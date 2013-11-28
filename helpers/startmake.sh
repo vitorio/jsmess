@@ -144,9 +144,9 @@ echo "(3/3) Creating $MESSMAKE/${SOURCEFILE}.lst"
 
 O=${MESSMAKE}/${SOURCEFILE}.lst
 
-echo "## " >$O
-echo "## List of drivers $SOURCEFILE.mak supports" >>$O
-echo "## " >>$O
+echo "// " >$O
+echo "// List of drivers $SOURCEFILE.mak supports" >>$O
+echo "// " >>$O
 echo "" >> $O
 
 for AAA in $CHILDREN

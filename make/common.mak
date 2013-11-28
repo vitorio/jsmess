@@ -29,7 +29,7 @@ endif
 SED_I = sed --help >/dev/null 2>&1 && sed -i $(1) || sed -i '' $(1)
 
 
-
+MAME_DIR := $(CURDIR)/third_party/mame
 EMSCRIPTEN_DIR := $(CURDIR)/third_party/emscripten
 EMMAKE := $(EMSCRIPTEN_DIR)/emmake
 EMCC := $(EMSCRIPTEN_DIR)/emcc
@@ -59,7 +59,7 @@ TEMPLATE_FILES := $(foreach TFILE,$(TEMPLATE_FILES),$(TEMPLATE_DIR)/$(TFILE))
 MESS_EXE := mess$(SUBTARGET)
 
 ifeq ($(IS_64_BIT),1)
-NATIVE_OBJ := $(CURDIR)/mess/obj/sdl/nativemame64
+NATIVE_OBJ := $(MAME_DIR)/obj/sdl/nativemame64
 else
-NATIVE_OBJ := $(CURDIR)/mess/obj/sdl/nativemame
+NATIVE_OBJ := $(MAME_DIR)/obj/sdl/nativemame
 endif

@@ -37,7 +37,7 @@ DEBUG_NAME :=
 endif
 
 ifdef SYSTEM
-include $(CURDIR)/make/systems/$(SYSTEM).mak
+include $(CURDIR)/systems/$(SYSTEM).mak
 endif
 
 include $(CURDIR)/make/common.mak
@@ -111,7 +111,7 @@ NATIVE_MESS_FLAGS := $(SHARED_MESS_FLAGS) $(NATIVE_MESS_FLAGS)
 
 BIOS_FILES := $(foreach BIOS_FILE,$(BIOS),$(BIOS_DIR)/$(BIOS_FILE))
 
-JSMESS_MESS_BUILD_VERSION := $(shell tail --lines=1 mess/src/version.c | cut -d '"' -f 2)$(shell date -u))
+JSMESS_MESS_BUILD_VERSION := $(shell tail --lines=1 $(MAME_DIR)/src/version.c | cut -d '"' -f 2)$(shell date -u))
 JSMESS_EMCC_VERSION := $(shell third_party/emscripten/emcc --version | grep commit)
 
 
@@ -132,11 +132,11 @@ test: $(JS_OBJ_DIR)/index.html
 
 # Compiles buildtools required by MESS.
 buildtools:
-	@cd mess; make $(NATIVE_MESS_FLAGS) buildtools
+	@cd $(MAME_DIR); make $(NATIVE_MESS_FLAGS) buildtools
 
 clean:
-	cd mess; make $(SHARED_FLAGS) $(NATIVE_MESS_FLAGS) clean
-	cd mess; $(EMMAKE) make $(SHARED_FLAGS) $(EMSCRIPTEN_MESS_FLAGS) clean
+	cd $(MAME_DIR); make $(SHARED_FLAGS) $(NATIVE_MESS_FLAGS) clean
+	cd $(MAME_DIR); $(EMMAKE) make $(SHARED_FLAGS) $(EMSCRIPTEN_MESS_FLAGS) clean
 
 # Creates a final HTML file.
 $(JS_OBJ_DIR)/index.html: $(JS_OBJ_DIR) $(TEMPLATE_FILES) $(BIOS_FILES) $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js.gz
@@ -172,7 +172,7 @@ $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js.gz: $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).j
 	@gzip -f -c $< > $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js.gz
 
 # Runs emcc on LLVM bitcode version of MESS.
-$(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js: mess/$(MESS_EXE)$(DEBUG_NAME).bc $(TEMPLATE_DIR)/pre.js $(TEMPLATE_DIR)/post.js
+$(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js: $(MAME_DIR)/$(MESS_EXE)$(DEBUG_NAME).bc $(TEMPLATE_DIR)/pre.js $(TEMPLATE_DIR)/post.js
 	$(EMCC) $(EMCC_FLAGS) $< -o $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js --pre-js $(TEMPLATE_DIR)/pre.js --post-js $(TEMPLATE_DIR)/post.js
 	@$(call SED_I,'s/JSMESS_MESS_BUILD_VERSION/$(JSMESS_MESS_BUILD_VERSION)/' $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js)
 	@$(call SED_I,'s/JSMESS_EMCC_VERSION/$(JSMESS_EMCC_VERSION)/' $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js)
@@ -180,12 +180,12 @@ $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js: mess/$(MESS_EXE)$(DEBUG_NAME).bc $(TEMPL
 	@$(call SED_I,'s/JSMESS_MESS_FLAGS/$(subst ",\\", $(subst /,\/, $(MESS_FLAGS)))/' $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js)
 
 # Copies over the LLVM bitcode for MESS into a .bc file.
-mess/$(MESS_EXE)$(DEBUG_NAME).bc: mess/$(MESS_EXE)
-	@cp $< mess/$(MESS_EXE)$(DEBUG_NAME).bc
+$(MAME_DIR)/$(MESS_EXE)$(DEBUG_NAME).bc: $(MAME_DIR)/$(MESS_EXE)
+	@cp $< $(MAME_DIR)/$(MESS_EXE)$(DEBUG_NAME).bc
 
 # Compiles MESS to LLVM bitcode.
-mess/$(MESS_EXE): buildtools
-	@cd mess; $(EMMAKE) make $(MESS_FLAGS)
+$(MAME_DIR)/$(MESS_EXE): buildtools
+	@cd $(MAME_DIR); $(EMMAKE) make $(MESS_FLAGS)
 
 # Ensures that required files actually exist and, if so, copies it over to the
 # build directory.
