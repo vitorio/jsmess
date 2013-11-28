@@ -4,6 +4,10 @@ DEPCOUNT=1
 NEWDEPCOUNT=0
 CPUMAK=../third_party/mame/src/emu/cpu/cpu.mak
 SOUNDMAK=../third_party/mame/src/emu/sound/sound.mak
+VIDEOMAK=../third_party/mame/src/emu/video/video.mak
+MACHINEMAK=../third_party/mame/src/emu/machine/machine.mak
+BUSESMAK=../third_party/mame/src/emu/bus/bus.mak
+MESSMAK=../third_party/mame/src/mess/mess.mak
 
 ## Give it a system name as the only parameter
 
@@ -43,7 +47,7 @@ do
 	echo $NEWDEPCOUNT dependencies... 1>&2
 done
 
-cat $1.deps.tmp | grep "/cpu/" > $1.newdeps.tmp
+cat $1.deps.tmp | grep "^./emu/cpu/" > $1.newdeps.tmp
 NUMCPUS=`wc -l $1.newdeps.tmp | awk '{print $1}'`
 
 if [ "$NUMCPUS" -gt 0 ]
@@ -57,7 +61,7 @@ then
 	rm $1.cpus.tmp
 fi
 
-cat $1.deps.tmp | grep "/sound/" > $1.newdeps.tmp
+cat $1.deps.tmp | grep "^./emu/sound/" > $1.newdeps.tmp
 NUMSOUNDS=`wc -l $1.newdeps.tmp | awk '{print $1}'`
 
 if [ "$NUMSOUNDS" -gt 0 ]
@@ -71,8 +75,56 @@ then
 	rm $1.sounds.tmp
 fi
 
+cat $1.deps.tmp | grep "^./emu/video/" > $1.newdeps.tmp
+NUMVIDEO=`wc -l $1.newdeps.tmp | awk '{print $1}'`
+
+if [ "$NUMVIDEO" -gt 0 ]
+then
+	cut -d '.' -f 2 $1.newdeps.tmp | sort -u | while read LINE
+	do
+		grep "#@src$LINE" $VIDEOMAK | cut -d ',' -f 2 >> $1.video.tmp
+	done
+	sort -u $1.video.tmp
+	echo ""
+	rm $1.video.tmp
+fi
+
+cat $1.deps.tmp | grep "^./emu/machine/" > $1.newdeps.tmp
+NUMMACHINE=`wc -l $1.newdeps.tmp | awk '{print $1}'`
+
+if [ "$NUMMACHINE" -gt 0 ]
+then
+	cut -d '.' -f 2 $1.newdeps.tmp | sort -u | while read LINE
+	do
+		grep "#@src$LINE" $MACHINEMAK | cut -d ',' -f 2 >> $1.machine.tmp
+	done
+	sort -u $1.machine.tmp
+	echo ""
+	rm $1.machine.tmp
+fi
+
+cat $1.deps.tmp | grep "^./emu/bus/" > $1.newdeps.tmp
+NUMBUSES=`wc -l $1.newdeps.tmp | awk '{print $1}'`
+
+if [ "$NUMBUSES" -gt 0 ]
+then
+	cut -d '/' -f 2-4 $1.newdeps.tmp | sort -u | while read LINE
+	do
+		grep "#@src/$LINE/" $BUSESMAK | cut -d ',' -f 2 >> $1.buses.tmp
+	done
+	sort -u $1.buses.tmp
+	echo ""
+	rm $1.buses.tmp
+fi
+
+cat $1.deps.tmp | grep -v '^./emu/imagedev' | sed 's/\.\/mess\/drivers/$(MESS_DRIVERS)/g' | sed 's/\.\/lib\/formats/$(OBJ)\/lib\/formats/g' | sed 's/\.\/emu\/machine/$(EMUOBJ)\/machine/g' | sed 's/\.\/emu\/sound/$(EMUOBJ)\/sound/g' | sed 's/\.\/mess\/video/$(MESS_VIDEO)/g' | sed 's/\.\/mess\/devices/$(MESS_DEVICES)/g' | sed 's/\.\/emu\/cpu/$(EMUOBJ)\/cpu/g' | sed 's/\.\/mess\/machine/$(MESS_MACHINE)/g' | sed 's/\.\/mess\/formats/$(MESS_FORMATS)/g' | sed 's/\.\/emu\/video/$(EMU_VIDEO)/g' | sed 's/\.\/mame\/machine/$(MAME_MACHINE)/g' | sed 's/\.\/mame\/video/$(MAME_VIDEO)/g' | sed 's/\.\/mess\/audio/$(MESS_AUDIO)/g' | sed 's/\.\/emu\/audio/$(EMU_AUDIO)/g' | sed 's/\.\/mame\/drivers/$(MAME_DRIVERS)/g' | while read LINE
+do
+	SEDLINE=`echo $LINE | sed 's/[$)(\/]/\\\&/g'`
+	grep "\.lh" $MESSMAK | awk '{ while( /\\$/ ) { getline n; $0 = $0 n; }} '"/$SEDLINE/"
+done
+
 ## make the output makefile-ready
-cat $1.deps.tmp | grep -v '^./emu/imagedev' | sed 's/\.\/mess\/drivers/$(MESS_DRIVERS)/g' |sed 's/\.\/lib\/formats/$(OBJ)\/lib\/formats/g' | sed 's/\.\/emu\/machine/$(EMUOBJ)\/machine/g' | sed 's/\.\/emu\/sound/$(EMUOBJ)\/sound/g' | sed 's/\.\/mess\/video/$(MESS_VIDEO)/g' | sed 's/\.\/mess\/devices/$(MESS_DEVICES)/g' | sed 's/\.\/emu\/cpu/$(EMUOBJ)\/cpu/g' | sed 's/\.\/mess\/machine/$(MESS_MACHINE)/g' | sed 's/\.\/mess\/formats/$(MESS_FORMATS)/g' | sed 's/\.\/emu\/video/$(EMU_VIDEO)/g' | sed 's/\.\/mame\/machine/$(MAME_MACHINE)/g' | sed 's/\.\/mame\/video/$(MAME_VIDEO)/g' | sed 's/\.\/mess\/audio/$(MESS_MACHINE)/g' | sed 's/\.\/emu\/audio/$(EMU_AUDIO)/g' | sed 's/\.\/mame\/drivers/$(MAME_DRIVERS)/g' > $1.newdeps.tmp
+cat $1.deps.tmp | grep -v '^./emu/imagedev\|^./emu/cpu/\|^./emu/sound/\|^./emu/video/\|^./emu/machine/\|^./emu/bus/' | sed 's/\.\/mess\/drivers/$(MESS_DRIVERS)/g' | sed 's/\.\/lib\/formats/$(OBJ)\/lib\/formats/g' | sed 's/\.\/emu\/machine/$(EMUOBJ)\/machine/g' | sed 's/\.\/emu\/sound/$(EMUOBJ)\/sound/g' | sed 's/\.\/mess\/video/$(MESS_VIDEO)/g' | sed 's/\.\/mess\/devices/$(MESS_DEVICES)/g' | sed 's/\.\/emu\/cpu/$(EMUOBJ)\/cpu/g' | sed 's/\.\/mess\/machine/$(MESS_MACHINE)/g' | sed 's/\.\/mess\/formats/$(MESS_FORMATS)/g' | sed 's/\.\/emu\/video/$(EMU_VIDEO)/g' | sed 's/\.\/mame\/machine/$(MAME_MACHINE)/g' | sed 's/\.\/mame\/video/$(MAME_VIDEO)/g' | sed 's/\.\/mess\/audio/$(MESS_AUDIO)/g' | sed 's/\.\/emu\/audio/$(EMU_AUDIO)/g' | sed 's/\.\/mame\/drivers/$(MAME_DRIVERS)/g' > $1.newdeps.tmp
 
 cat $1.newdeps.tmp | while read LINE
 do
