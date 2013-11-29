@@ -8,74 +8,204 @@
 #include "cpu/z80/z80.h"
 #include "imagedev/cartslot.h"
 
+// PV-1000 Sound device
 
-DECLARE_LEGACY_SOUND_DEVICE(PV1000,pv1000_sound);
-DEFINE_LEGACY_SOUND_DEVICE(PV1000,pv1000_sound);
-
-
-class d65010_state : public driver_device
+class pv1000_sound_device : public device_t,
+									public device_sound_interface
 {
 public:
-	d65010_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+	pv1000_sound_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
-	UINT8	m_io_regs[8];
-	UINT8	m_fd_data;
+	DECLARE_WRITE8_MEMBER(voice_w);
+
+protected:
+	// device-level overrides
+	virtual void device_config_complete();
+	virtual void device_start();
+
+	// sound stream update overrides
+	virtual void sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples);
+
+private:
+
+	// internal state
 	struct
 	{
-		UINT32	count;
-		UINT16	period;
-		UINT8	val;
-	}		m_voice[4];
+		UINT32  count;
+		UINT16  period;
+		UINT8   val;
+	}       m_voice[4];
 
-	sound_stream	*m_sh_channel;
-	emu_timer		*m_irq_on_timer;
-	emu_timer		*m_irq_off_timer;
+	sound_stream    *m_sh_channel;
+};
 
-	device_t *m_maincpu;
-	screen_device *m_screen;
-	UINT8 *m_ram;
+extern const device_type PV1000;
+
+const device_type PV1000 = &device_creator<pv1000_sound_device>;
+
+pv1000_sound_device::pv1000_sound_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+				: device_t(mconfig, PV1000, "NEC D65010G031", tag, owner, clock, "pv1000_sound", __FILE__),
+					device_sound_interface(mconfig, *this)
+{
+}
+
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void pv1000_sound_device::device_config_complete()
+{
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void pv1000_sound_device::device_start()
+{
+	m_sh_channel = machine().sound().stream_alloc(*this, 0, 1, clock() / 1024, this);
+
+	save_item(NAME(m_voice[0].count));
+	save_item(NAME(m_voice[0].period));
+	save_item(NAME(m_voice[0].val));
+	save_item(NAME(m_voice[1].count));
+	save_item(NAME(m_voice[1].period));
+	save_item(NAME(m_voice[1].val));
+	save_item(NAME(m_voice[2].count));
+	save_item(NAME(m_voice[2].period));
+	save_item(NAME(m_voice[2].val));
+	// are these ever used?
+	save_item(NAME(m_voice[3].count));
+	save_item(NAME(m_voice[3].period));
+	save_item(NAME(m_voice[3].val));
+}
+
+WRITE8_MEMBER(pv1000_sound_device::voice_w)
+{
+	offset &= 0x03;
+	m_voice[offset].period = data;
+}
+
+//-------------------------------------------------
+//  sound_stream_update - handle a stream update
+//-------------------------------------------------
+
+
+/*
+ plgDavid's audio implementation/analysis notes:
+
+ Sound appears to be 3 50/50 pulse voices made by cutting the main clock by 1024,
+ then by the value of the 6bit period registers.
+ This creates a surprisingly accurate pitch range.
+
+ Note: the register periods are inverted.
+ */
+
+void pv1000_sound_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
+{
+	stream_sample_t *buffer = outputs[0];
+
+	while (samples > 0)
+	{
+		*buffer=0;
+
+		for (int i = 0; i < 3; i++)
+		{
+			UINT32 per = (0x3f - (m_voice[i].period & 0x3f));
+
+			if (per != 0)   //OFF!
+				*buffer += m_voice[i].val * 8192;
+
+			m_voice[i].count++;
+
+			if (m_voice[i].count >= per)
+			{
+				m_voice[i].count = 0;
+				m_voice[i].val = !m_voice[i].val;
+			}
+		}
+
+		buffer++;
+		samples--;
+	}
+}
+
+
+// PV-1000 System
+
+
+class pv1000_state : public driver_device
+{
+public:
+	pv1000_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this, "maincpu"),
+		m_sound(*this, "pv1000_sound"),
+		m_p_videoram(*this, "p_videoram")
+		{ }
+
+	DECLARE_WRITE8_MEMBER(pv1000_io_w);
+	DECLARE_READ8_MEMBER(pv1000_io_r);
+	DECLARE_WRITE8_MEMBER(pv1000_gfxram_w);
+	UINT8   m_io_regs[8];
+	UINT8   m_fd_data;
+
+	emu_timer       *m_irq_on_timer;
+	emu_timer       *m_irq_off_timer;
+	UINT8 m_pcg_bank;
+	UINT8 m_force_pattern;
+	UINT8 m_fd_buffer_flag;
+	UINT8 m_border_col;
+
+	UINT8 * m_gfxram;
+	void pv1000_postload();
+
+	required_device<cpu_device> m_maincpu;
+	required_device<pv1000_sound_device> m_sound;
+	required_shared_ptr<UINT8> m_p_videoram;
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void palette_init();
+	UINT32 screen_update_pv1000(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	TIMER_CALLBACK_MEMBER(d65010_irq_on_cb);
+	TIMER_CALLBACK_MEMBER(d65010_irq_off_cb);
+	DECLARE_DEVICE_IMAGE_LOAD_MEMBER( pv1000_cart );
 };
 
 
-static WRITE8_HANDLER( pv1000_io_w );
-static READ8_HANDLER( pv1000_io_r );
-static WRITE8_HANDLER( pv1000_gfxram_w );
-
-
-static ADDRESS_MAP_START( pv1000, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( pv1000, AS_PROGRAM, 8, pv1000_state )
 	AM_RANGE( 0x0000, 0x3fff ) AM_MIRROR( 0x4000 ) AM_ROM AM_REGION( "cart", 0 )
-	AM_RANGE( 0xb800, 0xbbff ) AM_RAM AM_BASE_MEMBER( d65010_state, m_ram )
+	AM_RANGE( 0xb800, 0xbbff ) AM_RAM AM_SHARE("p_videoram")
 	AM_RANGE( 0xbc00, 0xbfff ) AM_RAM_WRITE( pv1000_gfxram_w ) AM_REGION( "gfxram", 0 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( pv1000_io, AS_IO, 8 )
+static ADDRESS_MAP_START( pv1000_io, AS_IO, 8, pv1000_state )
 	ADDRESS_MAP_GLOBAL_MASK( 0xff )
 	AM_RANGE( 0xf8, 0xff ) AM_READWRITE( pv1000_io_r, pv1000_io_w )
 ADDRESS_MAP_END
 
 
-static WRITE8_HANDLER( pv1000_gfxram_w )
+WRITE8_MEMBER( pv1000_state::pv1000_gfxram_w )
 {
-	UINT8 *gfxram = space->machine().region( "gfxram" )->base();
+	UINT8 *gfxram = memregion( "gfxram" )->base();
 
 	gfxram[ offset ] = data;
-	gfx_element_mark_dirty(space->machine().gfx[1], offset/32);
+	machine().gfx[1]->mark_dirty(offset/32);
 }
 
 
-static WRITE8_HANDLER( pv1000_io_w )
+WRITE8_MEMBER( pv1000_state::pv1000_io_w )
 {
-	d65010_state *state = space->machine().driver_data<d65010_state>();
-
-	switch ( offset )
+	switch (offset)
 	{
 	case 0x00:
 	case 0x01:
 	case 0x02:
 		//logerror("pv1000_io_w offset=%02x, data=%02x (%03d)\n", offset, data , data);
-		state->m_voice[offset].period = data;
+		m_sound->voice_w(space, offset, data);
 	break;
 
 	case 0x03:
@@ -83,18 +213,24 @@ static WRITE8_HANDLER( pv1000_io_w )
 	break;
 
 	case 0x05:
-		state->m_fd_data = 1;
+		m_fd_data = 0xf;
+		break;
+//  case 0x06 VRAM + PCG location, always fixed at 0xb8xx
+	case 0x07:
+		/* ---- -xxx unknown, border color? */
+		m_pcg_bank = (data & 0x20) >> 5;
+		m_force_pattern = ((data & 0x10) >> 4); /* Dig Dug relies on this */
+		m_border_col = data & 7;
 		break;
 	}
 
-	state->m_io_regs[offset] = data;
+	m_io_regs[offset] = data;
 }
 
 
-static READ8_HANDLER( pv1000_io_r )
+READ8_MEMBER( pv1000_state::pv1000_io_r )
 {
-	d65010_state *state = space->machine().driver_data<d65010_state>();
-	UINT8 data = state->m_io_regs[offset];
+	UINT8 data = m_io_regs[offset];
 
 //  logerror("pv1000_io_r offset=%02x\n", offset );
 
@@ -103,28 +239,26 @@ static READ8_HANDLER( pv1000_io_r )
 	case 0x04:
 		/* Bit 1 = 1 => Data is available in port FD */
 		/* Bit 0 = 1 => Buffer at port FD is empty */
-		data = ( state->m_screen->vpos() >= 212 && state->m_screen->vpos() <= 220 ) ? 0x01 : 0x00;
-		data |= state->m_fd_data ? 0x02 : 0x00;
+		data = 0;
+		data = m_fd_buffer_flag & 1;
+		data |= m_fd_data ? 2 : 0;
+		m_fd_buffer_flag &= ~1;
 		break;
 	case 0x05:
+		static const char *const joynames[] = { "IN0", "IN1", "IN2", "IN3" };
+
 		data = 0;
-		if ( state->m_io_regs[5] & 0x08 )
+
+		for (int i = 0; i < 4; i++)
 		{
-			data = input_port_read( space->machine(), "IN3" );
+			if (m_io_regs[5] & 1 << i)
+			{
+				data |= ioport(joynames[i])->read();
+				m_fd_data &= ~(1 << i);
+			}
 		}
-		if ( state->m_io_regs[5] & 0x04 )
-		{
-			data = input_port_read( space->machine(), "IN2" );
-		}
-		if ( state->m_io_regs[5] & 0x02 )
-		{
-			data = input_port_read( space->machine(), "IN1" );
-		}
-		if ( state->m_io_regs[5] & 0x01 )
-		{
-			data = input_port_read( space->machine(), "IN0" );
-		}
-		state->m_fd_data = 0;
+
+		//m_fd_data = 0;
 		break;
 	}
 
@@ -159,22 +293,16 @@ static INPUT_PORTS_START( pv1000 )
 INPUT_PORTS_END
 
 
-static PALETTE_INIT( pv1000 )
+void pv1000_state::palette_init()
 {
-	palette_set_color_rgb( machine,  0,   0,   0,   0 );
-	palette_set_color_rgb( machine,  1,   0,   0, 255 );
-	palette_set_color_rgb( machine,  2,   0, 255,   0 );
-	palette_set_color_rgb( machine,  3,   0, 255, 255 );
-	palette_set_color_rgb( machine,  4, 255,   0,   0 );
-	palette_set_color_rgb( machine,  5, 255,   0, 255 );
-	palette_set_color_rgb( machine,  6, 255, 255,   0 );
-	palette_set_color_rgb( machine,  7, 255, 255, 255 );
+	for (int i = 0; i < 8; i++)
+		palette_set_color_rgb(machine(), i, pal1bit(i >> 2), pal1bit(i >> 1), pal1bit(i >> 0));
 }
 
 
-static DEVICE_IMAGE_LOAD( pv1000_cart )
+DEVICE_IMAGE_LOAD_MEMBER( pv1000_state, pv1000_cart )
 {
-	UINT8 *cart = image.device().machine().region("cart")->base();
+	UINT8 *cart = memregion("cart")->base();
 	UINT32 size;
 
 	if (image.software_entry() == NULL)
@@ -209,26 +337,27 @@ static DEVICE_IMAGE_LOAD( pv1000_cart )
 }
 
 
-static SCREEN_UPDATE( pv1000 )
+UINT32 pv1000_state::screen_update_pv1000(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	d65010_state *state = screen->machine().driver_data<d65010_state>();
 	int x, y;
+
+	bitmap.fill(m_border_col); // TODO: might be either black or colored by this register
 
 	for ( y = 0; y < 24; y++ )
 	{
-		for ( x = 0; x < 32; x++ )
+		for ( x = 2; x < 30; x++ ) // left-right most columns are definitely masked by the border color
 		{
-			UINT16 tile = state->m_ram[ y * 32 + x ];
+			UINT16 tile = m_p_videoram[ y * 32 + x ];
 
-			if ( tile < 0xe0 )
+			if ( tile < 0xe0 || m_force_pattern )
 			{
-				tile += ( state->m_io_regs[7] * 8 );
-				drawgfx_opaque( bitmap, cliprect, screen->machine().gfx[0], tile, 0, 0, 0, x*8, y*8 );
+				tile += ( m_pcg_bank << 8);
+				drawgfx_opaque( bitmap, cliprect, machine().gfx[0], tile, 0, 0, 0, x*8, y*8 );
 			}
 			else
 			{
 				tile -= 0xe0;
-				drawgfx_opaque( bitmap, cliprect, screen->machine().gfx[1], tile, 0, 0, 0, x*8, y*8 );
+				drawgfx_opaque( bitmap, cliprect, machine().gfx[1], tile, 0, 0, 0, x*8, y*8 );
 			}
 		}
 	}
@@ -237,124 +366,74 @@ static SCREEN_UPDATE( pv1000 )
 }
 
 
-/*
- plgDavid's audio implementation/analysis notes:
-
- Sound appears to be 3 50/50 pulse voices made by cutting the main clock by 1024,
- then by the value of the 6bit period registers.
- This creates a surprisingly accurate pitch range.
-
- Note: the register periods are inverted.
- */
-
-static STREAM_UPDATE( pv1000_sound_update )
-{
-	d65010_state *state = device->machine().driver_data<d65010_state>();
-	stream_sample_t *buffer = outputs[0];
-
-	while ( samples > 0 )
-	{
-
-		*buffer=0;
-
-		for (size_t i=0;i<3;i++)
-		{
-			UINT32 per = (0x3F-(state->m_voice[i].period & 0x3f));
-
-			if( per != 0)//OFF!
-				*buffer += state->m_voice[i].val * 8192;
-
-			state->m_voice[i].count++;
-
-			if (state->m_voice[i].count >= per)
-			{
-			   state->m_voice[i].count = 0;
-			   state->m_voice[i].val = !state->m_voice[i].val;
-			}
-		}
-
-		buffer++;
-		samples--;
-	}
-
-}
-
-
-static DEVICE_START( pv1000_sound )
-{
-	d65010_state *state = device->machine().driver_data<d65010_state>();
-	state->m_sh_channel = device->machine().sound().stream_alloc(*device, 0, 1, device->clock()/1024, 0, pv1000_sound_update );
-}
-
-
-DEVICE_GET_INFO( pv1000_sound )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(pv1000_sound);	break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "NEC D65010G031");				break;
-		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);						break;
-	}
-}
-
 
 /* Interrupt is triggering 16 times during vblank. */
 /* we have chosen to trigger on scanlines 195, 199, 203, 207, 211, 215, 219, 223, 227, 231, 235, 239, 243, 247, 251, 255 */
-static TIMER_CALLBACK( d65010_irq_on_cb )
+TIMER_CALLBACK_MEMBER(pv1000_state::d65010_irq_on_cb)
 {
-	d65010_state *state = machine.driver_data<d65010_state>();
-	int vpos = state->m_screen->vpos();
-	int next_vpos = vpos + 12;
+	int vpos = m_screen->vpos();
+	int next_vpos = vpos + 4;
+
+	if(vpos == 195)
+		m_fd_buffer_flag |= 1; /* TODO: exact timing of this */
 
 	/* Set IRQ line and schedule release of IRQ line */
-	device_set_input_line( state->m_maincpu, 0, ASSERT_LINE );
-	state->m_irq_off_timer->adjust( state->m_screen->time_until_pos(vpos, 380/2 ) );
+	m_maincpu->set_input_line(0, ASSERT_LINE );
+	m_irq_off_timer->adjust( m_screen->time_until_pos(vpos, 380/2 ) );
 
 	/* Schedule next IRQ trigger */
 	if ( vpos >= 255 )
 	{
 		next_vpos = 195;
 	}
-	state->m_irq_on_timer->adjust( state->m_screen->time_until_pos(next_vpos, 0 ) );
+	m_irq_on_timer->adjust( m_screen->time_until_pos(next_vpos, 0 ) );
 }
 
 
-static TIMER_CALLBACK( d65010_irq_off_cb )
+TIMER_CALLBACK_MEMBER(pv1000_state::d65010_irq_off_cb)
 {
-	d65010_state *state = machine.driver_data<d65010_state>();
-
-	device_set_input_line( state->m_maincpu, 0, CLEAR_LINE );
+	m_maincpu->set_input_line(0, CLEAR_LINE );
 }
 
 
-static MACHINE_START( pv1000 )
+void pv1000_state::pv1000_postload()
 {
-	d65010_state *state = machine.driver_data<d65010_state>();
+	// restore GFX ram
+	for (int i = 0; i < 0x400; i++)
+		pv1000_gfxram_w(m_maincpu->space(AS_PROGRAM), i, m_gfxram[i]);
+}
 
-	state->m_irq_on_timer = machine.scheduler().timer_alloc(FUNC(d65010_irq_on_cb));
-	state->m_irq_off_timer = machine.scheduler().timer_alloc(FUNC(d65010_irq_off_cb));
-	state->m_maincpu = machine.device( "maincpu" );
-	state->m_screen = machine.device<screen_device>("screen" );
+void pv1000_state::machine_start()
+{
+	m_irq_on_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(pv1000_state::d65010_irq_on_cb),this));
+	m_irq_off_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(pv1000_state::d65010_irq_off_cb),this));
+
+	m_gfxram = memregion("gfxram")->base();
+	save_pointer(NAME(m_gfxram), 0x400);
+
+	save_item(NAME(m_io_regs));
+	save_item(NAME(m_fd_data));
+	save_item(NAME(m_pcg_bank));
+	save_item(NAME(m_force_pattern));
+	save_item(NAME(m_fd_buffer_flag));
+	save_item(NAME(m_border_col));
+
+	machine().save().register_postload(save_prepost_delegate(FUNC(pv1000_state::pv1000_postload), this));
 }
 
 
-static MACHINE_RESET( pv1000 )
+void pv1000_state::machine_reset()
 {
-	d65010_state *state = machine.driver_data<d65010_state>();
-
-	state->m_io_regs[5] = 0;
-	state->m_fd_data = 0;
-	state->m_irq_on_timer->adjust( state->m_screen->time_until_pos(195, 0 ) );
-	state->m_irq_off_timer->adjust( attotime::never );
+	m_io_regs[5] = 0;
+	m_fd_data = 0;
+	m_irq_on_timer->adjust(m_screen->time_until_pos(195, 0));
+	m_irq_off_timer->adjust(attotime::never);
 }
 
 
 static const gfx_layout pv1000_3bpp_gfx =
 {
-	8, 8,			/* 8x8 characters */
+	8, 8,           /* 8x8 characters */
 	RGN_FRAC(1,1),
 	3,
 	{ 0, 8*8, 16*8 },
@@ -370,23 +449,19 @@ static GFXDECODE_START( pv1000 )
 GFXDECODE_END
 
 
-static MACHINE_CONFIG_START( pv1000, d65010_state )
+static MACHINE_CONFIG_START( pv1000, pv1000_state )
 
 	MCFG_CPU_ADD( "maincpu", Z80, 17897725/5 )
 	MCFG_CPU_PROGRAM_MAP( pv1000 )
 	MCFG_CPU_IO_MAP( pv1000_io )
 
-	MCFG_MACHINE_START( pv1000 )
-	MCFG_MACHINE_RESET( pv1000 )
 
 	/* D65010G031 - Video & sound chip */
 	MCFG_SCREEN_ADD( "screen", RASTER )
-	MCFG_SCREEN_FORMAT( BITMAP_FORMAT_INDEXED16 )
 	MCFG_SCREEN_RAW_PARAMS( 17897725/3, 380, 0, 256, 262, 0, 192 )
-	MCFG_SCREEN_UPDATE( pv1000 )
+	MCFG_SCREEN_UPDATE_DRIVER(pv1000_state, screen_update_pv1000)
 
 	MCFG_PALETTE_LENGTH( 8 )
-	MCFG_PALETTE_INIT( pv1000 )
 	MCFG_GFXDECODE( pv1000 )
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -398,7 +473,7 @@ static MACHINE_CONFIG_START( pv1000, d65010_state )
 	MCFG_CARTSLOT_EXTENSION_LIST("bin")
 	MCFG_CARTSLOT_MANDATORY
 	MCFG_CARTSLOT_INTERFACE("pv1000_cart")
-	MCFG_CARTSLOT_LOAD(pv1000_cart)
+	MCFG_CARTSLOT_LOAD(pv1000_state,pv1000_cart)
 
 	/* Software lists */
 	MCFG_SOFTWARE_LIST_ADD("cart_list","pv1000")
@@ -412,5 +487,4 @@ ROM_END
 
 
 /*    YEAR  NAME     PARENT  COMPAT  MACHINE  INPUT  INIT    COMPANY   FULLNAME    FLAGS */
-CONS( 1983, pv1000,  0,      0,      pv1000,  pv1000,   0,   "Casio",  "PV-1000",  GAME_NOT_WORKING )
-
+CONS( 1983, pv1000,  0,      0,      pv1000,  pv1000, driver_device,   0,   "Casio",  "PV-1000",  GAME_SUPPORTS_SAVE )

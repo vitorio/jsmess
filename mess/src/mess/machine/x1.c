@@ -1,4 +1,4 @@
-#include "emu.h"
+
 #include "includes/x1.h"
 
 
@@ -13,8 +13,8 @@ const device_type X1_KEYBOARD = &device_creator<x1_keyboard_device>;
 //-------------------------------------------------
 
 x1_keyboard_device::x1_keyboard_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, X1_KEYBOARD, "X1 Keyboard", tag, owner, clock),
-	  device_z80daisy_interface(mconfig, *this)
+	: device_t(mconfig, X1_KEYBOARD, "X1 Keyboard", tag, owner, clock, "x1_keyboard", __FILE__),
+		device_z80daisy_interface(mconfig, *this)
 {
 }
 
@@ -53,7 +53,7 @@ int x1_keyboard_device::z80daisy_irq_ack()
 {
 	x1_state *state = machine().driver_data<x1_state>();
 	state->m_key_irq_flag = 0;
-	cputag_set_input_line(device().machine(),"maincpu",INPUT_LINE_IRQ0,CLEAR_LINE);
+	state->m_maincpu->set_input_line(INPUT_LINE_IRQ0,CLEAR_LINE);
 	return state->m_key_irq_vector;
 }
 

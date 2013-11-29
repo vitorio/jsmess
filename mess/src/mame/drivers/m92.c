@@ -46,6 +46,10 @@ System notes:
 
 Glitch list!
 
+    All games:
+        Flip screen/Cocktail Mode is unsupported (offsetted screens, and also Irem Skins Game
+        hangs at title screen when flip is enabled), it's also unknown where exactly it's tied.
+
     Gunforce:
         Animated water sometimes doesn't appear on level 5 (but it
         always appears if you cheat and jump straight to the level).
@@ -190,12 +194,13 @@ Notes:
 Dip locations verified for:
     - dsoccr94j, gunforce, inthunt, majtitl2, uccops [manual]
     - bmaster, hook, lethalt, mysticri, rtypeleo [dip listing]
-psoldier dip locations still need veritication.
+psoldier dip locations still need verification.
 
 *****************************************************************************/
 
 #include "emu.h"
 #include "cpu/nec/nec.h"
+#include "cpu/nec/v25.h"
 #include "includes/m92.h"
 #include "includes/iremipt.h"
 #include "machine/irem_cpu.h"
@@ -204,165 +209,165 @@ psoldier dip locations still need veritication.
 #include "sound/okim6295.h"
 
 
-#define M92_IRQ_0 ((state->m_irq_vectorbase+0)/4)  /* VBL interrupt */
-#define M92_IRQ_1 ((state->m_irq_vectorbase+4)/4)  /* Sprite buffer complete interrupt */
-#define M92_IRQ_2 ((state->m_irq_vectorbase+8)/4)  /* Raster interrupt */
-#define M92_IRQ_3 ((state->m_irq_vectorbase+12)/4) /* Sound cpu interrupt */
+#define M92_IRQ_0 ((m_irq_vectorbase+0)/4)  /* VBL interrupt */
+#define M92_IRQ_1 ((m_irq_vectorbase+4)/4)  /* Sprite buffer complete interrupt */
+#define M92_IRQ_2 ((m_irq_vectorbase+8)/4)  /* Raster interrupt */
+#define M92_IRQ_3 ((m_irq_vectorbase+12)/4) /* Sound cpu interrupt */
 
 
 /*****************************************************************************/
 
-static MACHINE_START( m92 )
+MACHINE_START_MEMBER(m92_state,m92)
 {
-	m92_state *state = machine.driver_data<m92_state>();
-	state->save_item(NAME(state->m_sound_status));
+	save_item(NAME(m_sound_status));
 }
 
-static MACHINE_RESET( m92 )
+MACHINE_RESET_MEMBER(m92_state,m92)
 {
-	m92_state *state = machine.driver_data<m92_state>();
-
-	state->m_sprite_buffer_busy = 1;
+	m_sprite_buffer_busy = 1;
 }
 
 /*****************************************************************************/
 
-static TIMER_DEVICE_CALLBACK( m92_scanline_interrupt )
+TIMER_DEVICE_CALLBACK_MEMBER(m92_state::m92_scanline_interrupt)
 {
-	running_machine &machine = timer.machine();
-	m92_state *state = machine.driver_data<m92_state>();
 	int scanline = param;
 
 	/* raster interrupt */
-	if (scanline == state->m_raster_irq_position)
+	if (scanline == m_raster_irq_position)
 	{
-		machine.primary_screen->update_partial(scanline);
-		cputag_set_input_line_and_vector(machine, "maincpu", 0, HOLD_LINE, M92_IRQ_2);
+		m_screen->update_partial(scanline);
+		m_maincpu->set_input_line_and_vector(0, HOLD_LINE, M92_IRQ_2);
 	}
 
 	/* VBLANK interrupt */
-	else if (scanline == machine.primary_screen->visible_area().max_y + 1)
+	else if (scanline == m_screen->visible_area().max_y + 1)
 	{
-		machine.primary_screen->update_partial(scanline);
-		cputag_set_input_line_and_vector(machine, "maincpu", 0, HOLD_LINE, M92_IRQ_0);
+		m_screen->update_partial(scanline);
+		m_maincpu->set_input_line_and_vector(0, HOLD_LINE, M92_IRQ_0);
 	}
 }
 
 /*****************************************************************************/
 
-static READ16_HANDLER( m92_eeprom_r )
+READ16_MEMBER(m92_state::m92_eeprom_r)
 {
-	UINT8 *RAM = space->machine().region("eeprom")->base();
-//  logerror("%05x: EEPROM RE %04x\n",cpu_get_pc(&space->device()),offset);
+	UINT8 *RAM = memregion("eeprom")->base();
+//  logerror("%05x: EEPROM RE %04x\n",space.device().safe_pc(),offset);
 	return RAM[offset] | 0xff00;
 }
 
-static WRITE16_HANDLER( m92_eeprom_w )
+WRITE16_MEMBER(m92_state::m92_eeprom_w)
 {
-	UINT8 *RAM = space->machine().region("eeprom")->base();
-//  logerror("%05x: EEPROM WR %04x\n",cpu_get_pc(&space->device()),offset);
+	UINT8 *RAM = memregion("eeprom")->base();
+//  logerror("%05x: EEPROM WR %04x\n",space.device().safe_pc(),offset);
 	if (ACCESSING_BITS_0_7)
 		RAM[offset] = data;
 }
 
-static WRITE16_HANDLER( m92_coincounter_w )
+WRITE16_MEMBER(m92_state::m92_coincounter_w)
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(space->machine(), 0, data & 0x01);
-		coin_counter_w(space->machine(), 1, data & 0x02);
+		coin_counter_w(machine(), 0, data & 0x01);
+		coin_counter_w(machine(), 1, data & 0x02);
 		/* Bit 0x8 is Motor(?!), used in Hook, In The Hunt, UCops */
 		/* Bit 0x8 is Memcard related in RTypeLeo */
 		/* Bit 0x40 set in Blade Master test mode input check */
 	}
 }
 
-static WRITE16_HANDLER( m92_bankswitch_w )
+WRITE16_MEMBER(m92_state::m92_bankswitch_w)
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		memory_set_bank(space->machine(), "bank1", (data & 0x06) >> 1);
+		membank("bank1")->set_entry((data & 0x06) >> 1);
 		if (data & 0xf9)
-			logerror("%05x: bankswitch %04x\n", cpu_get_pc(&space->device()), data);
+			logerror("%05x: bankswitch %04x\n", space.device().safe_pc(), data);
 	}
 }
 
-static CUSTOM_INPUT( m92_sprite_busy_r )
+CUSTOM_INPUT_MEMBER(m92_state::m92_sprite_busy_r)
 {
-	m92_state *state = field.machine().driver_data<m92_state>();
-	return state->m_sprite_buffer_busy;
+	return m_sprite_buffer_busy;
 }
 
 /*****************************************************************************/
 
-static WRITE16_HANDLER( m92_soundlatch_w )
+WRITE16_MEMBER(m92_state::m92_soundlatch_w)
 {
-	cputag_set_input_line(space->machine(), "soundcpu", NEC_INPUT_LINE_INTP1, ASSERT_LINE);
-	soundlatch_w(space, 0, data & 0xff);
+	if (m_soundcpu)
+		m_soundcpu->set_input_line(NEC_INPUT_LINE_INTP1, ASSERT_LINE);
+
+	soundlatch_byte_w(space, 0, data & 0xff);
 }
 
-static READ16_HANDLER( m92_sound_status_r )
+READ16_MEMBER(m92_state::m92_sound_status_r)
 {
-	m92_state *state = space->machine().driver_data<m92_state>();
-//logerror("%06x: read sound status\n",cpu_get_pc(&space->device()));
-	return state->m_sound_status;
+//logerror("%06x: read sound status\n",space.device().safe_pc());
+	return m_sound_status;
 }
 
-static READ16_HANDLER( m92_soundlatch_r )
+READ16_MEMBER(m92_state::m92_soundlatch_r)
 {
-	return soundlatch_r(space, offset) | 0xff00;
+	if (m_soundcpu)
+		m_soundcpu->set_input_line(NEC_INPUT_LINE_INTP1, CLEAR_LINE);
+
+	return soundlatch_byte_r(space, offset) | 0xff00;
 }
 
-static WRITE16_HANDLER( m92_sound_irq_ack_w )
+WRITE16_MEMBER(m92_state::m92_sound_irq_ack_w)
 {
-	cputag_set_input_line(space->machine(), "soundcpu", NEC_INPUT_LINE_INTP1, CLEAR_LINE);
+	if (m_soundcpu)
+		m_soundcpu->set_input_line(NEC_INPUT_LINE_INTP1, CLEAR_LINE);
 }
 
-static WRITE16_HANDLER( m92_sound_status_w )
+WRITE16_MEMBER(m92_state::m92_sound_status_w)
 {
-	m92_state *state = space->machine().driver_data<m92_state>();
-	COMBINE_DATA(&state->m_sound_status);
-	cputag_set_input_line_and_vector(space->machine(), "maincpu", 0, HOLD_LINE, M92_IRQ_3);
+	COMBINE_DATA(&m_sound_status);
+	m_maincpu->set_input_line_and_vector(0, HOLD_LINE, M92_IRQ_3);
+
 }
 
-static WRITE16_HANDLER( m92_sound_reset_w )
+WRITE16_MEMBER(m92_state::m92_sound_reset_w)
 {
-	cputag_set_input_line(space->machine(), "soundcpu", INPUT_LINE_RESET, (data) ? CLEAR_LINE : ASSERT_LINE);
+	if (m_soundcpu)
+		m_soundcpu->set_input_line(INPUT_LINE_RESET, (data) ? CLEAR_LINE : ASSERT_LINE);
 }
 
 /*****************************************************************************/
 
 /* appears to be an earlier board */
-static ADDRESS_MAP_START( lethalth_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( lethalth_map, AS_PROGRAM, 16, m92_state )
 	AM_RANGE(0x00000, 0x7ffff) AM_ROM
-	AM_RANGE(0x80000, 0x8ffff) AM_RAM_WRITE(m92_vram_w) AM_BASE_MEMBER(m92_state, m_vram_data)
+	AM_RANGE(0x80000, 0x8ffff) AM_RAM_WRITE(m92_vram_w) AM_SHARE("vram_data")
 	AM_RANGE(0xe0000, 0xeffff) AM_RAM /* System ram */
-	AM_RANGE(0xf8000, 0xf87ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xf8000, 0xf87ff) AM_RAM AM_SHARE("spriteram")
 	AM_RANGE(0xf8800, 0xf8fff) AM_READWRITE(m92_paletteram_r, m92_paletteram_w)
-	AM_RANGE(0xf9000, 0xf900f) AM_WRITE(m92_spritecontrol_w) AM_BASE_MEMBER(m92_state, m_spritecontrol)
+	AM_RANGE(0xf9000, 0xf900f) AM_WRITE(m92_spritecontrol_w) AM_SHARE("spritecontrol")
 	AM_RANGE(0xf9800, 0xf9801) AM_WRITE(m92_videocontrol_w)
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM AM_REGION("maincpu", 0x7fff0)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( m92_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( m92_map, AS_PROGRAM, 16, m92_state )
 	AM_RANGE(0x00000, 0x9ffff) AM_ROM
 	AM_RANGE(0xa0000, 0xbffff) AM_ROMBANK("bank1")
-	AM_RANGE(0xc0000, 0xcffff) AM_ROM AM_REGION("maincpu", 0x00000)	/* Mirror used by In The Hunt as protection */
-	AM_RANGE(0xd0000, 0xdffff) AM_RAM_WRITE(m92_vram_w) AM_BASE_MEMBER(m92_state, m_vram_data)
+	AM_RANGE(0xc0000, 0xcffff) AM_ROM AM_REGION("maincpu", 0x00000) /* Mirror used by In The Hunt as protection */
+	AM_RANGE(0xd0000, 0xdffff) AM_RAM_WRITE(m92_vram_w) AM_SHARE("vram_data")
 	AM_RANGE(0xe0000, 0xeffff) AM_RAM /* System ram */
-	AM_RANGE(0xf8000, 0xf87ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xf8000, 0xf87ff) AM_RAM AM_SHARE("spriteram")
 	AM_RANGE(0xf8800, 0xf8fff) AM_READWRITE(m92_paletteram_r, m92_paletteram_w)
-	AM_RANGE(0xf9000, 0xf900f) AM_WRITE(m92_spritecontrol_w) AM_BASE_MEMBER(m92_state, m_spritecontrol)
+	AM_RANGE(0xf9000, 0xf900f) AM_WRITE(m92_spritecontrol_w) AM_SHARE("spritecontrol")
 	AM_RANGE(0xf9800, 0xf9801) AM_WRITE(m92_videocontrol_w)
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM AM_REGION("maincpu", 0x7fff0)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( m92_portmap, AS_IO, 16 )
+static ADDRESS_MAP_START( m92_portmap, AS_IO, 16, m92_state )
 	AM_RANGE(0x00, 0x01) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x02, 0x03) AM_READ_PORT("COINS_DSW3")
 	AM_RANGE(0x04, 0x05) AM_READ_PORT("DSW")
 	AM_RANGE(0x06, 0x07) AM_READ_PORT("P3_P4")
-	AM_RANGE(0x08, 0x09) AM_READ(m92_sound_status_r)	/* answer from sound CPU */
+	AM_RANGE(0x08, 0x09) AM_READ(m92_sound_status_r)    /* answer from sound CPU */
 	AM_RANGE(0x00, 0x01) AM_WRITE(m92_soundlatch_w)
 	AM_RANGE(0x02, 0x03) AM_WRITE(m92_coincounter_w)
 	AM_RANGE(0x40, 0x43) AM_WRITENOP /* Interrupt controller, only written to at bootup */
@@ -373,13 +378,35 @@ static ADDRESS_MAP_START( m92_portmap, AS_IO, 16 )
 	AM_RANGE(0xc0, 0xc1) AM_WRITE(m92_sound_reset_w)
 ADDRESS_MAP_END
 
+WRITE16_MEMBER(m92_state::oki_bank_w)
+{
+	m_oki->set_bank_base(0x40000 * ((data+1) & 0x3)); // +1?
+}
+
+static ADDRESS_MAP_START( ppan_portmap, AS_IO, 16, m92_state )
+	AM_RANGE(0x00, 0x01) AM_READ_PORT("P1_P2")
+	AM_RANGE(0x02, 0x03) AM_READ_PORT("COINS_DSW3")
+	AM_RANGE(0x04, 0x05) AM_READ_PORT("DSW")
+	AM_RANGE(0x06, 0x07) AM_READ_PORT("P3_P4")
+	AM_RANGE(0x08, 0x09) AM_READ(m92_sound_status_r)    /* answer from sound CPU */
+	AM_RANGE(0x10, 0x11) AM_WRITE(oki_bank_w)
+	AM_RANGE(0x18, 0x19) AM_DEVREADWRITE8("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x02, 0x03) AM_WRITE(m92_coincounter_w)
+	AM_RANGE(0x40, 0x43) AM_WRITENOP /* Interrupt controller, only written to at bootup */
+	AM_RANGE(0x80, 0x87) AM_WRITE(m92_pf1_control_w)
+	AM_RANGE(0x88, 0x8f) AM_WRITE(m92_pf2_control_w)
+	AM_RANGE(0x90, 0x97) AM_WRITE(m92_pf3_control_w)
+	AM_RANGE(0x98, 0x9f) AM_WRITE(m92_master_control_w)
+ADDRESS_MAP_END
+
+
 /******************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 16, m92_state )
 	AM_RANGE(0x00000, 0x1ffff) AM_ROM
 	AM_RANGE(0xa0000, 0xa3fff) AM_RAM
-	AM_RANGE(0xa8000, 0xa803f) AM_DEVREADWRITE8("irem", irem_ga20_r, irem_ga20_w, 0x00ff)
-	AM_RANGE(0xa8040, 0xa8043) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
+	AM_RANGE(0xa8000, 0xa803f) AM_DEVREADWRITE8("irem", iremga20_device, irem_ga20_r, irem_ga20_w, 0x00ff)
+	AM_RANGE(0xa8040, 0xa8043) AM_DEVREADWRITE8("ymsnd", ym2151_device, read, write, 0x00ff)
 	AM_RANGE(0xa8044, 0xa8045) AM_READWRITE(m92_soundlatch_r, m92_sound_irq_ack_w)
 	AM_RANGE(0xa8046, 0xa8047) AM_WRITE(m92_sound_status_w)
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM AM_REGION("soundcpu", 0x1fff0)
@@ -399,7 +426,7 @@ static INPUT_PORTS_START( m92_2player )
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_SERVICE )
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0080, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(m92_sprite_busy_r, NULL)
+	PORT_BIT( 0x0080, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM_MEMBER(DEVICE_SELF, m92_state,m92_sprite_busy_r, NULL)
 	/* DIP switch bank 3 */
 	PORT_DIPUNKNOWN_DIPLOC( 0x0100, 0x0100, "SW3:1" )
 	PORT_DIPUNKNOWN_DIPLOC( 0x0200, 0x0200, "SW3:2" )
@@ -575,8 +602,8 @@ static INPUT_PORTS_START( majtitl2 )
 	PORT_MODIFY("COINS_DSW3")
 	/* Dip switch bank 3 */
 	PORT_DIPNAME( 0x0100, 0x0100, "Ticket Dispenser" ) PORT_DIPLOCATION("SW3:1")
-	PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )	/* "Ticket payout function is not working now" will be shown on screen */
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )	/* Stored data is shown on screen with the option to clear data */
+	PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )  /* "Ticket payout function is not working now" will be shown on screen */
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )   /* Stored data is shown on screen with the option to clear data */
 	PORT_DIPNAME( 0x0600, 0x0600, "Points Per Ticket" ) PORT_DIPLOCATION("SW3:2,3") /* Conversion Rate for Ticket */
 	PORT_DIPSETTING(      0x0600, "1 Point - 1 Ticket" )
 	PORT_DIPSETTING(      0x0400, "2 Points - 1 Ticket" )
@@ -592,9 +619,9 @@ static INPUT_PORTS_START( majtitl2 )
 
 	PORT_MODIFY("DSW")
 	/* Dip switch bank 2 */
-	PORT_DIPNAME( 0x0200, 0x0000, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW2:2")
-	PORT_DIPSETTING(      0x0000, DEF_STR( Upright ) )
-	PORT_DIPSETTING(      0x0200, DEF_STR( Cocktail ) )
+	PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW2:2")
+	PORT_DIPSETTING(      0x0200, DEF_STR( Upright ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( Cocktail ) )
 
 	/* Dip switch bank 1 */
 	PORT_DIPNAME( 0x0001, 0x0001, "Given Holes/Stroke Play" ) PORT_DIPLOCATION("SW1:1")
@@ -609,7 +636,7 @@ static INPUT_PORTS_START( majtitl2 )
 	PORT_DIPNAME( 0x0008, 0x0008, "Joystick Configuration" ) PORT_DIPLOCATION("SW1:4")    /* Listed as "Joysticks on" */
 	PORT_DIPSETTING(      0x0008, DEF_STR( Upright ) )          /* "One Side" */
 	PORT_DIPSETTING(      0x0000, DEF_STR( Cocktail ) )         /* "Both Sides" */
-	PORT_DIPNAME( 0x0010, 0x0010, "Number of Joysticks" ) PORT_DIPLOCATION("SW1:5")	/* 4 Way joysticks with 2 buttons each player */
+	PORT_DIPNAME( 0x0010, 0x0010, "Number of Joysticks" ) PORT_DIPLOCATION("SW1:5") /* 4 Way joysticks with 2 buttons each player */
 	PORT_DIPSETTING(      0x0010, "2 Joysticks" )
 	PORT_DIPSETTING(      0x0000, "4 Joysticks" )
 	PORT_DIPNAME( 0x0020, 0x0000, "Any Button to Start" ) PORT_DIPLOCATION("SW1:6")
@@ -734,7 +761,7 @@ static INPUT_PORTS_START( psoldier )
 	PORT_DIPSETTING(      0x0020, DEF_STR( No ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Yes ) )
 
-	PORT_MODIFY("P3_P4")	/* Extra connector for kick buttons */
+	PORT_MODIFY("P3_P4")    /* Extra connector for kick buttons */
 	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(1)
@@ -811,13 +838,13 @@ INPUT_PORTS_END
 
 static const gfx_layout charlayout =
 {
-	8,8,	/* 8*8 characters */
+	8,8,    /* 8*8 characters */
 	RGN_FRAC(1,4),
-	4,	/* 4 bits per pixel */
+	4,  /* 4 bits per pixel */
 	{ RGN_FRAC(3,4), RGN_FRAC(2,4), RGN_FRAC(1,4), RGN_FRAC(0,4) },
 	{ STEP8(0,1) },
 	{ STEP8(0,8) },
-	8*8	/* every char takes 8 consecutive bytes */
+	8*8 /* every char takes 8 consecutive bytes */
 };
 
 static const gfx_layout spritelayout =
@@ -847,149 +874,156 @@ static GFXDECODE_START( m92 )
 	GFXDECODE_ENTRY( "gfx2", 0, spritelayout, 0, 128 )
 GFXDECODE_END
 
-static GFXDECODE_START( 2 )
+static GFXDECODE_START( psoldier )
 	GFXDECODE_ENTRY( "gfx1", 0, charlayout,    0, 128 )
 	GFXDECODE_ENTRY( "gfx2", 0, spritelayout2, 0, 128 )
 GFXDECODE_END
 
-/***************************************************************************/
-
-static void sound_irq(device_t *device, int state)
+static const gfx_layout bootleg_charlayout =
 {
-	cputag_set_input_line(device->machine(), "soundcpu", NEC_INPUT_LINE_INTP0, state ? ASSERT_LINE : CLEAR_LINE);
-}
-
-static const ym2151_interface ym2151_config =
-{
-	sound_irq
+	8,8,
+	RGN_FRAC(1,1),
+	4,
+	{ 24,16,8,0 },
+	{ 0,1,2,3,4,5,6,7 },
+	{ STEP8(0,32) },
+	8*32
 };
 
+static const gfx_layout bootleg_spritelayout =
+{
+	16,16,
+	RGN_FRAC(1,1),
+	4,
+	{ 48,32,16,0 },
+	{ 8,9,10,11,12,13,14,15,0,1,2,3,4,5,6,7 },
+	{ STEP16(0,64) },
+	1024
+};
+
+
+static GFXDECODE_START( bootleg )
+	GFXDECODE_ENTRY( "gfx1", 0, bootleg_charlayout,   0x400, 128 )
+	GFXDECODE_ENTRY( "gfx2", 0, bootleg_spritelayout, 0x400, 128 )
+GFXDECODE_END
+
+
+
 /***************************************************************************/
 
-void m92_sprite_interrupt(running_machine &machine)
+void m92_state::m92_sprite_interrupt()
 {
-	m92_state *state = machine.driver_data<m92_state>();
-
-	cputag_set_input_line_and_vector(machine, "maincpu", 0, HOLD_LINE, M92_IRQ_1);
+	m_maincpu->set_input_line_and_vector(0, HOLD_LINE, M92_IRQ_1);
 }
 
 static MACHINE_CONFIG_START( m92, m92_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu",V33,18000000/2)	/* NEC V33, 18 MHz clock */
+	MCFG_CPU_ADD("maincpu",V33,XTAL_18MHz/2)
 	MCFG_CPU_PROGRAM_MAP(m92_map)
 	MCFG_CPU_IO_MAP(m92_portmap)
 
-	MCFG_CPU_ADD("soundcpu" ,V35, 14318180)	/* 14.31818 MHz */
+	MCFG_CPU_ADD("soundcpu" ,V35, XTAL_14_31818MHz)
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MCFG_MACHINE_START(m92)
-	MCFG_MACHINE_RESET(m92)
+	MCFG_MACHINE_START_OVERRIDE(m92_state,m92)
+	MCFG_MACHINE_RESET_OVERRIDE(m92_state,m92)
 
-	MCFG_TIMER_ADD_SCANLINE("scantimer", m92_scanline_interrupt, "screen", 0, 1)
+	MCFG_TIMER_DRIVER_ADD_SCANLINE("scantimer", m92_state, m92_scanline_interrupt, "screen", 0, 1)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MCFG_BUFFERED_SPRITERAM16_ADD("spriteram")
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(80, 511-112, 8, 247) /* 320 x 240 */
-	MCFG_SCREEN_UPDATE(m92)
+	MCFG_SCREEN_UPDATE_DRIVER(m92_state, screen_update_m92)
 
 	MCFG_GFXDECODE(m92)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_START(m92)
+	MCFG_VIDEO_START_OVERRIDE(m92_state,m92)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 14318180/4)
-	MCFG_SOUND_CONFIG(ym2151_config)
+	MCFG_YM2151_ADD("ymsnd", XTAL_14_31818MHz/4)
+	MCFG_YM2151_IRQ_HANDLER(INPUTLINE("soundcpu", NEC_INPUT_LINE_INTP0))
 	MCFG_SOUND_ROUTE(0, "mono", 0.40)
 	MCFG_SOUND_ROUTE(1, "mono", 0.40)
 
-	MCFG_SOUND_ADD("irem", IREMGA20, 14318180/4)
+	MCFG_IREMGA20_ADD("irem", XTAL_14_31818MHz/4)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 
 
-static const nec_config gunforce_config ={	gunforce_decryption_table, };
 static MACHINE_CONFIG_DERIVED( gunforce, m92 )
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(gunforce_config)
+	MCFG_V25_CONFIG(gunforce_decryption_table)
 MACHINE_CONFIG_END
 
-static const nec_config bmaster_config ={ bomberman_decryption_table, };
 static MACHINE_CONFIG_DERIVED( bmaster, m92 )
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(bmaster_config)
+	MCFG_V25_CONFIG(bomberman_decryption_table)
 MACHINE_CONFIG_END
 
-static const nec_config lethalth_config ={ lethalth_decryption_table, };
 static MACHINE_CONFIG_DERIVED( lethalth, m92 )
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_PROGRAM_MAP(lethalth_map)
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(lethalth_config)
+	MCFG_V25_CONFIG(lethalth_decryption_table)
 MACHINE_CONFIG_END
 
-static const nec_config uccops_config ={ dynablaster_decryption_table, };
 static MACHINE_CONFIG_DERIVED( uccops, m92 )
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(uccops_config)
+	MCFG_V25_CONFIG(dynablaster_decryption_table)
 MACHINE_CONFIG_END
 
-static const nec_config mysticri_config ={ mysticri_decryption_table, };
 static MACHINE_CONFIG_DERIVED( mysticri, m92 )
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(mysticri_config)
+	MCFG_V25_CONFIG(mysticri_decryption_table)
 MACHINE_CONFIG_END
 
-static const nec_config majtitl2_config ={ majtitl2_decryption_table, };
 static MACHINE_CONFIG_DERIVED( majtitl2, m92 )
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(majtitl2_config)
+	MCFG_V25_CONFIG(majtitl2_decryption_table)
 MACHINE_CONFIG_END
 
-static const nec_config hook_config ={ hook_decryption_table, };
 static MACHINE_CONFIG_DERIVED( hook, m92 )
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(hook_config)
+	MCFG_V25_CONFIG(hook_decryption_table)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( ppan, m92_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu",V33,18000000/2)
+	MCFG_CPU_ADD("maincpu",V33,XTAL_18MHz/2)
 	MCFG_CPU_PROGRAM_MAP(m92_map)
-	MCFG_CPU_IO_MAP(m92_portmap)
+	MCFG_CPU_IO_MAP(ppan_portmap)
 
 	/* no Sound CPU */
 
-	MCFG_MACHINE_START(m92)
-	MCFG_MACHINE_RESET(m92)
+	MCFG_MACHINE_START_OVERRIDE(m92_state,m92)
+	MCFG_MACHINE_RESET_OVERRIDE(m92_state,m92)
 
-	MCFG_TIMER_ADD_SCANLINE("scantimer", m92_scanline_interrupt, "screen", 0, 1)
+	MCFG_TIMER_DRIVER_ADD_SCANLINE("scantimer", m92_state, m92_scanline_interrupt, "screen", 0, 1)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MCFG_BUFFERED_SPRITERAM16_ADD("spriteram") // not really...
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(80, 511-112, 8, 247) /* 320 x 240 */
-	MCFG_SCREEN_UPDATE(m92)
+	MCFG_SCREEN_UPDATE_DRIVER(m92_state, screen_update_ppan)
 
 	MCFG_GFXDECODE(m92)
 	MCFG_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_START(m92)
+	MCFG_VIDEO_START_OVERRIDE(m92_state,ppan)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -998,47 +1032,52 @@ static MACHINE_CONFIG_START( ppan, m92_state )
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 
-static const nec_config rtypeleo_config ={ rtypeleo_decryption_table, };
 static MACHINE_CONFIG_DERIVED( rtypeleo, m92 )
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(rtypeleo_config)
+	MCFG_V25_CONFIG(rtypeleo_decryption_table)
 MACHINE_CONFIG_END
 
 
-static const nec_config inthunt_config ={ inthunt_decryption_table, };
 static MACHINE_CONFIG_DERIVED( inthunt, m92 )
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(inthunt_config)
+	MCFG_V25_CONFIG(inthunt_decryption_table)
 MACHINE_CONFIG_END
 
 
-static const nec_config nbbatman_config ={ leagueman_decryption_table, };
 static MACHINE_CONFIG_DERIVED( nbbatman, m92 )
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(nbbatman_config)
+	MCFG_V25_CONFIG(leagueman_decryption_table)
 MACHINE_CONFIG_END
 
+static MACHINE_CONFIG_DERIVED( nbbatman2bl, m92 )
+	MCFG_DEVICE_REMOVE("soundcpu")
+	MCFG_DEVICE_REMOVE("ymsnd")
+	MCFG_DEVICE_REMOVE("irem")
 
-static const nec_config psoldier_config ={ psoldier_decryption_table, };
+	MCFG_GFXDECODE(bootleg)
+
+	/* 8951 MCU as sound CPU */
+	/* OKI6295 (AD-65) as sound */
+
+MACHINE_CONFIG_END
+
 static MACHINE_CONFIG_DERIVED( psoldier, m92 )
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(psoldier_config)
+	MCFG_V25_CONFIG(psoldier_decryption_table)
 	/* video hardware */
-	MCFG_GFXDECODE(2)
+	MCFG_GFXDECODE(psoldier)
 MACHINE_CONFIG_END
 
-static const nec_config dsoccr94_config ={ dsoccr94_decryption_table, };
 static MACHINE_CONFIG_DERIVED( dsoccr94j, m92 )
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(dsoccr94_config)
+	MCFG_V25_CONFIG(dsoccr94_decryption_table)
 	/* video hardware */
-	MCFG_GFXDECODE(2)
+	MCFG_GFXDECODE(psoldier)
 MACHINE_CONFIG_END
 
-static const nec_config gunforc2_config ={ lethalth_decryption_table, };
 static MACHINE_CONFIG_DERIVED( gunforc2, m92 )
 	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_CONFIG(gunforc2_config)
+	MCFG_V25_CONFIG(lethalth_decryption_table)
 MACHINE_CONFIG_END
 
 /***************************************************************************/
@@ -1123,7 +1162,7 @@ ROM_START( skingame )
 	ROM_REGION( 0x80000, "irem", 0 )
 	ROM_LOAD( "da", 0x000000, 0x80000, CRC(713b9e9f) SHA1(91384d67d4ba9c7d926fbecb077293c661b8ec83) )
 
-	ROM_REGION( 0x4000, "eeprom", 0 )	/* EEPROM */
+	ROM_REGION( 0x4000, "eeprom", 0 )   /* EEPROM */
 	ROM_LOAD( "mt2eep",  0x000000, 0x800, CRC(208af971) SHA1(69384cac24b7af35a031f9b60e035131a8b10cb2) )
 
 	ROM_REGION( 0x0c00, "plds", 0 )
@@ -1160,7 +1199,7 @@ ROM_START( majtitl2 )
 	ROM_REGION( 0x80000, "irem", 0 )
 	ROM_LOAD( "da", 0x000000, 0x80000, CRC(713b9e9f) SHA1(91384d67d4ba9c7d926fbecb077293c661b8ec83) )
 
-	ROM_REGION( 0x4000, "eeprom", 0 )	/* EEPROM */
+	ROM_REGION( 0x4000, "eeprom", 0 )   /* EEPROM */
 	ROM_LOAD( "mt2eep",  0x000000, 0x800, CRC(208af971) SHA1(69384cac24b7af35a031f9b60e035131a8b10cb2) )
 
 	ROM_REGION( 0x0c00, "plds", 0 )
@@ -1197,7 +1236,7 @@ ROM_START( majtitl2j )
 	ROM_REGION( 0x80000, "irem", 0 )
 	ROM_LOAD( "da", 0x000000, 0x80000, CRC(713b9e9f) SHA1(91384d67d4ba9c7d926fbecb077293c661b8ec83) )
 
-	ROM_REGION( 0x4000, "eeprom", 0 )	/* EEPROM */
+	ROM_REGION( 0x4000, "eeprom", 0 )   /* EEPROM */
 	ROM_LOAD( "mt2eep",  0x000000, 0x800, CRC(208af971) SHA1(69384cac24b7af35a031f9b60e035131a8b10cb2) )
 
 	ROM_REGION( 0x0c00, "plds", 0 )
@@ -1234,7 +1273,7 @@ ROM_START( skingame2 )
 	ROM_REGION( 0x80000, "irem", 0 )
 	ROM_LOAD( "da", 0x000000, 0x80000, CRC(713b9e9f) SHA1(91384d67d4ba9c7d926fbecb077293c661b8ec83) )
 
-	ROM_REGION( 0x4000, "eeprom", 0 )	/* EEPROM */
+	ROM_REGION( 0x4000, "eeprom", 0 )   /* EEPROM */
 	ROM_LOAD( "mt2eep",  0x000000, 0x800, CRC(208af971) SHA1(69384cac24b7af35a031f9b60e035131a8b10cb2) )
 
 	ROM_REGION( 0x0c00, "plds", 0 )
@@ -1333,7 +1372,7 @@ ROM_START( inthunt )
 	ROM_LOAD16_BYTE( "ith-h1-b.bin", 0x080001, 0x020000, CRC(fc2899df) SHA1(f811ff5fd55655afdb25950d317db85c8091b6d6) )
 	ROM_LOAD16_BYTE( "ith-l1-b.bin", 0x080000, 0x020000, CRC(955a605a) SHA1(2515accc2f4a06b07418e45eb62e746d09c81720) )
 
-	ROM_REGION( 0x20000, "soundcpu", 0 )	/* Irem D8000011A1 */
+	ROM_REGION( 0x20000, "soundcpu", 0 )    /* Irem D8000011A1 */
 	ROM_LOAD16_BYTE( "ith-sh0.rom", 0x00001, 0x10000, CRC(209c8b7f) SHA1(eaf4a6d9222fe181df65cea1f13c3f2ebff2ec5b) )
 	ROM_LOAD16_BYTE( "ith-sl0.rom", 0x00000, 0x10000, CRC(18472d65) SHA1(2705e94ee350ffda272c50ea3bf605826aa19978) )
 
@@ -1360,7 +1399,7 @@ ROM_START( inthuntu )
 	ROM_LOAD16_BYTE( "ith-h1-a.bin", 0x080001, 0x020000, CRC(0253065f) SHA1(a11e6bf014c19b2e317b75f01a7f0d7a9a85c7d3) )
 	ROM_LOAD16_BYTE( "ith-l1-a.bin", 0x080000, 0x020000, CRC(a57d688d) SHA1(aa049de5c41097b6f1da31e9bf3bac132f67aa6c) )
 
-	ROM_REGION( 0x20000, "soundcpu", 0 )	/* Irem D8000011A1 */
+	ROM_REGION( 0x20000, "soundcpu", 0 )    /* Irem D8000011A1 */
 	ROM_LOAD16_BYTE( "ith-sh0.rom", 0x00001, 0x10000, CRC(209c8b7f) SHA1(eaf4a6d9222fe181df65cea1f13c3f2ebff2ec5b) )
 	ROM_LOAD16_BYTE( "ith-sl0.rom", 0x00000, 0x10000, CRC(18472d65) SHA1(2705e94ee350ffda272c50ea3bf605826aa19978) )
 
@@ -1387,7 +1426,7 @@ ROM_START( kaiteids )
 	ROM_LOAD16_BYTE( "ith-h1j.bin", 0x080001, 0x020000, CRC(5a7b212d) SHA1(50562d804a43aed7c34c19c8345782ac2f85caa7) )
 	ROM_LOAD16_BYTE( "ith-l1j.bin", 0x080000, 0x020000, CRC(4c084494) SHA1(4f32003db32f13e19dd07c66996b4328ac2a671e) )
 
-	ROM_REGION( 0x20000, "soundcpu", 0 )	/* Irem D8000011A1 */
+	ROM_REGION( 0x20000, "soundcpu", 0 )    /* Irem D8000011A1 */
 	ROM_LOAD16_BYTE( "ith-sh0.rom", 0x00001, 0x10000, CRC(209c8b7f) SHA1(eaf4a6d9222fe181df65cea1f13c3f2ebff2ec5b) )
 	ROM_LOAD16_BYTE( "ith-sl0.rom", 0x00000, 0x10000, CRC(18472d65) SHA1(2705e94ee350ffda272c50ea3bf605826aa19978) )
 
@@ -1509,8 +1548,18 @@ ROM_START( ppan )
 	ROM_LOAD( "9.u109",  0x300000, 0x080000, CRC(9d466b1a) SHA1(c65b7afcfbd6bfec1b495a5dbce806ff34a7cbc1) )
 	ROM_LOAD( "8.u113",  0x380000, 0x080000, CRC(d08a5f6b) SHA1(ab762be9e5fadac2dc3149bfa69b8cbdbac3218b) )
 
-	ROM_REGION( 0x80000, "oki", 0 ) /* OKI M6295 samples */
-	ROM_LOAD( "3.u122", 0x000000, 0x080000, CRC(d0d37028) SHA1(0f58d220a1972bafa1299a19e704b7735886c8b6) )
+	ROM_REGION( 0x080000, "okidata", 0 ) /* OKI M6295 samples */
+	ROM_LOAD( "3.u122",  0x000000, 0x080000, CRC(d0d37028) SHA1(0f58d220a1972bafa1299a19e704b7735886c8b6) )
+
+	ROM_REGION( 0x100000, "oki", 0) /* OKI Samples copied here */
+	ROM_COPY( "okidata",  0x000000, 0x000000, 0x20000 )
+	ROM_COPY( "okidata",  0x000000, 0x020000, 0x20000 )
+	ROM_COPY( "okidata",  0x000000, 0x040000, 0x20000 )
+	ROM_COPY( "okidata",  0x020000, 0x060000, 0x20000 )
+	ROM_COPY( "okidata",  0x000000, 0x080000, 0x20000 )
+	ROM_COPY( "okidata",  0x040000, 0x0a0000, 0x20000 )
+	ROM_COPY( "okidata",  0x000000, 0x0c0000, 0x20000 )
+	ROM_COPY( "okidata",  0x060000, 0x0e0000, 0x20000 )
 ROM_END
 
 ROM_START( rtypeleo )
@@ -1828,6 +1877,33 @@ ROM_END
 
 ROM_START( nbbatman )
 	ROM_REGION( 0x100000, "maincpu", 0 )
+	ROM_LOAD16_BYTE( "6_h0.34",   0x000001, 0x040000, CRC(5c4a1e3f) SHA1(583f83ae789040b28b62af67218abfdc6ea74d25) )
+	ROM_LOAD16_BYTE( "3_l0.31",   0x000000, 0x040000, CRC(3d6d70ae) SHA1(6585d0e2367d9400d83be483d849d2390cae7d39) )
+	ROM_LOAD16_BYTE( "a1-h1-.33", 0x080001, 0x040000, CRC(3ce2aab5) SHA1(b39f17853bcab7ab290fdfaf9f3d8e8c2d91072a) )
+	ROM_LOAD16_BYTE( "a1-l1-.32", 0x080000, 0x040000, CRC(116d9bcc) SHA1(c2faf8d1c6b51ac1483757777fd55961b74501fb) )
+
+	ROM_REGION( 0x20000, "soundcpu", 0 )
+	ROM_LOAD16_BYTE( "a1-sh0-.14", 0x00001, 0x10000, CRC(b7fae3e6) SHA1(ce41380d6c0f29f2facf9bf23dd4403648cd9eb4) )
+	ROM_LOAD16_BYTE( "a1-sl0-.17", 0x00000, 0x10000, CRC(b26d54fc) SHA1(136e1a83da08a0dc9046faf71f3f58d8d3095fde) )
+
+	ROM_REGION( 0x200000, "gfx1", 0 ) /* Tiles */
+	ROM_LOAD( "lh534k0c.9",  0x000000, 0x080000, CRC(314a0c6d) SHA1(a918ae638f10b18165f7d34ab7db54fbf258df01) )
+	ROM_LOAD( "lh534k0e.10", 0x080000, 0x080000, CRC(dc31675b) SHA1(81b0a6b35285e855c778c7f32f31115f1edce099) )
+	ROM_LOAD( "lh534k0f.11", 0x100000, 0x080000, CRC(e15d8bfb) SHA1(74ea6f9748ed52e579cb08445282c871b3fd0f3a) )
+	ROM_LOAD( "lh534k0g.12", 0x180000, 0x080000, CRC(888d71a3) SHA1(d1609e326fda5ac579ddf1ad5dc77443ec2a180f) )
+
+	ROM_REGION( 0x400000, "gfx2", 0 ) /* Sprites */
+	ROM_LOAD( "lh538393.42", 0x000000, 0x100000, CRC(26cdd224) SHA1(ab2a3dd8eafec78866a0d45c1f051209025bdc77) )
+	ROM_LOAD( "lh538394.43", 0x100000, 0x100000, CRC(4bbe94fa) SHA1(7c13b22e056dc1cf497ea0b3e9766579c33d4370) )
+	ROM_LOAD( "lh538395.44", 0x200000, 0x100000, CRC(2a533b5e) SHA1(ceb9750b674adfa5fa0f88e46bce7b2b58440873) )
+	ROM_LOAD( "lh538396.45", 0x300000, 0x100000, CRC(863a66fa) SHA1(0edc4734daee8fc1738df4f4f17bcd817f0ade0a) )
+
+	ROM_REGION( 0x80000, "irem", 0 )
+	ROM_LOAD( "lh534k0k.8", 0x000000, 0x080000, CRC(735e6380) SHA1(bf019815e579ef2393c00869f101a01f746e04d6) )
+ROM_END
+
+ROM_START( nbbatmanu )
+	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "a1-h0-a.34", 0x000001, 0x040000, CRC(24a9b794) SHA1(a4867a89ea2749d60e6d1225bd84a488403b8cf3) )
 	ROM_LOAD16_BYTE( "a1-l0-a.31", 0x000000, 0x040000, CRC(846d7716) SHA1(28434fd74b168ef73d00779b3e5d8b36b1f3ef80) )
 	ROM_LOAD16_BYTE( "a1-h1-.33",  0x080001, 0x040000, CRC(3ce2aab5) SHA1(b39f17853bcab7ab290fdfaf9f3d8e8c2d91072a) )
@@ -1879,6 +1955,24 @@ ROM_START( leaguemn )
 	ROM_REGION( 0x80000, "irem", 0 )
 	ROM_LOAD( "lh534k0k.8", 0x000000, 0x080000, CRC(735e6380) SHA1(bf019815e579ef2393c00869f101a01f746e04d6) )
 ROM_END
+
+ROM_START( nbbatman2bl )
+	ROM_REGION( 0x100000, "maincpu", 0 )
+	ROM_LOAD( "1.sys_rom",  0x000000, 0x100000, CRC(88526580) SHA1(175ec535d1d4641b3057afd1979b18148060f397) )
+
+	ROM_REGION( 0x20000, "mcu", 0 )
+	ROM_LOAD( "at89c4051-24pc.mcu", 0x00000, 0x04000, NO_DUMP )
+
+	ROM_REGION( 0x200000, "gfx1", 0 ) /* Tiles */
+	ROM_LOAD( "4.bin",  0x000000, 0x200000, CRC(17148932) SHA1(f15777b842691dcabc6336a3c33ab6b61c83ae8b) )
+
+	ROM_REGION( 0x400000, "gfx2", 0 ) /* Sprites */
+	ROM_LOAD( "2.bin", 0x000000, 0x400000, CRC(bae2eb19) SHA1(609c805b23ceaf4cb02f4ad6192ab4dd50b89711) )
+
+	ROM_REGION( 0x200000, "irem", 0 )
+	ROM_LOAD( "3.sou_rom", 0x000000, 0x100000, CRC(776ed65d) SHA1(0e3321c024a62fc48aa5541215af8af14c95ccc6) )
+ROM_END
+
 
 ROM_START( ssoldier )
 	ROM_REGION( 0x100000, "maincpu", 0 )
@@ -1953,13 +2047,13 @@ ROM_START( dsoccr94j )
 	ROM_LOAD16_BYTE("ds_sh0.rom", 0x00001, 0x10000, CRC(23fe6ffc) SHA1(896377961cafc19e44d9d889f9fbfdbaedd556da) )
 	ROM_LOAD16_BYTE("ds_sl0.rom", 0x00000, 0x10000, CRC(768132e5) SHA1(1bb64516eb58d3b246f08e1c07f091e78085689f) )
 
-	ROM_REGION( 0x400000, "gfx1", 0 )	/* chars */
+	ROM_REGION( 0x400000, "gfx1", 0 )   /* chars */
 	ROM_LOAD("c0.bin", 0x000000, 0x100000, CRC(83ea8a47) SHA1(b29c8cc50da85c8168dda92446dfa12582580f96) )
 	ROM_LOAD("c1.bin", 0x100000, 0x100000, CRC(64063e6d) SHA1(80b66e08292a3682f80d5670c5fe9f0fcc92062e) )
 	ROM_LOAD("c2.bin", 0x200000, 0x100000, CRC(cc1f621a) SHA1(a0bdfe582206d49ca01bedc2b6973ebe5248efe4) )
 	ROM_LOAD("c3.bin", 0x300000, 0x100000, CRC(515829e1) SHA1(2b5a5151eeb56cd3da30c8cb6415605cbe1d82e9) )
 
-	ROM_REGION( 0x400000, "gfx2", 0 )	/* sprites */
+	ROM_REGION( 0x400000, "gfx2", 0 )   /* sprites */
 	ROM_LOAD16_BYTE("a3-o00-w.bin", 0x000001, 0x80000, CRC(b094e5ad) SHA1(9acceb24a72eeb3c6e629c08d4cc9ef2a171da32) )
 	ROM_LOAD16_BYTE("a3-o01-w.bin", 0x000000, 0x80000, CRC(91f34018) SHA1(4982b914ecce0358d63800caf7e249e1723bf7cf) )
 	ROM_LOAD16_BYTE("a3-o10-w.bin", 0x100001, 0x80000, CRC(edddeef4) SHA1(73a90c20c99209206370e8bff35199c3a6b9dc3d) )
@@ -1984,7 +2078,7 @@ ROM_START( gunforc2 )
 	ROM_LOAD16_BYTE("a2_sh0.3l",  0x00001, 0x10000, CRC(2e2d103d) SHA1(6b663948f69218308d9ecdb677557b2db1dfbf5a) )
 	ROM_LOAD16_BYTE("a2_sl0.5l",  0x00000, 0x10000, CRC(2287e0b3) SHA1(755dab510915161428ed57ab18410c393e138e65) )
 
-	ROM_REGION( 0x200000, "gfx1", 0 )	/* chars */
+	ROM_REGION( 0x200000, "gfx1", 0 )   /* chars */
 	ROM_LOAD("a2_c0.1a",   0x000000, 0x080000, CRC(68b8f574) SHA1(fb935947cdde43e84453f82caeea141a4ae7226d) )
 	ROM_LOAD("a2_c1.1b",   0x080000, 0x080000, CRC(0b9efe67) SHA1(1df4108d30d2538f6407e328513517cd3412321f) )
 	ROM_LOAD("a2_c2.3a",   0x100000, 0x080000, CRC(7a9e9978) SHA1(241dc310e75960e306701a2e86e30d9c1a60ebff) )
@@ -2011,7 +2105,7 @@ ROM_START( geostorm )
 	ROM_LOAD16_BYTE("a2_sh0.3l",  0x00001, 0x10000, CRC(2e2d103d) SHA1(6b663948f69218308d9ecdb677557b2db1dfbf5a) )
 	ROM_LOAD16_BYTE("a2_sl0.5l",  0x00000, 0x10000, CRC(2287e0b3) SHA1(755dab510915161428ed57ab18410c393e138e65) )
 
-	ROM_REGION( 0x200000, "gfx1", 0 )	/* chars */
+	ROM_REGION( 0x200000, "gfx1", 0 )   /* chars */
 	ROM_LOAD("a2_c0.1a",   0x000000, 0x080000, CRC(68b8f574) SHA1(fb935947cdde43e84453f82caeea141a4ae7226d) )
 	ROM_LOAD("a2_c1.1b",   0x080000, 0x080000, CRC(0b9efe67) SHA1(1df4108d30d2538f6407e328513517cd3412321f) )
 	ROM_LOAD("a2_c2.3a",   0x100000, 0x080000, CRC(7a9e9978) SHA1(241dc310e75960e306701a2e86e30d9c1a60ebff) )
@@ -2029,119 +2123,108 @@ ROM_END
 
 /***************************************************************************/
 
-static DRIVER_INIT( m92 )
+DRIVER_INIT_MEMBER(m92_state,m92)
 {
-	m92_state *state = machine.driver_data<m92_state>();
-	UINT8 *ROM = machine.region("maincpu")->base();
+	UINT8 *ROM = memregion("maincpu")->base();
 
-	memory_set_bankptr(machine, "bank1", &ROM[0xa0000]);
+	membank("bank1")->set_base(&ROM[0xa0000]);
 
-	state->m_game_kludge = 0;
-	state->m_irq_vectorbase = 0x80;
+	m_game_kludge = 0;
+	m_irq_vectorbase = 0x80;
 }
 
 /* different vector base */
-static DRIVER_INIT( m92_alt )
+DRIVER_INIT_MEMBER(m92_state,m92_alt)
 {
-	m92_state *state = machine.driver_data<m92_state>();
-	UINT8 *ROM = machine.region("maincpu")->base();
+	UINT8 *ROM = memregion("maincpu")->base();
 
-	memory_set_bankptr(machine, "bank1", &ROM[0xa0000]);
+	membank("bank1")->set_base(&ROM[0xa0000]);
 
-	state->m_game_kludge = 0;
-	state->m_irq_vectorbase = 0x20;
+	m_game_kludge = 0;
+	m_irq_vectorbase = 0x20;
 }
 
 /* different vector base, different address map (no bank1) */
-static DRIVER_INIT( lethalth )
+DRIVER_INIT_MEMBER(m92_state,lethalth)
 {
-	m92_state *state = machine.driver_data<m92_state>();
-
-	state->m_game_kludge = 0;
-	state->m_irq_vectorbase = 0x20;
+	m_game_kludge = 0;
+	m_irq_vectorbase = 0x20;
 }
 
 /* has bankswitching */
-static DRIVER_INIT( m92_bank )
+DRIVER_INIT_MEMBER(m92_state,m92_bank)
 {
-	m92_state *state = machine.driver_data<m92_state>();
-	UINT8 *ROM = machine.region("maincpu")->base();
+	UINT8 *ROM = memregion("maincpu")->base();
 
-	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x80000], 0x20000);
-	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x20, 0x21, FUNC(m92_bankswitch_w));
+	membank("bank1")->configure_entries(0, 4, &ROM[0x80000], 0x20000);
+	m_maincpu->space(AS_IO).install_write_handler(0x20, 0x21, write16_delegate(FUNC(m92_state::m92_bankswitch_w),this));
 
-	state->m_game_kludge = 0;
-	state->m_irq_vectorbase = 0x80;
+	m_game_kludge = 0;
+	m_irq_vectorbase = 0x80;
 }
 
 /* has bankswitching, has eeprom, needs sprite kludge */
-static DRIVER_INIT( majtitl2 )
+DRIVER_INIT_MEMBER(m92_state,majtitl2)
 {
-	m92_state *state = machine.driver_data<m92_state>();
-	UINT8 *ROM = machine.region("maincpu")->base();
+	UINT8 *ROM = memregion("maincpu")->base();
 
-	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x80000], 0x20000);
-	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x20, 0x21, FUNC(m92_bankswitch_w));
+	membank("bank1")->configure_entries(0, 4, &ROM[0x80000], 0x20000);
+	m_maincpu->space(AS_IO).install_write_handler(0x20, 0x21, write16_delegate(FUNC(m92_state::m92_bankswitch_w),this));
 
 	/* This game has an eeprom on the game board */
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0xf0000, 0xf3fff, FUNC(m92_eeprom_r), FUNC(m92_eeprom_w));
+	m_maincpu->space(AS_PROGRAM).install_readwrite_handler(0xf0000, 0xf3fff, read16_delegate(FUNC(m92_state::m92_eeprom_r),this), write16_delegate(FUNC(m92_state::m92_eeprom_w),this));
 
-	state->m_game_kludge = 2;
-	state->m_irq_vectorbase = 0x80;
+	m_game_kludge = 2;
+	m_irq_vectorbase = 0x80;
 }
 
 /* TODO: figure out actual address map and other differences from real Irem h/w */
-/* Based on the size of the program ROMs, this board might have bankswitching */
-static DRIVER_INIT( ppan )
+DRIVER_INIT_MEMBER(m92_state,ppan)
 {
-	m92_state *state = machine.driver_data<m92_state>();
-	UINT8 *ROM = machine.region("maincpu")->base();
+	UINT8 *ROM = memregion("maincpu")->base();
+	membank("bank1")->set_base(&ROM[0xa0000]);
 
-	memory_set_bankptr(machine, "bank1", &ROM[0xa0000]);
-
-	state->m_game_kludge = 0;
-	state->m_irq_vectorbase = 0x80;
-
-	/* NOP out the sound comms */
-	machine.device("maincpu")->memory().space(AS_IO)->nop_write(0x00, 0x01);
-	machine.device("maincpu")->memory().space(AS_IO)->nop_write(0xc0, 0xc1);
+	m_game_kludge = 0;
+	m_irq_vectorbase = 0x80;
 }
 
 /***************************************************************************/
 
-GAME( 1991, gunforce, 0,        gunforce,      gunforce, m92,      ROT0,   "Irem",         "Gunforce - Battle Fire Engulfed Terror Island (World)", GAME_SUPPORTS_SAVE )
-GAME( 1991, gunforcej,gunforce, gunforce,      gunforce, m92,      ROT0,   "Irem",         "Gunforce - Battle Fire Engulfed Terror Island (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1991, gunforceu,gunforce, gunforce,      gunforce, m92,      ROT0,   "Irem America", "Gunforce - Battle Fire Engulfed Terror Island (US)", GAME_SUPPORTS_SAVE )
-GAME( 1991, bmaster,  0,        bmaster,       bmaster,  m92,      ROT0,   "Irem",         "Blade Master (World)", GAME_SUPPORTS_SAVE )
-GAME( 1991, crossbld, bmaster,  bmaster,       bmaster,  m92,      ROT0,   "Irem",         "Cross Blades! (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1991, lethalth, 0,        lethalth,      lethalth, lethalth, ROT270, "Irem",         "Lethal Thunder (World)", GAME_SUPPORTS_SAVE )
-GAME( 1991, thndblst, lethalth, lethalth,      lethalth, lethalth, ROT270, "Irem",         "Thunder Blaster (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1992, uccops,   0,        uccops,        uccops,   m92,      ROT0,   "Irem",         "Undercover Cops (World)", GAME_SUPPORTS_SAVE )
-GAME( 1992, uccopsu,  uccops,   uccops,        uccops,   m92,      ROT0,   "Irem",         "Undercover Cops (US)", GAME_SUPPORTS_SAVE )
-GAME( 1992, uccopsar, uccops,   uccops,        uccops,   m92,      ROT0,   "Irem",         "Undercover Cops (Alpha Renewal Version)", GAME_SUPPORTS_SAVE )
-GAME( 1992, uccopsj,  uccops,   uccops,        uccops,   m92,      ROT0,   "Irem",         "Undercover Cops (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1992, mysticri, 0,        mysticri,      mysticri, m92,      ROT0,   "Irem",         "Mystic Riders (World)", GAME_SUPPORTS_SAVE )
-GAME( 1992, gunhohki, mysticri, mysticri,      mysticri, m92,      ROT0,   "Irem",         "Mahou Keibitai Gun Hohki (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1991, gunforce, 0,        gunforce,      gunforce, m92_state, m92,      ROT0,   "Irem",         "Gunforce - Battle Fire Engulfed Terror Island (World)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1991, gunforcej,gunforce, gunforce,      gunforce, m92_state, m92,      ROT0,   "Irem",         "Gunforce - Battle Fire Engulfed Terror Island (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1991, gunforceu,gunforce, gunforce,      gunforce, m92_state, m92,      ROT0,   "Irem America", "Gunforce - Battle Fire Engulfed Terror Island (US)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1991, bmaster,  0,        bmaster,       bmaster, m92_state,  m92,      ROT0,   "Irem",         "Blade Master (World)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1991, crossbld, bmaster,  bmaster,       bmaster, m92_state,  m92,      ROT0,   "Irem",         "Cross Blades! (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL)
+GAME( 1991, lethalth, 0,        lethalth,      lethalth, m92_state, lethalth, ROT270, "Irem",         "Lethal Thunder (World)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1991, thndblst, lethalth, lethalth,      lethalth, m92_state, lethalth, ROT270, "Irem",         "Thunder Blaster (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1992, uccops,   0,        uccops,        uccops, m92_state,   m92,      ROT0,   "Irem",         "Undercover Cops (World)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1992, uccopsu,  uccops,   uccops,        uccops, m92_state,   m92,      ROT0,   "Irem",         "Undercover Cops (US)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1992, uccopsar, uccops,   uccops,        uccops, m92_state,   m92,      ROT0,   "Irem",         "Undercover Cops - Alpha Renewal Version", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1992, uccopsj,  uccops,   uccops,        uccops, m92_state,   m92,      ROT0,   "Irem",         "Undercover Cops (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1992, mysticri, 0,        mysticri,      mysticri, m92_state, m92,      ROT0,   "Irem",         "Mystic Riders (World)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL)
+GAME( 1992, gunhohki, mysticri, mysticri,      mysticri, m92_state, m92,      ROT0,   "Irem",         "Mahou Keibitai Gun Hohki (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
 // cheaply produced Korean board, has original chips, but lacks any proper labels
 // main code is also significantly different to the supported original set, so it might just be a legitimate early revision on a cheap board
-GAME( 1992, mysticrib,mysticri, mysticri,      mysticri, m92,      ROT0,   "Irem",         "Mystic Riders (bootleg?)", GAME_SUPPORTS_SAVE )
-GAME( 1992, majtitl2, 0,        majtitl2,      majtitl2, majtitl2, ROT0,   "Irem",         "Major Title 2 (World)", GAME_SUPPORTS_SAVE )
-GAME( 1992, majtitl2j,majtitl2, majtitl2,      majtitl2, majtitl2, ROT0,   "Irem",         "Major Title 2 (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1992, skingame, majtitl2, majtitl2,      majtitl2, majtitl2, ROT0,   "Irem America", "The Irem Skins Game (US set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1992, skingame2,majtitl2, majtitl2,      majtitl2, majtitl2, ROT0,   "Irem America", "The Irem Skins Game (US set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1992, hook,     0,        hook,          hook,     m92,      ROT0,   "Irem",         "Hook (World)", GAME_SUPPORTS_SAVE )
-GAME( 1992, hooku,    hook,     hook,          hook,     m92,      ROT0,   "Irem America", "Hook (US)", GAME_SUPPORTS_SAVE )
-GAME( 1992, hookj,    hook,     hook,          hook,     m92,      ROT0,   "Irem",         "Hook (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1992, ppan,     hook,     ppan,          hook,     ppan,     ROT0,   "bootleg",      "Peter Pan (bootleg of Hook)", GAME_NOT_WORKING ) // PCB marked 'Peter Pan', no title screen, made in Italy?
-GAME( 1992, rtypeleo, 0,        rtypeleo,      rtypeleo, m92_alt,  ROT0,   "Irem",         "R-Type Leo (World)", GAME_SUPPORTS_SAVE )
-GAME( 1992, rtypeleoj,rtypeleo, rtypeleo,      rtypeleo, m92_alt,  ROT0,   "Irem",         "R-Type Leo (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1993, inthunt,  0,        inthunt,       inthunt,  m92,      ROT0,   "Irem",         "In The Hunt (World)", GAME_SUPPORTS_SAVE )
-GAME( 1993, inthuntu, inthunt,  inthunt,       inthunt,  m92,      ROT0,   "Irem America", "In The Hunt (US)", GAME_SUPPORTS_SAVE )
-GAME( 1993, kaiteids, inthunt,  inthunt,       inthunt,  m92,      ROT0,   "Irem",         "Kaitei Daisensou (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1993, nbbatman, 0,        nbbatman,      nbbatman, m92_bank, ROT0,   "Irem America", "Ninja Baseball Bat Man (US)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, leaguemn, nbbatman, nbbatman,      nbbatman, m92_bank, ROT0,   "Irem",         "Yakyuu Kakutou League-Man (Japan)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, ssoldier, 0,        psoldier,      psoldier, m92_alt,  ROT0,   "Irem America", "Superior Soldiers (US)", GAME_SUPPORTS_SAVE )
-GAME( 1993, psoldier, ssoldier, psoldier,      psoldier, m92_alt,  ROT0,   "Irem",         "Perfect Soldiers (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1994, dsoccr94j,dsoccr94, dsoccr94j,     dsoccr94j,m92_bank, ROT0,   "Irem",         "Dream Soccer '94 (Japan, M92 hardware)", GAME_SUPPORTS_SAVE )
-GAME( 1994, gunforc2, 0,        gunforc2,      gunforc2, m92_bank, ROT0,   "Irem",         "Gunforce 2 (US)", GAME_SUPPORTS_SAVE )
-GAME( 1994, geostorm, gunforc2, gunforc2,      gunforc2, m92_bank, ROT0,   "Irem",         "Geostorm (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1992, mysticrib,mysticri, mysticri,      mysticri, m92_state, m92,      ROT0,   "Irem",         "Mystic Riders (bootleg?)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1992, majtitl2, 0,        majtitl2,      majtitl2, m92_state, majtitl2, ROT0,   "Irem",         "Major Title 2 (World)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL)
+GAME( 1992, majtitl2j,majtitl2, majtitl2,      majtitl2, m92_state, majtitl2, ROT0,   "Irem",         "Major Title 2 (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL)
+GAME( 1992, skingame, majtitl2, majtitl2,      majtitl2, m92_state, majtitl2, ROT0,   "Irem America", "The Irem Skins Game (US set 1)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1992, skingame2,majtitl2, majtitl2,      majtitl2, m92_state, majtitl2, ROT0,   "Irem America", "The Irem Skins Game (US set 2)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1992, hook,     0,        hook,          hook, m92_state,     m92,      ROT0,   "Irem",         "Hook (World)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL)
+GAME( 1992, hooku,    hook,     hook,          hook, m92_state,     m92,      ROT0,   "Irem America", "Hook (US)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL)
+GAME( 1992, hookj,    hook,     hook,          hook, m92_state,     m92,      ROT0,   "Irem",         "Hook (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL)
+GAME( 1992, ppan,     hook,     ppan,          hook, m92_state,     ppan,     ROT0,   "bootleg",      "Peter Pan (bootleg of Hook)", GAME_IMPERFECT_GRAPHICS | GAME_NO_COCKTAIL) // PCB marked 'Peter Pan', no title screen, made in Italy?
+GAME( 1992, rtypeleo, 0,        rtypeleo,      rtypeleo, m92_state, m92_alt,  ROT0,   "Irem",         "R-Type Leo (World)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL)
+GAME( 1992, rtypeleoj,rtypeleo, rtypeleo,      rtypeleo, m92_state, m92_alt,  ROT0,   "Irem",         "R-Type Leo (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL)
+GAME( 1993, inthunt,  0,        inthunt,       inthunt, m92_state,  m92,      ROT0,   "Irem",         "In The Hunt (World)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL)
+GAME( 1993, inthuntu, inthunt,  inthunt,       inthunt, m92_state,  m92,      ROT0,   "Irem America", "In The Hunt (US)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL)
+GAME( 1993, kaiteids, inthunt,  inthunt,       inthunt, m92_state,  m92,      ROT0,   "Irem",         "Kaitei Daisensou (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1993, nbbatman, 0,        nbbatman,      nbbatman, m92_state, m92_bank, ROT0,   "Irem",         "Ninja Baseball Bat Man (World)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS | GAME_NO_COCKTAIL )
+GAME( 1993, nbbatmanu,nbbatman, nbbatman,      nbbatman, m92_state, m92_bank, ROT0,   "Irem America", "Ninja Baseball Bat Man (US)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS | GAME_NO_COCKTAIL)
+GAME( 1993, leaguemn, nbbatman, nbbatman,      nbbatman, m92_state, m92_bank, ROT0,   "Irem",         "Yakyuu Kakutou League-Man (Japan)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS | GAME_NO_COCKTAIL )
+GAME( 1993, nbbatman2bl,nbbatman,nbbatman2bl,  nbbatman, m92_state, m92_bank, ROT0,   "bootleg",      "Ninja Baseball Bat Man II (bootleg)", GAME_NO_SOUND | GAME_NOT_WORKING | GAME_NO_COCKTAIL ) // different sprite system, MCU as soundcpu, OKI samples for music/sound
+GAME( 1993, ssoldier, 0,        psoldier,      psoldier, m92_state, m92_alt,  ROT0,   "Irem America", "Superior Soldiers (US)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1993, psoldier, ssoldier, psoldier,      psoldier, m92_state, m92_alt,  ROT0,   "Irem",         "Perfect Soldiers (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1994, dsoccr94j,dsoccr94, dsoccr94j,     dsoccr94j, m92_state,m92_bank, ROT0,   "Irem",         "Dream Soccer '94 (Japan, M92 hardware)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1994, gunforc2, 0,        gunforc2,      gunforc2, m92_state, m92_bank, ROT0,   "Irem",         "Gun Force II (US)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1994, geostorm, gunforc2, gunforc2,      gunforc2, m92_state, m92_bank, ROT0,   "Irem",         "Geo Storm (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL)

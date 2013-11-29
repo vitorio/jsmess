@@ -5,9 +5,9 @@
 */
 
 #include "hd63450.h"
+#include "devlegcy.h"
 
-typedef struct _hd63450_regs hd63450_regs;
-struct _hd63450_regs
+struct hd63450_regs
 {  // offsets in bytes
 	unsigned char csr;  // [00] Channel status register (R/W)
 	unsigned char cer;  // [01] Channel error register (R)
@@ -29,8 +29,7 @@ struct _hd63450_regs
 	unsigned char gcr;  // [3f]  General Control Register (R/W)
 };
 
-typedef struct _hd63450_t hd63450_t;
-struct _hd63450_t
+struct hd63450_t
 {
 	hd63450_regs reg[4];
 	emu_timer* timer[4];  // for timing data reading/writing each channel
@@ -53,7 +52,7 @@ INLINE hd63450_t *get_safe_token(device_t *device)
 	assert(device != NULL);
 	assert(device->type() == HD63450);
 
-	return (hd63450_t *)downcast<legacy_device_base *>(device)->token();
+	return (hd63450_t *)downcast<hd63450_device *>(device)->token();
 }
 
 static DEVICE_START(hd63450)
@@ -239,7 +238,7 @@ void hd63450_write(device_t* device, int offset, int data, UINT16 mem_mask)
 
 static void dma_transfer_start(device_t* device, int channel, int dir)
 {
-	address_space *space = device->machine().firstcpu->memory().space(AS_PROGRAM);
+	address_space &space = device->machine().firstcpu->space(AS_PROGRAM);
 	hd63450_t* dmac = get_safe_token(device);
 	dmac->in_progress[channel] = 1;
 	dmac->reg[channel].csr &= ~0xe0;
@@ -247,9 +246,9 @@ static void dma_transfer_start(device_t* device, int channel, int dir)
 	dmac->reg[channel].csr &= ~0x30;  // Reset Error and Normal termination bits
 	if((dmac->reg[channel].ocr & 0x0c) != 0x00)  // Array chain or Link array chain
 	{
-		dmac->reg[channel].mar = space->read_word(dmac->reg[channel].bar) << 16;
-		dmac->reg[channel].mar |= space->read_word(dmac->reg[channel].bar+2);
-		dmac->reg[channel].mtc = space->read_word(dmac->reg[channel].bar+4);
+		dmac->reg[channel].mar = space.read_word(dmac->reg[channel].bar) << 16;
+		dmac->reg[channel].mar |= space.read_word(dmac->reg[channel].bar+2);
+		dmac->reg[channel].mtc = space.read_word(dmac->reg[channel].bar+4);
 		if(dmac->reg[channel].btc > 0)
 			dmac->reg[channel].btc--;
 	}
@@ -258,11 +257,13 @@ static void dma_transfer_start(device_t* device, int channel, int dir)
 	if((dmac->reg[channel].dcr & 0xc0) == 0x00)  // Burst transfer
 	{
 		device_t *cpu = device->machine().device(dmac->intf->cpu_tag);
-		device_set_input_line(cpu, INPUT_LINE_HALT, ASSERT_LINE);
+		cpu->execute().set_input_line(INPUT_LINE_HALT, ASSERT_LINE);
 		dmac->timer[channel]->adjust(attotime::zero, channel, dmac->burst_clock[channel]);
 	}
-	else
+	else if(!(dmac->reg[channel].ocr & 2))
 		dmac->timer[channel]->adjust(attotime::from_usec(500), channel, dmac->clock[channel]);
+	else if((dmac->reg[channel].ocr & 3) == 3)
+		dmac->timer[channel]->adjust(attotime::from_usec(500), channel, attotime::never);
 
 	dmac->transfer_size[channel] = dmac->reg[channel].mtc;
 
@@ -316,7 +317,7 @@ static void dma_transfer_continue(device_t* device, int channel)
 
 void hd63450_single_transfer(device_t* device, int x)
 {
-	address_space *space = device->machine().firstcpu->memory().space(AS_PROGRAM);
+	address_space &space = device->machine().firstcpu->space(AS_PROGRAM);
 	int data;
 	int datasize = 1;
 	hd63450_t* dmac = get_safe_token(device);
@@ -329,8 +330,8 @@ void hd63450_single_transfer(device_t* device, int x)
 				{
 					data = dmac->intf->dma_read[x](device->machine(),dmac->reg[x].mar);
 					if(data == -1)
-						return;  // not ready to recieve data
-					space->write_byte(dmac->reg[x].mar,data);
+						return;  // not ready to receive data
+					space.write_byte(dmac->reg[x].mar,data);
 					datasize = 1;
 				}
 				else
@@ -338,25 +339,25 @@ void hd63450_single_transfer(device_t* device, int x)
 					switch(dmac->reg[x].ocr & 0x30)  // operation size
 					{
 					case 0x00:  // 8 bit
-						data = space->read_byte(dmac->reg[x].dar);  // read from device address
-						space->write_byte(dmac->reg[x].mar, data);  // write to memory address
+						data = space.read_byte(dmac->reg[x].dar);  // read from device address
+						space.write_byte(dmac->reg[x].mar, data);  // write to memory address
 						datasize = 1;
 						break;
 					case 0x10:  // 16 bit
-						data = space->read_word(dmac->reg[x].dar);  // read from device address
-						space->write_word(dmac->reg[x].mar, data);  // write to memory address
+						data = space.read_word(dmac->reg[x].dar);  // read from device address
+						space.write_word(dmac->reg[x].mar, data);  // write to memory address
 						datasize = 2;
 						break;
 					case 0x20:  // 32 bit
-						data = space->read_word(dmac->reg[x].dar) << 16;  // read from device address
-						data |= space->read_word(dmac->reg[x].dar+2);
-						space->write_word(dmac->reg[x].mar, (data & 0xffff0000) >> 16);  // write to memory address
-						space->write_word(dmac->reg[x].mar+2, data & 0x0000ffff);
+						data = space.read_word(dmac->reg[x].dar) << 16;  // read from device address
+						data |= space.read_word(dmac->reg[x].dar+2);
+						space.write_word(dmac->reg[x].mar, (data & 0xffff0000) >> 16);  // write to memory address
+						space.write_word(dmac->reg[x].mar+2, data & 0x0000ffff);
 						datasize = 4;
 						break;
 					case 0x30:  // 8 bit packed (?)
-						data = space->read_byte(dmac->reg[x].dar);  // read from device address
-						space->write_byte(dmac->reg[x].mar, data);  // write to memory address
+						data = space.read_byte(dmac->reg[x].dar);  // read from device address
+						space.write_byte(dmac->reg[x].mar, data);  // write to memory address
 						datasize = 1;
 						break;
 					}
@@ -367,7 +368,7 @@ void hd63450_single_transfer(device_t* device, int x)
 			{
 				if(dmac->intf->dma_write[x])
 				{
-					data = space->read_byte(dmac->reg[x].mar);
+					data = space.read_byte(dmac->reg[x].mar);
 					dmac->intf->dma_write[x](device->machine(), dmac->reg[x].mar,data);
 					datasize = 1;
 				}
@@ -376,25 +377,25 @@ void hd63450_single_transfer(device_t* device, int x)
 					switch(dmac->reg[x].ocr & 0x30)  // operation size
 					{
 					case 0x00:  // 8 bit
-						data = space->read_byte(dmac->reg[x].mar);  // read from memory address
-						space->write_byte(dmac->reg[x].dar, data);  // write to device address
+						data = space.read_byte(dmac->reg[x].mar);  // read from memory address
+						space.write_byte(dmac->reg[x].dar, data);  // write to device address
 						datasize = 1;
 						break;
 					case 0x10:  // 16 bit
-						data = space->read_word(dmac->reg[x].mar);  // read from memory address
-						space->write_word(dmac->reg[x].dar, data);  // write to device address
+						data = space.read_word(dmac->reg[x].mar);  // read from memory address
+						space.write_word(dmac->reg[x].dar, data);  // write to device address
 						datasize = 2;
 						break;
 					case 0x20:  // 32 bit
-						data = space->read_word(dmac->reg[x].mar) << 16;  // read from memory address
-						data |= space->read_word(dmac->reg[x].mar+2);  // read from memory address
-						space->write_word(dmac->reg[x].dar, (data & 0xffff0000) >> 16);  // write to device address
-						space->write_word(dmac->reg[x].dar+2, data & 0x0000ffff);  // write to device address
+						data = space.read_word(dmac->reg[x].mar) << 16;  // read from memory address
+						data |= space.read_word(dmac->reg[x].mar+2);  // read from memory address
+						space.write_word(dmac->reg[x].dar, (data & 0xffff0000) >> 16);  // write to device address
+						space.write_word(dmac->reg[x].dar+2, data & 0x0000ffff);  // write to device address
 						datasize = 4;
 						break;
 					case 0x30:  // 8 bit packed (?)
-						data = space->read_byte(dmac->reg[x].mar);  // read from memory address
-						space->write_byte(dmac->reg[x].dar, data);  // write to device address
+						data = space.read_byte(dmac->reg[x].mar);  // read from memory address
+						space.write_byte(dmac->reg[x].dar, data);  // write to device address
 						datasize = 1;
 						break;
 					}
@@ -426,9 +427,9 @@ void hd63450_single_transfer(device_t* device, int x)
 				{
 					dmac->reg[x].btc--;
 					dmac->reg[x].bar+=6;
-					dmac->reg[x].mar = space->read_word(dmac->reg[x].bar) << 16;
-					dmac->reg[x].mar |= space->read_word(dmac->reg[x].bar+2);
-					dmac->reg[x].mtc = space->read_word(dmac->reg[x].bar+4);
+					dmac->reg[x].mar = space.read_word(dmac->reg[x].bar) << 16;
+					dmac->reg[x].mar |= space.read_word(dmac->reg[x].bar+2);
+					dmac->reg[x].mtc = space.read_word(dmac->reg[x].bar+4);
 					return;
 				}
 				dmac->timer[x]->adjust(attotime::zero);
@@ -440,7 +441,7 @@ void hd63450_single_transfer(device_t* device, int x)
 				if((dmac->reg[x].dcr & 0xc0) == 0x00)
 				{
 					device_t *cpu = device->machine().device(dmac->intf->cpu_tag);
-					device_set_input_line(cpu, INPUT_LINE_HALT, CLEAR_LINE);
+					cpu->execute().set_input_line(INPUT_LINE_HALT, CLEAR_LINE);
 				}
 
 				if(dmac->intf->dma_end)
@@ -461,28 +462,32 @@ int hd63450_get_error_vector(device_t* device, int channel)
 	return dmac->reg[channel].eiv;
 }
 
-DEVICE_GET_INFO(hd63450)
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(hd63450_t);				break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(hd63450);	break;
-		case DEVINFO_FCT_STOP:							/* Nothing */								break;
-		case DEVINFO_FCT_RESET:							/*info->reset = DEVICE_RESET_NAME(hd63450);*/	break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "Hitachi HD63450");			break;
-		case DEVINFO_STR_FAMILY:						strcpy(info->s, "DMA Controller");			break;
-		case DEVINFO_STR_VERSION:						strcpy(info->s, "1.0");						break;
-		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);					break;
-		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright the MESS Team");	break;
-	}
-}
-
 READ16_DEVICE_HANDLER(hd63450_r) { return hd63450_read(device,offset,mem_mask); }
 WRITE16_DEVICE_HANDLER(hd63450_w) { hd63450_write(device,offset,data,mem_mask); }
 
-DEFINE_LEGACY_DEVICE(HD63450, hd63450);
+const device_type HD63450 = &device_creator<hd63450_device>;
+
+hd63450_device::hd63450_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, HD63450, "Hitachi HD63450", tag, owner, clock, "hd63450", __FILE__)
+{
+	m_token = global_alloc_clear(hd63450_t);
+}
+
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void hd63450_device::device_config_complete()
+{
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void hd63450_device::device_start()
+{
+	DEVICE_START_NAME( hd63450 )(this);
+}

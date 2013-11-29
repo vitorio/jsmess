@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     emualloc.c
 
     Memory allocation helpers for the core emulator.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -45,7 +16,7 @@
 //  DEBUGGING
 //**************************************************************************
 
-#define LOG_ALLOCS		(0)
+#define LOG_ALLOCS      (0)
 
 
 
@@ -79,22 +50,22 @@ const int memory_block_alloc_chunk = 256;
 class memory_entry
 {
 public:
-	memory_entry *		m_next;				// link to the next entry
-	memory_entry *		m_prev;				// link to the previous entry
-	size_t				m_size;				// size of the allocation (not including this header)
-	void *				m_base;				// base of the allocation
-	const char *		m_file;				// file the allocation was made from
-	int					m_line;				// line number within that file
-	UINT64				m_id;				// unique id
+	memory_entry *      m_next;             // link to the next entry
+	memory_entry *      m_prev;             // link to the previous entry
+	size_t              m_size;             // size of the allocation (not including this header)
+	void *              m_base;             // base of the allocation
+	const char *        m_file;             // file the allocation was made from
+	int                 m_line;             // line number within that file
+	UINT64              m_id;               // unique id
 
-	static const int	k_hash_prime = 6151;
+	static const int    k_hash_prime = 6151;
 
-	static UINT64		s_curid;			// current ID
-	static osd_lock *	s_lock;				// lock for managing the list
-	static bool			s_lock_alloc;		// set to true temporarily during lock allocation
-	static bool			s_tracking;			// set to true when tracking is live
+	static UINT64       s_curid;            // current ID
+	static osd_lock *   s_lock;             // lock for managing the list
+	static bool         s_lock_alloc;       // set to true temporarily during lock allocation
+	static bool         s_tracking;         // set to true when tracking is live
 	static memory_entry *s_hash[k_hash_prime];// hash table based on pointer
-	static memory_entry *s_freehead;		// pointer to the head of the free list
+	static memory_entry *s_freehead;        // pointer to the head of the free list
 
 	static memory_entry *allocate(size_t size, void *base, const char *file, int line);
 	static memory_entry *find(void *ptr);
@@ -112,9 +83,6 @@ private:
 //  GLOBALS
 //**************************************************************************
 
-// global resource pool to handle allocations outside of the emulator context
-resource_pool global_resource_pool(6151);
-
 // dummy zeromem object
 const zeromem_t zeromem = { };
 
@@ -126,6 +94,12 @@ bool memory_entry::s_tracking = false;
 memory_entry *memory_entry::s_hash[memory_entry::k_hash_prime] = { NULL };
 memory_entry *memory_entry::s_freehead = NULL;
 
+// wrapper for the global resource pool to help ensure construction order
+resource_pool &global_resource_pool()
+{
+	static resource_pool s_pool(6151);
+	return s_pool;
+};
 
 
 //**************************************************************************
@@ -147,9 +121,8 @@ void *malloc_file_line(size_t size, const char *file, int line)
 	// add a new entry
 	memory_entry::allocate(size, result, file, line);
 
-#ifdef MAME_DEBUG
-	// randomize the memory
-	rand_memory(result, size);
+#if !__has_feature(memory_sanitizer) && defined(MAME_DEBUG)
+	memset(result, 0xdd, size);
 #endif
 
 	return result;
@@ -172,9 +145,8 @@ void *malloc_array_file_line(size_t size, const char *file, int line)
 	// add a new entry
 	memory_entry::allocate(size, result, file, line);
 
-#ifdef MAME_DEBUG
-	// randomize the memory
-	rand_memory(result, size);
+#if !__has_feature(memory_sanitizer) && defined(MAME_DEBUG)
+	memset(result, 0xdd, size);
 #endif
 
 	return result;
@@ -188,6 +160,10 @@ void *malloc_array_file_line(size_t size, const char *file, int line)
 
 void free_file_line(void *memory, const char *file, int line)
 {
+	// ignore NULL frees/deletes
+	if (memory == NULL)
+		return;
+
 	// find the memory entry
 	memory_entry *entry = memory_entry::find(memory);
 
@@ -248,10 +224,10 @@ void dump_unfreed_mem()
 
 resource_pool::resource_pool(int hash_size)
 	: m_hash_size(hash_size),
-	  m_listlock(osd_lock_alloc()),
-	  m_hash(new resource_pool_item *[hash_size]),
-	  m_ordered_head(NULL),
-	  m_ordered_tail(NULL)
+		m_listlock(osd_lock_alloc()),
+		m_hash(new resource_pool_item *[hash_size]),
+		m_ordered_head(NULL),
+		m_ordered_tail(NULL)
 {
 	memset(m_hash, 0, hash_size * sizeof(m_hash[0]));
 }
@@ -603,5 +579,5 @@ void memory_entry::report_unfreed()
 	release_lock();
 
 	if (total > 0)
-		fprintf(stderr, "a total of %d bytes were not freed\n", total);
+		fprintf(stderr, "a total of %u bytes were not freed\n", total);
 }

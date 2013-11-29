@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     Killer Instinct hardware
@@ -131,7 +133,8 @@ Notes:
 #include "emu.h"
 #include "cpu/mips/mips3.h"
 #include "cpu/adsp2100/adsp2100.h"
-#include "machine/idectrl.h"
+#include "machine/ataintf.h"
+#include "machine/idehd.h"
 #include "machine/midwayic.h"
 #include "audio/dcs.h"
 
@@ -139,21 +142,52 @@ Notes:
 class kinst_state : public driver_device
 {
 public:
-	kinst_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+	enum
+	{
+		TIMER_IRQ0_STOP
+	};
 
-	UINT32 *m_rambase;
-	UINT32 *m_rambase2;
-	UINT32 *m_rombase;
+	kinst_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
+		m_rambase(*this, "rambase"),
+		m_rambase2(*this, "rambase2"),
+		m_control(*this, "control"),
+		m_rombase(*this, "rombase"),
+		m_maincpu(*this, "maincpu"),
+		m_ata(*this, "ata" )
+	{
+	}
+
+	required_shared_ptr<UINT32> m_rambase;
+	required_shared_ptr<UINT32> m_rambase2;
+	required_shared_ptr<UINT32> m_control;
+	required_shared_ptr<UINT32> m_rombase;
 	UINT32 *m_video_base;
-	UINT32 *m_control;
 	const UINT8 *m_control_map;
+	DECLARE_READ32_MEMBER(kinst_control_r);
+	DECLARE_WRITE32_MEMBER(kinst_control_w);
+	DECLARE_READ32_MEMBER(kinst_ide_r);
+	DECLARE_WRITE32_MEMBER(kinst_ide_w);
+	DECLARE_READ32_MEMBER(kinst_ide_extra_r);
+	DECLARE_WRITE32_MEMBER(kinst_ide_extra_w);
+	DECLARE_WRITE_LINE_MEMBER(ide_interrupt);
+	DECLARE_DRIVER_INIT(kinst);
+	DECLARE_DRIVER_INIT(kinst2);
+	virtual void machine_start();
+	virtual void machine_reset();
+	UINT32 screen_update_kinst(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	INTERRUPT_GEN_MEMBER(irq0_start);
+	required_device<cpu_device> m_maincpu;
+	required_device<ata_interface_device> m_ata;
+
+protected:
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 };
 
 
 
 /* constants */
-#define MASTER_CLOCK	XTAL_50MHz
+#define MASTER_CLOCK    XTAL_50MHz
 
 
 
@@ -163,48 +197,15 @@ public:
  *
  *************************************/
 
-static MACHINE_START( kinst )
+void kinst_state::machine_start()
 {
-	kinst_state *state = machine.driver_data<kinst_state>();
-	device_t *ide = machine.device("ide");
-	UINT8 *features = ide_get_features(ide);
-
-	if (strncmp(machine.system().name, "kinst2", 6) != 0)
-	{
-		/* kinst: tweak the model number so we pass the check */
-		features[27*2+0] = 0x54;
-		features[27*2+1] = 0x53;
-		features[28*2+0] = 0x31;
-		features[28*2+1] = 0x39;
-		features[29*2+0] = 0x30;
-		features[29*2+1] = 0x35;
-		features[30*2+0] = 0x47;
-		features[30*2+1] = 0x41;
-		features[31*2+0] = 0x20;
-		features[31*2+1] = 0x20;
-	}
-	else
-	{
-		/* kinst2: tweak the model number so we pass the check */
-		features[10*2+0] = 0x30;
-		features[10*2+1] = 0x30;
-		features[11*2+0] = 0x54;
-		features[11*2+1] = 0x53;
-		features[12*2+0] = 0x31;
-		features[12*2+1] = 0x39;
-		features[13*2+0] = 0x30;
-		features[13*2+1] = 0x35;
-		features[14*2+0] = 0x47;
-		features[14*2+1] = 0x41;
-	}
-
 	/* set the fastest DRC options */
-	mips3drc_set_options(machine.device("maincpu"), MIPS3DRC_FASTEST_OPTIONS);
+	mips3drc_set_options(m_maincpu, MIPS3DRC_FASTEST_OPTIONS);
 
 	/* configure fast RAM regions for DRC */
-	mips3drc_add_fastram(machine.device("maincpu"), 0x08000000, 0x087fffff, FALSE, state->m_rambase2);
-	mips3drc_add_fastram(machine.device("maincpu"), 0x00000000, 0x0007ffff, FALSE, state->m_rambase);
-	mips3drc_add_fastram(machine.device("maincpu"), 0x1fc00000, 0x1fc7ffff, TRUE,  state->m_rombase);
+	mips3drc_add_fastram(m_maincpu, 0x08000000, 0x087fffff, FALSE, m_rambase2);
+	mips3drc_add_fastram(m_maincpu, 0x00000000, 0x0007ffff, FALSE, m_rambase);
+	mips3drc_add_fastram(m_maincpu, 0x1fc00000, 0x1fc7ffff, TRUE,  m_rombase);
 }
 
 
@@ -215,11 +216,32 @@ static MACHINE_START( kinst )
  *
  *************************************/
 
-static MACHINE_RESET( kinst )
+void kinst_state::machine_reset()
 {
-	kinst_state *state = machine.driver_data<kinst_state>();
+	ide_hdd_device *hdd = m_ata->subdevice<ata_slot_device>("0")->subdevice<ide_hdd_device>("hdd");
+	UINT16 *identify_device = hdd->identify_device_buffer();
+
+	if (strncmp(machine().system().name, "kinst2", 6) != 0)
+	{
+		/* kinst: tweak the model number so we pass the check */
+		identify_device[27] = ('S' << 8) | 'T';
+		identify_device[28] = ('9' << 8) | '1';
+		identify_device[29] = ('5' << 8) | '0';
+		identify_device[30] = ('A' << 8) | 'G';
+		identify_device[31] = (' ' << 8) | ' ';
+	}
+	else
+	{
+		/* kinst2: tweak the model number so we pass the check */
+		identify_device[10] = ('0' << 8) | '0';
+		identify_device[11] = ('S' << 8) | 'T';
+		identify_device[12] = ('9' << 8) | '1';
+		identify_device[13] = ('5' << 8) | '0';
+		identify_device[14] = ('A' << 8) | 'G';
+	}
+
 	/* set a safe base location for video */
-	state->m_video_base = &state->m_rambase[0x30000/4];
+	m_video_base = &m_rambase[0x30000/4];
 }
 
 
@@ -230,20 +252,19 @@ static MACHINE_RESET( kinst )
  *
  *************************************/
 
-static SCREEN_UPDATE( kinst )
+UINT32 kinst_state::screen_update_kinst(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	kinst_state *state = screen->machine().driver_data<kinst_state>();
 	int y;
 
 	/* loop over rows and copy to the destination */
-	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
+	for (y = cliprect.min_y; y <= cliprect.max_y; y++)
 	{
-		UINT32 *src = &state->m_video_base[640/4 * y];
-		UINT16 *dest = BITMAP_ADDR16(bitmap, y, cliprect->min_x);
+		UINT32 *src = &m_video_base[640/4 * y];
+		UINT16 *dest = &bitmap.pix16(y, cliprect.min_x);
 		int x;
 
 		/* loop over columns */
-		for (x = cliprect->min_x; x < cliprect->max_x; x += 2)
+		for (x = cliprect.min_x; x < cliprect.max_x; x += 2)
 		{
 			UINT32 data = *src++;
 
@@ -263,22 +284,29 @@ static SCREEN_UPDATE( kinst )
  *
  *************************************/
 
-static TIMER_CALLBACK( irq0_stop )
+void kinst_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
+	switch (id)
+	{
+	case TIMER_IRQ0_STOP:
+		m_maincpu->set_input_line(0, CLEAR_LINE);
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in kinst_state::device_timer");
+	}
 }
 
 
-static INTERRUPT_GEN( irq0_start )
+INTERRUPT_GEN_MEMBER(kinst_state::irq0_start)
 {
-	device_set_input_line(device, 0, ASSERT_LINE);
-	device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(irq0_stop));
+	device.execute().set_input_line(0, ASSERT_LINE);
+	timer_set(attotime::from_usec(50), TIMER_IRQ0_STOP);
 }
 
 
-static void ide_interrupt(device_t *device, int state)
+WRITE_LINE_MEMBER(kinst_state::ide_interrupt)
 {
-	cputag_set_input_line(device->machine(), "maincpu", 1, state);
+	m_maincpu->set_input_line(1, state);
 }
 
 
@@ -289,27 +317,27 @@ static void ide_interrupt(device_t *device, int state)
  *
  *************************************/
 
-static READ32_DEVICE_HANDLER( kinst_ide_r )
+READ32_MEMBER(kinst_state::kinst_ide_r)
 {
-	return midway_ide_asic_r(device, offset / 2, mem_mask);
+	return m_ata->read_cs0(space, offset / 2, mem_mask);
 }
 
 
-static WRITE32_DEVICE_HANDLER( kinst_ide_w )
+WRITE32_MEMBER(kinst_state::kinst_ide_w)
 {
-	midway_ide_asic_w(device, offset / 2, data, mem_mask);
+	m_ata->write_cs0(space, offset / 2, data, mem_mask);
 }
 
 
-static READ32_DEVICE_HANDLER( kinst_ide_extra_r )
+READ32_MEMBER(kinst_state::kinst_ide_extra_r)
 {
-	return ide_controller32_r(device, 0x3f6/4, 0x00ff0000) >> 16;
+	return m_ata->read_cs1(space, 6, 0xff);
 }
 
 
-static WRITE32_DEVICE_HANDLER( kinst_ide_extra_w )
+WRITE32_MEMBER(kinst_state::kinst_ide_extra_w)
 {
-	ide_controller32_w(device, 0x3f6/4, data << 16, 0x00ff0000);
+	m_ata->write_cs1(space, 6, data, 0xff);
 }
 
 
@@ -320,35 +348,34 @@ static WRITE32_DEVICE_HANDLER( kinst_ide_extra_w )
  *
  *************************************/
 
-static READ32_HANDLER( kinst_control_r )
+READ32_MEMBER(kinst_state::kinst_control_r)
 {
-	kinst_state *state = space->machine().driver_data<kinst_state>();
 	UINT32 result;
 	static const char *const portnames[] = { "P1", "P2", "VOLUME", "UNUSED", "DSW" };
 
 	/* apply shuffling */
-	offset = state->m_control_map[offset / 2];
-	result = state->m_control[offset];
+	offset = m_control_map[offset / 2];
+	result = m_control[offset];
 
 	switch (offset)
 	{
-		case 2:		/* $90 -- sound return */
-			result = input_port_read(space->machine(), portnames[offset]);
+		case 2:     /* $90 -- sound return */
+			result = ioport(portnames[offset])->read();
 			result &= ~0x0002;
-			if (dcs_control_r(space->machine()) & 0x800)
+			if (dcs_control_r(machine()) & 0x800)
 				result |= 0x0002;
 			break;
 
-		case 0:		/* $80 */
-		case 1:		/* $88 */
-		case 3:		/* $98 */
-			result = input_port_read(space->machine(), portnames[offset]);
+		case 0:     /* $80 */
+		case 1:     /* $88 */
+		case 3:     /* $98 */
+			result = ioport(portnames[offset])->read();
 			break;
 
-		case 4:		/* $a0 */
-			result = input_port_read(space->machine(), portnames[offset]);
-			if (cpu_get_pc(&space->device()) == 0x802d428)
-				device_spin_until_interrupt(&space->device());
+		case 4:     /* $a0 */
+			result = ioport(portnames[offset])->read();
+			if (space.device().safe_pc() == 0x802d428)
+				space.device().execute().spin_until_interrupt();
 			break;
 	}
 
@@ -356,35 +383,34 @@ static READ32_HANDLER( kinst_control_r )
 }
 
 
-static WRITE32_HANDLER( kinst_control_w )
+WRITE32_MEMBER(kinst_state::kinst_control_w)
 {
-	kinst_state *state = space->machine().driver_data<kinst_state>();
 	UINT32 olddata;
 
 	/* apply shuffling */
-	offset = state->m_control_map[offset / 2];
-	olddata = state->m_control[offset];
-	COMBINE_DATA(&state->m_control[offset]);
+	offset = m_control_map[offset / 2];
+	olddata = m_control[offset];
+	COMBINE_DATA(&m_control[offset]);
 
 	switch (offset)
 	{
-		case 0:		/* $80 - VRAM buffer control */
+		case 0:     /* $80 - VRAM buffer control */
 			if (data & 4)
-				state->m_video_base = &state->m_rambase[0x58000/4];
+				m_video_base = &m_rambase[0x58000/4];
 			else
-				state->m_video_base = &state->m_rambase[0x30000/4];
+				m_video_base = &m_rambase[0x30000/4];
 			break;
 
-		case 1:		/* $88 - sound reset */
-			dcs_reset_w(space->machine(), ~data & 0x01);
+		case 1:     /* $88 - sound reset */
+			dcs_reset_w(machine(), ~data & 0x01);
 			break;
 
-		case 2:		/* $90 - sound control */
-			if (!(olddata & 0x02) && (state->m_control[offset] & 0x02))
-				dcs_data_w(space->machine(), state->m_control[3]);
+		case 2:     /* $90 - sound control */
+			if (!(olddata & 0x02) && (m_control[offset] & 0x02))
+				dcs_data_w(machine(), m_control[3]);
 			break;
 
-		case 3:		/* $98 - sound data */
+		case 3:     /* $98 - sound data */
 			break;
 	}
 }
@@ -397,14 +423,14 @@ static WRITE32_HANDLER( kinst_control_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 32, kinst_state )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x00000000, 0x0007ffff) AM_RAM AM_BASE_MEMBER(kinst_state, m_rambase)
-	AM_RANGE(0x08000000, 0x087fffff) AM_RAM AM_BASE_MEMBER(kinst_state, m_rambase2)
-	AM_RANGE(0x10000080, 0x100000ff) AM_READWRITE(kinst_control_r, kinst_control_w) AM_BASE_MEMBER(kinst_state, m_control)
-	AM_RANGE(0x10000100, 0x1000013f) AM_DEVREADWRITE("ide", kinst_ide_r, kinst_ide_w)
-	AM_RANGE(0x10000170, 0x10000173) AM_DEVREADWRITE("ide", kinst_ide_extra_r, kinst_ide_extra_w)
-	AM_RANGE(0x1fc00000, 0x1fc7ffff) AM_ROM AM_REGION("user1", 0) AM_BASE_MEMBER(kinst_state, m_rombase)
+	AM_RANGE(0x00000000, 0x0007ffff) AM_RAM AM_SHARE("rambase")
+	AM_RANGE(0x08000000, 0x087fffff) AM_RAM AM_SHARE("rambase2")
+	AM_RANGE(0x10000080, 0x100000ff) AM_READWRITE(kinst_control_r, kinst_control_w) AM_SHARE("control")
+	AM_RANGE(0x10000100, 0x1000013f) AM_READWRITE(kinst_ide_r, kinst_ide_w)
+	AM_RANGE(0x10000170, 0x10000173) AM_READWRITE(kinst_ide_extra_r, kinst_ide_extra_w)
+	AM_RANGE(0x1fc00000, 0x1fc7ffff) AM_ROM AM_REGION("user1", 0) AM_SHARE("rombase")
 ADDRESS_MAP_END
 
 
@@ -433,7 +459,7 @@ static INPUT_PORTS_START( kinst )
 	PORT_SERVICE_NO_TOGGLE( 0x00001000, IP_ACTIVE_LOW )
 	PORT_BIT( 0x00002000, IP_ACTIVE_LOW, IPT_COIN3 )
 	PORT_BIT( 0x00004000, IP_ACTIVE_LOW, IPT_COIN4 )
-	PORT_BIT( 0x00008000, IP_ACTIVE_LOW, IPT_SPECIAL )	/* door */
+	PORT_BIT( 0x00008000, IP_ACTIVE_LOW, IPT_SPECIAL )  /* door */
 	PORT_BIT( 0xffff0000, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("P2")
@@ -451,20 +477,20 @@ static INPUT_PORTS_START( kinst )
 	PORT_BIT( 0x00000800, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x00001000, IP_ACTIVE_LOW, IPT_TILT )
 	PORT_BIT( 0x00002000, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_BIT( 0x00004000, IP_ACTIVE_LOW, IPT_BILL1 )	/* bill */
-	PORT_BIT( 0x00008000, IP_ACTIVE_LOW, IPT_SPECIAL )	/* coin door */
+	PORT_BIT( 0x00004000, IP_ACTIVE_LOW, IPT_BILL1 )    /* bill */
+	PORT_BIT( 0x00008000, IP_ACTIVE_LOW, IPT_SPECIAL )  /* coin door */
 	PORT_BIT( 0xffff0000, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("VOLUME")
 	PORT_BIT( 0x00000001, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x00000002, IP_ACTIVE_LOW, IPT_SPECIAL )	/* sound status */
+	PORT_BIT( 0x00000002, IP_ACTIVE_LOW, IPT_SPECIAL )  /* sound status */
 	PORT_BIT( 0x00000004, IP_ACTIVE_LOW, IPT_VOLUME_UP )
 	PORT_BIT( 0x00000008, IP_ACTIVE_LOW, IPT_VOLUME_DOWN )
 	PORT_BIT( 0x0000fff0, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0xffff0000, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("UNUSED")
-	PORT_BIT( 0x0000ffff, IP_ACTIVE_LOW, IPT_UNUSED )	/* verify */
+	PORT_BIT( 0x0000ffff, IP_ACTIVE_LOW, IPT_UNUSED )   /* verify */
 	PORT_BIT( 0xffff0000, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("DSW")
@@ -542,7 +568,7 @@ static INPUT_PORTS_START( kinst2 )
 	PORT_SERVICE_NO_TOGGLE( 0x00001000, IP_ACTIVE_LOW )
 	PORT_BIT( 0x00002000, IP_ACTIVE_LOW, IPT_COIN3 )
 	PORT_BIT( 0x00004000, IP_ACTIVE_LOW, IPT_COIN4 )
-	PORT_BIT( 0x00008000, IP_ACTIVE_LOW, IPT_SPECIAL )	/* door */
+	PORT_BIT( 0x00008000, IP_ACTIVE_LOW, IPT_SPECIAL )  /* door */
 	PORT_BIT( 0xffff0000, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("P2")
@@ -560,20 +586,20 @@ static INPUT_PORTS_START( kinst2 )
 	PORT_BIT( 0x00000800, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x00001000, IP_ACTIVE_LOW, IPT_TILT )
 	PORT_BIT( 0x00002000, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_BIT( 0x00004000, IP_ACTIVE_LOW, IPT_BILL1 )	/* bill */
-	PORT_BIT( 0x00008000, IP_ACTIVE_LOW, IPT_SPECIAL )	/* coin door */
+	PORT_BIT( 0x00004000, IP_ACTIVE_LOW, IPT_BILL1 )    /* bill */
+	PORT_BIT( 0x00008000, IP_ACTIVE_LOW, IPT_SPECIAL )  /* coin door */
 	PORT_BIT( 0xffff0000, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("VOLUME")
 	PORT_BIT( 0x00000001, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x00000002, IP_ACTIVE_LOW, IPT_SPECIAL )	/* sound status */
+	PORT_BIT( 0x00000002, IP_ACTIVE_LOW, IPT_SPECIAL )  /* sound status */
 	PORT_BIT( 0x00000004, IP_ACTIVE_LOW, IPT_VOLUME_UP )
 	PORT_BIT( 0x00000008, IP_ACTIVE_LOW, IPT_VOLUME_DOWN )
 	PORT_BIT( 0x0000fff0, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0xffff0000, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("UNUSED")
-	PORT_BIT( 0x0000ffff, IP_ACTIVE_LOW, IPT_UNUSED )	/* verify */
+	PORT_BIT( 0x0000ffff, IP_ACTIVE_LOW, IPT_UNUSED )   /* verify */
 	PORT_BIT( 0xffff0000, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("DSW")
@@ -644,10 +670,9 @@ INPUT_PORTS_END
 
 static const mips3_config r4600_config =
 {
-	16384,				/* code cache size */
-	16384				/* data cache size */
+	16384,              /* code cache size */
+	16384               /* data cache size */
 };
-
 
 static MACHINE_CONFIG_START( kinst, kinst_state )
 
@@ -655,12 +680,11 @@ static MACHINE_CONFIG_START( kinst, kinst_state )
 	MCFG_CPU_ADD("maincpu", R4600LE, MASTER_CLOCK*2)
 	MCFG_CPU_CONFIG(r4600_config)
 	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_start)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", kinst_state,  irq0_start)
 
-	MCFG_MACHINE_START(kinst)
-	MCFG_MACHINE_RESET(kinst)
 
-	MCFG_IDE_CONTROLLER_ADD("ide", ide_interrupt)
+	MCFG_ATA_INTERFACE_ADD("ata", ata_devices, "hdd", NULL, true)
+	MCFG_ATA_INTERFACE_IRQ_HANDLER(WRITELINE(kinst_state, ide_interrupt))
 
 	/* video hardware */
 	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
@@ -668,12 +692,11 @@ static MACHINE_CONFIG_START( kinst, kinst_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320, 240)
 	MCFG_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
-	MCFG_SCREEN_UPDATE(kinst)
+	MCFG_SCREEN_UPDATE_DRIVER(kinst_state, screen_update_kinst)
 
-	MCFG_PALETTE_INIT(BBBBB_GGGGG_RRRRR)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, BBBBB_GGGGG_RRRRR)
 	MCFG_PALETTE_LENGTH(32768)
 
 	/* sound hardware */
@@ -689,10 +712,10 @@ MACHINE_CONFIG_END
  *************************************/
 
 ROM_START( kinst )
-	ROM_REGION32_LE( 0x80000, "user1", 0 )	/* 512k for R4600 code */
+	ROM_REGION32_LE( 0x80000, "user1", 0 )  /* 512k for R4600 code */
 	ROM_LOAD( "ki-l15d.u98", 0x00000, 0x80000, CRC(7b65ca3d) SHA1(607394d4ba1713f38c2cb5159303cace9cde991e) )
 
-	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )	/* sound data */
+	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )  /* sound data */
 	ROM_LOAD16_BYTE( "u10-l1", 0x000000, 0x80000, CRC(b6cc155f) SHA1(810d455df8f385d76143e9d7d048f2b555ff8bf0) )
 	ROM_LOAD16_BYTE( "u11-l1", 0x200000, 0x80000, CRC(0b5e05df) SHA1(0595909cb667c38ac7c8c7bd0646b28899e27777) )
 	ROM_LOAD16_BYTE( "u12-l1", 0x400000, 0x80000, CRC(d05ce6ad) SHA1(7a8ee405c118fd176b66353fa7bfab888cc63cd2) )
@@ -702,16 +725,16 @@ ROM_START( kinst )
 	ROM_LOAD16_BYTE( "u35-l1", 0xc00000, 0x80000, CRC(0aaef4fc) SHA1(48c4c954ac9db648f28ad64f9845e19ec432eec3) )
 	ROM_LOAD16_BYTE( "u36-l1", 0xe00000, 0x80000, CRC(0577bb60) SHA1(cc78070cc41701e9a91fde5cfbdc7e1e83354854) )
 
-	DISK_REGION( "ide" )
+	DISK_REGION( "ata:0:hdd:image" )
 	DISK_IMAGE( "kinst", 0, SHA1(81d833236e994528d1482979261401b198d1ca53) )
 ROM_END
 
 
 ROM_START( kinst14 )
-	ROM_REGION32_LE( 0x80000, "user1", 0 )	/* 512k for R4600 code */
+	ROM_REGION32_LE( 0x80000, "user1", 0 )  /* 512k for R4600 code */
 	ROM_LOAD( "ki-l14.u98", 0x00000, 0x80000, CRC(afedb75f) SHA1(07254f20707377f7195e64675eb6458e663c1a9a) )
 
-	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )	/* sound data */
+	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )  /* sound data */
 	ROM_LOAD16_BYTE( "u10-l1", 0x000000, 0x80000, CRC(b6cc155f) SHA1(810d455df8f385d76143e9d7d048f2b555ff8bf0) )
 	ROM_LOAD16_BYTE( "u11-l1", 0x200000, 0x80000, CRC(0b5e05df) SHA1(0595909cb667c38ac7c8c7bd0646b28899e27777) )
 	ROM_LOAD16_BYTE( "u12-l1", 0x400000, 0x80000, CRC(d05ce6ad) SHA1(7a8ee405c118fd176b66353fa7bfab888cc63cd2) )
@@ -721,16 +744,16 @@ ROM_START( kinst14 )
 	ROM_LOAD16_BYTE( "u35-l1", 0xc00000, 0x80000, CRC(0aaef4fc) SHA1(48c4c954ac9db648f28ad64f9845e19ec432eec3) )
 	ROM_LOAD16_BYTE( "u36-l1", 0xe00000, 0x80000, CRC(0577bb60) SHA1(cc78070cc41701e9a91fde5cfbdc7e1e83354854) )
 
-	DISK_REGION( "ide" )
+	DISK_REGION( "ata:0:hdd:image" )
 	DISK_IMAGE( "kinst", 0, SHA1(81d833236e994528d1482979261401b198d1ca53) )
 ROM_END
 
 
 ROM_START( kinst13 )
-	ROM_REGION32_LE( 0x80000, "user1", 0 )	/* 512k for R4600 code */
+	ROM_REGION32_LE( 0x80000, "user1", 0 )  /* 512k for R4600 code */
 	ROM_LOAD( "ki-l13.u98", 0x00000, 0x80000, CRC(65f7ea31) SHA1(7f21620a512549db6821a0b4fa53681a767b7974) )
 
-	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )	/* sound data */
+	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )  /* sound data */
 	ROM_LOAD16_BYTE( "u10-l1", 0x000000, 0x80000, CRC(b6cc155f) SHA1(810d455df8f385d76143e9d7d048f2b555ff8bf0) )
 	ROM_LOAD16_BYTE( "u11-l1", 0x200000, 0x80000, CRC(0b5e05df) SHA1(0595909cb667c38ac7c8c7bd0646b28899e27777) )
 	ROM_LOAD16_BYTE( "u12-l1", 0x400000, 0x80000, CRC(d05ce6ad) SHA1(7a8ee405c118fd176b66353fa7bfab888cc63cd2) )
@@ -740,16 +763,16 @@ ROM_START( kinst13 )
 	ROM_LOAD16_BYTE( "u35-l1", 0xc00000, 0x80000, CRC(0aaef4fc) SHA1(48c4c954ac9db648f28ad64f9845e19ec432eec3) )
 	ROM_LOAD16_BYTE( "u36-l1", 0xe00000, 0x80000, CRC(0577bb60) SHA1(cc78070cc41701e9a91fde5cfbdc7e1e83354854) )
 
-	DISK_REGION( "ide" )
+	DISK_REGION( "ata:0:hdd:image" )
 	DISK_IMAGE( "kinst", 0, SHA1(81d833236e994528d1482979261401b198d1ca53) )
 ROM_END
 
 
 ROM_START( kinstp )
-	ROM_REGION32_LE( 0x80000, "user1", 0 )	/* 512k for R4600 code */
+	ROM_REGION32_LE( 0x80000, "user1", 0 )  /* 512k for R4600 code */
 	ROM_LOAD( "ki-p47.u98", 0x00000, 0x80000, CRC(05e67bcb) SHA1(501e69b3026394f69229a6e9866c1037502b86bb) )
 
-	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )	/* sound data */
+	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )  /* sound data */
 	ROM_LOAD16_BYTE( "u10-l1", 0x000000, 0x80000, CRC(b6cc155f) SHA1(810d455df8f385d76143e9d7d048f2b555ff8bf0) )
 	ROM_LOAD16_BYTE( "u11-l1", 0x200000, 0x80000, CRC(0b5e05df) SHA1(0595909cb667c38ac7c8c7bd0646b28899e27777) )
 	ROM_LOAD16_BYTE( "u12-l1", 0x400000, 0x80000, CRC(d05ce6ad) SHA1(7a8ee405c118fd176b66353fa7bfab888cc63cd2) )
@@ -759,16 +782,16 @@ ROM_START( kinstp )
 	ROM_LOAD16_BYTE( "u35-l1", 0xc00000, 0x80000, CRC(0aaef4fc) SHA1(48c4c954ac9db648f28ad64f9845e19ec432eec3) )
 	ROM_LOAD16_BYTE( "u36-l1", 0xe00000, 0x80000, CRC(0577bb60) SHA1(cc78070cc41701e9a91fde5cfbdc7e1e83354854) )
 
-	DISK_REGION( "ide" )
+	DISK_REGION( "ata:0:hdd:image" )
 	DISK_IMAGE( "kinst", 0, SHA1(81d833236e994528d1482979261401b198d1ca53) )
 ROM_END
 
 
 ROM_START( kinst2 )
-	ROM_REGION32_LE( 0x80000, "user1", 0 )	/* 512k for R4600 code */
+	ROM_REGION32_LE( 0x80000, "user1", 0 )  /* 512k for R4600 code */
 	ROM_LOAD( "ki2-l14.u98", 0x00000, 0x80000, CRC(27d0285e) SHA1(aa7a2a9d72a47dd0ea2ee7b2776b79288060b179) )
 
-	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )	/* sound data */
+	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )  /* sound data */
 	ROM_LOAD16_BYTE( "ki2_l1.u10", 0x000000, 0x80000, CRC(fdf6ed51) SHA1(acfc9460cd5df01403b7f00b2f68c2a8734ad6d3) )
 	ROM_LOAD16_BYTE( "ki2_l1.u11", 0x200000, 0x80000, CRC(f9e70024) SHA1(fe7fc78f1c60b15f2bbdc4c455f55cdf30f48ed4) )
 	ROM_LOAD16_BYTE( "ki2_l1.u12", 0x400000, 0x80000, CRC(2994c199) SHA1(9997a83432cb720f65b40a8af46f31a5d0d16d8e) )
@@ -778,16 +801,16 @@ ROM_START( kinst2 )
 	ROM_LOAD16_BYTE( "ki2_l1.u35", 0xc00000, 0x80000, CRC(7245ce69) SHA1(24a3ff009c8a7f5a0bfcb198b8dcb5df365770d3) )
 	ROM_LOAD16_BYTE( "ki2_l1.u36", 0xe00000, 0x80000, CRC(8920acbb) SHA1(0fca72c40067034939b984b4bf32972a5a6c26af) )
 
-	DISK_REGION( "ide" )
+	DISK_REGION( "ata:0:hdd:image" )
 	DISK_IMAGE( "kinst2", 0, SHA1(e7c9291b4648eae0012ea0cc230731ed4987d1d5) )
 ROM_END
 
 
 ROM_START( kinst2k4 )
-	ROM_REGION32_LE( 0x80000, "user1", 0 )	/* 512k for R4600 code */
+	ROM_REGION32_LE( 0x80000, "user1", 0 )  /* 512k for R4600 code */
 	ROM_LOAD( "ki2-l14k.u98", 0x00000, 0x80000, CRC(9cbd00a8) SHA1(926dce4bb9016331ea40d3c337a9ace896f07493) )
 
-	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )	/* sound data */
+	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )  /* sound data */
 	ROM_LOAD16_BYTE( "ki2_l1.u10", 0x000000, 0x80000, CRC(fdf6ed51) SHA1(acfc9460cd5df01403b7f00b2f68c2a8734ad6d3) )
 	ROM_LOAD16_BYTE( "ki2_l1.u11", 0x200000, 0x80000, CRC(f9e70024) SHA1(fe7fc78f1c60b15f2bbdc4c455f55cdf30f48ed4) )
 	ROM_LOAD16_BYTE( "ki2_l1.u12", 0x400000, 0x80000, CRC(2994c199) SHA1(9997a83432cb720f65b40a8af46f31a5d0d16d8e) )
@@ -797,16 +820,16 @@ ROM_START( kinst2k4 )
 	ROM_LOAD16_BYTE( "ki2_l1.u35", 0xc00000, 0x80000, CRC(7245ce69) SHA1(24a3ff009c8a7f5a0bfcb198b8dcb5df365770d3) )
 	ROM_LOAD16_BYTE( "ki2_l1.u36", 0xe00000, 0x80000, CRC(8920acbb) SHA1(0fca72c40067034939b984b4bf32972a5a6c26af) )
 
-	DISK_REGION( "ide" )
+	DISK_REGION( "ata:0:hdd:image" )
 	DISK_IMAGE( "kinst2", 0, SHA1(e7c9291b4648eae0012ea0cc230731ed4987d1d5) )
 ROM_END
 
 
 ROM_START( kinst213 )
-	ROM_REGION32_LE( 0x80000, "user1", 0 )	/* 512k for R4600 code */
+	ROM_REGION32_LE( 0x80000, "user1", 0 )  /* 512k for R4600 code */
 	ROM_LOAD( "ki2-l13.u98", 0x00000, 0x80000, CRC(25ebde3b) SHA1(771d150fb4de0a2ceb279954b9545458e93e2405) )
 
-	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )	/* sound data */
+	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )  /* sound data */
 	ROM_LOAD16_BYTE( "ki2_l1.u10", 0x000000, 0x80000, CRC(fdf6ed51) SHA1(acfc9460cd5df01403b7f00b2f68c2a8734ad6d3) )
 	ROM_LOAD16_BYTE( "ki2_l1.u11", 0x200000, 0x80000, CRC(f9e70024) SHA1(fe7fc78f1c60b15f2bbdc4c455f55cdf30f48ed4) )
 	ROM_LOAD16_BYTE( "ki2_l1.u12", 0x400000, 0x80000, CRC(2994c199) SHA1(9997a83432cb720f65b40a8af46f31a5d0d16d8e) )
@@ -816,16 +839,16 @@ ROM_START( kinst213 )
 	ROM_LOAD16_BYTE( "ki2_l1.u35", 0xc00000, 0x80000, CRC(7245ce69) SHA1(24a3ff009c8a7f5a0bfcb198b8dcb5df365770d3) )
 	ROM_LOAD16_BYTE( "ki2_l1.u36", 0xe00000, 0x80000, CRC(8920acbb) SHA1(0fca72c40067034939b984b4bf32972a5a6c26af) )
 
-	DISK_REGION( "ide" )
+	DISK_REGION( "ata:0:hdd:image" )
 	DISK_IMAGE( "kinst2", 0, SHA1(e7c9291b4648eae0012ea0cc230731ed4987d1d5) )
 ROM_END
 
 
 ROM_START( kinst2k3 )
-	ROM_REGION32_LE( 0x80000, "user1", 0 )	/* 512k for R4600 code */
+	ROM_REGION32_LE( 0x80000, "user1", 0 )  /* 512k for R4600 code */
 	ROM_LOAD( "ki2-l13k.u98", 0x00000, 0x80000, CRC(3b4f16fc) SHA1(c28416f94453fd1f73ba01025276a04610569d12) )
 
-	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )	/* sound data */
+	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )  /* sound data */
 	ROM_LOAD16_BYTE( "ki2_l1.u10", 0x000000, 0x80000, CRC(fdf6ed51) SHA1(acfc9460cd5df01403b7f00b2f68c2a8734ad6d3) )
 	ROM_LOAD16_BYTE( "ki2_l1.u11", 0x200000, 0x80000, CRC(f9e70024) SHA1(fe7fc78f1c60b15f2bbdc4c455f55cdf30f48ed4) )
 	ROM_LOAD16_BYTE( "ki2_l1.u12", 0x400000, 0x80000, CRC(2994c199) SHA1(9997a83432cb720f65b40a8af46f31a5d0d16d8e) )
@@ -835,16 +858,16 @@ ROM_START( kinst2k3 )
 	ROM_LOAD16_BYTE( "ki2_l1.u35", 0xc00000, 0x80000, CRC(7245ce69) SHA1(24a3ff009c8a7f5a0bfcb198b8dcb5df365770d3) )
 	ROM_LOAD16_BYTE( "ki2_l1.u36", 0xe00000, 0x80000, CRC(8920acbb) SHA1(0fca72c40067034939b984b4bf32972a5a6c26af) )
 
-	DISK_REGION( "ide" )
+	DISK_REGION( "ata:0:hdd:image" )
 	DISK_IMAGE( "kinst2", 0, SHA1(e7c9291b4648eae0012ea0cc230731ed4987d1d5) )
 ROM_END
 
 
 ROM_START( kinst211 )
-	ROM_REGION32_LE( 0x80000, "user1", 0 )	/* 512k for R4600 code */
+	ROM_REGION32_LE( 0x80000, "user1", 0 )  /* 512k for R4600 code */
 	ROM_LOAD( "ki2-l11.u98", 0x00000, 0x80000, CRC(0cb8de1e) SHA1(fe447f4b1d29b524f57c5ba1890652ef6afff88a) )
 
-	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )	/* sound data */
+	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )  /* sound data */
 	ROM_LOAD16_BYTE( "ki2_l1.u10", 0x000000, 0x80000, CRC(fdf6ed51) SHA1(acfc9460cd5df01403b7f00b2f68c2a8734ad6d3) )
 	ROM_LOAD16_BYTE( "ki2_l1.u11", 0x200000, 0x80000, CRC(f9e70024) SHA1(fe7fc78f1c60b15f2bbdc4c455f55cdf30f48ed4) )
 	ROM_LOAD16_BYTE( "ki2_l1.u12", 0x400000, 0x80000, CRC(2994c199) SHA1(9997a83432cb720f65b40a8af46f31a5d0d16d8e) )
@@ -854,16 +877,16 @@ ROM_START( kinst211 )
 	ROM_LOAD16_BYTE( "ki2_l1.u35", 0xc00000, 0x80000, CRC(7245ce69) SHA1(24a3ff009c8a7f5a0bfcb198b8dcb5df365770d3) )
 	ROM_LOAD16_BYTE( "ki2_l1.u36", 0xe00000, 0x80000, CRC(8920acbb) SHA1(0fca72c40067034939b984b4bf32972a5a6c26af) )
 
-	DISK_REGION( "ide" )
+	DISK_REGION( "ata:0:hdd:image" )
 	DISK_IMAGE( "kinst2", 0, SHA1(e7c9291b4648eae0012ea0cc230731ed4987d1d5) )
 ROM_END
 
 
 ROM_START( kinst210 )
-	ROM_REGION32_LE( 0x80000, "user1", 0 )	/* 512k for R4600 code */
+	ROM_REGION32_LE( 0x80000, "user1", 0 )  /* 512k for R4600 code */
 	ROM_LOAD( "ki2-l10.u98", 0x00000, 0x80000, CRC(b17b4b3d) SHA1(756629cd1b51ae50f2b9818765dd3d277c3019b3) )
 
-	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )	/* sound data */
+	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )  /* sound data */
 	ROM_LOAD16_BYTE( "ki2_l1.u10", 0x000000, 0x80000, CRC(fdf6ed51) SHA1(acfc9460cd5df01403b7f00b2f68c2a8734ad6d3) )
 	ROM_LOAD16_BYTE( "ki2_l1.u11", 0x200000, 0x80000, CRC(f9e70024) SHA1(fe7fc78f1c60b15f2bbdc4c455f55cdf30f48ed4) )
 	ROM_LOAD16_BYTE( "ki2_l1.u12", 0x400000, 0x80000, CRC(2994c199) SHA1(9997a83432cb720f65b40a8af46f31a5d0d16d8e) )
@@ -873,7 +896,7 @@ ROM_START( kinst210 )
 	ROM_LOAD16_BYTE( "ki2_l1.u35", 0xc00000, 0x80000, CRC(7245ce69) SHA1(24a3ff009c8a7f5a0bfcb198b8dcb5df365770d3) )
 	ROM_LOAD16_BYTE( "ki2_l1.u36", 0xe00000, 0x80000, CRC(8920acbb) SHA1(0fca72c40067034939b984b4bf32972a5a6c26af) )
 
-	DISK_REGION( "ide" )
+	DISK_REGION( "ata:0:hdd:image" )
 	DISK_IMAGE( "kinst2", 0, SHA1(e7c9291b4648eae0012ea0cc230731ed4987d1d5) )
 ROM_END
 
@@ -885,21 +908,19 @@ ROM_END
  *
  *************************************/
 
-static DRIVER_INIT( kinst )
+DRIVER_INIT_MEMBER(kinst_state,kinst)
 {
-	kinst_state *state = machine.driver_data<kinst_state>();
 	static const UINT8 kinst_control_map[8] = { 0,1,2,3,4,5,6,7 };
 
-	dcs_init(machine);
+	dcs_init(machine());
 
 	/* set up the control register mapping */
-	state->m_control_map = kinst_control_map;
+	m_control_map = kinst_control_map;
 }
 
 
-static DRIVER_INIT( kinst2 )
+DRIVER_INIT_MEMBER(kinst_state,kinst2)
 {
-	kinst_state *state = machine.driver_data<kinst_state>();
 	static const UINT8 kinst2_control_map[8] = { 2,4,1,0,3,5,6,7 };
 
 	// read: $80 on ki2 = $90 on ki
@@ -909,10 +930,10 @@ static DRIVER_INIT( kinst2 )
 	// write: $98 on ki2 = $80 on ki
 	// write: $a0 on ki2 = $98 on ki
 
-	dcs_init(machine);
+	dcs_init(machine());
 
 	/* set up the control register mapping */
-	state->m_control_map = kinst2_control_map;
+	m_control_map = kinst2_control_map;
 }
 
 
@@ -923,14 +944,14 @@ static DRIVER_INIT( kinst2 )
  *
  *************************************/
 
-GAME( 1994, kinst,    0,      kinst, kinst,  kinst,   ROT0, "Rare", "Killer Instinct (v1.5d)", GAME_SUPPORTS_SAVE )
-GAME( 1994, kinst14,  kinst,  kinst, kinst2, kinst,   ROT0, "Rare", "Killer Instinct (v1.4)", GAME_SUPPORTS_SAVE )
-GAME( 1994, kinst13,  kinst,  kinst, kinst2, kinst,   ROT0, "Rare", "Killer Instinct (v1.3)", GAME_SUPPORTS_SAVE )
-GAME( 1994, kinstp,   kinst,  kinst, kinst2, kinst,   ROT0, "Rare", "Killer Instinct (proto v4.7)", GAME_SUPPORTS_SAVE )
+GAME( 1994, kinst,    0,      kinst, kinst, kinst_state,  kinst,   ROT0, "Rare", "Killer Instinct (v1.5d)", GAME_SUPPORTS_SAVE )
+GAME( 1994, kinst14,  kinst,  kinst, kinst2, kinst_state, kinst,   ROT0, "Rare", "Killer Instinct (v1.4)", GAME_SUPPORTS_SAVE )
+GAME( 1994, kinst13,  kinst,  kinst, kinst2, kinst_state, kinst,   ROT0, "Rare", "Killer Instinct (v1.3)", GAME_SUPPORTS_SAVE )
+GAME( 1994, kinstp,   kinst,  kinst, kinst2, kinst_state, kinst,   ROT0, "Rare", "Killer Instinct (proto v4.7)", GAME_SUPPORTS_SAVE )
 
-GAME( 1995, kinst2,   0,      kinst, kinst2, kinst2,  ROT0, "Rare", "Killer Instinct 2 (v1.4)", GAME_SUPPORTS_SAVE )
-GAME( 1995, kinst2k4, kinst2, kinst, kinst2, kinst2,  ROT0, "Rare", "Killer Instinct 2 (v1.4k, upgrade kit)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
-GAME( 1995, kinst213, kinst2, kinst, kinst2, kinst2,  ROT0, "Rare", "Killer Instinct 2 (v1.3)", GAME_SUPPORTS_SAVE )
-GAME( 1995, kinst2k3, kinst2, kinst, kinst2, kinst2,  ROT0, "Rare", "Killer Instinct 2 (v1.3k, upgrade kit)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
-GAME( 1995, kinst211, kinst2, kinst, kinst2, kinst2,  ROT0, "Rare", "Killer Instinct 2 (v1.1)", GAME_SUPPORTS_SAVE )
-GAME( 1995, kinst210, kinst2, kinst, kinst2, kinst2,  ROT0, "Rare", "Killer Instinct 2 (v1.0)", GAME_SUPPORTS_SAVE )
+GAME( 1995, kinst2,   0,      kinst, kinst2, kinst_state, kinst2,  ROT0, "Rare", "Killer Instinct 2 (v1.4)", GAME_SUPPORTS_SAVE )
+GAME( 1995, kinst2k4, kinst2, kinst, kinst2, kinst_state, kinst2,  ROT0, "Rare", "Killer Instinct 2 (v1.4k, upgrade kit)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1995, kinst213, kinst2, kinst, kinst2, kinst_state, kinst2,  ROT0, "Rare", "Killer Instinct 2 (v1.3)", GAME_SUPPORTS_SAVE )
+GAME( 1995, kinst2k3, kinst2, kinst, kinst2, kinst_state, kinst2,  ROT0, "Rare", "Killer Instinct 2 (v1.3k, upgrade kit)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1995, kinst211, kinst2, kinst, kinst2, kinst_state, kinst2,  ROT0, "Rare", "Killer Instinct 2 (v1.1)", GAME_SUPPORTS_SAVE )
+GAME( 1995, kinst210, kinst2, kinst, kinst2, kinst_state, kinst2,  ROT0, "Rare", "Killer Instinct 2 (v1.0)", GAME_SUPPORTS_SAVE )

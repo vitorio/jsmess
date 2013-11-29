@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Miodrag Milanovic
 /***************************************************************************
 
     main.c
@@ -27,21 +29,26 @@
 #include "formats/gtp_cas.h"
 #include "formats/hect_tap.h"
 #include "formats/ace_tap.h"
+#include "formats/adam_cas.h"
+#include "formats/kc_cas.h"
 #include "formats/kim1_cas.h"
 #include "formats/lviv_lvt.h"
 #include "formats/mz_cas.h"
 #include "formats/orao_cas.h"
 #include "formats/oric_tap.h"
-#include "formats/pmd_pmd.h"
+#include "formats/pmd_cas.h"
 #include "formats/primoptp.h"
 #include "formats/rk_cas.h"
 #include "formats/sord_cas.h"
 #include "formats/svi_cas.h"
+#include "formats/thom_cas.h"
 #include "formats/trs_cas.h"
+#include "formats/tvc_cas.h"
 #include "formats/tzx_cas.h"
 #include "formats/uef_cas.h"
 #include "formats/vg5k_cas.h"
 #include "formats/vt_cas.h"
+#include "formats/x07_cas.h"
 #include "formats/zx81_p.h"
 
 struct SupportedCassetteFormats
@@ -53,6 +60,7 @@ struct SupportedCassetteFormats
 
 const struct SupportedCassetteFormats formats[] = {
 	{"a26", a26_cassette_formats               ,"Atari 2600"},
+	{"ddp", coleco_adam_cassette_formats       ,"Coleco Adam"},
 	{"apf", apf_cassette_formats               ,"APF Imagination Machine"},
 	{"cbm", cbm_cassette_formats               ,"Commodore"},
 	{"cgenie", cgenie_cassette_formats         ,"Colour Genie"},
@@ -63,12 +71,13 @@ const struct SupportedCassetteFormats formats[] = {
 	{"gtp", gtp_cassette_formats               ,"Galaksija"},
 	{"hector", hector_cassette_formats         ,"Hector - k7 : classical, FOR : forth cassette "},
 	{"jupiter", ace_cassette_formats           ,"Jupiter"},
+	{"kc85", kc_cassette_formats               ,"VEB Mikroelektronik KC 85"},
 	{"kim1", kim1_cassette_formats             ,"KIM-1"},
 	{"lviv", lviv_lvt_format                   ,"Lviv"},
 	{"mz", mz700_cassette_formats              ,"Sharp MZ"},
 	{"orao", orao_cassette_formats             ,"Orao"},
 	{"oric", oric_cassette_formats             ,"Oric"},
-	{"pmd85", pmd85_pmd_format                 ,"PMD-85"},
+	{"pmd85", pmd85_cassette_formats           ,"PMD-85"},
 	{"primo", primo_ptp_format                 ,"Primo"},
 	{"rku", rku_cassette_formats               ,"UT-88"},
 	{"rk8", rk8_cassette_formats               ,"Mikro-80"},
@@ -80,13 +89,17 @@ const struct SupportedCassetteFormats formats[] = {
 	{"rkp", rkp_cassette_formats               ,"Partner"},
 	{"sordm5", sordm5_cassette_formats         ,"Sord M5"},
 	{"svi", svi_cassette_formats               ,"SVI"},
+	{"to7", to7_cassette_formats               ,"Thomson TO"},
+	{"mo5", mo5_cassette_formats               ,"Thomson MO"},
 	{"trs80l2", trs80l2_cassette_formats       ,"TRS-80 Level 2"},
+	{"tvc64", tvc64_cassette_formats           ,"Videoton TVC 64"},
 	{"tzx", tzx_cassette_formats               ,"ZX Spectrum"},
 	{"cdt", cdt_cassette_formats               ,"Amstrad CPC"},
 	{"uef", uef_cassette_formats               ,"Acorn Electron"},
 	{"vg5k", vg5k_cassette_formats             ,"VG 5000 k7"},
 	{"vtech1", vtech1_cassette_formats         ,"Video Technology Laser 110-310"},
 	{"vtech2", vtech2_cassette_formats         ,"Video Technology Laser 350-700"},
+	{"x07", x07_cassette_formats               ,"Canon X-07"},
 	{"zx81_p", zx81_p_format                   ,"Sinclair ZX81"},
 	{"zx80_o", zx80_o_format                   ,"Sinclair ZX80"},
 	{NULL,NULL,NULL}
@@ -105,7 +118,7 @@ static const char *get_extension(const char *name)
 static void display_usage(void)
 {
 	fprintf(stderr, "Usage: \n");
-	fprintf(stderr, "		castool.exe convert <format> <inputfile> <outputfile.wav>\n");
+	fprintf(stderr, "       castool.exe convert <format> <inputfile> <outputfile.wav>\n");
 }
 
 static void display_formats(void)
@@ -158,7 +171,7 @@ int CLIB_DECL main(int argc, char *argv[])
 					return -1;
 				}
 
-				if (cassette_open_choices(f, &stdio_ioprocs, get_extension(argv[3]), selected_formats, CASSETTE_FLAG_READONLY, &cassette))	{
+				if (cassette_open_choices(f, &stdio_ioprocs, get_extension(argv[3]), selected_formats, CASSETTE_FLAG_READONLY, &cassette))  {
 					fprintf(stderr, "Invalid format of input file.\n");
 					fclose(f);
 					return -1;

@@ -17,26 +17,6 @@ silence compression: '00 nn' must be replaced by nn+1 times '80'.
 #include "n63701x.h"
 
 
-typedef struct
-{
-	int select;
-	int playing;
-	int base_addr;
-	int position;
-	int volume;
-	int silence_counter;
-} voice;
-
-
-typedef struct _namco_63701x namco_63701x;
-struct _namco_63701x
-{
-	voice voices[2];
-	sound_stream * stream;		/* channel assigned by the mixer */
-	UINT8 *rom;		/* pointer to sample ROM */
-};
-
-
 /* volume control has three resistors: 22000, 10000 and 3300 Ohm.
    22000 is always enabled, the other two can be turned off.
    Since 0x00 and 0xff samples have special meaning, the available range is
@@ -46,27 +26,45 @@ struct _namco_63701x
 static const int vol_table[4] = { 26, 84, 200, 258 };
 
 
-INLINE namco_63701x *get_safe_token(device_t *device)
+// device type definition
+const device_type NAMCO_63701X = &device_creator<namco_63701x_device>;
+
+namco_63701x_device::namco_63701x_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, NAMCO_63701X, "Namco 63701X", tag, owner, clock, "namco_63701x", __FILE__),
+		device_sound_interface(mconfig, *this),
+		m_stream(NULL),
+		m_rom(NULL)
 {
-	assert(device != NULL);
-	assert(device->type() == NAMCO_63701X);
-	return (namco_63701x *)downcast<legacy_device_base *>(device)->token();
 }
 
 
-static STREAM_UPDATE( namco_63701x_update )
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void namco_63701x_device::device_start()
 {
-	namco_63701x *chip = (namco_63701x *)param;
+	m_rom = *region();
+	m_stream = stream_alloc(0, 2, clock()/1000);
+}
+
+
+//-------------------------------------------------
+//  sound_stream_update - handle a stream update
+//-------------------------------------------------
+
+void namco_63701x_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
+{
 	int ch;
 
 	for (ch = 0;ch < 2;ch++)
 	{
 		stream_sample_t *buf = outputs[ch];
-		voice *v = &chip->voices[ch];
+		voice_63701x *v = &m_voices[ch];
 
 		if (v->playing)
 		{
-			UINT8 *base = chip->rom + v->base_addr;
+			UINT8 *base = m_rom + v->base_addr;
 			int pos = v->position;
 			int vol = vol_table[v->volume];
 			int p;
@@ -82,12 +80,12 @@ static STREAM_UPDATE( namco_63701x_update )
 				{
 					int data = base[(pos++) & 0xffff];
 
-					if (data == 0xff)	/* end of sample */
+					if (data == 0xff)   /* end of sample */
 					{
 						v->playing = 0;
 						break;
 					}
-					else if (data == 0x00)	/* silence compression */
+					else if (data == 0x00)  /* silence compression */
 					{
 						data = base[(pos++) & 0xffff];
 						v->silence_counter = data;
@@ -108,81 +106,37 @@ static STREAM_UPDATE( namco_63701x_update )
 }
 
 
-static DEVICE_START( namco_63701x )
+
+WRITE8_MEMBER( namco_63701x_device::namco_63701x_w )
 {
-	namco_63701x *chip = get_safe_token(device);
-
-	chip->rom = *device->region();
-
-	chip->stream = device->machine().sound().stream_alloc(*device, 0, 2, device->clock()/1000, chip, namco_63701x_update);
-}
-
-
-
-WRITE8_DEVICE_HANDLER( namco_63701x_w )
-{
-	namco_63701x *chip = get_safe_token(device);
 	int ch = offset / 2;
 
 	if (offset & 1)
-		chip->voices[ch].select = data;
+		m_voices[ch].select = data;
 	else
 	{
 		/*
-          should we stop the playing sample if voice_select[ch] == 0 ?
-          originally we were, but this makes us lose a sample in genpeitd,
-          after the continue counter reaches 0. Either we shouldn't stop
-          the sample, or genpeitd is returning to the title screen too soon.
-         */
-		if (chip->voices[ch].select & 0x1f)
+		  should we stop the playing sample if voice_select[ch] == 0 ?
+		  originally we were, but this makes us lose a sample in genpeitd,
+		  after the continue counter reaches 0. Either we shouldn't stop
+		  the sample, or genpeitd is returning to the title screen too soon.
+		 */
+		if (m_voices[ch].select & 0x1f)
 		{
 			int rom_offs;
 
 			/* update the streams */
-			chip->stream->update();
+			m_stream->update();
 
-			chip->voices[ch].playing = 1;
-			chip->voices[ch].base_addr = 0x10000 * ((chip->voices[ch].select & 0xe0) >> 5);
-			rom_offs = chip->voices[ch].base_addr + 2 * ((chip->voices[ch].select & 0x1f) - 1);
-			chip->voices[ch].position = (chip->rom[rom_offs] << 8) + chip->rom[rom_offs+1];
+			m_voices[ch].playing = 1;
+			m_voices[ch].base_addr = 0x10000 * ((m_voices[ch].select & 0xe0) >> 5);
+			rom_offs = m_voices[ch].base_addr + 2 * ((m_voices[ch].select & 0x1f) - 1);
+			m_voices[ch].position = (m_rom[rom_offs] << 8) + m_rom[rom_offs+1];
 			/* bits 6-7 = volume */
-			chip->voices[ch].volume = data >> 6;
+			m_voices[ch].volume = data >> 6;
 			/* bits 0-5 = counter to indicate new sample start? we don't use them */
 
-			chip->voices[ch].silence_counter = 0;
+			m_voices[ch].silence_counter = 0;
 		}
 	}
 }
-
-
-
-
-
-
-/**************************************************************************
- * Generic get_info
- **************************************************************************/
-
-DEVICE_GET_INFO( namco_63701x )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(namco_63701x);						break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME( namco_63701x );	break;
-		case DEVINFO_FCT_STOP:							/* Nothing */										break;
-		case DEVINFO_FCT_RESET:							/* Nothing */										break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "Namco 63701X");					break;
-		case DEVINFO_STR_FAMILY:					strcpy(info->s, "Namco custom");					break;
-		case DEVINFO_STR_VERSION:					strcpy(info->s, "1.0");								break;
-		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);							break;
-		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
-	}
-}
-
-
-DEFINE_LEGACY_SOUND_DEVICE(NAMCO_63701X, namco_63701x);

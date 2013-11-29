@@ -14,7 +14,6 @@
         18/11/2009 Skeleton driver.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i8008/i8008.h"
@@ -26,9 +25,10 @@ public:
 	mod8_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
 	m_teleprinter(*this, TELEPRINTER_TAG)
-	{ }
+	,
+		m_maincpu(*this, "maincpu") { }
 
-	required_device<device_t> m_teleprinter;
+	required_device<teleprinter_device> m_teleprinter;
 	DECLARE_WRITE8_MEMBER(out_w);
 	DECLARE_WRITE8_MEMBER(tty_w);
 	DECLARE_WRITE8_MEMBER(kbd_put);
@@ -36,6 +36,9 @@ public:
 	UINT16 m_tty_data;
 	UINT8 m_tty_key_data;
 	int m_tty_cnt;
+	virtual void machine_reset();
+	IRQ_CALLBACK_MEMBER(mod8_irq_callback);
+	required_device<cpu_device> m_maincpu;
 };
 
 WRITE8_MEMBER( mod8_state::out_w )
@@ -46,7 +49,7 @@ WRITE8_MEMBER( mod8_state::out_w )
 
 	if (m_tty_cnt == 10)
 	{
-		teleprinter_write(m_teleprinter, 0, (m_tty_data >> 7) & 0x7f);
+		m_teleprinter->write(space, 0, (m_tty_data >> 7) & 0x7f);
 		m_tty_cnt = 0;
 	}
 }
@@ -82,20 +85,20 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( mod8 )
 INPUT_PORTS_END
 
-static IRQ_CALLBACK ( mod8_irq_callback )
+IRQ_CALLBACK_MEMBER(mod8_state::mod8_irq_callback)
 {
 	return 0xC0; // LAA - NOP equivalent
 }
 
-static MACHINE_RESET(mod8)
+void mod8_state::machine_reset()
 {
-	device_set_irq_callback(machine.device("maincpu"), mod8_irq_callback);
+	m_maincpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(mod8_state::mod8_irq_callback),this));
 }
 
 WRITE8_MEMBER( mod8_state::kbd_put )
 {
 	m_tty_key_data = data ^ 0xff;
-	cputag_set_input_line(machine(), "maincpu", 0, HOLD_LINE);
+	m_maincpu->set_input_line(0, HOLD_LINE);
 }
 
 static GENERIC_TELEPRINTER_INTERFACE( teleprinter_intf )
@@ -109,10 +112,8 @@ static MACHINE_CONFIG_START( mod8, mod8_state )
 	MCFG_CPU_PROGRAM_MAP(mod8_mem)
 	MCFG_CPU_IO_MAP(mod8_io)
 
-	MCFG_MACHINE_RESET(mod8)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_teleprinter )
 	MCFG_GENERIC_TELEPRINTER_ADD(TELEPRINTER_TAG, teleprinter_intf)
 MACHINE_CONFIG_END
 
@@ -132,5 +133,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT   COMPANY                      FULLNAME       FLAGS */
-COMP( 1974, mod8,   0,       0,      mod8,      mod8,    0, "Microsystems International Ltd", "MOD-8", GAME_NO_SOUND_HW)
-
+COMP( 1974, mod8,   0,       0,      mod8,      mod8, driver_device,    0, "Microsystems International Ltd", "MOD-8", GAME_NO_SOUND_HW)

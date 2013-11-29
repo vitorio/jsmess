@@ -1,7 +1,9 @@
+// license:MAME
+// copyright-holders:smf
 /*
  * PlayStation CPU emulator
  *
- * Copyright 2003-2011 smf
+ * Copyright 2003-2013 smf
  *
  */
 
@@ -10,10 +12,12 @@
 #ifndef __PSXCPU_H__
 #define __PSXCPU_H__
 
-#include "gte.h"
+#include "emu.h"
+#include "machine/ram.h"
 #include "dma.h"
+#include "gte.h"
+#include "irq.h"
 #include "sio.h"
-#include "includes/psx.h"
 
 //**************************************************************************
 //  CONSTANTS
@@ -26,12 +30,12 @@
 
 // interrupts
 
-#define PSXCPU_IRQ0	( 0 )
-#define PSXCPU_IRQ1	( 1 )
-#define PSXCPU_IRQ2	( 2 )
-#define PSXCPU_IRQ3	( 3 )
-#define PSXCPU_IRQ4	( 4 )
-#define PSXCPU_IRQ5	( 5 )
+#define PSXCPU_IRQ0 ( 0 )
+#define PSXCPU_IRQ1 ( 1 )
+#define PSXCPU_IRQ2 ( 2 )
+#define PSXCPU_IRQ3 ( 3 )
+#define PSXCPU_IRQ4 ( 4 )
+#define PSXCPU_IRQ5 ( 5 )
 
 // register enumeration
 
@@ -105,12 +109,25 @@ enum
 //**************************************************************************
 
 #define MCFG_PSX_DMA_CHANNEL_READ( cputag, channel, handler ) \
-	downcast<psxdma_device *>( psxcpu_device::getcpu( *owner, cputag )->subdevice("dma") )->install_read_handler( channel, handler );
+	psxcpu_device::getcpu( *owner, cputag )->subdevice<psxdma_device>("dma")->install_read_handler( channel, handler );
 
 #define MCFG_PSX_DMA_CHANNEL_WRITE( cputag, channel, handler ) \
-	downcast<psxdma_device *>( psxcpu_device::getcpu( *owner, cputag )->subdevice("dma") )->install_write_handler( channel, handler );
+	psxcpu_device::getcpu( *owner, cputag )->subdevice<psxdma_device>("dma")->install_write_handler( channel, handler );
 
+#define MCFG_PSX_GPU_READ_HANDLER(_devcb) \
+	devcb = &psxcpu_device::set_gpu_read_handler(*device, DEVCB2_##_devcb);
+#define MCFG_PSX_GPU_WRITE_HANDLER(_devcb) \
+	devcb = &psxcpu_device::set_gpu_write_handler(*device, DEVCB2_##_devcb);
 
+#define MCFG_PSX_SPU_READ_HANDLER(_devcb) \
+	devcb = &psxcpu_device::set_spu_read_handler(*device, DEVCB2_##_devcb);
+#define MCFG_PSX_SPU_WRITE_HANDLER(_devcb) \
+	devcb = &psxcpu_device::set_spu_write_handler(*device, DEVCB2_##_devcb);
+
+#define MCFG_PSX_CD_READ_HANDLER(_devcb) \
+	devcb = &psxcpu_device::set_cd_read_handler(*device, DEVCB2_##_devcb);
+#define MCFG_PSX_CD_WRITE_HANDLER(_devcb) \
+	devcb = &psxcpu_device::set_cd_write_handler(*device, DEVCB2_##_devcb);
 
 //**************************************************************************
 //  TYPE DEFINITIONS
@@ -124,25 +141,57 @@ public:
 	// construction/destruction
 	psxcpu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
+	// static configuration helpers
+	template<class _Object> static devcb2_base &set_gpu_read_handler(device_t &device, _Object object) { return downcast<psxcpu_device &>(device).m_gpu_read_handler.set_callback(object); }
+	template<class _Object> static devcb2_base &set_gpu_write_handler(device_t &device, _Object object) { return downcast<psxcpu_device &>(device).m_gpu_write_handler.set_callback(object); }
+	template<class _Object> static devcb2_base &set_spu_read_handler(device_t &device, _Object object) { return downcast<psxcpu_device &>(device).m_spu_read_handler.set_callback(object); }
+	template<class _Object> static devcb2_base &set_spu_write_handler(device_t &device, _Object object) { return downcast<psxcpu_device &>(device).m_spu_write_handler.set_callback(object); }
+	template<class _Object> static devcb2_base &set_cd_read_handler(device_t &device, _Object object) { return downcast<psxcpu_device &>(device).m_cd_read_handler.set_callback(object); }
+	template<class _Object> static devcb2_base &set_cd_write_handler(device_t &device, _Object object) { return downcast<psxcpu_device &>(device).m_cd_write_handler.set_callback(object); }
+
 	// public interfaces
-	WRITE32_MEMBER( biu_w );
-	READ32_MEMBER( biu_r );
-	WRITE32_MEMBER( berr_w );
-	READ32_MEMBER( berr_r );
+	DECLARE_WRITE32_MEMBER( berr_w );
+	DECLARE_READ32_MEMBER( berr_r );
+
+	UINT32 exp_base();
+
+	DECLARE_WRITE32_MEMBER( exp_base_w );
+	DECLARE_READ32_MEMBER( exp_base_r );
+
+	DECLARE_WRITE32_MEMBER( exp_config_w );
+	DECLARE_READ32_MEMBER( exp_config_r );
+
+	DECLARE_WRITE32_MEMBER( ram_config_w );
+	DECLARE_READ32_MEMBER( ram_config_r );
+
+	DECLARE_WRITE32_MEMBER( rom_config_w );
+	DECLARE_READ32_MEMBER( rom_config_r );
+
+	DECLARE_WRITE32_MEMBER( biu_w );
+	DECLARE_READ32_MEMBER( biu_r );
+
+	DECLARE_WRITE32_MEMBER( gpu_w );
+	DECLARE_READ32_MEMBER( gpu_r );
+
+	DECLARE_WRITE16_MEMBER( spu_w );
+	DECLARE_READ16_MEMBER( spu_r );
+
+	DECLARE_WRITE8_MEMBER( cd_w );
+	DECLARE_READ8_MEMBER( cd_r );
+
+	DECLARE_WRITE32_MEMBER( com_delay_w );
+	DECLARE_READ32_MEMBER( com_delay_r );
 
 	static psxcpu_device *getcpu( device_t &device, const char *cputag );
-	static void install_sio_handler( device_t &device, const char *cputag, int n_port, psx_sio_handler p_f_sio_handler );
-	static void sio_input( device_t &device, const char *cputag, int n_port, int n_mask, int n_data );
-	static void irq_set( device_t &device, const char *cputag, UINT32 bitmask );
 
 protected:
-	psxcpu_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, address_map_constructor internal_map);
+	psxcpu_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source);
 
 	// device-level overrides
 	virtual void device_start();
 	virtual void device_reset();
 	virtual void device_post_load();
-	machine_config_constructor device_mconfig_additions() const;
+	virtual machine_config_constructor device_mconfig_additions() const;
 
 	// device_execute_interface overrides
 	virtual UINT32 execute_min_cycles() const { return 1; }
@@ -172,7 +221,7 @@ protected:
 	UINT32 m_hi;
 	UINT32 m_lo;
 
-    // internal stuff
+	// internal stuff
 	UINT32 m_op;
 
 	// memory access
@@ -186,7 +235,8 @@ protected:
 	direct_read_data *m_direct;
 
 	// other internal states
-    int m_icount;
+	int m_icount;
+	UINT32 m_com_delay;
 	UINT32 m_delayv;
 	UINT32 m_delayr;
 	UINT32 m_berr;
@@ -201,6 +251,10 @@ protected:
 	UINT32 m_bad_byte_address_mask;
 	UINT32 m_bad_half_address_mask;
 	UINT32 m_bad_word_address_mask;
+	UINT32 m_exp_base;
+	UINT32 m_exp_config;
+	UINT32 m_ram_config;
+	UINT32 m_rom_config;
 
 	void stop();
 	UINT32 cache_readword( UINT32 offset );
@@ -230,6 +284,8 @@ protected:
 	int execute_unstoppable_instructions( int executeCop2 );
 	void update_address_masks();
 	void update_scratchpad();
+	void update_ram_config();
+	void update_rom_config();
 	void update_cop0( int reg );
 	void commit_delayed_load();
 	void set_pc( unsigned pc );
@@ -243,6 +299,7 @@ protected:
 	void common_exception( int exception, UINT32 romOffset, UINT32 ramOffset );
 	void exception( int exception );
 	void breakpoint_exception();
+	void fetch_bus_error_exception();
 	void load_bus_error_exception();
 	void store_bus_error_exception();
 	void load_bad_address( UINT32 address );
@@ -267,6 +324,15 @@ protected:
 	void setcp3cr( int reg, UINT32 value );
 
 	gte m_gte;
+
+	devcb2_read32 m_gpu_read_handler;
+	devcb2_write32 m_gpu_write_handler;
+	devcb2_read16 m_spu_read_handler;
+	devcb2_write16 m_spu_write_handler;
+	devcb2_read8 m_cd_read_handler;
+	devcb2_write8 m_cd_write_handler;
+	required_device<ram_device> m_ram;
+	memory_region *m_rom;
 };
 
 class cxd8530aq_device : public psxcpu_device
@@ -440,9 +506,7 @@ extern const device_type CXD8606CQ;
 
 
 
-typedef struct _DasmPSXCPU_state DasmPSXCPU_state;
-
-struct _DasmPSXCPU_state
+struct DasmPSXCPU_state
 {
 	UINT32 pc;
 	int delayr;

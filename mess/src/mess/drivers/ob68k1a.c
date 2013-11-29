@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /*
 
 Omnibyte OB68K1A
@@ -51,23 +53,13 @@ Notes:
 
     TODO:
 
-    - COM8116 dividers are wrong
     - interrupts
     - configuration switches
     - PIA odd/even byte access
 
 */
 
-#define ADDRESS_MAP_MODERN
 
-#include "emu.h"
-#include "cpu/m68000/m68000.h"
-#include "machine/ram.h"
-#include "machine/6821pia.h"
-#include "machine/6840ptm.h"
-#include "machine/6850acia.h"
-#include "machine/com8116.h"
-#include "machine/terminal.h"
 #include "includes/ob68k1a.h"
 
 
@@ -82,8 +74,8 @@ Notes:
 
 WRITE8_MEMBER( ob68k1a_state::com8116_w )
 {
-	m_dbrg->stt_w(space, 0, data & 0x0f);
-//  m_dbrg->str_w(space, 0, data >> 4); // HACK for terminal
+	m_dbrg->stt_w(data & 0x0f);
+	m_dbrg->str_w(data >> 4);
 }
 
 
@@ -209,8 +201,8 @@ static const ptm6840_interface ptm_intf =
 	XTAL_10MHz/10,
 	{ 0, 0, 0 },
 	{ DEVCB_NULL,
-	  DEVCB_NULL,
-	  DEVCB_NULL },
+		DEVCB_NULL,
+		DEVCB_NULL },
 	DEVCB_NULL
 };
 
@@ -221,13 +213,13 @@ static const ptm6840_interface ptm_intf =
 
 static ACIA6850_INTERFACE( acia0_intf )
 {
-	9600*16, // HACK for terminal
-	9600*16, // HACK for terminal
-	DEVCB_DEVICE_LINE(TERMINAL_TAG, terminal_serial_r),
-	DEVCB_DEVICE_LINE(TERMINAL_TAG, terminal_serial_w),
-	DEVCB_LINE_GND, // HACK for terminal
-	DEVCB_NULL,
-	DEVCB_LINE_GND, // HACK for terminal
+	0,
+	0,
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, serial_port_device, rx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, serial_port_device, tx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, rs232_port_device, cts_r),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, rs232_port_device, rts_w),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, rs232_port_device, dcd_r),
 	DEVCB_NULL
 };
 
@@ -240,11 +232,11 @@ static ACIA6850_INTERFACE( acia1_intf )
 {
 	0,
 	0,
-	DEVCB_LINE_VCC,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, serial_port_device, rx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, serial_port_device, tx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, rs232_port_device, cts_r),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, rs232_port_device, rts_w),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, rs232_port_device, dcd_r),
 	DEVCB_NULL,
 };
 
@@ -253,34 +245,44 @@ static ACIA6850_INTERFACE( acia1_intf )
 //  COM8116_INTERFACE( dbrg_intf )
 //-------------------------------------------------
 
-static WRITE_LINE_DEVICE_HANDLER( rx_tx_w )
+WRITE_LINE_MEMBER( ob68k1a_state::rx_tx_0_w )
 {
-	downcast<acia6850_device *>(device)->rx_clock_in();
-	downcast<acia6850_device *>(device)->tx_clock_in();
+	m_acia0->rx_clock_in();
+	m_acia0->tx_clock_in();
 }
 
-static COM8116_INTERFACE( dbrg_intf )
+WRITE_LINE_MEMBER( ob68k1a_state::rx_tx_1_w )
 {
-	DEVCB_NULL,		/* fX/4 output */
-	DEVCB_DEVICE_LINE(MC6850_0_TAG, rx_tx_w),
-	DEVCB_DEVICE_LINE(MC6850_1_TAG, rx_tx_w),
-	{ 101376, 67584, 46080, 37686, 33792, 16896, 8448, 4224, 2816, 2534, 2112, 1408, 1056, 704, 528, 264 },			/* receiver divisor ROM */
-	{ 101376, 67584, 46080, 37686, 33792, 16896, 8448, 4224, 2816, 2534, 2112, 1408, 1056, 704, 528, 264 },			/* transmitter divisor ROM */
+	m_acia1->rx_clock_in();
+	m_acia1->tx_clock_in();
+}
+
+
+//-------------------------------------------------
+//  rs232_port_interface rs232a_intf
+//-------------------------------------------------
+
+static const rs232_port_interface rs232a_intf =
+{
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
 };
 
 
 //-------------------------------------------------
-//  GENERIC_TERMINAL_INTERFACE( terminal_intf )
+//  rs232_port_interface rs232b_intf
 //-------------------------------------------------
 
-static WRITE8_DEVICE_HANDLER( dummy_w )
+static const rs232_port_interface rs232b_intf =
 {
-	// this is here only so that terminal.c will initialize the keyboard scan timer
-}
-
-static GENERIC_TERMINAL_INTERFACE( terminal_intf )
-{
-	DEVCB_HANDLER(dummy_w)
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
 };
 
 
@@ -295,37 +297,31 @@ static GENERIC_TERMINAL_INTERFACE( terminal_intf )
 
 void ob68k1a_state::machine_start()
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
+	address_space &program = m_maincpu->space(AS_PROGRAM);
 
 	// configure RAM
-	switch (ram_get_size(m_ram))
+	switch (m_ram->size())
 	{
 	case 32*1024:
-		program->unmap_readwrite(0x008000, 0x01ffff);
+		program.unmap_readwrite(0x008000, 0x01ffff);
 		break;
 	}
 }
 
 
-//-------------------------------------------------
-//  MACHINE_RESET( ob68k1a )
-//-------------------------------------------------
-
 void ob68k1a_state::machine_reset()
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
-
 	// initialize COM8116
-//  m_dbrg->stt_w(program, 0, 0x01);
-//  m_dbrg->str_w(program, 0, 0x01);
+	m_dbrg->stt_w(0x0e);
+	m_dbrg->str_w(0x0e);
 
 	// set reset vector
-	void *ram = program->get_write_ptr(0);
-	UINT8 *rom = machine().region(MC68000L10_TAG)->base();
+	void *ram = m_maincpu->space(AS_PROGRAM).get_write_ptr(0);
+	UINT8 *rom = memregion(MC68000L10_TAG)->base();
 
 	memcpy(ram, rom, 8);
 
-	machine().firstcpu->reset();
+	m_maincpu->reset();
 }
 
 
@@ -339,12 +335,9 @@ void ob68k1a_state::machine_reset()
 //-------------------------------------------------
 
 static MACHINE_CONFIG_START( ob68k1a, ob68k1a_state )
-    // basic machine hardware
-    MCFG_CPU_ADD(MC68000L10_TAG, M68000, XTAL_10MHz)
-    MCFG_CPU_PROGRAM_MAP(ob68k1a_mem)
-
-    // video hardware
-	MCFG_FRAGMENT_ADD( generic_terminal )
+	// basic machine hardware
+	MCFG_CPU_ADD(MC68000L10_TAG, M68000, XTAL_10MHz)
+	MCFG_CPU_PROGRAM_MAP(ob68k1a_mem)
 
 	// devices
 	MCFG_PIA6821_ADD(MC6821_0_TAG, pia0_intf)
@@ -352,8 +345,9 @@ static MACHINE_CONFIG_START( ob68k1a, ob68k1a_state )
 	MCFG_PTM6840_ADD(MC6840_TAG, ptm_intf)
 	MCFG_ACIA6850_ADD(MC6850_0_TAG, acia0_intf)
 	MCFG_ACIA6850_ADD(MC6850_1_TAG, acia1_intf)
-	MCFG_COM8116_ADD(COM8116_TAG, XTAL_5_0688MHz, dbrg_intf)
-	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
+	MCFG_COM8116_ADD(COM8116_TAG, XTAL_5_0688MHz, NULL, WRITELINE(ob68k1a_state, rx_tx_0_w), WRITELINE(ob68k1a_state, rx_tx_1_w))
+	MCFG_RS232_PORT_ADD(RS232_A_TAG, rs232a_intf, default_rs232_devices, "serial_terminal")
+	MCFG_RS232_PORT_ADD(RS232_B_TAG, rs232b_intf, default_rs232_devices, NULL)
 
 	// internal ram
 	MCFG_RAM_ADD(RAM_TAG)
@@ -372,7 +366,7 @@ MACHINE_CONFIG_END
 //-------------------------------------------------
 
 ROM_START( ob68k1a )
-    ROM_REGION16_BE( 0x10000, MC68000L10_TAG, 0 )
+	ROM_REGION16_BE( 0x10000, MC68000L10_TAG, 0 )
 	ROM_LOAD16_BYTE( "macsbug.u60",    0x0000, 0x2000, CRC(7c8905ff) SHA1(eba6c70f6b5b40d60e2885c2bd33dd93ec2aae48) )
 	ROM_LOAD16_BYTE( "macsbug.u61",    0x0001, 0x2000, CRC(b5069252) SHA1(b310465d8ece944bd694cc9726d03fed0f4b2c0f) )
 	ROM_LOAD16_BYTE( "idris_boot.u62", 0x4000, 0x2000, CRC(091e900e) SHA1(ea0c9f3ad5179eab2e743459c8afb707c059f0e2) )
@@ -394,4 +388,4 @@ ROM_END
 //**************************************************************************
 
 //    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS
-COMP( 1982, ob68k1a,  0,       0,	ob68k1a,	ob68k1a,	 0,  "Omnibyte",   "OB68K1A",	GAME_NO_SOUND_HW )
+COMP( 1982, ob68k1a,  0,       0,   ob68k1a,    ob68k1a, driver_device,  0,  "Omnibyte",   "OB68K1A",   GAME_NO_SOUND_HW )

@@ -1,29 +1,29 @@
-#include "emu.h"
+
 #include "includes/gamecom.h"
 
 #define Y_PIXELS 200
 
 
-static TIMER_CALLBACK( gamecom_scanline ) {
-	gamecom_state *state = machine.driver_data<gamecom_state>();
-	UINT8 * RAM = machine.region("maincpu")->base();
+TIMER_CALLBACK_MEMBER(gamecom_state::gamecom_scanline)
+	{
 	// draw line
-	if ( state->m_scanline == 0 ) {
-		state->m_base_address = ( RAM[SM8521_LCDC] & 0x40 ) ? 0x2000 : 0x0000;
-	}
-	if ( ~RAM[SM8521_LCDC] & 0x80 ) {
-		rectangle rec;
-		rec.min_x = 0;
-		rec.max_x = Y_PIXELS - 1;
-		rec.min_y = rec.max_y = state->m_scanline;
-		bitmap_fill( machine.generic.tmpbitmap, &rec , 0);
-		return;
-	} else {
-		UINT8 *line = &state->m_p_videoram[ state->m_base_address + 40 * state->m_scanline ];
-		int	pal[4];
-		int	i;
+	if ( m_scanline == 0 )
+		m_base_address = ( m_p_ram[SM8521_LCDC] & 0x40 ) ? 0x2000 : 0x0000;
 
-		switch( RAM[SM8521_LCDC] & 0x30 ) {
+	if ( ~m_p_ram[SM8521_LCDC] & 0x80 )
+	{
+		rectangle rec(0, Y_PIXELS - 1, m_scanline, m_scanline);
+		m_bitmap.fill(0, rec );
+		return;
+	}
+	else
+	{
+		UINT8 *line = &m_p_videoram[ m_base_address + 40 * m_scanline ];
+		int pal[4];
+		int i;
+
+		switch( m_p_ram[SM8521_LCDC] & 0x30 )
+		{
 		case 0x00:
 			pal[0] = 4;
 			pal[1] = 3;
@@ -49,24 +49,22 @@ static TIMER_CALLBACK( gamecom_scanline ) {
 			pal[3] = 0;
 			break;
 		}
-		for( i = 0; i < 40; i++ ) {
+		for( i = 0; i < 40; i++ )
+		{
 			UINT8 p = line[i];
-			*BITMAP_ADDR16(machine.generic.tmpbitmap, i * 4 + 0, state->m_scanline) = pal[ ( p >> 6 ) & 3 ];
-			*BITMAP_ADDR16(machine.generic.tmpbitmap, i * 4 + 1, state->m_scanline) = pal[ ( p >> 4 ) & 3 ];
-			*BITMAP_ADDR16(machine.generic.tmpbitmap, i * 4 + 2, state->m_scanline) = pal[ ( p >> 2 ) & 3 ];
-			*BITMAP_ADDR16(machine.generic.tmpbitmap, i * 4 + 3, state->m_scanline) = pal[ ( p      ) & 3 ];
+			m_bitmap.pix16(i * 4 + 0, m_scanline) = pal[ ( p >> 6 ) & 3 ];
+			m_bitmap.pix16(i * 4 + 1, m_scanline) = pal[ ( p >> 4 ) & 3 ];
+			m_bitmap.pix16(i * 4 + 2, m_scanline) = pal[ ( p >> 2 ) & 3 ];
+			m_bitmap.pix16(i * 4 + 3, m_scanline) = pal[ ( p      ) & 3 ];
 		}
 	}
 
-	state->m_scanline = ( state->m_scanline + 1 ) % Y_PIXELS;
+	m_scanline = ( m_scanline + 1 ) % Y_PIXELS;
 }
 
-VIDEO_START( gamecom )
+void gamecom_state::video_start()
 {
-	gamecom_state *state = machine.driver_data<gamecom_state>();
-	VIDEO_START_CALL( generic_bitmapped );
-	state->m_scanline_timer = machine.scheduler().timer_alloc(FUNC(gamecom_scanline));
-	state->m_scanline_timer->adjust( machine.primary_screen->time_until_pos(0 ), 0, machine.primary_screen->scan_period() );
-
+	m_scanline_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(gamecom_state::gamecom_scanline),this));
+	m_scanline_timer->adjust( machine().primary_screen->time_until_pos(0 ), 0, machine().primary_screen->scan_period() );
+	machine().primary_screen->register_screen_bitmap(m_bitmap);
 }
-

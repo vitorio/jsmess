@@ -9,8 +9,6 @@
 #ifndef __PRINTER_H__
 #define __PRINTER_H__
 
-#include "diimage.h"
-
 
 /***************************************************************************
     TYPE DEFINITIONS
@@ -20,12 +18,12 @@
 
 struct printer_interface
 {
-    devcb_write_line m_online;
+	devcb_write_line m_online;
 };
 
 // ======================> printer_image_device
 
-class printer_image_device :	public device_t,
+class printer_image_device :    public device_t,
 								public printer_interface,
 								public device_image_interface
 {
@@ -36,6 +34,7 @@ public:
 
 	// image-level overrides
 	virtual bool call_load();
+	virtual bool call_create(int format_type, option_resolution *format_options);
 	virtual void call_unload();
 
 	virtual iodevice_t image_type() const { return IO_PRINTER; }
@@ -57,7 +56,7 @@ public:
 	void output(UINT8 data);
 protected:
 	// device-level overrides
-    virtual void device_config_complete();
+	virtual void device_config_complete();
 	virtual void device_start();
 
 	devcb_resolved_write_line m_online_func;
@@ -69,6 +68,5 @@ extern const device_type PRINTER;
 
 
 #define MCFG_PRINTER_ADD(_tag) \
-	MCFG_DEVICE_ADD(_tag, PRINTER, 0) \
-
+	MCFG_DEVICE_ADD(_tag, PRINTER, 0)
 #endif /* __PRINTER_H__ */

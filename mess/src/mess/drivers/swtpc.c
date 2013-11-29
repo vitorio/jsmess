@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
         SWTPC 6800
@@ -21,8 +23,22 @@
 
         - Finish conversion to modern.
 
+Commands:
+B Breakpoint
+C Clear screen
+D Disk boot
+E End of tape
+F Find a byte
+G Goto
+J Jump
+L Ascii Load
+M Memory change (enter to quit, - to display next byte)
+O Optional Port
+P Ascii Punch
+R Register dump
+Z Goto Prom (0xC000)
+
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/m6800/m6800.h"
@@ -39,13 +55,14 @@ public:
 	{ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_terminal;
+	required_device<generic_terminal_device> m_terminal;
 	DECLARE_READ8_MEMBER(swtpc_status_r);
 	DECLARE_READ8_MEMBER(swtpc_terminal_r);
 	DECLARE_READ8_MEMBER(swtpc_tricky_r);
 	DECLARE_WRITE8_MEMBER(swtpc_terminal_w);
 	DECLARE_WRITE8_MEMBER(kbd_put);
 	UINT8 m_term_data;
+	virtual void machine_reset();
 };
 
 // bit 0 - ready to receive a character; bit 1 - ready to send a character to the terminal
@@ -67,18 +84,10 @@ READ8_MEMBER( swtpc_state::swtpc_tricky_r )
 	return ret;
 }
 
-// SWTBUG sends lots of nulls for slow terminals
-WRITE8_MEMBER(swtpc_state::swtpc_terminal_w)
-{
-	if (data)
-		terminal_write(m_terminal, 0, data);
-}
-
-
 static ADDRESS_MAP_START(swtpc_mem, AS_PROGRAM, 8, swtpc_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE( 0x8004, 0x8004 ) AM_READ(swtpc_status_r)
-	AM_RANGE( 0x8005, 0x8005 ) AM_READWRITE(swtpc_terminal_r,swtpc_terminal_w)
+	AM_RANGE( 0x8005, 0x8005 ) AM_READ(swtpc_terminal_r) AM_DEVWRITE(TERMINAL_TAG, generic_terminal_device, write)
 	AM_RANGE( 0x8007, 0x8007 ) AM_READ(swtpc_tricky_r)
 	AM_RANGE( 0xa000, 0xa07f ) AM_RAM
 	AM_RANGE( 0xe000, 0xe3ff ) AM_MIRROR(0x1c00) AM_ROM
@@ -89,7 +98,7 @@ static INPUT_PORTS_START( swtpc )
 INPUT_PORTS_END
 
 
-static MACHINE_RESET(swtpc)
+void swtpc_state::machine_reset()
 {
 }
 
@@ -108,10 +117,8 @@ static MACHINE_CONFIG_START( swtpc, swtpc_state )
 	MCFG_CPU_ADD("maincpu", M6800, XTAL_1MHz)
 	MCFG_CPU_PROGRAM_MAP(swtpc_mem)
 
-	MCFG_MACHINE_RESET(swtpc)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 MACHINE_CONFIG_END
 
@@ -127,4 +134,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT   COMPANY   FULLNAME       FLAGS */
-COMP( 1975, swtpc,  0,       0,      swtpc,     swtpc,    0, "Southwest Technical Products Corporation", "SWTPC 6800", GAME_NO_SOUND)
+COMP( 1975, swtpc,  0,       0,      swtpc,     swtpc, driver_device,    0, "Southwest Technical Products Corporation", "SWTPC 6800", GAME_NO_SOUND)

@@ -40,13 +40,27 @@
 class sys2900_state : public driver_device
 {
 public:
-	sys2900_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+	enum
+	{
+		TIMER_BOOT
+	};
 
+	sys2900_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu") { }
+
+	DECLARE_DRIVER_INIT(sys2900);
+	virtual void machine_reset();
+	virtual void video_start();
+	UINT32 screen_update_sys2900(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
+
+protected:
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 };
 
 
-static ADDRESS_MAP_START(sys2900_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(sys2900_mem, AS_PROGRAM, 8, sys2900_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE( 0x0000, 0x07ff ) AM_RAMBANK("boot")
 	AM_RANGE( 0x0800, 0xefff ) AM_RAM
@@ -54,8 +68,9 @@ static ADDRESS_MAP_START(sys2900_mem, AS_PROGRAM, 8)
 	AM_RANGE( 0xf800, 0xffff ) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sys2900_io , AS_IO, 8)
+static ADDRESS_MAP_START(sys2900_io, AS_IO, 8, sys2900_state)
 	ADDRESS_MAP_UNMAP_HIGH
+	ADDRESS_MAP_GLOBAL_MASK(0xff)
 ADDRESS_MAP_END
 
 /* Input ports */
@@ -63,29 +78,36 @@ static INPUT_PORTS_START( sys2900 )
 INPUT_PORTS_END
 
 
-/* after the first 4 bytes have been read from ROM, switch the ram back in */
-static TIMER_CALLBACK( sys2900_boot )
+void sys2900_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	memory_set_bank(machine, "boot", 0);
+	switch (id)
+	{
+	case TIMER_BOOT:
+		/* after the first 4 bytes have been read from ROM, switch the ram back in */
+		membank("boot")->set_entry(0);
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in sys2900_state::device_timer");
+	}
 }
 
-static MACHINE_RESET(sys2900)
+void sys2900_state::machine_reset()
 {
-	memory_set_bank(machine, "boot", 1);
-	machine.scheduler().timer_set(attotime::from_usec(5), FUNC(sys2900_boot));
+	membank("boot")->set_entry(1);
+	timer_set(attotime::from_usec(5), TIMER_BOOT);
 }
 
-DRIVER_INIT( sys2900 )
+DRIVER_INIT_MEMBER(sys2900_state,sys2900)
 {
-	UINT8 *RAM = machine.region("maincpu")->base();
-	memory_configure_bank(machine, "boot", 0, 2, &RAM[0x0000], 0xf000);
+	UINT8 *RAM = memregion("maincpu")->base();
+	membank("boot")->configure_entries(0, 2, &RAM[0x0000], 0xf000);
 }
 
-static VIDEO_START( sys2900 )
+void sys2900_state::video_start()
 {
 }
 
-static SCREEN_UPDATE( sys2900 )
+UINT32 sys2900_state::screen_update_sys2900(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	return 0;
 }
@@ -96,21 +118,18 @@ static MACHINE_CONFIG_START( sys2900, sys2900_state )
 	MCFG_CPU_PROGRAM_MAP(sys2900_mem)
 	MCFG_CPU_IO_MAP(sys2900_io)
 
-	MCFG_MACHINE_RESET(sys2900)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
-	MCFG_SCREEN_UPDATE(sys2900)
+	MCFG_SCREEN_UPDATE_DRIVER(sys2900_state, screen_update_sys2900)
 
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
-	MCFG_VIDEO_START(sys2900)
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -121,6 +140,5 @@ ROM_END
 
 /* Driver */
 
-/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1981, sys2900,  0,       0,    sys2900, sys2900, sys2900,  "Systems Group",   "System 2900", GAME_NOT_WORKING | GAME_NO_SOUND)
-
+/*    YEAR  NAME     PARENT  COMPAT   MACHINE    INPUT    INIT        COMPANY          FULLNAME       FLAGS */
+COMP( 1981, sys2900, 0,      0,       sys2900,   sys2900, sys2900_state, sys2900, "Systems Group", "System 2900", GAME_NOT_WORKING | GAME_NO_SOUND)

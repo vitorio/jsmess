@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     jedparse.c
 
     Parser for .JED files into raw fusemaps.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ****************************************************************************
 
@@ -57,7 +28,7 @@
     DEBUGGING
 ***************************************************************************/
 
-#define LOG_PARSE		0
+#define LOG_PARSE       0
 
 
 
@@ -65,11 +36,10 @@
     TYPE DEFINITIONS
 ***************************************************************************/
 
-typedef struct _parse_info parse_info;
-struct _parse_info
+struct parse_info
 {
-	UINT16		checksum;				/* checksum value */
-	UINT32		explicit_numfuses;		/* explicitly specified number of fuses */
+	UINT16      checksum;               /* checksum value */
+	UINT32      explicit_numfuses;      /* explicitly specified number of fuses */
 };
 
 
@@ -182,14 +152,14 @@ static void process_field(jed_data *data, const UINT8 *cursrc, const UINT8 *srce
 			/* read the fuse number */
 			cursrc++;
 			curfuse = suck_number(&cursrc);
-			if (LOG_PARSE) printf("L%d\n", curfuse);
+			if (LOG_PARSE) printf("L%u\n", curfuse);
 
 			/* read digits, skipping delimiters */
 			for ( ; cursrc < srcend; cursrc++)
 				if (*cursrc == '0' || *cursrc == '1')
 				{
 					jed_set_fuse(data, curfuse, *cursrc - '0');
-					if (LOG_PARSE) printf("  fuse %d = %d\n", curfuse, 0);
+					if (LOG_PARSE) printf("  fuse %u = %d\n", curfuse, 0);
 					if (curfuse >= data->numfuses)
 						data->numfuses = curfuse + 1;
 					curfuse++;
@@ -460,4 +430,3 @@ size_t jedbin_output(const jed_data *data, void *result, size_t length)
 	/* return the final size */
 	return 4 + (data->numfuses + 7) / 8;
 }
-

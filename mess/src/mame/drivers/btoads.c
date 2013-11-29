@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /*************************************************************************
 
     BattleToads
@@ -6,14 +8,13 @@
 
 **************************************************************************/
 
-#define ADDRESS_MAP_MODERN
 #include "emu.h"
 #include "includes/btoads.h"
 
 
-#define CPU_CLOCK			XTAL_64MHz
-#define VIDEO_CLOCK			XTAL_20MHz
-#define SOUND_CLOCK			XTAL_24MHz
+#define CPU_CLOCK           XTAL_64MHz
+#define VIDEO_CLOCK         XTAL_20MHz
+#define SOUND_CLOCK         XTAL_24MHz
 
 
 
@@ -179,7 +180,7 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16, btoads_state )
 	AM_RANGE(0x20000300, 0x2000037f) AM_READWRITE(paletteram_r, paletteram_w)
 	AM_RANGE(0x20000380, 0x200003ff) AM_READWRITE(main_sound_r, main_sound_w)
 	AM_RANGE(0x20000400, 0x2000047f) AM_WRITE(misc_control_w)
-	AM_RANGE(0x40000000, 0x4000000f) AM_WRITENOP	/* watchdog? */
+	AM_RANGE(0x40000000, 0x4000000f) AM_WRITENOP    /* watchdog? */
 	AM_RANGE(0x60000000, 0x6003ffff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xa0000000, 0xa03fffff) AM_READWRITE(vram_fg_display_r, vram_fg_display_w) AM_SHARE("vram_fg0")
 	AM_RANGE(0xa4000000, 0xa43fffff) AM_READWRITE(vram_fg_draw_r, vram_fg_draw_w) AM_SHARE("vram_fg1")
@@ -300,14 +301,15 @@ INPUT_PORTS_END
 
 static const tms34010_config tms_config =
 {
-	FALSE,							/* halt on reset */
-	"screen",						/* the screen operated on */
-	VIDEO_CLOCK/2,					/* pixel clock */
-	1,								/* pixels per clock */
-	btoads_state::static_scanline_update,			/* scanline callback */
-	NULL,							/* generate interrupt */
-	btoads_state::static_to_shiftreg,				/* write to shiftreg function */
-	btoads_state::static_from_shiftreg			/* read from shiftreg function */
+	FALSE,                          /* halt on reset */
+	"screen",                       /* the screen operated on */
+	VIDEO_CLOCK/2,                  /* pixel clock */
+	1,                              /* pixels per clock */
+	NULL,                           /* scanline callback (indexed16) */
+	btoads_state::static_scanline_update, /* scanline callback (rgb32) */
+	NULL,                           /* generate interrupt */
+	btoads_state::static_to_shiftreg,               /* write to shiftreg function */
+	btoads_state::static_from_shiftreg          /* read from shiftreg function */
 };
 
 
@@ -327,7 +329,7 @@ static MACHINE_CONFIG_START( btoads, btoads_state )
 	MCFG_CPU_ADD("audiocpu", Z80, SOUND_CLOCK/4)
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 	MCFG_CPU_IO_MAP(sound_io_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_assert, 183)
+	MCFG_CPU_PERIODIC_INT_DRIVER(btoads_state, irq0_line_assert,  183)
 
 	MCFG_NVRAM_ADD_1FILL("nvram")
 
@@ -335,9 +337,8 @@ static MACHINE_CONFIG_START( btoads, btoads_state )
 	MCFG_TLC34076_ADD("tlc34076", TLC34076_6_BIT)
 
 	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_RAW_PARAMS(VIDEO_CLOCK/2, 640, 0, 512, 257, 0, 224)
-	MCFG_SCREEN_UPDATE(tms340x0)
+	MCFG_SCREEN_UPDATE_DEVICE("maincpu", tms34020_device, tms340x0_rgb32)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -356,23 +357,23 @@ MACHINE_CONFIG_END
  *************************************/
 
 ROM_START( btoads )
-	ROM_REGION( 0x10000, "audiocpu", 0 )	/* sound program, M27C256B rom */
+	ROM_REGION( 0x10000, "audiocpu", 0 )    /* sound program, M27C256B rom */
 	ROM_LOAD( "bt.u102", 0x0000, 0x8000, CRC(a90b911a) SHA1(6ec25161e68df1c9870d48cc2b1f85cd1a49aba9) )
 
-	ROM_REGION16_LE( 0x800000, "user1", 0 )	/* 34020 code, M27C322 roms */
+	ROM_REGION16_LE( 0x800000, "user1", 0 ) /* 34020 code, M27C322 roms */
 	ROM_LOAD32_WORD( "btc0-p0.u120", 0x000000, 0x400000, CRC(0dfd1e35) SHA1(733a0a4235bebd598c600f187ed2628f28cf9bd0) )
 	ROM_LOAD32_WORD( "btc0-p1.u121", 0x000002, 0x400000, CRC(df7487e1) SHA1(67151b900767bb2653b5261a98c81ff8827222c3) )
 
-	ROM_REGION( 0x1000000, "bsmt", 0 )	/* BSMT data, M27C160 rom */
+	ROM_REGION( 0x1000000, "bsmt", 0 )  /* BSMT data, M27C160 rom */
 	ROM_LOAD( "btc0-s.u109", 0x00000, 0x200000, CRC(d9612ddb) SHA1(f186dfb013e81abf81ba8ac5dc7eb731c1ad82b6) )
 
 	ROM_REGION( 0x080a, "plds", 0 )
-    ROM_LOAD( "u10.bin",  0x0000, 0x0157, CRC(b1144178) SHA1(15fb047adee4125e9fcf04171e0a502655e0a3d8) ) /* GAL20V8A-15LP Located at U10. */
-    ROM_LOAD( "u11.bin",  0x0000, 0x0157, CRC(7c6beb96) SHA1(2f19d21889dd765b344ad7d257ea7c244baebec2) ) /* GAL20V8A-15LP Located at U11. */
-    ROM_LOAD( "u57.bin",  0x0000, 0x0157, CRC(be355a56) SHA1(975238bb1ea8fef14458d6f264a82aa77ecf865d) ) /* GAL20V8A-15LP Located at U57. */
-    ROM_LOAD( "u58.bin",  0x0000, 0x0157, CRC(41ed339c) SHA1(5853c805a902e6d12c979958d878d1cefd6908cc) ) /* GAL20V8A-15LP Located at U58. */
-    ROM_LOAD( "u90.bin",  0x0000, 0x0157, CRC(a0d0c3f1) SHA1(47464c2ef9fadbba933df27767f377e0c29158aa) ) /* GAL20V8A-15LP Located at U90. */
-    ROM_LOAD( "u144.bin", 0x0000, 0x0157, CRC(8597017f) SHA1(003d7b5de57e48f831ab211e2783fff338ce2f32) ) /* GAL20V8A-15LP Located at U144. */
+	ROM_LOAD( "u10.bin",  0x0000, 0x0157, CRC(b1144178) SHA1(15fb047adee4125e9fcf04171e0a502655e0a3d8) ) /* GAL20V8A-15LP Located at U10. */
+	ROM_LOAD( "u11.bin",  0x0000, 0x0157, CRC(7c6beb96) SHA1(2f19d21889dd765b344ad7d257ea7c244baebec2) ) /* GAL20V8A-15LP Located at U11. */
+	ROM_LOAD( "u57.bin",  0x0000, 0x0157, CRC(be355a56) SHA1(975238bb1ea8fef14458d6f264a82aa77ecf865d) ) /* GAL20V8A-15LP Located at U57. */
+	ROM_LOAD( "u58.bin",  0x0000, 0x0157, CRC(41ed339c) SHA1(5853c805a902e6d12c979958d878d1cefd6908cc) ) /* GAL20V8A-15LP Located at U58. */
+	ROM_LOAD( "u90.bin",  0x0000, 0x0157, CRC(a0d0c3f1) SHA1(47464c2ef9fadbba933df27767f377e0c29158aa) ) /* GAL20V8A-15LP Located at U90. */
+	ROM_LOAD( "u144.bin", 0x0000, 0x0157, CRC(8597017f) SHA1(003d7b5de57e48f831ab211e2783fff338ce2f32) ) /* GAL20V8A-15LP Located at U144. */
 ROM_END
 
 
@@ -383,4 +384,4 @@ ROM_END
  *
  *************************************/
 
-GAME( 1994, btoads, 0, btoads, btoads, 0,  ROT0, "Rare", "Battle Toads", GAME_SUPPORTS_SAVE )
+GAME( 1994, btoads, 0, btoads, btoads, driver_device, 0,  ROT0, "Rare / Electronic Arts", "Battletoads", GAME_SUPPORTS_SAVE )

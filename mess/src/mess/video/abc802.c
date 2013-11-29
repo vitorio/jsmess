@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /*****************************************************************************
  *
  * video/abc802.c
@@ -10,8 +12,8 @@
 
 // these are needed because the MC6845 emulation does
 // not position the active display area correctly
-#define HORIZONTAL_PORCH_HACK	121
-#define VERTICAL_PORCH_HACK		29
+#define HORIZONTAL_PORCH_HACK   121
+#define VERTICAL_PORCH_HACK     29
 
 
 
@@ -23,42 +25,42 @@ static MC6845_UPDATE_ROW( abc802_update_row )
 {
 	/*
 
-        PAL16R4 equation:
+	    PAL16R4 equation:
 
-        IF (VCC)    *OS   = FC + RF / RC
-                    *RG:  = HS / *RG + *ATE / *RG + ATD / *RG + LL /
-                            *RG + AT1 / *RG + AT0 / ATE + *ATD + *LL +
-                            *AT1 + *AT0
-                    *RI:  = *RI + *INV / *RI + LL / *INV + *LL
-                    *RF:  = HS / *RF + *ATE / *RF + ATD / *RF + LL /
-                            *RF + AT1 / *RF + AT0 / ATE + *ATD + *LL +
-                            *AT1 + AT0
-                    *RC:  = HS / *RC + *ATE / *RC + *ATD / *RC + LL /
-                            *RC + *ATI / *RC + AT0 / ATE + *LL + *AT1 +
-                            *AT0
-        IF (VCC)    *O0   = *CUR + *AT0 / *CUR + ATE
-                    *O1   = *CUR + *AT1 / *CUR + ATE
+	    IF (VCC)    *OS   = FC + RF / RC
+	                *RG:  = HS / *RG + *ATE / *RG + ATD / *RG + LL /
+	                        *RG + AT1 / *RG + AT0 / ATE + *ATD + *LL +
+	                        *AT1 + *AT0
+	                *RI:  = *RI + *INV / *RI + LL / *INV + *LL
+	                *RF:  = HS / *RF + *ATE / *RF + ATD / *RF + LL /
+	                        *RF + AT1 / *RF + AT0 / ATE + *ATD + *LL +
+	                        *AT1 + AT0
+	                *RC:  = HS / *RC + *ATE / *RC + *ATD / *RC + LL /
+	                        *RC + *ATI / *RC + AT0 / ATE + *LL + *AT1 +
+	                        *AT0
+	    IF (VCC)    *O0   = *CUR + *AT0 / *CUR + ATE
+	                *O1   = *CUR + *AT1 / *CUR + ATE
 
 
-        + = AND
-        / = OR
-        * = Inverted
+	    + = AND
+	    / = OR
+	    * = Inverted
 
-        ATD     Attribute data
-        ATE     Attribute enable
-        AT0,AT1 Attribute address
-        CUR     Cursor
-        FC      FLSH clock
-        HS      Horizontal sync
-        INV     Inverted signal input
-        LL      Load when Low
-        OEL     Output Enable when Low
-        RC      Row clear
-        RF      Row flash
-        RG      Row graphic
-        RI      Row inverted
+	    ATD     Attribute data
+	    ATE     Attribute enable
+	    AT0,AT1 Attribute address
+	    CUR     Cursor
+	    FC      FLSH clock
+	    HS      Horizontal sync
+	    INV     Inverted signal input
+	    LL      Load when Low
+	    OEL     Output Enable when Low
+	    RC      Row clear
+	    RF      Row flash
+	    RG      Row graphic
+	    RI      Row inverted
 
-    */
+	*/
 
 	abc802_state *state =  device->machine().driver_data<abc802_state>();
 
@@ -93,7 +95,7 @@ static MC6845_UPDATE_ROW( abc802_update_row )
 			address |= 0x800;
 		}
 
-		data = state->m_char_rom[(address + ra_latch) & 0xfff];
+		data = state->m_char_rom->base()[(address + ra_latch) & 0xfff];
 
 		if (data & ABC802_ATE)
 		{
@@ -133,7 +135,7 @@ static MC6845_UPDATE_ROW( abc802_update_row )
 					int x = HORIZONTAL_PORCH_HACK + ((column + 3) * ABC800_CHAR_WIDTH) + bit;
 					int color = BIT(data, 7) ^ ri;
 
-					*BITMAP_ADDR16(bitmap, y, x) = color;
+					bitmap.pix32(y, x) = RGB_MONOCHROME_AMBER[color];
 
 					data <<= 1;
 				}
@@ -145,8 +147,8 @@ static MC6845_UPDATE_ROW( abc802_update_row )
 					int x = HORIZONTAL_PORCH_HACK + ((column + 3) * ABC800_CHAR_WIDTH) + (bit << 1);
 					int color = BIT(data, 7) ^ ri;
 
-					*BITMAP_ADDR16(bitmap, y, x) = color;
-					*BITMAP_ADDR16(bitmap, y, x + 1) = color;
+					bitmap.pix32(y, x) = RGB_MONOCHROME_AMBER[color];
+					bitmap.pix32(y, x + 1) = RGB_MONOCHROME_AMBER[color];
 
 					data <<= 1;
 				}
@@ -179,7 +181,7 @@ WRITE_LINE_MEMBER( abc802_state::vs_w )
 	}
 
 	// signal _DEW to DART
-	m_dart->ri_w(1, !state);
+	m_dart->rib_w(!state);
 }
 
 
@@ -187,9 +189,9 @@ WRITE_LINE_MEMBER( abc802_state::vs_w )
 //  mc6845_interface crtc_intf
 //-------------------------------------------------
 
-static const mc6845_interface crtc_intf =
+static MC6845_INTERFACE( crtc_intf )
 {
-	SCREEN_TAG,
+	false,
 	ABC800_CHAR_WIDTH,
 	NULL,
 	abc802_update_row,
@@ -202,19 +204,12 @@ static const mc6845_interface crtc_intf =
 };
 
 
-//-------------------------------------------------
-//  VIDEO_START( abc802 )
-//-------------------------------------------------
-
 void abc802_state::video_start()
 {
-	// find memory regions
-	m_char_rom = machine().region(MC6845_TAG)->base();
-
 	// register for state saving
-	state_save_register_global(machine(), m_flshclk_ctr);
-	state_save_register_global(machine(), m_flshclk);
-	state_save_register_global(machine(), m_80_40_mux);
+	save_item(NAME(m_flshclk_ctr));
+	save_item(NAME(m_flshclk));
+	save_item(NAME(m_80_40_mux));
 }
 
 
@@ -222,13 +217,13 @@ void abc802_state::video_start()
 //  SCREEN_UPDATE( abc802 )
 //-------------------------------------------------
 
-bool abc802_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
+UINT32 abc802_state::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
 	// HACK expand visible area to workaround MC6845
 	screen.set_visible_area(0, 767, 0, 311);
 
 	// draw text
-	m_crtc->update(&bitmap, &cliprect);
+	m_crtc->screen_update(screen, bitmap, cliprect);
 
 	return 0;
 }
@@ -239,16 +234,13 @@ bool abc802_state::screen_update(screen_device &screen, bitmap_t &bitmap, const 
 //-------------------------------------------------
 
 MACHINE_CONFIG_FRAGMENT( abc802_video )
-	MCFG_MC6845_ADD(MC6845_TAG, MC6845, ABC800_CCLK, crtc_intf)
+	MCFG_MC6845_ADD(MC6845_TAG, MC6845, SCREEN_TAG, ABC800_CCLK, crtc_intf)
 
 	MCFG_SCREEN_ADD(SCREEN_TAG, RASTER)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(abc802_state, screen_update)
 
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
-	MCFG_SCREEN_SIZE(640, 400)
-	MCFG_SCREEN_VISIBLE_AREA(0,640-1, 0, 400-1)
-
-	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(monochrome_amber)
+	MCFG_SCREEN_SIZE(768, 312)
+	MCFG_SCREEN_VISIBLE_AREA(0,768-1, 0, 312-1)
 MACHINE_CONFIG_END

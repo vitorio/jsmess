@@ -1,11 +1,21 @@
+// license:BSD-3-Clause
+// copyright-holders:Sandro Ronco
 /*********************************************************************
 
     includes/x07.h
 
 *********************************************************************/
 
+#include "emu.h"
+#include "cpu/z80/z80.h"
+#include "sound/beep.h"
 #include "machine/ram.h"
+#include "sound/wave.h"
+#include "imagedev/cartslot.h"
+#include "imagedev/cassette.h"
 #include "imagedev/printer.h"
+#include "formats/x07_cas.h"
+#include "rendlay.h"
 
 //default value for user defined keys, taken for official documentation
 static const char *const udk_ini[12] = {
@@ -78,12 +88,12 @@ static const UINT8 t6834_cmd_len[0x47] =
 	0x01, 0x09, 0x01, 0x03, 0x03, 0x01, 0x01
 };
 
-typedef struct
+struct x07_kb
 {
-	const char *tag;		//input port tag
-	UINT8		mask;		//bit mask
-	UINT8		codes[7];	//port codes
-} x07_kb;
+	const char *tag;        //input port tag
+	UINT8       mask;       //bit mask
+	UINT8       codes[7];   //port codes
+};
 
 static const x07_kb x07_keycodes[56] =
 {
@@ -150,38 +160,48 @@ class x07_state : public driver_device
 public:
 	x07_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, "maincpu"),
-		  m_printer(*this, "printer"),
-		  m_beep(*this, BEEPER_TAG),
-		  m_ram(*this, RAM_TAG)
+			m_maincpu(*this, "maincpu"),
+			m_printer(*this, "printer"),
+			m_beep(*this, "beeper"),
+			m_ram(*this, RAM_TAG),
+			m_cassette(*this, "cassette")
 	{ }
 
 	required_device<cpu_device> m_maincpu;
 	required_device<printer_image_device> m_printer;
-	required_device<device_t> m_beep;
-	required_device<device_t> m_ram;
+	required_device<beep_device> m_beep;
+	required_device<ram_device> m_ram;
+	required_device<cassette_image_device> m_cassette;
 
 	void machine_start();
 	void machine_reset();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	DECLARE_READ8_MEMBER( x07_io_r );
 	DECLARE_WRITE8_MEMBER( x07_io_w );
 
-	void kb_scan_keys(running_machine &machine, UINT8 keycode);
-	void kb_fun_keys(running_machine &machine, UINT8 idx);
-	void t6834_cmd(running_machine &machine, UINT8 cmd);
-	void t6834_r(running_machine &machine);
-	void t6834_w(running_machine &machine);
-	void cassette_w(running_machine &machine);
-	void cassette_r(running_machine &machine);
-	void printer_w(running_machine &machine);
-	void kb_irq(running_machine &machine);
+	DECLARE_INPUT_CHANGED_MEMBER( kb_keys );
+	DECLARE_INPUT_CHANGED_MEMBER( kb_func_keys );
+	DECLARE_INPUT_CHANGED_MEMBER( kb_break );
+	DECLARE_INPUT_CHANGED_MEMBER( kb_update_udk );
+
+	void t6834_cmd(UINT8 cmd);
+	void t6834_r();
+	void t6834_w();
+	void cassette_w();
+	void cassette_r();
+	void printer_w();
+	void kb_irq();
+	void cassette_load();
+	void cassette_save();
+	void receive_bit(int bit);
 
 	inline UINT8 get_char(UINT16 pos);
 	inline UINT8 kb_get_index(UINT8 char_code);
-	inline void draw_char(running_machine &machine, UINT8 x, UINT8 y, UINT8 char_pos);
-	inline void draw_point(running_machine &machine, UINT8 x, UINT8 y, UINT8 color);
-	inline void draw_udk(running_machine &machine);
+	inline void draw_char(UINT8 x, UINT8 y, UINT8 char_pos);
+	inline void draw_point(UINT8 x, UINT8 y, UINT8 color);
+	inline void draw_udk();
+
+	DECLARE_DEVICE_IMAGE_LOAD_MEMBER( x07_card );
 
 	/* general */
 	UINT8 m_sleep;
@@ -226,19 +246,28 @@ public:
 
 	/* keyboard */
 	UINT8 m_kb_on;
-	UINT8 m_repeat_key;			//not supported
+	UINT8 m_repeat_key;         //not supported
 	UINT8 m_kb_size;
 
 	/* cassette */
-	emu_timer *m_k7irq;
-	UINT8  m_k7on;
-	UINT8 *m_k7data;
-	UINT32 m_k7size;
-	UINT32 m_k7pos;
+	UINT8  m_cass_motor;
+	UINT8  m_cass_data;
+	UINT32 m_cass_clk;
+	UINT8  m_bit_count;
+	int    m_cass_state;
+	emu_timer *m_cass_poll;
+	emu_timer *m_cass_tick;
 
 	/* printer */
 	UINT8 m_prn_sendbit;
 	UINT8 m_prn_char_code;
 	UINT8 m_prn_buffer[0x100];
 	UINT8 m_prn_size;
+	virtual void palette_init();
+	TIMER_CALLBACK_MEMBER(cassette_tick);
+	TIMER_CALLBACK_MEMBER(cassette_poll);
+	TIMER_CALLBACK_MEMBER(rsta_clear);
+	TIMER_CALLBACK_MEMBER(rstb_clear);
+	TIMER_CALLBACK_MEMBER(beep_stop);
+	TIMER_DEVICE_CALLBACK_MEMBER(blink_timer);
 };

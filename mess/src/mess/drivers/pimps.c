@@ -19,25 +19,28 @@ U Usart Parameters for Host
 V Virtual Memory
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i8085/i8085.h"
 #include "machine/terminal.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
 
 class pimps_state : public driver_device
 {
 public:
 	pimps_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+			m_terminal(*this, TERMINAL_TAG) ,
+		m_maincpu(*this, "maincpu") { }
 
 	DECLARE_READ8_MEMBER(term_status_r);
 	DECLARE_READ8_MEMBER(term_r);
 	DECLARE_WRITE8_MEMBER(kbd_put);
 	UINT8 m_term_data;
 	virtual void machine_reset();
+
+	required_device<generic_terminal_device> m_terminal;
+	required_device<cpu_device> m_maincpu;
 };
 
 
@@ -64,7 +67,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START(pimps_io, AS_IO, 8, pimps_state)
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0xf0, 0xf0) AM_READ(term_r) AM_DEVWRITE_LEGACY(TERMINAL_TAG, terminal_write)
+	AM_RANGE(0xf0, 0xf0) AM_READ(term_r) AM_DEVWRITE(TERMINAL_TAG, generic_terminal_device, write)
 	AM_RANGE(0xf1, 0xf1) AM_READ(term_status_r)
 ADDRESS_MAP_END
 
@@ -73,7 +76,7 @@ static INPUT_PORTS_START( pimps )
 INPUT_PORTS_END
 
 
-MACHINE_RESET_MEMBER( pimps_state )
+void pimps_state::machine_reset()
 {
 	m_term_data = 0;
 }
@@ -95,7 +98,6 @@ static MACHINE_CONFIG_START( pimps, pimps_state )
 	MCFG_CPU_IO_MAP(pimps_io)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 MACHINE_CONFIG_END
 
@@ -108,4 +110,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT   COMPANY   FULLNAME       FLAGS */
-COMP( 197?, pimps,  0,      0,       pimps,     pimps,   0, "Henry Colford", "P.I.M.P.S.", GAME_NO_SOUND_HW)
+COMP( 197?, pimps,  0,      0,       pimps,     pimps, driver_device,   0, "Henry Colford", "P.I.M.P.S.", GAME_NO_SOUND_HW)

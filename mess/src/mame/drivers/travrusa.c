@@ -19,7 +19,7 @@ Notes:
   with the driver.
 
 TODO:
-- shtrider dip switches
+- shtrider dip switches and figure out flip screen (not same as travrusa)
 
 ****************************************************************************
 
@@ -53,19 +53,19 @@ and 2764 eprom (swapped D3/D4 and D5/D6 data lines)
 #include "includes/travrusa.h"
 
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8, travrusa_state )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(travrusa_videoram_w) AM_BASE_MEMBER(travrusa_state, m_videoram)
+	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(travrusa_videoram_w) AM_SHARE("videoram")
 	AM_RANGE(0x9000, 0x9000) AM_WRITE(travrusa_scroll_x_low_w)
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(travrusa_scroll_x_high_w)
-	AM_RANGE(0xc800, 0xc9ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(travrusa_state, m_spriteram, m_spriteram_size)
-	AM_RANGE(0xd000, 0xd000) AM_WRITE(irem_sound_cmd_w)
-	AM_RANGE(0xd001, 0xd001) AM_WRITE(travrusa_flipscreen_w)	/* + coin counters - not written by shtrider */
-	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("SYSTEM")		/* IN0 */
-	AM_RANGE(0xd001, 0xd001) AM_READ_PORT("P1")			/* IN1 */
-	AM_RANGE(0xd002, 0xd002) AM_READ_PORT("P2")			/* IN2 */
-	AM_RANGE(0xd003, 0xd003) AM_READ_PORT("DSW1")		/* DSW1 */
-	AM_RANGE(0xd004, 0xd004) AM_READ_PORT("DSW2")		/* DSW2 */
+	AM_RANGE(0xc800, 0xc9ff) AM_WRITEONLY AM_SHARE("spriteram")
+	AM_RANGE(0xd000, 0xd000) AM_DEVWRITE("irem_audio", irem_audio_device, cmd_w)
+	AM_RANGE(0xd001, 0xd001) AM_WRITE(travrusa_flipscreen_w)    /* + coin counters - not written by shtrider */
+	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("SYSTEM")     /* IN0 */
+	AM_RANGE(0xd001, 0xd001) AM_READ_PORT("P1")         /* IN1 */
+	AM_RANGE(0xd002, 0xd002) AM_READ_PORT("P2")         /* IN2 */
+	AM_RANGE(0xd003, 0xd003) AM_READ_PORT("DSW1")       /* DSW1 */
+	AM_RANGE(0xd004, 0xd004) AM_READ_PORT("DSW2")       /* DSW2 */
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 ADDRESS_MAP_END
 
@@ -102,57 +102,76 @@ static INPUT_PORTS_START( travrusa )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_COCKTAIL
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x03, 0x03, "Fuel Reduced on Collision" )
+	PORT_DIPNAME( 0x03, 0x03, "Fuel Reduced on Collision" ) PORT_DIPLOCATION("DSW1:1,2")
 	PORT_DIPSETTING(    0x03, DEF_STR( Low ) )
 	PORT_DIPSETTING(    0x02, "Med" )
 	PORT_DIPSETTING(    0x01, "Hi" )
 	PORT_DIPSETTING(    0x00, "Max" )
-	PORT_DIPNAME( 0x04, 0x04, "Fuel Consumption" )
+	PORT_DIPNAME( 0x04, 0x04, "Fuel Consumption" )      PORT_DIPLOCATION("DSW1:3")
 	PORT_DIPSETTING(    0x04, DEF_STR( Low ) )
 	PORT_DIPSETTING(    0x00, "Hi" )
-	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Allow_Continue ) )
+	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Allow_Continue ) )   PORT_DIPLOCATION("DSW1:4")
 	PORT_DIPSETTING(    0x08, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coinage ) )
-	PORT_DIPSETTING(    0xa0, DEF_STR( 6C_1C ) )
-	PORT_DIPSETTING(    0xb0, DEF_STR( 5C_1C ) )
-	PORT_DIPSETTING(    0xc0, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(    0xd0, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(    0xe0, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0xf0, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x70, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(    0x60, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(    0x50, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(    0x30, DEF_STR( 1C_6C ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( 1C_7C ) )
-	/* PORT_DIPSETTING( 0x10, "INVALID" ) */
-	/* PORT_DIPSETTING( 0x00, "INVALID" ) */
+	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coinage ) )      PORT_DIPLOCATION("DSW1:5,6,7,8")
+	PORT_DIPSETTING(    0x80, "Not Used" )          PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0x90, "Not Used" )          PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0xa0, DEF_STR( 6C_1C ) )        PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0xb0, DEF_STR( 5C_1C ) )        PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0xc0, DEF_STR( 4C_1C ) )        PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0xd0, DEF_STR( 3C_1C ) )        PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0xe0, DEF_STR( 2C_1C ) )        PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0xf0, DEF_STR( 1C_1C ) )        PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0x70, DEF_STR( 1C_2C ) )        PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0x60, DEF_STR( 1C_3C ) )        PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0x50, DEF_STR( 1C_4C ) )        PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0x40, DEF_STR( 1C_5C ) )        PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0x30, DEF_STR( 1C_6C ) )        PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0x20, DEF_STR( 1C_7C ) )        PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0x10, "Not Used" )          PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )    PORT_CONDITION("DSW2", 0x04, EQUALS, 0x04)
+
+	PORT_DIPSETTING(    0x80, DEF_STR( Free_Play ) )    PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x90, "A 3C_1C / B 1C_3C" )     PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0xa0, "A 2C_1C / B 1C_3C" )     PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0xb0, "A 1C_1C / B 1C_3C" )     PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0xc0, DEF_STR( Free_Play ) )    PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0xd0, "A 3C_1C / B 1C_2C" )     PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0xe0, "A 2C_1C / B 1C_2C" )     PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0xf0, "A 1C_1C / B 1C_2C" )     PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x70, "A 1C_1C / B 1C_5C" )     PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x60, "A 2C_1C / B 1C_5C" )     PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x50, "A 3C_1C / B 1C_5C" )     PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x40, DEF_STR( Free_Play ) )    PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x30, "A 1C_1C / B 1C_6C" )     PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x20, "A 2C_1C / B 1C_6C" )     PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x10, "A 3C_1C / B 1C_6C" )     PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )    PORT_CONDITION("DSW2", 0x04, EQUALS, 0x00)
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Flip_Screen ) )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Flip_Screen ) )  PORT_DIPLOCATION("DSW2:1")
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Cabinet ) )      PORT_DIPLOCATION("DSW2:2")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x04, 0x04, "Coin Mode" )
+	PORT_DIPNAME( 0x04, 0x04, "Coin Mode" )         PORT_DIPLOCATION("DSW2:3")
 	PORT_DIPSETTING(    0x04, "Mode 1" )
 	PORT_DIPSETTING(    0x00, "Mode 2" )
-	PORT_DIPNAME( 0x08, 0x08, "Speed Type" )
+	PORT_DIPNAME( 0x08, 0x08, "Speed Type" )        PORT_DIPLOCATION("DSW2:4")
 	PORT_DIPSETTING(    0x08, "M/H" ) //mph ?
 	PORT_DIPSETTING(    0x00, "Km/H" )
 	/* In stop mode, press 2 to stop and 1 to restart */
-	PORT_DIPNAME( 0x10, 0x10, "Stop Mode (Cheat)")
+	PORT_DIPNAME( 0x10, 0x10, "Stop Mode (Cheat)")      PORT_DIPLOCATION("DSW2:5")
 	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, "Title" )
+	PORT_DIPNAME( 0x20, 0x20, "Title" )         PORT_DIPLOCATION("DSW2:6")
 	PORT_DIPSETTING(    0x20, "Traverse USA" )
 	PORT_DIPSETTING(    0x00, "Zippy Race" )
-	PORT_DIPNAME( 0x40, 0x40, "Invulnerability (Cheat)")
+	PORT_DIPNAME( 0x40, 0x40, "Invulnerability (Cheat)")    PORT_DIPLOCATION("DSW2:7")
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_SERVICE( 0x80, IP_ACTIVE_LOW )
+	PORT_SERVICE_DIPLOC( 0x80, 0x80, "DSW2:8")
 INPUT_PORTS_END
 
 /* same as travrusa, no "Title" switch */
@@ -160,7 +179,7 @@ static INPUT_PORTS_START( motorace )
 	PORT_INCLUDE( travrusa )
 
 	PORT_MODIFY("DSW2")
-	PORT_DIPUNUSED( 0x20, IP_ACTIVE_LOW )
+	PORT_DIPUNUSED_DIPLOC( 0x20, 0x20, "DSW2:6")
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( shtrider )
@@ -189,7 +208,7 @@ static INPUT_PORTS_START( shtrider )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coin_A ) )
+	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coin_A ) )       PORT_DIPLOCATION("DSW1:1,2,3")
 	PORT_DIPSETTING(    0x00, DEF_STR( 5C_1C ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 3C_1C ) )
@@ -198,46 +217,30 @@ static INPUT_PORTS_START( shtrider )
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x05, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_5C ) )
-	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Coin_B ) )
+	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Coin_B ) )       PORT_DIPLOCATION("DSW1:4,5")
 	PORT_DIPSETTING(    0x00, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x18, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 1C_2C ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPUNKNOWN_DIPLOC( 0x20, 0x20, "DSW1:6" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x40, 0x40, "DSW1:7" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x80, 0x80, "DSW1:8" )
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Flip_Screen ) )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Flip_Screen ) )  PORT_DIPLOCATION("DSW2:1")
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "Speed Display" )
+	PORT_DIPNAME( 0x02, 0x02, "Speed Display" )     PORT_DIPLOCATION("DSW2:2")
 	PORT_DIPSETTING(    0x02, "km/h" )
 	PORT_DIPSETTING(    0x00, "mph" )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Cabinet ) )
+	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "DSW2:3" )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Cabinet ) )      PORT_DIPLOCATION("DSW2:4")
 	PORT_DIPSETTING(    0x08, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x10, "DSW2:5" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x20, 0x20, "DSW2:6" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x40, 0x40, "DSW2:7" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x80, 0x80, "DSW2:8" )
 INPUT_PORTS_END
 
 
@@ -289,40 +292,34 @@ static GFXDECODE_START( shtrider )
 	GFXDECODE_ENTRY( "gfx2", 0, shtrider_spritelayout, 16*8, 16 )
 GFXDECODE_END
 
-static MACHINE_RESET( travrusa )
+void travrusa_state::machine_reset()
 {
-	travrusa_state *state = machine.driver_data<travrusa_state>();
-
-	state->m_scrollx[0] = 0;
-	state->m_scrollx[1] = 0;
+	m_scrollx[0] = 0;
+	m_scrollx[1] = 0;
 }
 
 static MACHINE_CONFIG_START( travrusa, travrusa_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz (?) */
+	MCFG_CPU_ADD("maincpu", Z80, 4000000)   /* 4 MHz (?) */
 	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", travrusa_state,  irq0_line_hold)
 
-	MCFG_MACHINE_RESET(travrusa)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(56.75)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1790)	/* accurate frequency, measured on a Moon Patrol board, is 56.75Hz. */)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1790)   /* accurate frequency, measured on a Moon Patrol board, is 56.75Hz. */)
 				/* the Lode Runner manual (similar but different hardware) */
 				/* talks about 55Hz and 1790ms vblank duration. */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE(travrusa)
+	MCFG_SCREEN_UPDATE_DRIVER(travrusa_state, screen_update_travrusa)
 
 	MCFG_GFXDECODE(travrusa)
 
 	MCFG_PALETTE_LENGTH(16*8+16*8)
 
-	MCFG_PALETTE_INIT(travrusa)
-	MCFG_VIDEO_START(travrusa)
 
 	/* sound hardware */
 	MCFG_FRAGMENT_ADD(m52_sound_c_audio)
@@ -332,7 +329,7 @@ static MACHINE_CONFIG_DERIVED( shtrider, travrusa )
 
 	/* video hardware */
 	MCFG_GFXDECODE(shtrider)
-	MCFG_PALETTE_INIT(shtrider)
+	MCFG_PALETTE_INIT_OVERRIDE(travrusa_state,shtrider)
 MACHINE_CONFIG_END
 
 
@@ -346,23 +343,50 @@ MACHINE_CONFIG_END
 
 ROM_START( travrusa )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "zr1-0.m3", 0x0000, 0x2000, CRC(be066c0a) SHA1(fed0ef114b08519b99d77485b73768a838d2f06e) )
-	ROM_LOAD( "zr1-5.l3", 0x2000, 0x2000, CRC(145d6b34) SHA1(c9e2bd1d3e62c496e4c5057c4012b069dfcf592d) )
-	ROM_LOAD( "zr1-6a.k3", 0x4000, 0x2000, CRC(e1b51383) SHA1(34f4476c1bcc28c53c8ffa7b614f443a329aae13) )
-	ROM_LOAD( "zr1-7.j3", 0x6000, 0x2000, CRC(85cd1a51) SHA1(7eb046514845cb9d2507ee24d1b2f7cc5402ac02) )
+	ROM_LOAD( "zr1-0.m3",     0x0000, 0x2000, CRC(be066c0a) SHA1(fed0ef114b08519b99d77485b73768a838d2f06e) )
+	ROM_LOAD( "zr1-5.l3",     0x2000, 0x2000, CRC(145d6b34) SHA1(c9e2bd1d3e62c496e4c5057c4012b069dfcf592d) )
+	ROM_LOAD( "zr1-6a.k3",    0x4000, 0x2000, CRC(e1b51383) SHA1(34f4476c1bcc28c53c8ffa7b614f443a329aae13) )
+	ROM_LOAD( "zr1-7.j3",     0x6000, 0x2000, CRC(85cd1a51) SHA1(7eb046514845cb9d2507ee24d1b2f7cc5402ac02) )
 
 	ROM_REGION( 0x8000, "iremsound", 0 )
 	ROM_LOAD( "mr10.1a",      0x7000, 0x1000, CRC(a02ad8a0) SHA1(aff80b506dbecabed2a36eb743693940f6a22d16) )
 
 	ROM_REGION( 0x06000, "gfx1", 0 )
-	ROM_LOAD( "zippyrac.001", 0x00000, 0x2000, CRC(aa8994dd) SHA1(9b326ce52a03d723e5c3c1b5fd4aa8fa7f70f904) )
-	ROM_LOAD( "mr8.3c",       0x02000, 0x2000, CRC(3a046dd1) SHA1(65c1dd1c0b5fb72ac5c04e11a577308245e4b312) )
-	ROM_LOAD( "mr9.3a",       0x04000, 0x2000, CRC(1cc3d3f4) SHA1(e7ee365d43d783cb6b7df37c6edeadbed35318d9) )
+	ROM_LOAD( "zippyrac.001", 0x0000, 0x2000, CRC(aa8994dd) SHA1(9b326ce52a03d723e5c3c1b5fd4aa8fa7f70f904) )
+	ROM_LOAD( "mr8.3c",       0x2000, 0x2000, CRC(3a046dd1) SHA1(65c1dd1c0b5fb72ac5c04e11a577308245e4b312) )
+	ROM_LOAD( "mr9.3a",       0x4000, 0x2000, CRC(1cc3d3f4) SHA1(e7ee365d43d783cb6b7df37c6edeadbed35318d9) )
 
 	ROM_REGION( 0x06000, "gfx2", 0 )
-	ROM_LOAD( "zr1-8.n3", 0x00000, 0x2000, CRC(3e2c7a6b) SHA1(abc9eeb656ab6ed5f14e10fc988f75f21ccf037a) )
-	ROM_LOAD( "zr1-9.l3", 0x02000, 0x2000, CRC(13be6a14) SHA1(47861910fe4c46cd72634cf7d834be2da2a0a4f9) )
-	ROM_LOAD( "zr1-10.k3", 0x04000, 0x2000, CRC(6fcc9fdb) SHA1(88f878b9ebf07c5a16f8cb742016cac971ed3f10) )
+	ROM_LOAD( "zr1-8.n3",     0x0000, 0x2000, CRC(3e2c7a6b) SHA1(abc9eeb656ab6ed5f14e10fc988f75f21ccf037a) )
+	ROM_LOAD( "zr1-9.l3",     0x2000, 0x2000, CRC(13be6a14) SHA1(47861910fe4c46cd72634cf7d834be2da2a0a4f9) )
+	ROM_LOAD( "zr1-10.k3",    0x4000, 0x2000, CRC(6fcc9fdb) SHA1(88f878b9ebf07c5a16f8cb742016cac971ed3f10) )
+
+	ROM_REGION( 0x0320, "proms", 0 )
+	ROM_LOAD( "mmi6349.ij",   0x0000, 0x0200, CRC(c9724350) SHA1(1fac20cdc0a53d94e8f67b49d7dd71d1b9f1f7ef) ) /* character palette - last $100 are unused */
+	ROM_LOAD( "tbp18s.2",     0x0200, 0x0020, CRC(a1130007) SHA1(9deb0eed75dd06e86f83c819a3393158be7c9dce) ) /* sprite palette */
+	ROM_LOAD( "tbp24s10.3",   0x0220, 0x0100, CRC(76062638) SHA1(7378a26cf455d9d3df90929dc665870514c34b54) ) /* sprite lookup table */
+ROM_END
+
+	/* Bootleg - "American Top" printed on title - (c) 1983 I.P. - Zippy Race graphic logo is blanked out - Main ROM0-ROM3 test NG */
+ROM_START( travrusab )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "at4.m3",       0x0000, 0x2000, CRC(704ce6e4) SHA1(77385d853e3d5085c6ab155417e2b42212aff6fc) )
+	ROM_LOAD( "at5.l3",       0x2000, 0x2000, CRC(686cb0e6) SHA1(64c7e682a181bae159cca60ffa617c532b1e16d3) )
+	ROM_LOAD( "at6.k3",       0x4000, 0x2000, CRC(baf87d80) SHA1(761d687ef3f3dde80a47f547d3c822704a2ac821) )
+	ROM_LOAD( "at7.h3",       0x6000, 0x2000, CRC(48091ebe) SHA1(6146af6f08053a5955d9b388d25bfbab7ad6b0e5) )
+
+	ROM_REGION( 0x8000, "iremsound", 0 )
+	ROM_LOAD( "11.a1",        0x7000, 0x1000, CRC(d2c0bc33) SHA1(3a52ae514daf985d297416301dac0ac6cbe671d7) )
+
+	ROM_REGION( 0x06000, "gfx1", 0 )
+	ROM_LOAD( "zippyrac.001", 0x0000, 0x2000, CRC(aa8994dd) SHA1(9b326ce52a03d723e5c3c1b5fd4aa8fa7f70f904) ) /* at1.e3 */
+	ROM_LOAD( "mr8.3c",       0x2000, 0x2000, CRC(3a046dd1) SHA1(65c1dd1c0b5fb72ac5c04e11a577308245e4b312) ) /* at2.c3 */
+	ROM_LOAD( "mr9.3a",       0x4000, 0x2000, CRC(1cc3d3f4) SHA1(e7ee365d43d783cb6b7df37c6edeadbed35318d9) ) /* at3.a3 */
+
+	ROM_REGION( 0x06000, "gfx2", 0 )
+	ROM_LOAD( "8.n3",         0x0000, 0x2000, CRC(00c0f46b) SHA1(5fccc188af653785f3fc0f9d36dbbbab472f6fdc) )
+	ROM_LOAD( "9.m3",         0x2000, 0x2000, CRC(73ade73b) SHA1(4da012d71e7c1f46407343cc8d4fbe0397b7db71) )
+	ROM_LOAD( "10.k3",        0x4000, 0x2000, CRC(fcfeaa69) SHA1(a958caf70d2dc4a80298a395cb48db210e6ca16b) )
 
 	ROM_REGION( 0x0320, "proms", 0 )
 	ROM_LOAD( "mmi6349.ij",   0x0000, 0x0200, CRC(c9724350) SHA1(1fac20cdc0a53d94e8f67b49d7dd71d1b9f1f7ef) ) /* character palette - last $100 are unused */
@@ -372,7 +396,7 @@ ROM_END
 
 ROM_START( motorace )
 	ROM_REGION( 0x12000, "maincpu", 0 )
-	ROM_LOAD( "mr.cpu",       0x0000, 0x2000, CRC(89030b0c) SHA1(dec4209385bbccff4a3c0d93d6507110ef841331) )	/* encrypted */
+	ROM_LOAD( "mr.cpu",       0x0000, 0x2000, CRC(89030b0c) SHA1(dec4209385bbccff4a3c0d93d6507110ef841331) )    /* encrypted */
 	ROM_LOAD( "mr1.3l",       0x2000, 0x2000, CRC(0904ed58) SHA1(2776e031cb58f99103bc35299bffd7612d954608) )
 	ROM_LOAD( "mr2.3k",       0x4000, 0x2000, CRC(8a2374ec) SHA1(7159731f5ef2485e3c822e3e8e51e9583dd1c6bc) )
 	ROM_LOAD( "mr3.3j",       0x6000, 0x2000, CRC(2f04c341) SHA1(ae990d9d4abdd7d6ef9d21aa62125fe2e0067623) )
@@ -381,20 +405,81 @@ ROM_START( motorace )
 	ROM_LOAD( "mr10.1a",      0x7000, 0x1000, CRC(a02ad8a0) SHA1(aff80b506dbecabed2a36eb743693940f6a22d16) )
 
 	ROM_REGION( 0x06000, "gfx1", 0 )
-	ROM_LOAD( "mr7.3e",       0x00000, 0x2000, CRC(492a60be) SHA1(9a3d6407b834eb7c3e3c8bb292ff124550a2787c) )
-	ROM_LOAD( "mr8.3c",       0x02000, 0x2000, CRC(3a046dd1) SHA1(65c1dd1c0b5fb72ac5c04e11a577308245e4b312) )
-	ROM_LOAD( "mr9.3a",       0x04000, 0x2000, CRC(1cc3d3f4) SHA1(e7ee365d43d783cb6b7df37c6edeadbed35318d9) )
+	ROM_LOAD( "mr7.3e",       0x0000, 0x2000, CRC(492a60be) SHA1(9a3d6407b834eb7c3e3c8bb292ff124550a2787c) )
+	ROM_LOAD( "mr8.3c",       0x2000, 0x2000, CRC(3a046dd1) SHA1(65c1dd1c0b5fb72ac5c04e11a577308245e4b312) )
+	ROM_LOAD( "mr9.3a",       0x4000, 0x2000, CRC(1cc3d3f4) SHA1(e7ee365d43d783cb6b7df37c6edeadbed35318d9) )
 
 	ROM_REGION( 0x06000, "gfx2", 0 )
-	ROM_LOAD( "mr4.3n",       0x00000, 0x2000, CRC(5cf1a0d6) SHA1(ef0883e71ee1e9c38cf3f444d9d8e79a08076b78) )
-	ROM_LOAD( "mr5.3m",       0x02000, 0x2000, CRC(f75f2aad) SHA1(e4a8a3da56cbc04f0c9041afac182d1bfceb1d0d) )
-	ROM_LOAD( "mr6.3k",       0x04000, 0x2000, CRC(518889a0) SHA1(70b417104ce86132cb5542813c1e0509b2260756) )
+	ROM_LOAD( "mr4.3n",       0x0000, 0x2000, CRC(5cf1a0d6) SHA1(ef0883e71ee1e9c38cf3f444d9d8e79a08076b78) )
+	ROM_LOAD( "mr5.3m",       0x2000, 0x2000, CRC(f75f2aad) SHA1(e4a8a3da56cbc04f0c9041afac182d1bfceb1d0d) )
+	ROM_LOAD( "mr6.3k",       0x4000, 0x2000, CRC(518889a0) SHA1(70b417104ce86132cb5542813c1e0509b2260756) )
 
 	ROM_REGION( 0x0320, "proms", 0 )
 	ROM_LOAD( "mmi6349.ij",   0x0000, 0x0200, CRC(c9724350) SHA1(1fac20cdc0a53d94e8f67b49d7dd71d1b9f1f7ef) ) /* character palette - last $100 are unused */
 	ROM_LOAD( "tbp18s.2",     0x0200, 0x0020, CRC(a1130007) SHA1(9deb0eed75dd06e86f83c819a3393158be7c9dce) ) /* sprite palette */
 	ROM_LOAD( "tbp24s10.3",   0x0220, 0x0100, CRC(76062638) SHA1(7378a26cf455d9d3df90929dc665870514c34b54) ) /* sprite lookup table */
 ROM_END
+
+/*
+
+Moto tour is a Tecfri's licensed version of Traverse usa/Zippy Race from Irem
+
+This version don't have de MSM5202 but still having the sounds produced bt 5202 with a lower quality, I guess it converts the sound data to analog in some way, also this version is unprotected, doesn't have the epoxy block.
+
+Unfortunately the eproms labels have dissapeared, so I name it similar to Traverse usa but with the letters mt (Moto Tour)
+
+Rom Info
+
+snd.a1  ------  sound code, 100% identical to Traverse Usa/Zippy race
+
+mt1-1.e3 \
+mt1-2.c3  -- Backgrounds?, 100% identical to Traverse Usa/Zippy race
+mt1-3.a3 /
+
+mt1-4.m3  \
+mt1-5.l3  ==
+mt1-6.k3  ==  Main cpu. Different from the other sets
+mt1-7.j3  /
+
+
+mt1-8.n3  \
+mt1-9.m3 --  Sprites. Apparently all different from the other sets
+mt1-10.k3 /
+
+mm6349.k2 \
+prom1.f1  --  color proms, identical to other versions
+prom2.h2  /
+
+Ricky2001
+
+*/
+
+ROM_START( mototour )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "mt1-4.m3",     0x0000, 0x2000, CRC(fe643567) SHA1(2e47b6de43ff7fc1f070d34376fde697fc719b80) )
+	ROM_LOAD( "mt1-5.l3",     0x2000, 0x2000, CRC(38d9d0f5) SHA1(8b4531a28ff69df04a5eef687383dab57e0aa685) )
+	ROM_LOAD( "mt1-6.k3",     0x4000, 0x2000, CRC(efd325f2) SHA1(0862c0ec87f601b6c1cba2bd25e3186b6ad0c68e) )
+	ROM_LOAD( "mt1-7.j3",     0x6000, 0x2000, CRC(ab8a3a33) SHA1(e332b6e727083cf508ccec721ce42ccc3aa54e91) )
+
+	ROM_REGION( 0x8000, "iremsound", 0 )
+	ROM_LOAD( "snd.a1",      0x7000, 0x1000, CRC(a02ad8a0) SHA1(aff80b506dbecabed2a36eb743693940f6a22d16) ) // == mr10.1a
+
+	ROM_REGION( 0x06000, "gfx1", 0 )
+	ROM_LOAD( "mt1-1.e3", 0x0000, 0x2000, CRC(aa8994dd) SHA1(9b326ce52a03d723e5c3c1b5fd4aa8fa7f70f904) ) // == zippyrac.001
+	ROM_LOAD( "mt1-2.c3", 0x2000, 0x2000, CRC(3a046dd1) SHA1(65c1dd1c0b5fb72ac5c04e11a577308245e4b312) ) // == mr8.3c
+	ROM_LOAD( "mt1-3.a3", 0x4000, 0x2000, CRC(1cc3d3f4) SHA1(e7ee365d43d783cb6b7df37c6edeadbed35318d9) ) // == mr9.3a
+
+	ROM_REGION( 0x06000, "gfx2", 0 )
+	ROM_LOAD( "mt1-8..n3",    0x0000, 0x2000, CRC(600a57f5) SHA1(86c2b2efb9392b7eca44510587d2459388c40435) )
+	ROM_LOAD( "mt1-9..m3",    0x2000, 0x2000, CRC(6f9f2a4e) SHA1(8ebdd69895a4dd5de7fe84505359cccaa0aca6f8) )
+	ROM_LOAD( "mt1-10..k3",   0x4000, 0x2000, CRC(d958def5) SHA1(198adf7e87804bd018b8cfa8bbc68623255698a2) )
+
+	ROM_REGION( 0x0320, "proms", 0 )
+	ROM_LOAD( "mmi6349.k2", 0x0000, 0x0200, CRC(c9724350) SHA1(1fac20cdc0a53d94e8f67b49d7dd71d1b9f1f7ef) ) /* character palette - last $100 are unused */ // == mmi6349.ij
+	ROM_LOAD( "prom1.f1",   0x0200, 0x0020, CRC(a1130007) SHA1(9deb0eed75dd06e86f83c819a3393158be7c9dce) ) /* sprite palette */ // == tbp18s.2
+	ROM_LOAD( "prom2.h2",   0x0220, 0x0100, CRC(76062638) SHA1(7378a26cf455d9d3df90929dc665870514c34b54) ) /* sprite lookup table */ // == tbp24s10.3
+ROM_END
+
 
 /* it's probably a bootleg of the original Seibu version with the roms decrypted (no epoxy block) */
 ROM_START( shtrider )
@@ -451,11 +536,11 @@ ROM_START( shtridera )
 	ROM_LOAD( "3.bpr",   0x0220, 0x0100, CRC(5db47092) SHA1(8e234ee88143755a4fd5ec86a03b55be5f9c5db8) )
 ROM_END
 
-static DRIVER_INIT( motorace )
+DRIVER_INIT_MEMBER(travrusa_state,motorace)
 {
 	int A, j;
-	UINT8 *rom = machine.region("maincpu")->base();
-	UINT8 *buffer = auto_alloc_array(machine, UINT8, 0x2000);
+	UINT8 *rom = memregion("maincpu")->base();
+	UINT8 *buffer = auto_alloc_array(machine(), UINT8, 0x2000);
 
 	memcpy(buffer, rom, 0x2000);
 
@@ -466,13 +551,13 @@ static DRIVER_INIT( motorace )
 		rom[j] = BITSWAP8(buffer[A],2,7,4,1,6,3,0,5);
 	}
 
-	auto_free(machine, buffer);
+	auto_free(machine(), buffer);
 }
 
-static DRIVER_INIT( shtridra )
+DRIVER_INIT_MEMBER(travrusa_state,shtridra)
 {
 	int A;
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = memregion("maincpu")->base();
 
 	/* D3/D4  and  D5/D6 swapped */
 	for (A = 0; A < 0x2000; A++)
@@ -481,7 +566,10 @@ static DRIVER_INIT( shtridra )
 
 
 
-GAME( 1983, travrusa, 0,        travrusa, travrusa, 0,        ROT270, "Irem", "Traverse USA / Zippy Race", GAME_SUPPORTS_SAVE )
-GAME( 1983, motorace, travrusa, travrusa, motorace, motorace, ROT270, "Irem (Williams license)", "MotoRace USA", GAME_SUPPORTS_SAVE )
-GAME( 1985, shtrider, 0,        shtrider, shtrider, 0,        ROT270|ORIENTATION_FLIP_X, "Seibu Kaihatsu", "Shot Rider", GAME_SUPPORTS_SAVE )
-GAME( 1984, shtridera,shtrider, shtrider, shtrider, shtridra, ROT270|ORIENTATION_FLIP_X, "Seibu Kaihatsu (Sigma license)", "Shot Rider (Sigma license)", GAME_SUPPORTS_SAVE )
+GAME( 1983, travrusa, 0,        travrusa, travrusa, driver_device, 0,         ROT270, "Irem",                    "Traverse USA / Zippy Race", GAME_SUPPORTS_SAVE )
+GAME( 1983, travrusab,travrusa, travrusa, travrusa, driver_device, 0,         ROT270, "bootleg (I.P.)",          "Traverse USA (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mototour, travrusa, travrusa, travrusa, driver_device, 0,         ROT270, "Irem (Tecfri license)",   "MotoTour / Zippy Race (Tecfri license)", GAME_SUPPORTS_SAVE )
+GAME( 1983, motorace, travrusa, travrusa, motorace, travrusa_state, motorace, ROT270, "Irem (Williams license)", "MotoRace USA", GAME_SUPPORTS_SAVE )
+
+GAME( 1985, shtrider, 0,        shtrider, shtrider, driver_device, 0,         ROT270|ORIENTATION_FLIP_X, "Seibu Kaihatsu",                 "Shot Rider", GAME_SUPPORTS_SAVE )
+GAME( 1984, shtridera,shtrider, shtrider, shtrider, travrusa_state, shtridra, ROT270|ORIENTATION_FLIP_X, "Seibu Kaihatsu (Sigma license)", "Shot Rider (Sigma license)", GAME_SUPPORTS_SAVE )

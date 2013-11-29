@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     Intel 8255(A) Programmable Peripheral Interface emulation
@@ -8,7 +10,6 @@
 **********************************************************************/
 
 #include "i8255.h"
-#include "machine/devhelpr.h"
 
 
 
@@ -50,13 +51,13 @@ enum
 };
 
 
-#define CONTROL_PORT_C_LOWER_INPUT	0x01
-#define CONTROL_PORT_B_INPUT		0x02
-#define CONTROL_GROUP_B_MODE_1		0x04
-#define CONTROL_PORT_C_UPPER_INPUT	0x08
-#define CONTROL_PORT_A_INPUT		0x10
-#define CONTROL_GROUP_A_MODE_MASK	0x60
-#define CONTROL_MODE_SET			0x80
+#define CONTROL_PORT_C_LOWER_INPUT  0x01
+#define CONTROL_PORT_B_INPUT        0x02
+#define CONTROL_GROUP_B_MODE_1      0x04
+#define CONTROL_PORT_C_UPPER_INPUT  0x08
+#define CONTROL_PORT_A_INPUT        0x10
+#define CONTROL_GROUP_A_MODE_MASK   0x60
+#define CONTROL_MODE_SET            0x80
 
 
 
@@ -261,9 +262,10 @@ inline int i8255_device::port_c_upper_mode()
 //-------------------------------------------------
 
 i8255_device::i8255_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, I8255, "I8255", tag, owner, clock)
+	: device_t(mconfig, I8255, "Intel 8255", tag, owner, clock, "i8255", __FILE__)
 {
 	m_intr[PORT_A] = m_intr[PORT_B] = 0;
+	m_control = 0;
 }
 
 
@@ -417,6 +419,7 @@ UINT8 i8255_device::read_pc()
 {
 	UINT8 data = 0;
 	UINT8 mask = 0;
+	UINT8 b_mask = 0x0f;
 
 	// PC upper
 	switch (group_mode(GROUP_A))
@@ -452,6 +455,7 @@ UINT8 i8255_device::read_pc()
 		break;
 
 	case MODE_2:
+		b_mask = 0x07;
 		data |= m_intr[PORT_A] ? 0x08 : 0x00;
 		data |= m_inte2 ? 0x10 : 0x00;
 		data |= m_ibf[PORT_A] ? 0x20 : 0x00;
@@ -467,12 +471,12 @@ UINT8 i8255_device::read_pc()
 		if (port_c_lower_mode() == MODE_OUTPUT)
 		{
 			// read data from output latch
-			data |= m_output[PORT_C] & 0x0f;
+			data |= m_output[PORT_C] & b_mask;
 		}
 		else
 		{
 			// read data from port
-			mask |= 0x0f;
+			mask |= b_mask;
 		}
 		break;
 
@@ -561,38 +565,6 @@ void i8255_device::write_mode2(UINT8 data)
 
 
 //-------------------------------------------------
-//  write_pc -
-//-------------------------------------------------
-
-void i8255_device::write_pc(UINT8 data)
-{
-	int changed = 0;
-
-	if (group_mode(GROUP_A) == MODE_0)
-	{
-		// PC upper
-		if (port_c_upper_mode() == MODE_OUTPUT)
-		{
-			m_output[PORT_C] = (data & 0xf0) | (m_output[PORT_C] & 0x0f);
-			changed = 1;
-		}
-
-		// PC lower
-		if (port_c_lower_mode() == MODE_OUTPUT)
-		{
-			m_output[PORT_C] = (m_output[PORT_C] & 0xf0) | (data & 0x0f);
-			changed = 1;
-		}
-	}
-
-	if (changed)
-	{
-		output_pc();
-	}
-}
-
-
-//-------------------------------------------------
 //  output_pc -
 //-------------------------------------------------
 
@@ -600,6 +572,7 @@ void i8255_device::output_pc()
 {
 	UINT8 data = 0;
 	UINT8 mask = 0;
+	UINT8 b_mask = 0x0f;
 
 	// PC upper
 	switch (group_mode(GROUP_A))
@@ -632,6 +605,7 @@ void i8255_device::output_pc()
 		break;
 
 	case MODE_2:
+		b_mask = 0x07;
 		data |= m_intr[PORT_A] ? 0x08 : 0x00;
 		data |= m_ibf[PORT_A] ? 0x20 : 0x00;
 		data |= m_obf[PORT_A] ? 0x80 : 0x00;
@@ -644,12 +618,12 @@ void i8255_device::output_pc()
 	case MODE_0:
 		if (port_c_lower_mode() == MODE_OUTPUT)
 		{
-			mask |= 0x0f;
+			mask |= b_mask;
 		}
 		else
 		{
 			// TTL inputs float high
-			data |= 0x0f;
+			data |= b_mask;
 		}
 		break;
 
@@ -753,6 +727,7 @@ void i8255_device::set_pc_bit(int bit, int state)
 			case 3: set_intr(PORT_A, state); break;
 			case 6: set_inte(PORT_A, state); break;
 			case 7: set_obf(PORT_A, state); break;
+			default: break;
 			}
 		}
 		else
@@ -762,6 +737,7 @@ void i8255_device::set_pc_bit(int bit, int state)
 			case 3: set_intr(PORT_A, state); break;
 			case 4: set_inte(PORT_A, state); break;
 			case 5: set_ibf(PORT_A, state); break;
+			default: break;
 			}
 		}
 		break;
@@ -774,6 +750,7 @@ void i8255_device::set_pc_bit(int bit, int state)
 		case 5: set_ibf(PORT_A, state); break;
 		case 6: set_inte1(state); break;
 		case 7: set_obf(PORT_A, state); break;
+		default: break;
 		}
 		break;
 	}
@@ -790,6 +767,7 @@ void i8255_device::set_pc_bit(int bit, int state)
 				set_ibf(PORT_B, state);
 			break;
 		case 2: set_inte(PORT_B, state); break;
+		default: break;
 		}
 	}
 
@@ -873,7 +851,8 @@ WRITE8_MEMBER( i8255_device::write )
 	case PORT_C:
 		if (LOG) logerror("I8255 '%s' Port C Write: %02x\n", tag(), data);
 
-		write_pc(data);
+		m_output[PORT_C] = data;
+		output_pc();
 		break;
 
 	case CONTROL:

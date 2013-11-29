@@ -1,6 +1,15 @@
-/*
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
+/**********************************************************************
 
-Luxor ABC99
+    Luxor ABC-99 keyboard and mouse emulation
+
+    Copyright MESS Team.
+    Visit http://mamedev.org for licensing and usage restrictions.
+
+*********************************************************************/
+
+/*
 
 Keyboard PCB Layout
 -------------------
@@ -47,13 +56,7 @@ Notes:
 
 */
 
-#define ADDRESS_MAP_MODERN
-
-#include "emu.h"
 #include "abc99.h"
-#include "cpu/mcs48/mcs48.h"
-#include "machine/devhelpr.h"
-#include "sound/speaker.h"
 
 
 
@@ -61,24 +64,8 @@ Notes:
 //  MACROS / CONSTANTS
 //**************************************************************************
 
-#define I8035_Z2_TAG		"z2"
-#define I8035_Z5_TAG		"z5"
-
-
-enum
-{
-	LED_1 = 0,
-	LED_2,
-	LED_3,
-	LED_4,
-	LED_5,
-	LED_6,
-	LED_7,
-	LED_8,
-	LED_INS,
-	LED_ALT,
-	LED_CAPS_LOCK
-};
+#define I8035_Z2_TAG        "z2"
+#define I8035_Z5_TAG        "z5"
 
 
 
@@ -87,31 +74,6 @@ enum
 //**************************************************************************
 
 const device_type ABC99 = &device_creator<abc99_device>;
-
-
-//-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
-//-------------------------------------------------
-
-void abc99_device::device_config_complete()
-{
-	// inherit a copy of the static data
-	const abc99_interface *intf = reinterpret_cast<const abc99_interface *>(static_config());
-	if (intf != NULL)
-		*static_cast<abc99_interface *>(this) = *intf;
-
-	// or initialize to defaults if none provided
-	else
-	{
-		memset(&m_out_txd_cb, 0, sizeof(m_out_txd_cb));
-		memset(&m_out_clock_cb, 0, sizeof(m_out_clock_cb));
-		memset(&m_out_keydown_cb, 0, sizeof(m_out_keydown_cb));
-	}
-
-	m_shortname = "abc99";
-}
 
 
 //-------------------------------------------------
@@ -193,10 +155,10 @@ ADDRESS_MAP_END
 //-------------------------------------------------
 
 static ADDRESS_MAP_START( abc99_z5_io, AS_IO, 8, abc99_device )
-	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_READ(z5_p1_r)
-	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_WRITE(z5_p2_w)
-	AM_RANGE(MCS48_PORT_T0, MCS48_PORT_T0) AM_WRITE(z5_t0_w)
-	AM_RANGE(MCS48_PORT_T1, MCS48_PORT_T1) AM_READ(z5_t1_r)
+/*  AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_READ(z5_p1_r)
+    AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_WRITE(z5_p2_w)
+    AM_RANGE(MCS48_PORT_T0, MCS48_PORT_T0) AM_WRITENOP // Z2 CLK
+    AM_RANGE(MCS48_PORT_T1, MCS48_PORT_T1) AM_READ(z5_t1_r)*/
 ADDRESS_MAP_END
 
 
@@ -214,10 +176,11 @@ static MACHINE_CONFIG_FRAGMENT( abc99 )
 	MCFG_CPU_ADD(I8035_Z5_TAG, I8035, XTAL_6MHz)
 	MCFG_CPU_PROGRAM_MAP(abc99_z5_mem)
 	MCFG_CPU_IO_MAP(abc99_z5_io)
+	MCFG_DEVICE_DISABLE() // HACK fix for broken serial I/O
 
 	// sound hardware
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 MACHINE_CONFIG_END
 
@@ -234,14 +197,15 @@ machine_config_constructor abc99_device::device_mconfig_additions() const
 
 
 //-------------------------------------------------
-//  INPUT_PORTS( abc99 )
+//  INPUT_CHANGED_MEMBER( keyboard_reset )
 //-------------------------------------------------
 
-INPUT_CHANGED( abc99_device::keyboard_reset )
+INPUT_CHANGED_MEMBER( abc99_device::keyboard_reset )
 {
-    abc99_device *keyboard = static_cast<abc99_device *>(field.machine().device(ABC99_TAG));
-
-	device_set_input_line(keyboard->m_mousecpu, INPUT_LINE_RESET, newval ? CLEAR_LINE : ASSERT_LINE);
+	if (newval)
+	{
+		m_mousecpu->reset();
+	}
 }
 
 
@@ -430,13 +394,13 @@ INPUT_PORTS_START( abc99 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_NAME("Right Mouse Button") PORT_CODE(MOUSECODE_BUTTON2)
 
 	PORT_START("MOUSEX")
-	PORT_BIT( 0xff, 0x00, IPT_MOUSE_X ) PORT_SENSITIVITY(100) PORT_KEYDELTA(5) PORT_MINMAX(0, 255) PORT_PLAYER(1) PORT_CATEGORY(1)
+	PORT_BIT( 0xff, 0x00, IPT_MOUSE_X ) PORT_SENSITIVITY(100) PORT_KEYDELTA(5) PORT_MINMAX(0, 255) PORT_PLAYER(1)
 
 	PORT_START("MOUSEY")
-	PORT_BIT( 0xff, 0x00, IPT_MOUSE_Y ) PORT_SENSITIVITY(100) PORT_KEYDELTA(5) PORT_MINMAX(0, 255) PORT_PLAYER(1) PORT_CATEGORY(1)
+	PORT_BIT( 0xff, 0x00, IPT_MOUSE_Y ) PORT_SENSITIVITY(100) PORT_KEYDELTA(5) PORT_MINMAX(0, 255) PORT_PLAYER(1)
 
 	PORT_START("J4")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_NAME("Keyboard Reset") PORT_CHANGED(abc99_device::keyboard_reset, 0)
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_NAME("Keyboard Reset") PORT_CHANGED_MEMBER(DEVICE_SELF, abc99_device, keyboard_reset, 0)
 INPUT_PORTS_END
 
 
@@ -461,25 +425,8 @@ ioport_constructor abc99_device::device_input_ports() const
 
 inline void abc99_device::serial_input()
 {
-	device_set_input_line(m_maincpu, MCS48_INPUT_IRQ, (m_si | m_si_en) ? CLEAR_LINE : ASSERT_LINE);
-	device_set_input_line(m_mousecpu, MCS48_INPUT_IRQ, m_si ? CLEAR_LINE : ASSERT_LINE);
-}
-
-
-//-------------------------------------------------
-//  serial_output -
-//-------------------------------------------------
-
-inline void abc99_device::serial_output()
-{
-	int so = m_so_z2 & m_so_z5;
-
-	if (m_so != so)
-	{
-		m_so = so;
-
-		m_out_txd_func(m_so);
-	}
+	m_maincpu->set_input_line(MCS48_INPUT_IRQ, (m_si || m_si_en) ? CLEAR_LINE : ASSERT_LINE);
+	m_mousecpu->set_input_line(MCS48_INPUT_IRQ, m_si ? CLEAR_LINE : ASSERT_LINE);
 }
 
 
@@ -489,8 +436,8 @@ inline void abc99_device::serial_output()
 
 inline void abc99_device::serial_clock()
 {
-	m_out_clock_func(1);
-	m_out_clock_func(0);
+	m_slot->trxc_w(1);
+	m_slot->trxc_w(0);
 }
 
 
@@ -502,7 +449,7 @@ inline void abc99_device::key_down(int state)
 {
 	if (m_keydown != state)
 	{
-		m_out_keydown_func(state);
+		m_slot->keydown_w(state);
 		m_keydown = state;
 	}
 }
@@ -527,16 +474,22 @@ inline void abc99_device::scan_mouse()
 //-------------------------------------------------
 
 abc99_device::abc99_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, ABC99, "Luxor ABC 99", tag, owner, clock),
-	  m_maincpu(*this, I8035_Z2_TAG),
-	  m_mousecpu(*this, I8035_Z5_TAG),
-	  m_speaker(*this, SPEAKER_TAG),
-	  m_si(1),
-	  m_si_en(1),
-	  m_so(1),
-	  m_so_z2(1),
-	  m_so_z5(1),
-	  m_keydown(0)
+	: device_t(mconfig, ABC99, "Luxor ABC 99", tag, owner, clock, "abc99", __FILE__),
+		abc_keyboard_interface(mconfig, *this),
+		m_maincpu(*this, I8035_Z2_TAG),
+		m_mousecpu(*this, I8035_Z5_TAG),
+		m_speaker(*this, "speaker"),
+		m_z14(*this, "Z14"),
+		m_mouseb(*this, "MOUSEB"),
+		m_si(1),
+		m_si_en(1),
+		m_so_z2(1),
+		m_so_z5(1),
+		m_keydown(0),
+		m_t1_z2(0),
+		m_t1_z5(0),
+		m_led_en(0),
+		m_reset(1)
 {
 }
 
@@ -553,15 +506,9 @@ void abc99_device::device_start()
 
 	m_mouse_timer = timer_alloc(TIMER_MOUSE);
 
-	// resolve callbacks
-    m_out_txd_func.resolve(m_out_txd_cb, *this);
-    m_out_clock_func.resolve(m_out_clock_cb, *this);
-    m_out_keydown_func.resolve(m_out_keydown_cb, *this);
-
 	// state saving
 	save_item(NAME(m_si));
 	save_item(NAME(m_si_en));
-	save_item(NAME(m_so));
 	save_item(NAME(m_so_z2));
 	save_item(NAME(m_so_z5));
 	save_item(NAME(m_keydown));
@@ -579,8 +526,8 @@ void abc99_device::device_start()
 void abc99_device::device_reset()
 {
 	// set EA lines
-	device_set_input_line(m_maincpu, MCS48_INPUT_EA, ASSERT_LINE);
-	device_set_input_line(m_mousecpu, MCS48_INPUT_EA, ASSERT_LINE);
+	m_maincpu->set_input_line(MCS48_INPUT_EA, ASSERT_LINE);
+	m_mousecpu->set_input_line(MCS48_INPUT_EA, ASSERT_LINE);
 }
 
 
@@ -599,6 +546,30 @@ void abc99_device::device_timer(emu_timer &timer, device_timer_id id, int param,
 	case TIMER_MOUSE:
 		scan_mouse();
 		break;
+	}
+}
+
+
+//-------------------------------------------------
+//  rxd_r -
+//-------------------------------------------------
+
+int abc99_device::rxd_r()
+{
+	return m_so_z2 && m_so_z5;
+}
+
+
+//-------------------------------------------------
+//  txd_w -
+//-------------------------------------------------
+
+void abc99_device::txd_w(int state)
+{
+	if (m_si != state)
+	{
+		m_si = state;
+		serial_input();
 	}
 }
 
@@ -630,27 +601,21 @@ WRITE8_MEMBER( abc99_device::z2_p1_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        P10     serial output
-        P11     KEY DOWN
-        P12     transmit -> Z5 T1
-        P13     INS led
-        P14     ALT led
-        P15     CAPS LOCK led
-        P16     speaker output
-        P17     Z8 enable
+	    P10     serial output
+	    P11     KEY DOWN
+	    P12     transmit -> Z5 T1
+	    P13     INS led
+	    P14     ALT led
+	    P15     CAPS LOCK led
+	    P16     speaker output
+	    P17     Z8 enable
 
-    */
+	*/
 
 	// serial output
-	int so_z2 = BIT(data, 0);
-
-	if (m_so_z2 != so_z2)
-	{
-		m_so_z2 = so_z2;
-		serial_output();
-	}
+	m_so_z2 = BIT(data, 0);
 
 	// key down
 	key_down(!BIT(data, 1));
@@ -664,7 +629,7 @@ WRITE8_MEMBER( abc99_device::z2_p1_w )
 	output_set_led_value(LED_CAPS_LOCK, BIT(data, 5));
 
 	// speaker output
-	speaker_level_w(m_speaker, !BIT(data, 6));
+	m_speaker->level_w(!BIT(data, 6));
 
 	// Z8 enable
 	m_led_en = BIT(data, 7);
@@ -679,20 +644,20 @@ READ8_MEMBER( abc99_device::z2_p2_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        P20
-        P21
-        P22
-        P23
-        P24
-        P25     DIP0
-        P26     DIP1
-        P27     DIP2
+	    P20
+	    P21
+	    P22
+	    P23
+	    P24
+	    P25     DIP0
+	    P26     DIP1
+	    P27     DIP2
 
-    */
+	*/
 
-	UINT8 data = input_port_read(this, "Z14") << 5;
+	UINT8 data = m_z14->read() << 5;
 
 	return data;
 }
@@ -726,23 +691,23 @@ READ8_MEMBER( abc99_device::z5_p1_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        P10     XA
-        P11     XB
-        P12     YA
-        P13     YB
-        P14     LB
-        P15     MB
-        P16     RB
-        P17     input from host
+	    P10     XA
+	    P11     XB
+	    P12     YA
+	    P13     YB
+	    P14     LB
+	    P15     MB
+	    P16     RB
+	    P17     input from host
 
-    */
+	*/
 
 	UINT8 data = 0;
 
 	// mouse buttons
-	data |= (input_port_read(this, "MOUSEB") & 0x07) << 4;
+	data |= (m_mouseb->read() & 0x07) << 4;
 
 	// serial input
 	data |= m_si << 7;
@@ -759,18 +724,18 @@ WRITE8_MEMBER( abc99_device::z5_p2_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        P20
-        P21
-        P22
-        P23
-        P24     Z2 serial input enable
-        P25     Z2 RESET
-        P26     serial output
-        P27     Z2 T1
+	    P20
+	    P21
+	    P22
+	    P23
+	    P24     Z2 serial input enable
+	    P25     Z2 RESET
+	    P26     serial output
+	    P27     Z2 T1
 
-    */
+	*/
 
 	// serial input enable
 	int si_en = BIT(data, 4);
@@ -784,33 +749,18 @@ WRITE8_MEMBER( abc99_device::z5_p2_w )
 	// Z2 reset
 	int reset = BIT(data, 5);
 
-	if (m_reset != reset)
+	if (!m_reset && reset)
 	{
-		m_reset = reset;
-		device_set_input_line(m_maincpu, INPUT_LINE_RESET, m_reset ? CLEAR_LINE : ASSERT_LINE);
+		m_maincpu->reset();
 	}
+
+	m_reset = reset;
 
 	// serial output
-	int so_z5 = BIT(data, 6);
-
-	if (m_so_z5 != so_z5)
-	{
-		m_so_z5 = so_z5;
-		serial_output();
-	}
+	m_so_z5 = BIT(data, 6);
 
 	// keyboard CPU T1
 	m_t1_z2 = BIT(data, 7);
-}
-
-
-//-------------------------------------------------
-//  z5_t0_w -
-//-------------------------------------------------
-
-WRITE8_MEMBER( abc99_device::z5_t0_w )
-{
-	// clock output to Z2, not necessary to emulate
 }
 
 
@@ -821,39 +771,4 @@ WRITE8_MEMBER( abc99_device::z5_t0_w )
 READ8_MEMBER( abc99_device::z5_t1_r )
 {
 	return m_t1_z5;
-}
-
-
-//-------------------------------------------------
-//  rxd_w -
-//-------------------------------------------------
-
-WRITE_LINE_MEMBER( abc99_device::rxd_w )
-{
-	if (m_si != state)
-	{
-		m_si = state;
-
-		serial_input();
-	}
-}
-
-
-//-------------------------------------------------
-//  txd_r -
-//-------------------------------------------------
-
-READ_LINE_MEMBER( abc99_device::txd_r )
-{
-	return m_so;
-}
-
-
-//-------------------------------------------------
-//  reset_w -
-//-------------------------------------------------
-
-WRITE_LINE_MEMBER( abc99_device::reset_w )
-{
-	device_set_input_line(m_mousecpu, INPUT_LINE_RESET, state ? CLEAR_LINE : ASSERT_LINE);
 }

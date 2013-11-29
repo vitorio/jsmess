@@ -1,3 +1,5 @@
+// license:MAME|LGPL-2.1+
+// copyright-holders:Jonathan Gevaryahu
 /******************************************************************************
 *
 *  Pacific Educational Systems 'PES' Speech box
@@ -25,7 +27,7 @@ Hardware consists of:
 27c64 rom (holds less than 256 bytes of code)
 unpopulated 6164 sram, which isn't used
 TSP5220C speech chip (aka tms5220c)
-mc145406 RS232 driver/reciever (+-24v to 0-5v converter for serial i/o)
+mc145406 RS232 driver/receiver (+-24v to 0-5v converter for serial i/o)
 74hc573b1 octal tri-state D-latch (part of bus interface for ROM)
 74hc74b1 dual d-flipflop with set/reset, positive edge trigger (?)
 74hc02b1 quad 2-input NOR gate (wired up to decode address 0, and data 0 and 1 to produce /RS and /WS)
@@ -41,7 +43,7 @@ Address map:
   00 W: d0 and d1 are the /RS and /WS bits
   port 1.x: tms5220 bus
   port 2.x: unused
-  port 3.0: RxD serial recieve
+  port 3.0: RxD serial receive
   port 3.1: TxD serial send
   port 3.2: read, from /INT on tms5220c
   port 3.3: read, from /READY on tms5220c
@@ -51,8 +53,7 @@ Address map:
   port 3.7: write, /RD (general) and /OE (pin 22) for unpopulated 6164 SRAM
 
 */
-#define ADDRESS_MAP_MODERN
-#define CPU_CLOCK		XTAL_10_245MHz
+#define CPU_CLOCK       XTAL_10_245MHz
 
 #undef DEBUG_FIFO
 #undef DEBUG_SERIAL_CB
@@ -66,14 +67,13 @@ Address map:
 #include "machine/terminal.h"
 
 /* Devices */
-static WRITE8_DEVICE_HANDLER( pes_kbd_input )
+WRITE8_MEMBER(pes_state::pes_kbd_input)
 {
-	pes_state *state = device->machine().driver_data<pes_state>();
 #ifdef DEBUG_FIFO
 	fprintf(stderr,"keyboard input: %c, ", data);
 #endif
 	// if fifo is full (head ptr = tail ptr-1), do not increment the head ptr and do not store the data
-	if (((state->m_infifo_tail_ptr-1)&0x1F) == state->m_infifo_head_ptr)
+	if (((m_infifo_tail_ptr-1)&0x1F) == m_infifo_head_ptr)
 	{
 		logerror("infifo was full, write ignored!\n");
 #ifdef DEBUG_FIFO
@@ -81,41 +81,39 @@ static WRITE8_DEVICE_HANDLER( pes_kbd_input )
 #endif
 		return;
 	}
-	state->m_infifo[state->m_infifo_head_ptr] = data;
-	state->m_infifo_head_ptr++;
-	state->m_infifo_head_ptr&=0x1F;
+	m_infifo[m_infifo_head_ptr] = data;
+	m_infifo_head_ptr++;
+	m_infifo_head_ptr&=0x1F;
 #ifdef DEBUG_FIFO
-	fprintf(stderr,"kb input fifo fullness: %d\n",(state->m_infifo_head_ptr-state->m_infifo_tail_ptr)&0x1F);
+	fprintf(stderr,"kb input fifo fullness: %d\n",(m_infifo_head_ptr-m_infifo_tail_ptr)&0x1F);
 #endif
 	// todo: following two should be set so clear happens after one cpu cycle
-	cputag_set_input_line(device->machine(), "maincpu", MCS51_RX_LINE, ASSERT_LINE);
-	cputag_set_input_line(device->machine(), "maincpu", MCS51_RX_LINE, CLEAR_LINE);
+	m_maincpu->set_input_line(MCS51_RX_LINE, ASSERT_LINE);
+	m_maincpu->set_input_line(MCS51_RX_LINE, CLEAR_LINE);
 }
 
 static GENERIC_TERMINAL_INTERFACE( pes_terminal_intf )
 {
-	DEVCB_HANDLER(pes_kbd_input)
+	DEVCB_DRIVER_MEMBER(pes_state,pes_kbd_input)
 };
 
 /* Helper Functions */
-static int data_to_i8031(device_t *device)
+READ8_MEMBER( pes_state::data_to_i8031)
 {
-	pes_state *state = device->machine().driver_data<pes_state>();
 	UINT8 data;
-	data = state->m_infifo[state->m_infifo_tail_ptr];
+	data = m_infifo[m_infifo_tail_ptr];
 	// if fifo is empty (tail ptr == head ptr), do not increment the tail ptr, otherwise do.
-	if (state->m_infifo_tail_ptr != state->m_infifo_head_ptr) state->m_infifo_tail_ptr++;
-	state->m_infifo_tail_ptr&=0x1F;
+	if (m_infifo_tail_ptr != m_infifo_head_ptr) m_infifo_tail_ptr++;
+	m_infifo_tail_ptr&=0x1F;
 #ifdef DEBUG_SERIAL_CB
 	fprintf(stderr,"callback: input to i8031/pes from pc/terminal: %02X\n",data);
 #endif
 	return data;
 }
 
-static void data_from_i8031(device_t *device, int data)
+WRITE8_MEMBER(pes_state::data_from_i8031)
 {
-	pes_state *state = device->machine().driver_data<pes_state>();
-	terminal_write(state->m_terminal,0,data);
+	m_terminal->write(space,0,data);
 #ifdef DEBUG_SERIAL_CB
 	fprintf(stderr,"callback: output from i8031/pes to pc/terminal: %02X\n",data);
 #endif
@@ -130,8 +128,8 @@ WRITE8_MEMBER( pes_state::rsws_w )
 #ifdef DEBUG_PORTS
 	logerror("port0 write: RSWS states updated: /RS: %d, /WS: %d\n", m_rsstate, m_wsstate);
 #endif
-	tms5220_rsq_w(state->m_speech, m_rsstate);
-	tms5220_wsq_w(state->m_speech, m_wsstate);
+	state->m_speech->rsq_w(m_rsstate);
+	state->m_speech->wsq_w(m_wsstate);
 }
 
 WRITE8_MEMBER( pes_state::port1_w )
@@ -140,7 +138,7 @@ WRITE8_MEMBER( pes_state::port1_w )
 #ifdef DEBUG_PORTS
 	logerror("port1 write: tms5220 data written: %02X\n", data);
 #endif
-	tms5220_data_w(state->m_speech, 0, data);
+	state->m_speech->data_w(space, 0, data);
 
 }
 
@@ -148,7 +146,7 @@ READ8_MEMBER( pes_state::port1_r )
 {
 	UINT8 data = 0xFF;
 	pes_state *state = machine().driver_data<pes_state>();
-	data = tms5220_status_r(state->m_speech, 0);
+	data = state->m_speech->status_r(space, 0);
 #ifdef DEBUG_PORTS
 	logerror("port1 read: tms5220 data read: 0x%02X\n", data);
 #endif
@@ -190,8 +188,8 @@ READ8_MEMBER( pes_state::port3_r )
 	{
 		data |= 0x10; // set RTS bit
 	}
-	data |= (tms5220_intq_r(state->m_speech)<<2);
-	data |= (tms5220_readyq_r(state->m_speech)<<3);
+	data |= (state->m_speech->intq_r()<<2);
+	data |= (state->m_speech->readyq_r()<<3);
 #ifdef DEBUG_PORTS
 	logerror("port3 read: returning 0x%02X: ", data);
 	logerror("RXD: %d; ", BIT(data,0));
@@ -218,22 +216,22 @@ void pes_state::machine_reset()
 	m_rsstate = 1;
 
 	m_port3_state = 0; // reset the openbus state of port 3
-	//cputag_set_input_line(machine, "maincpu", INPUT_LINE_RESET, ASSERT_LINE); // this causes debugger to fail badly if included
-	devtag_reset(machine(), "tms5220"); // reset the 5220
+	//m_maincpu->set_input_line(INPUT_LINE_RESET, ASSERT_LINE); // this causes debugger to fail badly if included
+	machine().device("tms5220")->reset(); // reset the 5220
 }
 
 /******************************************************************************
  Driver Init and Timer Callbacks
 ******************************************************************************/
-/*static TIMER_CALLBACK( serial_read_cb )
+/*static TIMER_CALLBACK_MEMBER(pes_state::serial_read_cb )
 {
-    machine.scheduler().timer_set(attotime::from_hz(10000), FUNC(outfifo_read_cb));
+    timer_set(attotime::from_hz(10000), TIMER_OUTFIFO_READ);
 }*/
 
-DRIVER_INIT( pes )
+DRIVER_INIT_MEMBER(pes_state,pes)
 {
-	i8051_set_serial_tx_callback(machine.device("maincpu"), data_from_i8031);
-	i8051_set_serial_rx_callback(machine.device("maincpu"), data_to_i8031);
+	m_maincpu->i8051_set_serial_tx_callback(write8_delegate(FUNC(pes_state::data_from_i8031),this));
+	m_maincpu->i8051_set_serial_rx_callback(read8_delegate(FUNC(pes_state::data_to_i8031),this));
 }
 
 /******************************************************************************
@@ -273,7 +271,6 @@ static MACHINE_CONFIG_START( pes, pes_state )
 	MCFG_SOUND_ADD("tms5220", TMS5220C, 720000) /* 720Khz clock, 10khz output */
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG,pes_terminal_intf)
 MACHINE_CONFIG_END
 
@@ -294,4 +291,4 @@ ROM_END
 ******************************************************************************/
 
 /*    YEAR  NAME    PARENT  COMPAT  MACHINE     INPUT   INIT    COMPANY                        FULLNAME            FLAGS */
-COMP( 1987, pes,    0,      0,      pes,        pes,    pes, "Pacific Educational Systems", "VPU-01 Speech box", GAME_NOT_WORKING )
+COMP( 1987, pes,    0,      0,      pes,        pes, pes_state,    pes, "Pacific Educational Systems", "VPU-01 Speech box", GAME_NOT_WORKING )

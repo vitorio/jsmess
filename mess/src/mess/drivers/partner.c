@@ -23,7 +23,7 @@
 #include "includes/partner.h"
 
 /* Address maps */
-static ADDRESS_MAP_START(partner_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(partner_mem, AS_PROGRAM, 8, partner_state )
 	AM_RANGE( 0x0000, 0x07ff ) AM_RAMBANK("bank1")
 	AM_RANGE( 0x0800, 0x3fff ) AM_RAMBANK("bank2")
 	AM_RANGE( 0x4000, 0x5fff ) AM_RAMBANK("bank3")
@@ -34,10 +34,10 @@ static ADDRESS_MAP_START(partner_mem, AS_PROGRAM, 8)
 	AM_RANGE( 0xc000, 0xc7ff ) AM_RAMBANK("bank8")
 	AM_RANGE( 0xc800, 0xcfff ) AM_RAMBANK("bank9")
 	AM_RANGE( 0xd000, 0xd7ff ) AM_RAMBANK("bank10")
-	AM_RANGE( 0xd800, 0xd8ff ) AM_DEVREADWRITE("i8275", i8275_r, i8275_w)  // video
-	AM_RANGE( 0xd900, 0xd9ff ) AM_DEVREADWRITE_MODERN("ppi8255_1", i8255_device, read, write)
+	AM_RANGE( 0xd800, 0xd8ff ) AM_DEVREADWRITE("i8275", i8275_device, read, write)  // video
+	AM_RANGE( 0xd900, 0xd9ff ) AM_DEVREADWRITE("ppi8255_1", i8255_device, read, write)
 	AM_RANGE( 0xda00, 0xdaff ) AM_WRITE(partner_mem_page_w)
-	AM_RANGE( 0xdb00, 0xdbff ) AM_DEVWRITE("dma8257", i8257_w)	 // DMA
+	AM_RANGE( 0xdb00, 0xdbff ) AM_DEVWRITE("dma8257", i8257_device, i8257_w)    // DMA
 	AM_RANGE( 0xdc00, 0xddff ) AM_RAMBANK("bank11")
 	AM_RANGE( 0xde00, 0xdeff ) AM_WRITE(partner_win_memory_page_w)
 	AM_RANGE( 0xe000, 0xe7ff ) AM_RAMBANK("bank12")
@@ -131,7 +131,7 @@ static INPUT_PORTS_START( partner )
 	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_UNUSED)
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_UNUSED)
 	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_UNUSED)
-	PORT_BIT(0x10, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Shift") PORT_CODE(KEYCODE_LSHIFT) PORT_CODE(KEYCODE_RSHIFT)	// Apparently in partner is Shift to switch between Latin and Russian Keyboard!
+	PORT_BIT(0x10, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Shift") PORT_CODE(KEYCODE_LSHIFT) PORT_CODE(KEYCODE_RSHIFT)  // Apparently in partner is Shift to switch between Latin and Russian Keyboard!
 	PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Ctrl") PORT_CODE(KEYCODE_LCONTROL) PORT_CODE(KEYCODE_RCONTROL) PORT_CHAR(UCHAR_SHIFT_1)
 	PORT_BIT(0x40, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Rus/Lat") PORT_CODE(KEYCODE_LALT) PORT_CODE(KEYCODE_RALT)
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_UNUSED)
@@ -143,18 +143,18 @@ static const cassette_interface partner_cassette_interface =
 	rkp_cassette_formats,
 	NULL,
 	(cassette_state)(CASSETTE_STOPPED | CASSETTE_SPEAKER_ENABLED | CASSETTE_MOTOR_ENABLED),
-	NULL,
+	"partner_cass",
 	NULL
 };
 
-static FLOPPY_OPTIONS_START(partner)
-	FLOPPY_OPTION(partner, "cpm", "Partner disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
+static LEGACY_FLOPPY_OPTIONS_START(partner)
+	LEGACY_FLOPPY_OPTION(partner, "cpm", "Partner disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
 		HEADS([2])
 		TRACKS([80])
 		SECTORS([5])
 		SECTOR_LENGTH([1024])
 		FIRST_SECTOR_ID([1]))
-FLOPPY_OPTIONS_END
+LEGACY_FLOPPY_OPTIONS_END
 
 static const floppy_interface partner_floppy_interface =
 {
@@ -164,23 +164,23 @@ static const floppy_interface partner_floppy_interface =
 	DEVCB_NULL,
 	DEVCB_NULL,
 	FLOPPY_STANDARD_5_25_DSHD,
-	FLOPPY_OPTIONS_NAME(partner),
-	NULL,
+	LEGACY_FLOPPY_OPTIONS_NAME(partner),
+	"floppy_5_25",
 	NULL
 };
 
 /* F4 Character Displayer */
 static const gfx_layout partner_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	512,					/* 512 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	512,                    /* 512 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( partner )
@@ -189,42 +189,41 @@ GFXDECODE_END
 
 
 static MACHINE_CONFIG_START( partner, partner_state )
-    /* basic machine hardware */
-    MCFG_CPU_ADD("maincpu", I8080, XTAL_16MHz / 9)
-    MCFG_CPU_PROGRAM_MAP(partner_mem)
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", I8080, XTAL_16MHz / 9)
+	MCFG_CPU_PROGRAM_MAP(partner_mem)
 
-    MCFG_MACHINE_START( partner )
-    MCFG_MACHINE_RESET( partner )
+	MCFG_MACHINE_START_OVERRIDE(partner_state, partner )
+	MCFG_MACHINE_RESET_OVERRIDE(partner_state, partner )
 
 	MCFG_I8255_ADD( "ppi8255_1", radio86_ppi8255_interface_1 )
 
-	MCFG_I8275_ADD	( "i8275", partner_i8275_interface)
-    /* video hardware */
+	MCFG_I8275_ADD  ( "i8275", partner_i8275_interface)
+	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_UPDATE_DEVICE("i8275", i8275_device, screen_update)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(78*6, 30*10)
 	MCFG_SCREEN_VISIBLE_AREA(0, 78*6-1, 0, 30*10-1)
-	MCFG_SCREEN_UPDATE(radio86)
 
 	MCFG_GFXDECODE(partner)
 	MCFG_PALETTE_LENGTH(3)
-	MCFG_PALETTE_INIT(radio86)
-
-	MCFG_VIDEO_START(generic_bitmapped)
+	MCFG_PALETTE_INIT_OVERRIDE(partner_state,radio86)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	MCFG_I8257_ADD("dma8257", XTAL_16MHz / 9, partner_dma)
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, partner_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", partner_cassette_interface )
+	MCFG_SOFTWARE_LIST_ADD("cass_list","partner_cass")
 
 	MCFG_FD1793_ADD("wd1793", partner_wd17xx_interface )
 
-	MCFG_FLOPPY_2_DRIVES_ADD(partner_floppy_interface)
+	MCFG_LEGACY_FLOPPY_2_DRIVES_ADD(partner_floppy_interface)
+	MCFG_SOFTWARE_LIST_ADD("flop_list","partner_flop")
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -246,4 +245,4 @@ ROM_END
 
 /* Driver */
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT   INIT        COMPANY   FULLNAME       FLAGS */
-COMP( 1987, partner, radio86,   0,	partner,	partner,partner,	"SAM SKB VM",	"Partner-01.01",	GAME_NOT_WORKING)
+COMP( 1987, partner, radio86,   0,  partner,    partner, partner_state,partner, "SAM SKB VM",   "Partner-01.01",    GAME_NOT_WORKING)

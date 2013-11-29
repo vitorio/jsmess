@@ -9,7 +9,6 @@
 #include "emu.h"
 #include "ds2404.h"
 #include <time.h>
-#include "devhelpr.h"
 
 
 //**************************************************************************
@@ -24,9 +23,16 @@ const device_type DS2404 = &device_creator<ds2404_device>;
 //-------------------------------------------------
 
 ds2404_device::ds2404_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, DS2404, "DS2404", tag, owner, clock),
-	  device_nvram_interface(mconfig, *this)
+	: device_t(mconfig, DS2404, "DS2404", tag, owner, clock, "ds2404", __FILE__),
+		device_nvram_interface(mconfig, *this),
+		m_address(0),
+		m_offset(0),
+		m_end_offset(0),
+		m_a1(0),
+		m_a2(0),
+		m_state_ptr(0)
 {
+	memset(m_ram, 0, sizeof(m_ram));
 }
 
 
@@ -91,8 +97,11 @@ void ds2404_device::device_start()
 	m_rtc[3] = (current_time >> 16) & 0xff;
 	m_rtc[4] = (current_time >> 24) & 0xff;
 
-	emu_timer *timer = machine().scheduler().timer_alloc(FUNC(ds2404_tick_callback), (void *)this);
-	timer->adjust(attotime::from_hz(256), 0, attotime::from_hz(256));
+	for (int i = 0; i < 8; i++)
+		m_state[i] = DS2404_STATE_IDLE;
+
+	m_tick_timer = timer_alloc(0);
+	m_tick_timer->adjust(attotime::from_hz(256), 0, attotime::from_hz(256));
 }
 
 
@@ -100,13 +109,13 @@ void ds2404_device::ds2404_rom_cmd(UINT8 cmd)
 {
 	switch(cmd)
 	{
-		case 0xcc:		/* Skip ROM */
+		case 0xcc:      /* Skip ROM */
 			m_state[0] = DS2404_STATE_COMMAND;
 			m_state_ptr = 0;
 			break;
 
 		default:
-			fatalerror("DS2404: Unknown ROM command %02X", cmd);
+			fatalerror("DS2404: Unknown ROM command %02X\n", cmd);
 			break;
 	}
 }
@@ -115,7 +124,7 @@ void ds2404_device::ds2404_cmd(UINT8 cmd)
 {
 	switch(cmd)
 	{
-		case 0x0f:		/* Write scratchpad */
+		case 0x0f:      /* Write scratchpad */
 			m_state[0] = DS2404_STATE_ADDRESS1;
 			m_state[1] = DS2404_STATE_ADDRESS2;
 			m_state[2] = DS2404_STATE_INIT_COMMAND;
@@ -123,7 +132,7 @@ void ds2404_device::ds2404_cmd(UINT8 cmd)
 			m_state_ptr = 0;
 			break;
 
-		case 0x55:		/* Copy scratchpad */
+		case 0x55:      /* Copy scratchpad */
 			m_state[0] = DS2404_STATE_ADDRESS1;
 			m_state[1] = DS2404_STATE_ADDRESS2;
 			m_state[2] = DS2404_STATE_OFFSET;
@@ -132,7 +141,7 @@ void ds2404_device::ds2404_cmd(UINT8 cmd)
 			m_state_ptr = 0;
 			break;
 
-		case 0xf0:		/* Read memory */
+		case 0xf0:      /* Read memory */
 			m_state[0] = DS2404_STATE_ADDRESS1;
 			m_state[1] = DS2404_STATE_ADDRESS2;
 			m_state[2] = DS2404_STATE_INIT_COMMAND;
@@ -141,7 +150,7 @@ void ds2404_device::ds2404_cmd(UINT8 cmd)
 			break;
 
 		default:
-			fatalerror("DS2404: Unknown command %02X", cmd);
+			fatalerror("DS2404: Unknown command %02X\n", cmd);
 			break;
 	}
 }
@@ -171,19 +180,19 @@ void ds2404_device::ds2404_writemem(UINT8 value)
 	}
 }
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_1w_reset_w)
+WRITE8_MEMBER( ds2404_device::ds2404_1w_reset_w )
 {
 	m_state[0] = DS2404_STATE_IDLE;
 	m_state_ptr = 0;
 }
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_3w_reset_w)
+WRITE8_MEMBER( ds2404_device::ds2404_3w_reset_w )
 {
 	m_state[0] = DS2404_STATE_COMMAND;
 	m_state_ptr = 0;
 }
 
-READ8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_data_r)
+READ8_MEMBER( ds2404_device::ds2404_data_r )
 {
 	UINT8 value = 0;
 	switch(m_state[m_state_ptr])
@@ -217,7 +226,7 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_data_r)
 	return value;
 }
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_data_w)
+WRITE8_MEMBER( ds2404_device::ds2404_data_w )
 {
 	switch( m_state[m_state_ptr] )
 	{
@@ -310,7 +319,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_data_w)
 	}
 }
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_clk_w)
+WRITE8_MEMBER( ds2404_device::ds2404_clk_w )
 {
 	switch( m_state[m_state_ptr] )
 	{
@@ -337,20 +346,28 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_clk_w)
 	}
 }
 
-TIMER_CALLBACK( ds2404_device::ds2404_tick_callback )
+void ds2404_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	reinterpret_cast<ds2404_device*>(ptr)->ds2404_tick();
-}
-
-void ds2404_device::ds2404_tick()
-{
-	for(int i = 0; i < 5; i++)
+	switch(id)
 	{
-		m_rtc[ i ]++;
-		if(m_rtc[ i ] != 0)
+		case 0:
 		{
+			// tick
+			for(int i = 0; i < 5; i++)
+			{
+				m_rtc[ i ]++;
+				if(m_rtc[ i ] != 0)
+				{
+					break;
+				}
+			}
+
 			break;
 		}
+
+		default:
+			assert_always(FALSE, "Unknown id in ds2404_device::device_timer");
+			break;
 	}
 }
 

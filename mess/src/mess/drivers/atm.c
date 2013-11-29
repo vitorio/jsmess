@@ -1,3 +1,14 @@
+/*******************************************************************************************
+
+MicroART ATM (clone of Spectrum)
+
+Not working because of banking issues.
+
+The direct_update_handler needs rewriting, because removing it allows the
+computer to boot up (with keyboard problems).
+
+*******************************************************************************************/
+
 #include "emu.h"
 #include "includes/spectrum.h"
 #include "imagedev/snapquik.h"
@@ -10,143 +21,158 @@
 #include "machine/ram.h"
 
 
-class atm_state : public driver_device
+class atm_state : public spectrum_state
 {
 public:
 	atm_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: spectrum_state(mconfig, type, tag)
+		, m_bank1(*this, "bank1")
+		, m_bank2(*this, "bank2")
+		, m_bank3(*this, "bank3")
+		, m_bank4(*this, "bank4")
+		, m_beta(*this, BETA_DISK_TAG)
+	{ }
 
+	DECLARE_WRITE8_MEMBER(atm_port_7ffd_w);
+	DIRECT_UPDATE_MEMBER(atm_direct);
+	DECLARE_MACHINE_RESET(atm);
+
+protected:
+	required_memory_bank m_bank1;
+	required_memory_bank m_bank2;
+	required_memory_bank m_bank3;
+	required_memory_bank m_bank4;
+	required_device<device_t> m_beta;
+
+private:
+	UINT8 *m_p_ram;
+	void atm_update_memory();
 };
 
 
-DIRECT_UPDATE_HANDLER( atm_direct )
+DIRECT_UPDATE_MEMBER(atm_state::atm_direct)
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	device_t *beta = machine.device(BETA_DISK_TAG);
-	UINT16 pc = cpu_get_reg(machine.device("maincpu"), STATE_GENPCBASE);
+	UINT16 pc = m_maincpu->state_int(STATE_GENPCBASE);
 
-	if (beta->started() && betadisk_is_active(beta))
+	if (m_beta->started() && betadisk_is_active(m_beta))
 	{
 		if (pc >= 0x4000)
 		{
-			state->m_ROMSelection = ((state->m_port_7ffd_data>>4) & 0x01) ? 1 : 0;
-			betadisk_disable(beta);
-			memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base() + 0x010000 + (state->m_ROMSelection<<14));
+			m_ROMSelection = BIT(m_port_7ffd_data, 4);
+			betadisk_disable(m_beta);
+			m_bank1->set_base(&m_p_ram[0x10000 + (m_ROMSelection<<14)]);
 		}
 	}
-	else if (((pc & 0xff00) == 0x3d00) && (state->m_ROMSelection==1))
+	else if (((pc & 0xff00) == 0x3d00) && (m_ROMSelection==1))
 	{
-		state->m_ROMSelection = 3;
-		if (beta->started())
-			betadisk_enable(beta);
+		m_ROMSelection = 3;
+		if (m_beta->started())
+			betadisk_enable(m_beta);
 
 	}
-	if((address>=0x0000) && (address<=0x3fff))
+	if(address<=0x3fff)
 	{
-		if (state->m_ROMSelection == 3) {
-			direct.explicit_configure(0x0000, 0x3fff, 0x3fff, machine.region("maincpu")->base() + 0x018000);
-			memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base() + 0x018000);
-		} else {
-			direct.explicit_configure(0x0000, 0x3fff, 0x3fff, machine.region("maincpu")->base() + 0x010000 + (state->m_ROMSelection<<14));
-			memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base() + 0x010000 + (state->m_ROMSelection<<14));
+		if (m_ROMSelection == 3)
+		{
+			direct.explicit_configure(0x0000, 0x3fff, 0x3fff, &m_p_ram[0x18000]);
+			m_bank1->set_base(&m_p_ram[0x18000]);
+		}
+		else
+		{
+			direct.explicit_configure(0x0000, 0x3fff, 0x3fff, &m_p_ram[0x10000 + (m_ROMSelection<<14)]);
+			m_bank1->set_base(&m_p_ram[0x10000 + (m_ROMSelection<<14)]);
 		}
 		return ~0;
 	}
 	return address;
 }
 
-static void atm_update_memory(running_machine &machine)
+void atm_state::atm_update_memory()
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	device_t *beta = machine.device(BETA_DISK_TAG);
-	UINT8 *messram = ram_get_ptr(machine.device(RAM_TAG));
+	UINT8 *messram = m_ram->pointer();
 
-	state->m_screen_location = messram + ((state->m_port_7ffd_data & 8) ? (7<<14) : (5<<14));
+	m_screen_location = messram + ((m_port_7ffd_data & 8) ? (7<<14) : (5<<14));
 
-	memory_set_bankptr(machine, "bank4", messram + ((state->m_port_7ffd_data & 0x07) * 0x4000));
+	m_bank4->set_base(messram + ((m_port_7ffd_data & 0x07) * 0x4000));
 
-	if (beta->started() && betadisk_is_active(beta) && !( state->m_port_7ffd_data & 0x10 ) )
-	{
-		state->m_ROMSelection = 3;
-	}
-	else {
+	if (m_beta->started() && betadisk_is_active(m_beta) && !( m_port_7ffd_data & 0x10 ) )
+		m_ROMSelection = 3;
+	else
 		/* ROM switching */
-		state->m_ROMSelection = ((state->m_port_7ffd_data>>4) & 0x01) ;
-	}
+		m_ROMSelection = BIT(m_port_7ffd_data, 4) ;
+
 	/* rom 0 is 128K rom, rom 1 is 48 BASIC */
-	memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base() + 0x010000 + (state->m_ROMSelection<<14));
+	m_bank1->set_base(&m_p_ram[0x10000 + (m_ROMSelection<<14)]);
 }
 
-static WRITE8_HANDLER(atm_port_7ffd_w)
+WRITE8_MEMBER(atm_state::atm_port_7ffd_w)
 {
-	spectrum_state *state = space->machine().driver_data<spectrum_state>();
-
 	/* disable paging */
-	if (state->m_port_7ffd_data & 0x20)
+	if (m_port_7ffd_data & 0x20)
 		return;
 
 	/* store new state */
-	state->m_port_7ffd_data = data;
+	m_port_7ffd_data = data;
 
 	/* update memory */
-	atm_update_memory(space->machine());
+	atm_update_memory();
 }
 
-static ADDRESS_MAP_START (atm_io, AS_IO, 8)
+static ADDRESS_MAP_START (atm_io, AS_IO, 8, atm_state )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x001f, 0x001f) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_status_r,betadisk_command_w) AM_MIRROR(0xff00)
-	AM_RANGE(0x003f, 0x003f) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_track_r,betadisk_track_w) AM_MIRROR(0xff00)
-	AM_RANGE(0x005f, 0x005f) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_sector_r,betadisk_sector_w) AM_MIRROR(0xff00)
-	AM_RANGE(0x007f, 0x007f) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_data_r,betadisk_data_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x001f, 0x001f) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_status_r,betadisk_command_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x003f, 0x003f) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_track_r,betadisk_track_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x005f, 0x005f) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_sector_r,betadisk_sector_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x007f, 0x007f) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_data_r,betadisk_data_w) AM_MIRROR(0xff00)
 	AM_RANGE(0x00fe, 0x00fe) AM_READWRITE(spectrum_port_fe_r,spectrum_port_fe_w) AM_MIRROR(0xff00) AM_MASK(0xffff)
-	AM_RANGE(0x00ff, 0x00ff) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_state_r, betadisk_param_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x00ff, 0x00ff) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_state_r, betadisk_param_w) AM_MIRROR(0xff00)
 	AM_RANGE(0x4000, 0x4000) AM_WRITE(atm_port_7ffd_w)  AM_MIRROR(0x3ffd)
-	AM_RANGE(0x8000, 0x8000) AM_DEVWRITE("ay8912", ay8910_data_w) AM_MIRROR(0x3ffd)
-	AM_RANGE(0xc000, 0xc000) AM_DEVREADWRITE("ay8912", ay8910_r, ay8910_address_w) AM_MIRROR(0x3ffd)
+	AM_RANGE(0x8000, 0x8000) AM_DEVWRITE("ay8912", ay8910_device, data_w) AM_MIRROR(0x3ffd)
+	AM_RANGE(0xc000, 0xc000) AM_DEVREADWRITE("ay8912", ay8910_device, data_r, address_w) AM_MIRROR(0x3ffd)
 ADDRESS_MAP_END
 
-static MACHINE_RESET( atm )
+MACHINE_RESET_MEMBER(atm_state,atm)
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	UINT8 *messram = ram_get_ptr(machine.device(RAM_TAG));
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	device_t *beta = machine.device(BETA_DISK_TAG);
+	UINT8 *messram = m_ram->pointer();
+	address_space &space = m_maincpu->space(AS_PROGRAM);
+	m_p_ram = memregion("maincpu")->base();
 
-	space->install_read_bank(0x0000, 0x3fff, "bank1");
-	space->unmap_write(0x0000, 0x3fff);
+	space.install_read_bank(0x0000, 0x3fff, "bank1");
+	space.unmap_write(0x0000, 0x3fff);
 
-	if (beta->started())  {
-		betadisk_enable(beta);
-		betadisk_clear_status(beta);
+	if (m_beta->started())
+	{
+		betadisk_enable(m_beta);
+		betadisk_clear_status(m_beta);
 	}
-	space->set_direct_update_handler(direct_update_delegate(FUNC(atm_direct), &machine));
+	space.set_direct_update_handler(direct_update_delegate(FUNC(atm_state::atm_direct), this));
 
 	memset(messram,0,128*1024);
 
 	/* Bank 5 is always in 0x4000 - 0x7fff */
-	memory_set_bankptr(machine, "bank2", messram + (5<<14));
+	m_bank2->set_base(messram + (5<<14));
 
 	/* Bank 2 is always in 0x8000 - 0xbfff */
-	memory_set_bankptr(machine, "bank3", messram + (2<<14));
+	m_bank3->set_base(messram + (2<<14));
 
-	state->m_port_7ffd_data = 0;
-	state->m_port_1ffd_data = -1;
+	m_port_7ffd_data = 0;
+	m_port_1ffd_data = -1;
 
-	atm_update_memory(machine);
+	atm_update_memory();
 }
 
 /* F4 Character Displayer */
 static const gfx_layout spectrum_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	96,					/* 96 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	96,                 /* 96 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( atm )
@@ -158,10 +184,10 @@ static GFXDECODE_START( atmtb2 )
 GFXDECODE_END
 
 
-static MACHINE_CONFIG_DERIVED( atm, spectrum_128 )
+static MACHINE_CONFIG_DERIVED_CLASS( atm, spectrum_128, atm_state )
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_IO_MAP(atm_io)
-	MCFG_MACHINE_RESET( atm )
+	MCFG_MACHINE_RESET_OVERRIDE(atm_state, atm )
 
 	MCFG_BETA_DISK_ADD(BETA_DISK_TAG)
 	MCFG_GFXDECODE(atm)
@@ -218,8 +244,8 @@ ROM_START( atmtb2 )
 	ROM_LOAD( "sgen.rom", 0x0000, 0x0800, CRC(1f4387d6) SHA1(93b3774dc8a486643a1bdd48c606b0c84fa0e22b))
 ROM_END
 
-/*    YEAR  NAME      PARENT    COMPAT  MACHINE     INPUT       INIT    COMPANY     FULLNAME */
-COMP( 1991, atm,	spec128,	0,		atm,	spec_plus,	0,			"MicroART",		"ATM", GAME_NOT_WORKING)
-//COMP( 1991, atmtb1,   spec128,    0,      atm,    spec_plus,  0,      "MicroART",     "ATM-turbo1", GAME_NOT_WORKING)
-COMP( 1993, atmtb2, spec128,	0,		atmtb2,	spec_plus,	0,			"MicroART",		"ATM-turbo2", GAME_NOT_WORKING)
-//COMP( 1994, turbo2, spec128,  0,      atm,    spec_plus,  0,          "MicroART",     "TURBO 2+", GAME_NOT_WORKING)
+/*    YEAR  NAME    PARENT   COMPAT  MACHINE INPUT      CLASS          INIT    COMPANY     FULLNAME */
+COMP( 1991, atm,    spec128, 0,      atm,    spec_plus, driver_device, 0,    "MicroART", "ATM", GAME_NOT_WORKING)
+//COMP( 1991, atmtb1, spec128, 0,      atm,    spec_plus, driver_device, 0,    "MicroART", "ATM-turbo1", GAME_NOT_WORKING)
+COMP( 1993, atmtb2, spec128, 0,      atmtb2, spec_plus, driver_device, 0,    "MicroART", "ATM-turbo2", GAME_NOT_WORKING)
+//COMP( 1994, turbo2, spec128, 0,      atm,    spec_plus, driver_device, 0,    "MicroART", "TURBO 2+", GAME_NOT_WORKING)

@@ -9,8 +9,8 @@
 const device_type MAS3507D = &device_creator<mas3507d_device>;
 
 mas3507d_device::mas3507d_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, MAS3507D, "MAS3507D", tag, owner, clock),
-	  device_sound_interface(mconfig, *this)
+	: device_t(mconfig, MAS3507D, "MAS3507D", tag, owner, clock, "mas3507d", __FILE__),
+		device_sound_interface(mconfig, *this)
 {
 }
 
@@ -69,7 +69,7 @@ void mas3507d_device::i2c_scl_w(bool line)
 
 void mas3507d_device::i2c_nak()
 {
-	assert(i2c_bus_state = ACK);
+	assert(i2c_bus_state == ACK);
 	i2c_bus_state = NAK;
 }
 
@@ -258,4 +258,3 @@ void mas3507d_device::run_program(UINT32 adr)
 void mas3507d_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
 {
 }
-

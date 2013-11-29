@@ -44,127 +44,114 @@ Stephh's notes (based on the games Z80 code and some tests) :
 
 
 
-static MACHINE_RESET( espial )
+void espial_state::machine_reset()
 {
-	espial_state *state = machine.driver_data<espial_state>();
+	m_flipscreen = 0;
 
-	state->m_flipscreen = 0;
-
-	state->m_main_nmi_enabled = FALSE;
-	state->m_sound_nmi_enabled = FALSE;
+	m_main_nmi_enabled = FALSE;
+	m_sound_nmi_enabled = FALSE;
 }
 
-static MACHINE_START( espial )
+void espial_state::machine_start()
 {
-	espial_state *state = machine.driver_data<espial_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-
-	//state_save_register_global_array(machine, mcu_out[1]);
-	state->save_item(NAME(state->m_sound_nmi_enabled));
+	//save_item(NAME(mcu_out[1]));
+	save_item(NAME(m_sound_nmi_enabled));
 }
 
 
-static WRITE8_HANDLER( espial_master_interrupt_enable_w )
+WRITE8_MEMBER(espial_state::espial_master_interrupt_mask_w)
 {
-	espial_state *state = space->machine().driver_data<espial_state>();
-	state->m_main_nmi_enabled = ~(data & 1);
+	m_main_nmi_enabled = ~(data & 1);
 }
 
 
-WRITE8_HANDLER( espial_sound_nmi_enable_w )
+WRITE8_MEMBER(espial_state::espial_sound_nmi_mask_w)
 {
-	espial_state *state = space->machine().driver_data<espial_state>();
-	state->m_sound_nmi_enabled = data & 1;
+	m_sound_nmi_enabled = data & 1;
 }
 
-static TIMER_DEVICE_CALLBACK( espial_scanline )
+TIMER_DEVICE_CALLBACK_MEMBER(espial_state::espial_scanline)
 {
-	espial_state *state = timer.machine().driver_data<espial_state>();
 	int scanline = param;
 
-	if(scanline == 240 && state->m_main_nmi_enabled) // vblank-out irq
-		cputag_set_input_line(timer.machine(), "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+	if(scanline == 240 && m_main_nmi_enabled) // vblank-out irq
+		m_maincpu->set_input_line(INPUT_LINE_NMI, PULSE_LINE);
 
 	if(scanline == 16) // timer irq, checks soundlatch port then updates some sound related work RAM buffers
-		cputag_set_input_line(timer.machine(), "maincpu", 0, HOLD_LINE);
+		m_maincpu->set_input_line(0, HOLD_LINE);
 }
 
 
-INTERRUPT_GEN( espial_sound_nmi_gen )
+INTERRUPT_GEN_MEMBER(espial_state::espial_sound_nmi_gen)
 {
-	espial_state *state = device->machine().driver_data<espial_state>();
-
-	if (state->m_sound_nmi_enabled)
+	if (m_sound_nmi_enabled)
 		nmi_line_pulse(device);
 }
 
 
-static WRITE8_HANDLER( espial_master_soundlatch_w )
+WRITE8_MEMBER(espial_state::espial_master_soundlatch_w)
 {
-	espial_state *state = space->machine().driver_data<espial_state>();
-	soundlatch_w(space, offset, data);
-	device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
+	soundlatch_byte_w(space, offset, data);
+	m_audiocpu->set_input_line(0, HOLD_LINE);
 }
 
 
-static ADDRESS_MAP_START( espial_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( espial_map, AS_PROGRAM, 8, espial_state )
 	AM_RANGE(0x0000, 0x4fff) AM_ROM
 	AM_RANGE(0x5800, 0x5fff) AM_RAM
 	AM_RANGE(0x6081, 0x6081) AM_READ_PORT("IN0")
 	AM_RANGE(0x6082, 0x6082) AM_READ_PORT("DSW1")
 	AM_RANGE(0x6083, 0x6083) AM_READ_PORT("IN1")
 	AM_RANGE(0x6084, 0x6084) AM_READ_PORT("IN2")
-	AM_RANGE(0x6090, 0x6090) AM_READWRITE(soundlatch2_r, espial_master_soundlatch_w)
+	AM_RANGE(0x6090, 0x6090) AM_READ(soundlatch2_byte_r) AM_WRITE(espial_master_soundlatch_w)
 	AM_RANGE(0x7000, 0x7000) AM_READWRITE(watchdog_reset_r, watchdog_reset_w)
-	AM_RANGE(0x7100, 0x7100) AM_WRITE(espial_master_interrupt_enable_w)
+	AM_RANGE(0x7100, 0x7100) AM_WRITE(espial_master_interrupt_mask_w)
 	AM_RANGE(0x7200, 0x7200) AM_WRITE(espial_flipscreen_w)
-	AM_RANGE(0x8000, 0x801f) AM_RAM AM_BASE_MEMBER(espial_state, m_spriteram_1)
+	AM_RANGE(0x8000, 0x801f) AM_RAM AM_SHARE("spriteram_1")
 	AM_RANGE(0x8020, 0x803f) AM_READONLY
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(espial_videoram_w) AM_BASE_MEMBER(espial_state, m_videoram)
-	AM_RANGE(0x8800, 0x880f) AM_WRITEONLY AM_BASE_MEMBER(espial_state, m_spriteram_3)
-	AM_RANGE(0x8c00, 0x8fff) AM_RAM_WRITE(espial_attributeram_w) AM_BASE_MEMBER(espial_state, m_attributeram)
-	AM_RANGE(0x9000, 0x901f) AM_RAM AM_BASE_MEMBER(espial_state, m_spriteram_2)
-	AM_RANGE(0x9020, 0x903f) AM_RAM_WRITE(espial_scrollram_w) AM_BASE_MEMBER(espial_state, m_scrollram)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(espial_colorram_w) AM_BASE_MEMBER(espial_state, m_colorram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(espial_videoram_w) AM_SHARE("videoram")
+	AM_RANGE(0x8800, 0x880f) AM_WRITEONLY AM_SHARE("spriteram_3")
+	AM_RANGE(0x8c00, 0x8fff) AM_RAM_WRITE(espial_attributeram_w) AM_SHARE("attributeram")
+	AM_RANGE(0x9000, 0x901f) AM_RAM AM_SHARE("spriteram_2")
+	AM_RANGE(0x9020, 0x903f) AM_RAM_WRITE(espial_scrollram_w) AM_SHARE("scrollram")
+	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(espial_colorram_w) AM_SHARE("colorram")
 	AM_RANGE(0xc000, 0xcfff) AM_ROM
 ADDRESS_MAP_END
 
 
 /* there are a lot of unmapped reads from all over memory as the
    code uses POP instructions in a delay loop */
-static ADDRESS_MAP_START( netwars_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( netwars_map, AS_PROGRAM, 8, espial_state )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x5800, 0x5fff) AM_RAM
 	AM_RANGE(0x6081, 0x6081) AM_READ_PORT("IN0")
 	AM_RANGE(0x6082, 0x6082) AM_READ_PORT("DSW1")
 	AM_RANGE(0x6083, 0x6083) AM_READ_PORT("IN1")
 	AM_RANGE(0x6084, 0x6084) AM_READ_PORT("IN2")
-	AM_RANGE(0x6090, 0x6090) AM_READWRITE(soundlatch2_r, espial_master_soundlatch_w)
+	AM_RANGE(0x6090, 0x6090) AM_READ(soundlatch2_byte_r) AM_WRITE(espial_master_soundlatch_w)
 	AM_RANGE(0x7000, 0x7000) AM_READWRITE(watchdog_reset_r, watchdog_reset_w)
-	AM_RANGE(0x7100, 0x7100) AM_WRITE(espial_master_interrupt_enable_w)
+	AM_RANGE(0x7100, 0x7100) AM_WRITE(espial_master_interrupt_mask_w)
 	AM_RANGE(0x7200, 0x7200) AM_WRITE(espial_flipscreen_w)
-	AM_RANGE(0x8000, 0x801f) AM_RAM AM_BASE_MEMBER(espial_state, m_spriteram_1)
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(espial_videoram_w) AM_BASE_MEMBER(espial_state, m_videoram)
-	AM_RANGE(0x8800, 0x880f) AM_RAM AM_BASE_MEMBER(espial_state, m_spriteram_3)
-	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(espial_attributeram_w) AM_BASE_MEMBER(espial_state, m_attributeram)
-	AM_RANGE(0x9000, 0x901f) AM_RAM AM_BASE_MEMBER(espial_state, m_spriteram_2)
-	AM_RANGE(0x9020, 0x903f) AM_RAM_WRITE(espial_scrollram_w) AM_BASE_MEMBER(espial_state, m_scrollram)
-	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(espial_colorram_w) AM_BASE_MEMBER(espial_state, m_colorram)
+	AM_RANGE(0x8000, 0x801f) AM_RAM AM_SHARE("spriteram_1")
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(espial_videoram_w) AM_SHARE("videoram")
+	AM_RANGE(0x8800, 0x880f) AM_RAM AM_SHARE("spriteram_3")
+	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(espial_attributeram_w) AM_SHARE("attributeram")
+	AM_RANGE(0x9000, 0x901f) AM_RAM AM_SHARE("spriteram_2")
+	AM_RANGE(0x9020, 0x903f) AM_RAM_WRITE(espial_scrollram_w) AM_SHARE("scrollram")
+	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(espial_colorram_w) AM_SHARE("colorram")
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( espial_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( espial_sound_map, AS_PROGRAM, 8, espial_state )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
-	AM_RANGE(0x4000, 0x4000) AM_WRITE(espial_sound_nmi_enable_w)
-	AM_RANGE(0x6000, 0x6000) AM_READWRITE(soundlatch_r, soundlatch2_w)
+	AM_RANGE(0x4000, 0x4000) AM_WRITE(espial_sound_nmi_mask_w)
+	AM_RANGE(0x6000, 0x6000) AM_READWRITE(soundlatch_byte_r, soundlatch2_byte_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( espial_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( espial_sound_io_map, AS_IO, 8, espial_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_device, address_data_w)
 ADDRESS_MAP_END
 
 
@@ -200,11 +187,11 @@ static INPUT_PORTS_START( espial )
 	PORT_DIPSETTING(    0x10, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(    0x1c, DEF_STR( Free_Play ) )
 	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Bonus_Life ) )       /* code at 0x43e1 in 'espial' and 0x44b5 in 'espialu' */
-	PORT_DIPSETTING(	0x00, "20k 70k 70k+" )              /* last bonus life at 980k : max. 15 bonus lives */
-	PORT_DIPSETTING(	0x20, "50k 100k 100k+" )            /* last bonus life at 900k : max. 10 bonus lives */
+	PORT_DIPSETTING(    0x00, "20k 70k 70k+" )              /* last bonus life at 980k : max. 15 bonus lives */
+	PORT_DIPSETTING(    0x20, "50k 100k 100k+" )            /* last bonus life at 900k : max. 10 bonus lives */
 	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Cabinet ) )
-	PORT_DIPSETTING(	0x40, DEF_STR( Upright ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( Cocktail ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Upright ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
 	PORT_DIPNAME( 0x80, 0x00, "Reset on Check Error" )
 	PORT_DIPSETTING(    0x80, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
@@ -261,11 +248,11 @@ static INPUT_PORTS_START( netwars )
 	PORT_DIPSETTING(    0x10, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(    0x1c, DEF_STR( Free_Play ) )
 	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Bonus_Life ) )       /* code at 0x2383 */
-	PORT_DIPSETTING(	0x00, "20k and 50k" )
-	PORT_DIPSETTING(	0x20, "40k and 70k" )
+	PORT_DIPSETTING(    0x00, "20k and 50k" )
+	PORT_DIPSETTING(    0x20, "40k and 70k" )
 	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Cabinet ) )
-	PORT_DIPSETTING(	0x40, DEF_STR( Upright ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( Cocktail ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Upright ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
 	PORT_DIPNAME( 0x80, 0x00, "Reset on Check Error" )
 	PORT_DIPSETTING(    0x80, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
@@ -326,32 +313,27 @@ GFXDECODE_END
 static MACHINE_CONFIG_START( espial, espial_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz */
+	MCFG_CPU_ADD("maincpu", Z80, 3072000)   /* 3.072 MHz */
 	MCFG_CPU_PROGRAM_MAP(espial_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", espial_scanline, "screen", 0, 1)
+	MCFG_TIMER_DRIVER_ADD_SCANLINE("scantimer", espial_state, espial_scanline, "screen", 0, 1)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3072000)	/* 2 MHz?????? */
+	MCFG_CPU_ADD("audiocpu", Z80, 3072000)  /* 2 MHz?????? */
 	MCFG_CPU_PROGRAM_MAP(espial_sound_map)
 	MCFG_CPU_IO_MAP(espial_sound_io_map)
-	MCFG_CPU_PERIODIC_INT(espial_sound_nmi_gen,4*60)
+	MCFG_CPU_PERIODIC_INT_DRIVER(espial_state, espial_sound_nmi_gen, 4*60)
 
-	MCFG_MACHINE_RESET(espial)
-	MCFG_MACHINE_START(espial)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE(espial)
+	MCFG_SCREEN_UPDATE_DRIVER(espial_state, screen_update_espial)
 
 	MCFG_GFXDECODE(espial)
 	MCFG_PALETTE_LENGTH(256)
 
-	MCFG_PALETTE_INIT(espial)
-	MCFG_VIDEO_START(espial)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -370,7 +352,7 @@ static MACHINE_CONFIG_DERIVED( netwars, espial )
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_SIZE(32*8, 64*8)
 
-	MCFG_VIDEO_START(netwars)
+	MCFG_VIDEO_START_OVERRIDE(espial_state,netwars)
 MACHINE_CONFIG_END
 
 
@@ -453,6 +435,6 @@ ROM_END
 
 
 
-GAME( 1983, espial,  0,      espial,  espial,  0, ROT0,  "Orca / Thunderbolt", "Espial (Europe)", GAME_SUPPORTS_SAVE )
-GAME( 1983, espialu, espial, espial,  espial,  0, ROT0,  "Orca / Thunderbolt", "Espial (US?)", GAME_SUPPORTS_SAVE )
-GAME( 1983, netwars, 0,      netwars, netwars, 0, ROT90, "Orca (Esco Trading Co license)", "Net Wars", GAME_SUPPORTS_SAVE )
+GAME( 1983, espial,  0,      espial,  espial, driver_device,  0, ROT0,  "Orca / Thunderbolt", "Espial (Europe)", GAME_SUPPORTS_SAVE )
+GAME( 1983, espialu, espial, espial,  espial, driver_device,  0, ROT0,  "Orca / Thunderbolt", "Espial (US?)", GAME_SUPPORTS_SAVE )
+GAME( 1983, netwars, 0,      netwars, netwars, driver_device, 0, ROT90, "Orca (Esco Trading Co license)", "Net Wars", GAME_SUPPORTS_SAVE )

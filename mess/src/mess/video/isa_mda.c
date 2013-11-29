@@ -9,8 +9,8 @@
 #include "video/mc6845.h"
 #include "machine/pc_lpt.h"
 
-#define MDA_SCREEN_NAME	"mda_screen"
-#define MDA_MC6845_NAME	"mc6845_mda"
+#define MDA_SCREEN_NAME "mda_screen"
+#define MDA_MC6845_NAME "mc6845_mda"
 
 /*
   Hercules video card
@@ -18,9 +18,9 @@
 #define HERCULES_SCREEN_NAME "hercules_screen"
 #define HERCULES_MC6845_NAME "mc6845_hercules"
 
-#define VERBOSE_MDA	0		/* MDA (Monochrome Display Adapter) */
+#define VERBOSE_MDA 0       /* MDA (Monochrome Display Adapter) */
 
-#define MDA_CLOCK	16257000
+#define MDA_CLOCK   16257000
 
 #define MDA_LOG(N,M,A) \
 	do { \
@@ -40,38 +40,33 @@ static const unsigned char mda_palette[4][3] =
 	{ 0x00,0xff,0x00 }
 };
 
-static SCREEN_UPDATE( mc6845_mda );
-static READ8_DEVICE_HANDLER( pc_MDA_r );
-static WRITE8_DEVICE_HANDLER( pc_MDA_w );
 static MC6845_UPDATE_ROW( mda_update_row );
-static WRITE_LINE_DEVICE_HANDLER( mda_hsync_changed );
-static WRITE_LINE_DEVICE_HANDLER( mda_vsync_changed );
 
 /* F4 Character Displayer */
 static const gfx_layout pc_16_charlayout =
 {
-	8, 16,					/* 8 x 16 characters */
-	256,					/* 256 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 16,                  /* 8 x 16 characters */
+	256,                    /* 256 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8, 2048*8, 2049*8, 2050*8, 2051*8, 2052*8, 2053*8, 2054*8, 2055*8 },
-	8*8					/* every char takes 2 x 8 bytes */
+	8*8                 /* every char takes 2 x 8 bytes */
 };
 
 static const gfx_layout pc_8_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	512,					/* 512 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	512,                    /* 512 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( pcmda )
@@ -79,23 +74,24 @@ static GFXDECODE_START( pcmda )
 	GFXDECODE_ENTRY( "mda:gfx1", 0x1000, pc_8_charlayout, 1, 1 )
 GFXDECODE_END
 
-static const mc6845_interface mc6845_mda_intf =
+
+static MC6845_INTERFACE( mc6845_mda_intf )
 {
-	MDA_SCREEN_NAME, /* screen number */
-	9,					/* number of pixels per video memory address */
-	NULL,				/* begin_update */
-	mda_update_row,		/* update_row */
-	NULL,				/* end_update */
-	DEVCB_NULL,				/* on_de_changed */
-	DEVCB_NULL,				/* on_cur_changed */
-	DEVCB_LINE(mda_hsync_changed),	/* on_hsync_changed */
-	DEVCB_LINE(mda_vsync_changed),	/* on_vsync_changed */
+	false,              /* show border area */
+	9,                  /* number of pixels per video memory address */
+	NULL,               /* begin_update */
+	mda_update_row,     /* update_row */
+	NULL,               /* end_update */
+	DEVCB_NULL,             /* on_de_changed */
+	DEVCB_NULL,             /* on_cur_changed */
+	DEVCB_DEVICE_LINE_MEMBER(DEVICE_SELF_OWNER, isa8_mda_device, hsync_changed),    /* on_hsync_changed */
+	DEVCB_DEVICE_LINE_MEMBER(DEVICE_SELF_OWNER, isa8_mda_device, vsync_changed),    /* on_vsync_changed */
 	NULL
 };
 
 static WRITE_LINE_DEVICE_HANDLER(pc_cpu_line)
 {
-	isa8_mda_device	*mda  = downcast<isa8_mda_device *>(device->owner());
+	isa8_mda_device *mda  = downcast<isa8_mda_device *>(device->owner());
 	mda->m_isa->irq7_w(state);
 }
 static const pc_lpt_interface pc_lpt_config =
@@ -106,11 +102,12 @@ static const pc_lpt_interface pc_lpt_config =
 
 MACHINE_CONFIG_FRAGMENT( pcvideo_mda )
 	MCFG_SCREEN_ADD( MDA_SCREEN_NAME, RASTER)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(MDA_CLOCK, 882, 0, 720, 370, 0, 350 )
-	MCFG_SCREEN_UPDATE( mc6845_mda)
+	MCFG_SCREEN_UPDATE_DEVICE( MDA_MC6845_NAME, mc6845_device, screen_update )
 
-	MCFG_MC6845_ADD( MDA_MC6845_NAME, MC6845, MDA_CLOCK/9, mc6845_mda_intf)
+	MCFG_PALETTE_LENGTH( 4 )
+
+	MCFG_MC6845_ADD( MDA_MC6845_NAME, MC6845, MDA_SCREEN_NAME, MDA_CLOCK/9, mc6845_mda_intf)
 
 	//MCFG_GFXDECODE(pcmda)
 
@@ -158,11 +155,15 @@ const rom_entry *isa8_mda_device::device_rom_region() const
 //-------------------------------------------------
 
 isa8_mda_device::isa8_mda_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock) :
-        device_t(mconfig, ISA8_MDA, "ISA8_MDA", tag, owner, clock),
-		device_isa8_card_interface(mconfig, *this),
-		device_slot_card_interface(mconfig, *this)
+		device_t(mconfig, ISA8_MDA, "IBM Monochrome Display and Printer Adapter", tag, owner, clock, "isa_ibm_mda", __FILE__),
+		device_isa8_card_interface(mconfig, *this)
 {
-	m_shortname = "mda";
+}
+
+isa8_mda_device::isa8_mda_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source) :
+		device_t(mconfig, type, name, tag, owner, clock, shortname, source),
+		device_isa8_card_interface(mconfig, *this)
+{
 }
 
 //-------------------------------------------------
@@ -171,10 +172,10 @@ isa8_mda_device::isa8_mda_device(const machine_config &mconfig, const char *tag,
 
 void isa8_mda_device::device_start()
 {
-	m_isa = machine().device<isa8_device>("mb:isa");
-	videoram = auto_alloc_array(machine(), UINT8, 0x1000);
-	m_isa->install_device(this, 0x3b0, 0x3bf, 0, 0, FUNC(pc_MDA_r), FUNC(pc_MDA_w) );
-	m_isa->install_bank(0xb0000, 0xb0fff, 0, 0x07000, "bank_mda", videoram);
+	set_isa_device();
+	m_videoram = auto_alloc_array(machine(), UINT8, 0x1000);
+	m_isa->install_device(0x3b0, 0x3bf, 0, 0, read8_delegate( FUNC(isa8_mda_device::io_read), this ), write8_delegate( FUNC(isa8_mda_device::io_write), this ) );
+	m_isa->install_bank(0xb0000, 0xb0fff, 0, 0x07000, "bank_mda", m_videoram);
 
 	/* Initialise the mda palette */
 	for(int i = 0; i < (sizeof(mda_palette) / 3); i++)
@@ -187,14 +188,15 @@ void isa8_mda_device::device_start()
 
 void isa8_mda_device::device_reset()
 {
-	update_row = NULL;
-	framecnt = 0;
-	mode_control = 0;
-	vsync = 0;
-	hsync = 0;
+	m_update_row = NULL;
+	m_framecnt = 0;
+	m_mode_control = 0;
+	m_vsync = 0;
+	m_hsync = 0;
+	m_pixel = 0;
 
 	astring tempstring;
-	chr_gen = machine().region(subtag(tempstring, "gfx1"))->base();
+	m_chr_gen = memregion(subtag(tempstring, "gfx1"))->base();
 }
 
 /***************************************************************************
@@ -202,14 +204,6 @@ void isa8_mda_device::device_reset()
   Monochrome Display Adapter (MDA) section
 
 ***************************************************************************/
-
-static SCREEN_UPDATE( mc6845_mda )
-{
-	mc6845_device *mc6845 = downcast<mc6845_device *>(screen->owner()->subdevice(MDA_MC6845_NAME));
-	mc6845->update( bitmap, cliprect );
-	return 0;
-}
-
 
 /***************************************************************************
   Draw text mode with 80x25 characters (default) and intense background.
@@ -219,18 +213,19 @@ static SCREEN_UPDATE( mc6845_mda )
 
 static MC6845_UPDATE_ROW( mda_text_inten_update_row )
 {
-	isa8_mda_device	*mda  = downcast<isa8_mda_device *>(device->owner());
-	UINT16	*p = BITMAP_ADDR16( bitmap, y, 0 );
-	UINT16	chr_base = ( ra & 0x08 ) ? 0x800 | ( ra & 0x07 ) : ra;
+	isa8_mda_device *mda  = downcast<isa8_mda_device *>(device->owner());
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
+	UINT32  *p = &bitmap.pix32(y);
+	UINT16  chr_base = ( ra & 0x08 ) ? 0x800 | ( ra & 0x07 ) : ra;
 	int i;
 
 	if ( y == 0 ) MDA_LOG(1,"mda_text_inten_update_row",("\n"));
 	for ( i = 0; i < x_count; i++ )
 	{
 		UINT16 offset = ( ( ma + i ) << 1 ) & 0x0FFF;
-		UINT8 chr = mda->videoram[ offset ];
-		UINT8 attr = mda->videoram[ offset + 1 ];
-		UINT8 data = mda->chr_gen[ chr_base + chr * 8 ];
+		UINT8 chr = mda->m_videoram[ offset ];
+		UINT8 attr = mda->m_videoram[ offset + 1 ];
+		UINT8 data = mda->m_chr_gen[ chr_base + chr * 8 ];
 		UINT8 fg = ( attr & 0x08 ) ? 3 : 2;
 		UINT8 bg = 0;
 
@@ -259,26 +254,26 @@ static MC6845_UPDATE_ROW( mda_text_inten_update_row )
 			break;
 		}
 
-		if ( ( i == cursor_x && ( mda->framecnt & 0x08 ) ) || ( attr & 0x07 ) == 0x01 )
+		if ( ( i == cursor_x && ( mda->m_framecnt & 0x08 ) ) || ( attr & 0x07 ) == 0x01 )
 		{
 			data = 0xFF;
 		}
 
-		*p = ( data & 0x80 ) ? fg : bg; p++;
-		*p = ( data & 0x40 ) ? fg : bg; p++;
-		*p = ( data & 0x20 ) ? fg : bg; p++;
-		*p = ( data & 0x10 ) ? fg : bg; p++;
-		*p = ( data & 0x08 ) ? fg : bg; p++;
-		*p = ( data & 0x04 ) ? fg : bg; p++;
-		*p = ( data & 0x02 ) ? fg : bg; p++;
-		*p = ( data & 0x01 ) ? fg : bg; p++;
+		*p = palette[( data & 0x80 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x40 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x20 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x10 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x08 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x04 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x02 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x01 ) ? fg : bg]; p++;
 		if ( ( chr & 0xE0 ) == 0xC0 )
 		{
-			*p = ( data & 0x01 ) ? fg : bg; p++;
+			*p = palette[( data & 0x01 ) ? fg : bg]; p++;
 		}
 		else
 		{
-			*p = bg; p++;
+			*p = palette[bg]; p++;
 		}
 	}
 }
@@ -292,18 +287,19 @@ static MC6845_UPDATE_ROW( mda_text_inten_update_row )
 
 static MC6845_UPDATE_ROW( mda_text_blink_update_row )
 {
-	isa8_mda_device	*mda  = downcast<isa8_mda_device *>(device->owner());
-	UINT16	*p = BITMAP_ADDR16( bitmap, y, 0 );
-	UINT16	chr_base = ( ra & 0x08 ) ? 0x800 | ( ra & 0x07 ) : ra;
+	isa8_mda_device *mda  = downcast<isa8_mda_device *>(device->owner());
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
+	UINT32  *p = &bitmap.pix32(y);
+	UINT16  chr_base = ( ra & 0x08 ) ? 0x800 | ( ra & 0x07 ) : ra;
 	int i;
 
 	if ( y == 0 ) MDA_LOG(1,"mda_text_blink_update_row",("\n"));
 	for ( i = 0; i < x_count; i++ )
 	{
 		UINT16 offset = ( ( ma + i ) << 1 ) & 0x0FFF;
-		UINT8 chr = mda->videoram[ offset ];
-		UINT8 attr = mda->videoram[ offset + 1 ];
-		UINT8 data = mda->chr_gen[ chr_base + chr * 8 ];
+		UINT8 chr = mda->m_videoram[ offset ];
+		UINT8 attr = mda->m_videoram[ offset + 1 ];
+		UINT8 data = mda->m_chr_gen[ chr_base + chr * 8 ];
 		UINT8 fg = ( attr & 0x08 ) ? 3 : 2;
 		UINT8 bg = 0;
 
@@ -333,34 +329,34 @@ static MC6845_UPDATE_ROW( mda_text_blink_update_row )
 
 		if ( i == cursor_x )
 		{
-			if ( mda->framecnt & 0x08 )
+			if ( mda->m_framecnt & 0x08 )
 			{
 				data = 0xFF;
 			}
 		}
 		else
 		{
-			if ( ( attr & 0x80 ) && ( mda->framecnt & 0x10 ) )
+			if ( ( attr & 0x80 ) && ( mda->m_framecnt & 0x10 ) )
 			{
 				data = 0x00;
 			}
 		}
 
-		*p = ( data & 0x80 ) ? fg : bg; p++;
-		*p = ( data & 0x40 ) ? fg : bg; p++;
-		*p = ( data & 0x20 ) ? fg : bg; p++;
-		*p = ( data & 0x10 ) ? fg : bg; p++;
-		*p = ( data & 0x08 ) ? fg : bg; p++;
-		*p = ( data & 0x04 ) ? fg : bg; p++;
-		*p = ( data & 0x02 ) ? fg : bg; p++;
-		*p = ( data & 0x01 ) ? fg : bg; p++;
+		*p = palette[( data & 0x80 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x40 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x20 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x10 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x08 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x04 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x02 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x01 ) ? fg : bg]; p++;
 		if ( ( chr & 0xE0 ) == 0xC0 )
 		{
-			*p = ( data & 0x01 ) ? fg : bg; p++;
+			*p = palette[( data & 0x01 ) ? fg : bg]; p++;
 		}
 		else
 		{
-			*p = bg; p++;
+			*p = palette[bg]; p++;
 		}
 	}
 }
@@ -368,28 +364,26 @@ static MC6845_UPDATE_ROW( mda_text_blink_update_row )
 
 static MC6845_UPDATE_ROW( mda_update_row )
 {
-	isa8_mda_device	*mda  = downcast<isa8_mda_device *>(device->owner());
-	if ( mda->update_row )
+	isa8_mda_device *mda  = downcast<isa8_mda_device *>(device->owner());
+	if ( mda->m_update_row )
 	{
-		mda->update_row( device, bitmap, cliprect, ma, ra, y, x_count, cursor_x, param );
+		mda->m_update_row( device, bitmap, cliprect, ma, ra, y, x_count, cursor_x, param );
 	}
 }
 
 
-static WRITE_LINE_DEVICE_HANDLER( mda_hsync_changed )
+WRITE_LINE_MEMBER( isa8_mda_device::hsync_changed )
 {
-	isa8_mda_device	*mda  = downcast<isa8_mda_device *>(device->owner());
-	mda->hsync = state ? 1 : 0;
+	m_hsync = state ? 1 : 0;
 }
 
 
-static WRITE_LINE_DEVICE_HANDLER( mda_vsync_changed )
+WRITE_LINE_MEMBER( isa8_mda_device::vsync_changed )
 {
-	isa8_mda_device	*mda  = downcast<isa8_mda_device *>(device->owner());
-	mda->vsync = state ? 0x80 : 0;
+	m_vsync = state ? 0x80 : 0;
 	if ( state )
 	{
-		mda->framecnt++;
+		m_framecnt++;
 	}
 }
 
@@ -397,23 +391,20 @@ static WRITE_LINE_DEVICE_HANDLER( mda_vsync_changed )
 /*
  *  rW  MDA mode control register (see #P138)
  */
-static WRITE8_DEVICE_HANDLER(mda_mode_control_w)
+WRITE8_MEMBER( isa8_mda_device::mode_control_w )
 {
-	isa8_mda_device	*mda  = downcast<isa8_mda_device *>(device);
-	MDA_LOG(1,"MDA_mode_control_w",("$%02x: colums %d, gfx %d, enable %d, blink %d\n",
-		data, (data&1)?80:40, (data>>1)&1, (data>>3)&1, (data>>5)&1));
-	mda->mode_control = data;
+	m_mode_control = data;
 
-	switch( mda->mode_control & 0x2a )
+	switch( m_mode_control & 0x2a )
 	{
 	case 0x08:
-		mda->update_row = mda_text_inten_update_row;
+		m_update_row = mda_text_inten_update_row;
 		break;
 	case 0x28:
-		mda->update_row = mda_text_blink_update_row;
+		m_update_row = mda_text_blink_update_row;
 		break;
 	default:
-		mda->update_row = NULL;
+		m_update_row = NULL;
 	}
 }
 
@@ -429,10 +420,12 @@ static WRITE8_DEVICE_HANDLER(mda_mode_control_w)
  *      2-1  reserved
  *      0    horizontal drive enable
  */
-static READ8_DEVICE_HANDLER(mda_status_r)
+READ8_MEMBER( isa8_mda_device::status_r)
 {
-    isa8_mda_device	*mda  = downcast<isa8_mda_device *>(device);
-	return 0x08 | mda->hsync;
+	// Faking pixel stream here
+	m_pixel++;
+
+	return 0xF0 | (m_pixel & 0x08) | m_hsync;
 }
 
 
@@ -442,50 +435,48 @@ static READ8_DEVICE_HANDLER(mda_status_r)
  *      monochrome display adapter
  *
  *************************************************************************/
-WRITE8_DEVICE_HANDLER ( pc_MDA_w )
+WRITE8_MEMBER( isa8_mda_device::io_write)
 {
-	mc6845_device *mc6845 = downcast<mc6845_device *>(device->subdevice(MDA_MC6845_NAME));
-	address_space *space = device->machine().device("maincpu")->memory().space(AS_PROGRAM);
-	device_t *lpt = device->subdevice("lpt");
+	mc6845_device *mc6845 = subdevice<mc6845_device>(MDA_MC6845_NAME);
+	pc_lpt_device *lpt = subdevice<pc_lpt_device>("lpt");
 	switch( offset )
 	{
 		case 0: case 2: case 4: case 6:
-			mc6845->address_w( *space, offset, data );
+			mc6845->address_w( space, offset, data );
 			break;
 		case 1: case 3: case 5: case 7:
-			mc6845->register_w( *space, offset, data );
+			mc6845->register_w( space, offset, data );
 			break;
 		case 8:
-			mda_mode_control_w(device, offset, data);
+			mode_control_w(space, offset, data);
 			break;
 		case 12: case 13:  case 14:
-			pc_lpt_w(lpt, offset - 12, data);
+			lpt->write(space, offset - 12, data);
 			break;
 	}
 }
 
- READ8_DEVICE_HANDLER ( pc_MDA_r )
+READ8_MEMBER( isa8_mda_device::io_read)
 {
 	int data = 0xff;
-	mc6845_device *mc6845 = downcast<mc6845_device *>(device->subdevice(MDA_MC6845_NAME));
-	address_space *space = device->machine().device("maincpu")->memory().space(AS_PROGRAM);
-	device_t *lpt = device->subdevice("lpt");
+	mc6845_device *mc6845 = subdevice<mc6845_device>(MDA_MC6845_NAME);
+	pc_lpt_device *lpt = subdevice<pc_lpt_device>("lpt");
 	switch( offset )
 	{
 		case 0: case 2: case 4: case 6:
 			/* return last written mc6845 address value here? */
 			break;
 		case 1: case 3: case 5: case 7:
-			data = mc6845->register_r( *space, offset );
+			data = mc6845->register_r( space, offset );
 			break;
 		case 10:
-			data = mda_status_r(device, offset);
+			data = status_r(space, offset);
 			break;
 		/* 12, 13, 14  are the LPT ports */
 		case 12: case 13:  case 14:
-			data = pc_lpt_r(lpt, offset - 12);
+			data = lpt->read(space, offset - 12);
 			break;
-    }
+	}
 	return data;
 }
 
@@ -496,10 +487,6 @@ WRITE8_DEVICE_HANDLER ( pc_MDA_w )
 
 ***************************************************************************/
 
-static SCREEN_UPDATE( mc6845_hercules );
-static READ8_DEVICE_HANDLER( hercules_r );
-static WRITE8_DEVICE_HANDLER( hercules_w );
-
 /*
 When the Hercules changes to graphics mode, the number of pixels per access and
 clock divider should be changed. The currect mc6845 implementation does not
@@ -508,17 +495,17 @@ allow this.
 The divder/pixels per 6845 clock is 9 for text mode and 16 for graphics mode.
 */
 
-static const mc6845_interface mc6845_hercules_intf =
+static MC6845_INTERFACE( mc6845_hercules_intf )
 {
-	HERCULES_SCREEN_NAME,	/* screen number */
-	9,						/* number of pixels per video memory address */
-	NULL,					/* begin_update */
-	mda_update_row,			/* update_row */
-	NULL,					/* end_update */
-	DEVCB_NULL,				/* on_de_changed */
-	DEVCB_NULL,				/* on_cur_changed */
-	DEVCB_LINE(mda_hsync_changed),		/* on_hsync_changed */
-	DEVCB_LINE(mda_vsync_changed),		/* on_vsync_changed */
+	false,                  /* show border area */
+	9,                      /* number of pixels per video memory address */
+	NULL,                   /* begin_update */
+	mda_update_row,         /* update_row */
+	NULL,                   /* end_update */
+	DEVCB_NULL,             /* on_de_changed */
+	DEVCB_NULL,             /* on_cur_changed */
+	DEVCB_DEVICE_LINE_MEMBER(DEVICE_SELF_OWNER, isa8_mda_device, hsync_changed),    /* on_hsync_changed */
+	DEVCB_DEVICE_LINE_MEMBER(DEVICE_SELF_OWNER, isa8_mda_device, vsync_changed),    /* on_vsync_changed */
 	NULL
 };
 
@@ -528,11 +515,12 @@ GFXDECODE_END
 
 MACHINE_CONFIG_FRAGMENT( pcvideo_hercules )
 	MCFG_SCREEN_ADD( HERCULES_SCREEN_NAME, RASTER)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(MDA_CLOCK, 882, 0, 720, 370, 0, 350 )
-	MCFG_SCREEN_UPDATE( mc6845_hercules )
+	MCFG_SCREEN_UPDATE_DEVICE( HERCULES_MC6845_NAME, mc6845_device, screen_update )
 
-	MCFG_MC6845_ADD( HERCULES_MC6845_NAME, MC6845, MDA_CLOCK/9, mc6845_hercules_intf)
+	MCFG_PALETTE_LENGTH( 4 )
+
+	MCFG_MC6845_ADD( HERCULES_MC6845_NAME, MC6845, HERCULES_SCREEN_NAME, MDA_CLOCK/9, mc6845_hercules_intf)
 
 	//MCFG_GFXDECODE(pcherc)
 
@@ -578,9 +566,8 @@ const rom_entry *isa8_hercules_device::device_rom_region() const
 //-------------------------------------------------
 
 isa8_hercules_device::isa8_hercules_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock) :
-        isa8_mda_device(mconfig, tag, owner, clock)
+		isa8_mda_device(mconfig, ISA8_HERCULES, "Hercules Graphics Card", tag, owner, clock, "isa_hercules", __FILE__)
 {
-	m_shortname = "hercules";
 }
 
 //-------------------------------------------------
@@ -589,10 +576,10 @@ isa8_hercules_device::isa8_hercules_device(const machine_config &mconfig, const 
 
 void isa8_hercules_device::device_start()
 {
-	videoram = auto_alloc_array(machine(), UINT8, 0x10000);
-	m_isa = machine().device<isa8_device>("mb:isa");
-	m_isa->install_device(this, 0x3b0, 0x3bf, 0, 0, FUNC(hercules_r), FUNC(hercules_w) );
-	m_isa->install_bank(0xb0000, 0xbffff, 0, 0, "bank_hercules", videoram);
+	m_videoram = auto_alloc_array(machine(), UINT8, 0x10000);
+	set_isa_device();
+	m_isa->install_device(0x3b0, 0x3bf, 0, 0, read8_delegate( FUNC(isa8_hercules_device::io_read), this ), write8_delegate( FUNC(isa8_hercules_device::io_write), this ) );
+	m_isa->install_bank(0xb0000, 0xbffff, 0, 0, "bank_hercules", m_videoram);
 
 	/* Initialise the mda palette */
 	for(int i = 0; i < (sizeof(mda_palette) / 3); i++)
@@ -606,10 +593,10 @@ void isa8_hercules_device::device_start()
 void isa8_hercules_device::device_reset()
 {
 	isa8_mda_device::device_reset();
-	configuration_switch = 0;
+	m_configuration_switch = 0;
 
 	astring tempstring;
-	chr_gen = machine().region(subtag(tempstring, "gfx1"))->base();
+	m_chr_gen = memregion(subtag(tempstring, "gfx1"))->base();
 }
 
 /***************************************************************************
@@ -622,104 +609,85 @@ void isa8_hercules_device::device_reset()
 static MC6845_UPDATE_ROW( hercules_gfx_update_row )
 {
 	isa8_hercules_device *herc  = downcast<isa8_hercules_device *>(device->owner());
-	UINT16	*p = BITMAP_ADDR16( bitmap, y, 0 );
-	UINT16	gfx_base = ( ( herc->mode_control & 0x80 ) ? 0x8000 : 0x0000 ) | ( ( ra & 0x03 ) << 13 );
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
+	UINT32  *p = &bitmap.pix32(y);
+	UINT16  gfx_base = ( ( herc->m_mode_control & 0x80 ) ? 0x8000 : 0x0000 ) | ( ( ra & 0x03 ) << 13 );
 	int i;
 	if ( y == 0 ) MDA_LOG(1,"hercules_gfx_update_row",("\n"));
 	for ( i = 0; i < x_count; i++ )
 	{
-		UINT8	data = herc->videoram[ gfx_base + ( ( ma + i ) << 1 ) ];
+		UINT8   data = herc->m_videoram[ gfx_base + ( ( ma + i ) << 1 ) ];
 
-		*p = ( data & 0x80 ) ? 2 : 0; p++;
-		*p = ( data & 0x40 ) ? 2 : 0; p++;
-		*p = ( data & 0x20 ) ? 2 : 0; p++;
-		*p = ( data & 0x10 ) ? 2 : 0; p++;
-		*p = ( data & 0x08 ) ? 2 : 0; p++;
-		*p = ( data & 0x04 ) ? 2 : 0; p++;
-		*p = ( data & 0x02 ) ? 2 : 0; p++;
-		*p = ( data & 0x01 ) ? 2 : 0; p++;
+		*p = palette[( data & 0x80 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x40 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x20 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x10 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x08 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x04 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x02 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x01 ) ? 2 : 0]; p++;
 
-		data = herc->videoram[ gfx_base + ( ( ma + i ) << 1 ) + 1 ];
+		data = herc->m_videoram[ gfx_base + ( ( ma + i ) << 1 ) + 1 ];
 
-		*p = ( data & 0x80 ) ? 2 : 0; p++;
-		*p = ( data & 0x40 ) ? 2 : 0; p++;
-		*p = ( data & 0x20 ) ? 2 : 0; p++;
-		*p = ( data & 0x10 ) ? 2 : 0; p++;
-		*p = ( data & 0x08 ) ? 2 : 0; p++;
-		*p = ( data & 0x04 ) ? 2 : 0; p++;
-		*p = ( data & 0x02 ) ? 2 : 0; p++;
-		*p = ( data & 0x01 ) ? 2 : 0; p++;
+		*p = palette[( data & 0x80 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x40 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x20 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x10 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x08 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x04 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x02 ) ? 2 : 0]; p++;
+		*p = palette[( data & 0x01 ) ? 2 : 0]; p++;
 	}
 }
 
 
-static SCREEN_UPDATE( mc6845_hercules )
+WRITE8_MEMBER( isa8_hercules_device::mode_control_w )
 {
-	mc6845_device *mc6845 = downcast<mc6845_device *>(screen->owner()->subdevice(HERCULES_MC6845_NAME));
+	mc6845_device *mc6845 = subdevice<mc6845_device>(HERCULES_MC6845_NAME);
 
-	mc6845->update( bitmap, cliprect );
-	return 0;
-}
+	m_mode_control = data;
 
-
-static WRITE8_DEVICE_HANDLER(hercules_mode_control_w)
-{
-	isa8_hercules_device *herc  = downcast<isa8_hercules_device *>(device->owner());
-
-	MDA_LOG(1,"hercules_mode_control_w",("$%02x: colums %d, gfx %d, enable %d, blink %d\n",
-		data, (data&1)?80:40, (data>>1)&1, (data>>3)&1, (data>>5)&1));
-	herc->mode_control = data;
-
-	switch( herc->mode_control & 0x2a )
+	switch( m_mode_control & 0x2a )
 	{
 	case 0x08:
-		herc->update_row = mda_text_inten_update_row;
+		m_update_row = mda_text_inten_update_row;
 		break;
 	case 0x28:
-		herc->update_row = mda_text_blink_update_row;
+		m_update_row = mda_text_blink_update_row;
 		break;
 	case 0x0A:          /* Hercules modes */
 	case 0x2A:
-		herc->update_row = hercules_gfx_update_row;
+		m_update_row = hercules_gfx_update_row;
 		break;
 	default:
-		herc->update_row = NULL;
+		m_update_row = NULL;
 	}
 
-	downcast<mc6845_device *>(device)->set_clock( herc->mode_control & 0x02 ? MDA_CLOCK / 16 : MDA_CLOCK / 9 );
-	downcast<mc6845_device *>(device)->set_hpixels_per_column( herc->mode_control & 0x02 ? 16 : 9 );
+	mc6845->set_clock( m_mode_control & 0x02 ? MDA_CLOCK / 16 : MDA_CLOCK / 9 );
+	mc6845->set_hpixels_per_column( m_mode_control & 0x02 ? 16 : 9 );
 }
 
 
-static WRITE8_DEVICE_HANDLER(hercules_config_w)
+WRITE8_MEMBER( isa8_hercules_device::io_write )
 {
-	isa8_hercules_device *herc  = downcast<isa8_hercules_device *>(device);
-	MDA_LOG(1,"HGC_config_w",("$%02x\n", data));
-	herc->configuration_switch = data;
-}
-
-
-static WRITE8_DEVICE_HANDLER ( hercules_w )
-{
-	mc6845_device *mc6845 = downcast<mc6845_device *>(device->subdevice(HERCULES_MC6845_NAME));
-	address_space *space = device->machine().device("maincpu")->memory().space(AS_PROGRAM);
-	device_t *lpt = device->subdevice("lpt");
+	mc6845_device *mc6845 = subdevice<mc6845_device>(HERCULES_MC6845_NAME);
+	pc_lpt_device *lpt = subdevice<pc_lpt_device>("lpt");
 	switch( offset )
 	{
 	case 0: case 2: case 4: case 6:
-		mc6845->address_w( *space, offset, data );
+		mc6845->address_w( space, offset, data );
 		break;
 	case 1: case 3: case 5: case 7:
-		mc6845->register_w( *space, offset, data );
+		mc6845->register_w( space, offset, data );
 		break;
 	case 8:
-		hercules_mode_control_w(mc6845, offset, data);
+		mode_control_w(space, offset, data);
 		break;
 	case 12: case 13:  case 14:
-		pc_lpt_w(lpt, offset - 12, data);
+		lpt->write(space, offset - 12, data);
 		break;
 	case 15:
-		hercules_config_w(device, offset, data);
+		m_configuration_switch = data;
 		break;
 	}
 }
@@ -736,33 +704,34 @@ static WRITE8_DEVICE_HANDLER ( hercules_w )
  *      2-1  reserved
  *      0    horizontal drive enable
  */
-static READ8_DEVICE_HANDLER(hercules_status_r)
+READ8_MEMBER( isa8_hercules_device::status_r )
 {
-	isa8_hercules_device *herc  = downcast<isa8_hercules_device *>(device);
-	return herc->vsync | 0x08 | herc->hsync;
+	// Faking pixel stream here
+	m_pixel++;
+
+	return m_vsync | ( m_pixel & 0x08 ) | m_hsync;
 }
 
 
-static READ8_DEVICE_HANDLER ( hercules_r )
+READ8_MEMBER( isa8_hercules_device::io_read )
 {
 	int data = 0xff;
-	mc6845_device *mc6845 = downcast<mc6845_device *>(device->subdevice(HERCULES_MC6845_NAME));
-	address_space *space = device->machine().device("maincpu")->memory().space(AS_PROGRAM);
-	device_t *lpt = device->subdevice("lpt");
+	mc6845_device *mc6845 = subdevice<mc6845_device>(HERCULES_MC6845_NAME);
+	pc_lpt_device *lpt = subdevice<pc_lpt_device>("lpt");
 	switch( offset )
 	{
 	case 0: case 2: case 4: case 6:
 		/* return last written mc6845 address value here? */
 		break;
 	case 1: case 3: case 5: case 7:
-		data = mc6845->register_r( *space, offset );
+		data = mc6845->register_r( space, offset );
 		break;
 	case 10:
-		data = hercules_status_r(device, offset);
+		data = status_r(space, offset);
 		break;
 	/* 12, 13, 14  are the LPT ports */
 	case 12: case 13:  case 14:
-		data = pc_lpt_r(lpt, offset - 12);
+		data = lpt->read(space, offset - 12);
 		break;
 	}
 	return data;

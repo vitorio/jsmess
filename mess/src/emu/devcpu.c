@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     devcpu.c
 
     CPU device definitions.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -50,12 +21,12 @@
 //  cpu_device - constructor
 //-------------------------------------------------
 
-cpu_device::cpu_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, type, name, tag, owner, clock),
-	  device_execute_interface(mconfig, *this),
-	  device_memory_interface(mconfig, *this),
-	  device_state_interface(mconfig, *this),
-	  device_disasm_interface(mconfig, *this)
+cpu_device::cpu_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source)
+	: device_t(mconfig, type, name, tag, owner, clock, shortname, source),
+		device_execute_interface(mconfig, *this),
+		device_memory_interface(mconfig, *this),
+		device_state_interface(mconfig, *this),
+		device_disasm_interface(mconfig, *this)
 {
 }
 
@@ -74,47 +45,46 @@ cpu_device::~cpu_device()
 //-------------------------------------------------
 
 legacy_cpu_device::legacy_cpu_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, UINT32 clock, cpu_get_info_func get_info)
-	: cpu_device(mconfig, type, "CPU", tag, owner, clock),
-	  m_get_info(get_info),
-	  m_token(NULL),
-	  m_set_info(reinterpret_cast<cpu_set_info_func>(get_legacy_fct(CPUINFO_FCT_SET_INFO))),
-	  m_execute(reinterpret_cast<cpu_execute_func>(get_legacy_fct(CPUINFO_FCT_EXECUTE))),
-	  m_burn(reinterpret_cast<cpu_burn_func>(get_legacy_fct(CPUINFO_FCT_BURN))),
-	  m_translate(reinterpret_cast<cpu_translate_func>(get_legacy_fct(CPUINFO_FCT_TRANSLATE))),
-	  m_read(reinterpret_cast<cpu_read_func>(get_legacy_fct(CPUINFO_FCT_READ))),
-	  m_write(reinterpret_cast<cpu_write_func>(get_legacy_fct(CPUINFO_FCT_WRITE))),
-	  m_readop(reinterpret_cast<cpu_readop_func>(get_legacy_fct(CPUINFO_FCT_READOP))),
-	  m_disassemble(reinterpret_cast<cpu_disassemble_func>(get_legacy_fct(CPUINFO_FCT_DISASSEMBLE))),
-	  m_state_import(reinterpret_cast<cpu_state_io_func>(get_legacy_fct(CPUINFO_FCT_IMPORT_STATE))),
-	  m_state_export(reinterpret_cast<cpu_state_io_func>(get_legacy_fct(CPUINFO_FCT_EXPORT_STATE))),
-	  m_string_export(reinterpret_cast<cpu_string_io_func>(get_legacy_fct(CPUINFO_FCT_EXPORT_STRING))),
-	  m_exit(reinterpret_cast<cpu_exit_func>(get_legacy_fct(CPUINFO_FCT_EXIT))),
-	  m_using_legacy_state(false),
-	  m_inited(false)
+	: cpu_device(mconfig, type, "CPU", tag, owner, clock, "", ""),
+		m_get_info(get_info),
+		m_token(NULL),
+		m_set_info(reinterpret_cast<cpu_set_info_func>(get_legacy_fct(CPUINFO_FCT_SET_INFO))),
+		m_execute(reinterpret_cast<cpu_execute_func>(get_legacy_fct(CPUINFO_FCT_EXECUTE))),
+		m_burn(reinterpret_cast<cpu_burn_func>(get_legacy_fct(CPUINFO_FCT_BURN))),
+		m_translate(reinterpret_cast<cpu_translate_func>(get_legacy_fct(CPUINFO_FCT_TRANSLATE))),
+		m_read(reinterpret_cast<cpu_read_func>(get_legacy_fct(CPUINFO_FCT_READ))),
+		m_write(reinterpret_cast<cpu_write_func>(get_legacy_fct(CPUINFO_FCT_WRITE))),
+		m_readop(reinterpret_cast<cpu_readop_func>(get_legacy_fct(CPUINFO_FCT_READOP))),
+		m_disassemble(reinterpret_cast<cpu_disassemble_func>(get_legacy_fct(CPUINFO_FCT_DISASSEMBLE))),
+		m_state_import(reinterpret_cast<cpu_state_io_func>(get_legacy_fct(CPUINFO_FCT_IMPORT_STATE))),
+		m_state_export(reinterpret_cast<cpu_state_io_func>(get_legacy_fct(CPUINFO_FCT_EXPORT_STATE))),
+		m_string_export(reinterpret_cast<cpu_string_io_func>(get_legacy_fct(CPUINFO_FCT_EXPORT_STRING))),
+		m_exit(reinterpret_cast<cpu_exit_func>(get_legacy_fct(CPUINFO_FCT_EXIT))),
+		m_using_legacy_state(false),
+		m_inited(false)
 {
 	// build up our address spaces; legacy devices don't have logical spaces
 	memset(m_space_config, 0, sizeof(m_space_config));
 	for (address_spacenum spacenum = AS_0; spacenum < ARRAY_LENGTH(m_space_config); spacenum++)
 	{
 		m_space_config[spacenum].m_name = (spacenum == 1) ? "data" : (spacenum == 2) ? "i/o" : "program";
-		m_space_config[spacenum].m_endianness = static_cast<endianness_t>(get_legacy_int(DEVINFO_INT_ENDIANNESS));
-		m_space_config[spacenum].m_databus_width = get_legacy_int(DEVINFO_INT_DATABUS_WIDTH + spacenum);
-		m_space_config[spacenum].m_addrbus_width = get_legacy_int(DEVINFO_INT_ADDRBUS_WIDTH + spacenum);
-		m_space_config[spacenum].m_addrbus_shift = get_legacy_int(DEVINFO_INT_ADDRBUS_SHIFT + spacenum);
+		m_space_config[spacenum].m_endianness = static_cast<endianness_t>(get_legacy_int(CPUINFO_INT_ENDIANNESS));
+		m_space_config[spacenum].m_databus_width = get_legacy_int(CPUINFO_INT_DATABUS_WIDTH + spacenum);
+		m_space_config[spacenum].m_addrbus_width = get_legacy_int(CPUINFO_INT_ADDRBUS_WIDTH + spacenum);
+		m_space_config[spacenum].m_addrbus_shift = get_legacy_int(CPUINFO_INT_ADDRBUS_SHIFT + spacenum);
 		m_space_config[spacenum].m_logaddr_width = get_legacy_int(CPUINFO_INT_LOGADDR_WIDTH + spacenum);
 		if (m_space_config[spacenum].m_logaddr_width == 0)
 			m_space_config[spacenum].m_logaddr_width = m_space_config[spacenum].m_addrbus_width;
 		m_space_config[spacenum].m_page_shift = get_legacy_int(CPUINFO_INT_PAGE_SHIFT + spacenum);
-		m_space_config[spacenum].m_internal_map = reinterpret_cast<address_map_constructor>(get_legacy_fct(DEVINFO_PTR_INTERNAL_MEMORY_MAP + spacenum));
-		m_space_config[spacenum].m_default_map = reinterpret_cast<address_map_constructor>(get_legacy_fct(DEVINFO_PTR_DEFAULT_MEMORY_MAP + spacenum));
+		m_space_config[spacenum].m_internal_map = reinterpret_cast<address_map_constructor>(get_legacy_fct(CPUINFO_PTR_INTERNAL_MEMORY_MAP + spacenum));
+		m_space_config[spacenum].m_default_map = reinterpret_cast<address_map_constructor>(get_legacy_fct(CPUINFO_PTR_DEFAULT_MEMORY_MAP + spacenum));
 	}
 
 	// set the real name
-	m_name = get_legacy_string(DEVINFO_STR_NAME);
-	m_shortname = get_legacy_string(DEVINFO_STR_SHORTNAME);
+	m_name = get_legacy_string(CPUINFO_STR_NAME);
+	m_shortname = get_legacy_string(CPUINFO_STR_SHORTNAME);
+	m_source = get_legacy_string(CPUINFO_STR_SOURCE_FILE);
 	m_searchpath = m_shortname;
-
-	memset(&m_partial_frame_period, 0, sizeof(m_partial_frame_period));
 
 	int tokenbytes = get_legacy_int(CPUINFO_INT_CONTEXT_SIZE);
 	if (tokenbytes == 0)
@@ -122,6 +92,8 @@ legacy_cpu_device::legacy_cpu_device(const machine_config &mconfig, device_type 
 
 	// allocate memory for the token
 	m_token = global_alloc_array_clear(UINT8, tokenbytes);
+	// set hex or octal output
+	m_is_octal = get_legacy_int(CPUINFO_IS_OCTAL);
 }
 
 
@@ -413,6 +385,7 @@ genf *legacy_cpu_device::get_legacy_fct(UINT32 state) const
 //  get_legacy_string - return a legacy
 //  string value
 //-------------------------------------------------
+extern char *get_temp_string_buffer(void);
 
 const char *legacy_cpu_device::get_legacy_string(UINT32 state) const
 {
@@ -442,7 +415,7 @@ void legacy_cpu_device::state_import(const device_state_entry &entry)
 	if (m_using_legacy_state)
 	{
 		if (entry.index() == STATE_GENFLAGS)
-			;	// do nothing
+			;   // do nothing
 		else
 			set_legacy_int(CPUINFO_INT_REGISTER + entry.index(), m_state_io);
 	}

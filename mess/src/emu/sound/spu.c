@@ -9,7 +9,6 @@
 #include "emu.h"
 #include "spu.h"
 #include "spureverb.h"
-#include "includes/psx.h"
 
 //
 //
@@ -135,7 +134,7 @@ static const unsigned int sound_buffer_size=65536*4,
 													num_loop_cache_packets=4,
 													num_loop_cache_samples=num_loop_cache_packets*28,
 													spu_ram_size=512*1024,
-													infinity=0xffffffff,
+													spu_infinity=0xffffffff,
 
 													output_buffer_size=65536/8,
 
@@ -165,14 +164,14 @@ static const int filter_coef[5][2]=
 //
 
 #ifdef debug_spu_registers
-	#define _voice_registers(_voice)	\
-	  "voice"#_voice".voll",		\
-		"voice"#_voice".volr",		\
-		"voice"#_voice".pitch",		\
-		"voice"#_voice".addr",		\
-		"voice"#_voice".adsl",		\
-		"voice"#_voice".srrr",		\
-		"voice"#_voice".curvol",	\
+	#define _voice_registers(_voice)    \
+		"voice"#_voice".voll",      \
+		"voice"#_voice".volr",      \
+		"voice"#_voice".pitch",     \
+		"voice"#_voice".addr",      \
+		"voice"#_voice".adsl",      \
+		"voice"#_voice".srrr",      \
+		"voice"#_voice".curvol",    \
 		"voice"#_voice".repaddr"
 
 	#define _voice_mask_register(_name) \
@@ -285,22 +284,22 @@ struct spu_device::sample_cache
 {
 public:
 	unsigned int start,
-				 end,
-				 invalid_start,
-				 invalid_end,
-				 loopaddr,
-				 last_update_end;
+					end,
+					invalid_start,
+					invalid_end,
+					loopaddr,
+					last_update_end;
 	signed short *data,*loop,*dend;
 	adpcm_decoder decoder, update_decoder;
 	mutable int ref_count;
 	bool valid,
-			 is_loop;
+				is_loop;
 	sample_loop_cache *loop_cache;
 
 	static unsigned int cache_size;
 
 	sample_cache()
-		:	invalid_start(0xffffffff),
+		:   invalid_start(0xffffffff),
 			invalid_end(0),
 			last_update_end(0xffffffff),
 			data(NULL),
@@ -346,13 +345,13 @@ struct spu_device::sample_loop_cache
 {
 public:
 	unsigned int loopend,
-							 loopstart,
-							 len;
+								loopstart,
+								len;
 	signed short data[num_loop_cache_samples];
 	sample_loop_cache *next;
 
 	sample_loop_cache()
-		:	next(NULL)
+		:   next(NULL)
 	{
 		sample_cache::cache_size+=num_loop_cache_samples<<1;
 	}
@@ -430,7 +429,7 @@ struct spu_device::voiceinfo
 	cache_pointer play,loop;
 	sample_loop_cache *loop_cache;
 	unsigned int dptr,
-							 lcptr;
+								lcptr;
 
 	int env_state;
 	float env_ar,
@@ -448,13 +447,13 @@ struct spu_device::voiceinfo
 				//<<
 
 	unsigned int pitch,
-							 samplestoend,
-							 samplestoirq,
-							 envsamples;
+								samplestoend,
+								samplestoirq,
+								envsamples;
 	bool hitirq,
-			 inloopcache,
-			 forceloop,
-			 _pad;
+				inloopcache,
+				forceloop,
+				_pad;
 	INT64 keyontime;
 };
 
@@ -464,29 +463,29 @@ struct spu_device::voiceinfo
 
 class stream_buffer
 {
+public:
 	struct stream_marker
 	{
 	public:
 		unsigned int sector,
-								 offset;
+									offset;
 		stream_marker *next,
 									*prev;
 	};
 
 	unsigned char *buffer;
 	unsigned int head,
-							 tail,
-							 in,
-							 sector_size,
-							 num_sectors,
-							 buffer_size;
+								tail,
+								in,
+								sector_size,
+								num_sectors,
+								buffer_size;
 	stream_marker *marker_head,
 								*marker_tail;
 
-public:
 	stream_buffer(const unsigned int _sector_size,
 								const unsigned int _num_sectors)
-		:	head(0),
+		:   head(0),
 			tail(0),
 			in(0),
 			sector_size(_sector_size),
@@ -776,7 +775,7 @@ bool spu_device::sample_cache::try_update(spu_device *spu)
 			#endif
 
 			signed short *dp=data+(((invalid_start-start)>>4)*28);
-			adpcm_packet *ap=(adpcm_packet *)(spu->spu_ram+invalid_start);
+			ap=(adpcm_packet *)(spu->spu_ram+invalid_start);
 			for (a=invalid_start; a<invalid_end; a+=16, ap++)
 				dp=update_decoder.decode_packet(ap,dp);
 
@@ -794,8 +793,8 @@ bool spu_device::sample_cache::try_update(spu_device *spu)
 				if (invalid_start==lc->loopstart)
 				{
 					adpcm_decoder tmp=decoder;
-					signed short *dp=lc->data,
-											 *dpend=dp+lc->len;
+					dp=lc->data;
+					signed short *dpend=dp+lc->len;
 					unsigned int adr=lc->loopstart;
 					for (unsigned int i=0; ((i<num_loop_cache_packets) && (dp<dpend)); i++, adr+=16)
 						dp=tmp.decode_packet((adpcm_packet *)(spu->spu_ram+adr),dp);
@@ -806,7 +805,7 @@ bool spu_device::sample_cache::try_update(spu_device *spu)
 			invalid_start=0xffffffff;
 			valid=true;
 
-			for (unsigned int a=start; a<end; a+=16, ap++)
+			for (a=start; a<end; a+=16, ap++)
 			{
 				spu->cache[a>>4]=this;
 			}
@@ -867,7 +866,7 @@ bool spu_device::cache_pointer::update(spu_device *spu)
 			// old cache block
 
 			unsigned int off=ptr-cache->data,
-									 addr=cache->start;
+										addr=cache->start;
 
 			// Release cache block and get updated one
 
@@ -936,14 +935,14 @@ signed short *adpcm_decoder::decode_packet(adpcm_packet *ap, signed short *dp)
 
 static int shift_register15(int &shift)
 {
-   int bit0, bit1, bit14;
+	int bit0, bit1, bit14;
 
-   bit0 = shift & 1;
-   bit1 = (shift & 2) >> 1;
-   bit14 = (bit0 ^ bit1) ^ 1;
-   shift >>= 1;
-   shift |= (bit14 << 14);
-   return bit0;
+	bit0 = shift & 1;
+	bit1 = (shift & 2) >> 1;
+	bit14 = (bit0 ^ bit1) ^ 1;
+	shift >>= 1;
+	shift |= (bit14 << 14);
+	return bit0;
 }
 
 //
@@ -954,16 +953,15 @@ static int shift_register15(int &shift)
 //  spu_device - constructor
 //-------------------------------------------------
 
-spu_device::spu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, SPU, "SPU", tag, owner, clock),
-	  device_sound_interface(mconfig, *this),
-	  m_irq_cb(NULL),
-      dirty_flags(-1),
+spu_device::spu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock) :
+	device_t(mconfig, SPU, "SPU", tag, owner, clock, "spu", __FILE__),
+	device_sound_interface(mconfig, *this),
+	m_irq_handler(*this),
+	dirty_flags(-1),
 	status_enabled(false),
 	xa_voll(0x8000),
 	xa_volr(0x8000),
-	  changed_xa_vol(0)
-
+	changed_xa_vol(0)
 {
 }
 
@@ -972,14 +970,10 @@ spu_device::spu_device(const machine_config &mconfig, const char *tag, device_t 
 //  the IRQ callback
 //-------------------------------------------------
 
-void spu_device::static_set_irqf(device_t &device, void (*irqf)(device_t *device, UINT32 state))
-{
-	spu_device &spu = downcast<spu_device &>(device);
-	spu.m_irq_cb = irqf;
-}
-
 void spu_device::device_start()
 {
+	m_irq_handler.resolve_safe();
+
 	voice=new voiceinfo [24];
 	spu_ram=new unsigned char [spu_ram_size];
 
@@ -992,48 +986,39 @@ void spu_device::device_start()
 	memset(cache,0,(spu_ram_size>>4)*sizeof(sample_cache *));
 
 	// register save state stuff
-	// per-voice variables
-	for (int v = 0; v < 24; v++)
-	{
-		save_item(NAME(spureg.voice[v].vol_l), v);
-		save_item(NAME(spureg.voice[v].vol_r), v);
-		save_item(NAME(spureg.voice[v].pitch), v);
-		save_item(NAME(spureg.voice[v].addr), v);
-		save_item(NAME(spureg.voice[v].adsl), v);
-		save_item(NAME(spureg.voice[v].srrr), v);
-		save_item(NAME(spureg.voice[v].curvol), v);
-		save_item(NAME(spureg.voice[v].repaddr), v);
-	}
-
-	// SPU globals
-	save_item(NAME(spureg.mvol_l));
-	save_item(NAME(spureg.mvol_r));
-	save_item(NAME(spureg.rvol_l));
-	save_item(NAME(spureg.rvol_r));
-	save_item(NAME(spureg.keyon));
-	save_item(NAME(spureg.keyoff));
-	save_item(NAME(spureg.fm));
-	save_item(NAME(spureg.noise));
-	save_item(NAME(spureg.reverb));
-	save_item(NAME(spureg.chon));
-	save_item(NAME(spureg._unknown));
-	save_item(NAME(spureg.reverb_addr));
-	save_item(NAME(spureg.irq_addr));
-	save_item(NAME(spureg.trans_addr));
-	save_item(NAME(spureg.data));
-	save_item(NAME(spureg.ctrl));
-	save_item(NAME(spureg.status));
-	save_item(NAME(spureg.cdvol_l));
-	save_item(NAME(spureg.cdvol_r));
-	save_item(NAME(spureg.exvol_l));
-	save_item(NAME(spureg.exvol_r));
+	save_item(NAME(reg));           // this covers all spureg.* plus the reverb parameter block
+	save_item(NAME(xa_cnt));
+	save_item(NAME(cdda_cnt));
+	save_item(NAME(xa_freq));
+	save_item(NAME(cdda_freq));
+	save_item(NAME(xa_channels));
+	save_item(NAME(xa_spf));
+	save_item(NAME(cur_frame_sample));
+	save_item(NAME(cur_generate_sample));
 	save_pointer(NAME(spu_ram), spu_ram_size);
+
+	save_item(NAME(xa_buffer->head));
+	save_item(NAME(xa_buffer->tail));
+	save_item(NAME(xa_buffer->in));
+	save_item(NAME(xa_buffer->sector_size));
+	save_item(NAME(xa_buffer->num_sectors));
+	save_item(NAME(xa_buffer->buffer_size));
+	save_pointer(NAME(xa_buffer->buffer), xa_sector_size*xa_buffer_sectors);
+
+	save_item(NAME(cdda_buffer->head));
+	save_item(NAME(cdda_buffer->tail));
+	save_item(NAME(cdda_buffer->in));
+	save_item(NAME(cdda_buffer->sector_size));
+	save_item(NAME(cdda_buffer->num_sectors));
+	save_item(NAME(cdda_buffer->buffer_size));
+	save_pointer(NAME(cdda_buffer->buffer), cdda_sector_size*cdda_buffer_sectors);
 }
 
 void spu_device::device_reset()
 {
 	cur_reverb_preset = NULL;
 	cur_frame_sample = 0;
+	cur_generate_sample = 0;
 
 	sample_cache::cache_size = 0;
 
@@ -1052,6 +1037,7 @@ void spu_device::device_reset()
 
 	cdda_cnt=0;
 	cdda_playing=false;
+	m_cd_out_ptr = 0;
 
 	memset(spu_ram,0,spu_ram_size);
 	memset(reg,0,0x200);
@@ -1158,11 +1144,9 @@ void spu_device::kill_sound()
 //
 //
 
-unsigned short spu_device::read_word(const unsigned int addr)
+READ16_MEMBER( spu_device::read )
 {
-	unsigned short ret=0, *rp=(unsigned short *)(reg+(addr&0x1ff));
-
-	assert((addr&1)==0);
+	unsigned short ret=0, *rp=(unsigned short *)(reg+((offset*2)&0x1ff));
 
 	m_stream->update();
 
@@ -1170,9 +1154,9 @@ unsigned short spu_device::read_word(const unsigned int addr)
 
 	#ifdef debug_spu_registers
 		printf("spu: read word %08x = %04x [%s]\n",
-													addr,
+													offset*2,
 													ret,
-													get_register_name(addr));
+													get_register_name(offset*2));
 	#endif
 
 	return ret;
@@ -1182,38 +1166,18 @@ unsigned short spu_device::read_word(const unsigned int addr)
 //
 //
 
-unsigned char spu_device::read_byte(const unsigned int addr)
-{
-	unsigned char ret=0,
-								*rp=reg+(addr&0x1ff);
-
-	ret=*rp;
-
-	#ifdef debug_spu_registers
-		printf("spu: read byte %08x\n",addr);
-	#endif
-
-	return ret;
-}
-
-//
-//
-//
-
-void spu_device::write_word(const unsigned int addr, const unsigned short data)
+WRITE16_MEMBER( spu_device::write )
 {
 	#ifdef debug_spu_registers
 		printf("spu: write %08x = %04x [%s]\n",
-													addr,
+													offset*2,
 													data,
-													get_register_name(addr));
+													get_register_name(offset*2));
 	#endif
-
-	assert((addr&1)==0);
 
 	m_stream->update();
 
-	const unsigned int a=addr&0x1ff;
+	const unsigned int a=(offset*2)&0x1ff;
 	switch (a)
 	{
 		case spureg_trans_addr:
@@ -1228,7 +1192,7 @@ void spu_device::write_word(const unsigned int addr, const unsigned short data)
 
 		default:
 		{
-			unsigned short *rp=(unsigned short *)(reg+(addr&0x1ff));
+			unsigned short *rp=(unsigned short *)(reg+a);
 
 			if ((a==spureg_irq_addr) ||
 					((a==spureg_ctrl) && ((rp[0]^data)&spuctrl_irq_enable)))
@@ -1257,23 +1221,6 @@ void spu_device::write_word(const unsigned int addr, const unsigned short data)
 	update_vol(a);
 	update_voice_state();
 	update_irq_event();
-}
-
-//
-//
-//
-
-void spu_device::write_byte(const unsigned int addr, const unsigned char data)
-{
-	#ifdef debug_spu_registers
-		printf("spu: write %08x = %02x\n",addr,data);
-	#endif
-
-	const unsigned int a=addr&0x1ff;
-	reg[a]=data;
-	if ((a>spureg_reverb_config) && (a<=spureg_last))
-		dirty_flags|=dirtyflag_reverb;
-	update_key();
 }
 
 //
@@ -1414,7 +1361,7 @@ spu_device::sample_cache *spu_device::get_sample_cache(const unsigned int addr)
 		if (ap->flags&adpcmflag_end) break;
 	}
 
-	if (ap->flags&adpcmflag_loop) sc->is_loop=true;
+	if ((a < 0x80000) && (ap->flags&adpcmflag_loop)) sc->is_loop=true;
 
 	sc->end=min(spu_ram_size,a+16);
 
@@ -1488,13 +1435,13 @@ unsigned int spu_device::get_irq_distance(const voiceinfo *vi)
 			// IRQ address is inside this voices loop cache, return distance
 
 			return (vi->play.cache->dend-vi->play.ptr)+
-						 (irq_ptr-vi->loop.ptr);
+							(irq_ptr-vi->loop.ptr);
 		}
 	}
 
-	// IRQs not enabled, or IRQ address not reachable by voice, distance is infinity
+	// IRQs not enabled, or IRQ address not reachable by voice, distance is spu_infinity
 
-	return infinity;
+	return spu_infinity;
 }
 
 //
@@ -1514,26 +1461,26 @@ void spu_device::update_voice_events(voiceinfo *vi)
 
 			assert(vi->lcptr<vi->loop_cache->len);
 			vi->samplestoend=min(vi->samplestoend,
-													 (unsigned int)((((INT64)(vi->loop_cache->len-vi->lcptr)<<12)-vi->dptr)+(vi->pitch-1))/vi->pitch);
+														(unsigned int)((((INT64)(vi->loop_cache->len-vi->lcptr)<<12)-vi->dptr)+(vi->pitch-1))/vi->pitch);
 		}
 
 		// Calculate time until next IRQ in output samples
 
 		unsigned int irqdist=get_irq_distance(vi);
-		if (irqdist!=infinity)
+		if (irqdist!=spu_infinity)
 		{
 			// Convert IRQ input sample distance to output samples
 
 			vi->samplestoirq=(unsigned int)(((((INT64)irqdist)<<12)-vi->dptr)+(vi->pitch-1))/vi->pitch;
 		} else
 		{
-			vi->samplestoirq=infinity;
+			vi->samplestoirq=spu_infinity;
 		}
 	} else
 	{
-		// Voice pitch is 0, distance to sample end and IRQ is infinity
+		// Voice pitch is 0, distance to sample end and IRQ is spu_infinity
 
-		vi->samplestoend=vi->samplestoirq=infinity;
+		vi->samplestoend=vi->samplestoirq=spu_infinity;
 	}
 }
 
@@ -1706,10 +1653,10 @@ bool spu_device::process_voice(const unsigned int v,
 {
 	bool ret=true;
 	unsigned int voice_mask=1<<v,
-							 num=sz,
-							 off=0;
+								num=sz,
+								off=0;
 	bool noise=((spureg.noise&voice_mask)!=0),
-			 fm=((spureg.fm&voice_mask)!=0);
+				fm=((spureg.fm&voice_mask)!=0);
 	voiceinfo *vi=&voice[v];
 
 	// Early exit if we don't have a sample cache block
@@ -1727,8 +1674,8 @@ bool spu_device::process_voice(const unsigned int v,
 		// Play up to end of sample, envelope event, or IRQ, whichever comes first
 
 		unsigned int ntoplay=fm?1:num,
-								 nextevent=min(vi->samplestoend,
-															 min(vi->samplestoirq,vi->envsamples));
+									nextevent=min(vi->samplestoend,
+																min(vi->samplestoirq,vi->envsamples));
 		ntoplay=min(ntoplay,nextevent);
 
 		if (ntoplay)
@@ -1749,7 +1696,7 @@ bool spu_device::process_voice(const unsigned int v,
 			}
 
 			signed short *dp=(signed short *)ptr,
-									 *outxp=(signed short *)outxptr;
+										*outxp=(signed short *)outxptr;
 			dp+=off<<1;
 			if (outxp) outxp+=off<<1;
 
@@ -1759,8 +1706,8 @@ bool spu_device::process_voice(const unsigned int v,
 			off+=ntoplay;
 
 			vi->samplestoend-=ntoplay;
-			if (vi->samplestoirq!=infinity) vi->samplestoirq-=ntoplay;
-			if (vi->envsamples!=infinity) vi->envsamples-=ntoplay;
+			if (vi->samplestoirq!=spu_infinity) vi->samplestoirq-=ntoplay;
+			if (vi->envsamples!=spu_infinity) vi->envsamples-=ntoplay;
 			vi->hitirq=false;
 		}
 
@@ -1768,8 +1715,8 @@ bool spu_device::process_voice(const unsigned int v,
 
 		bool hitend=fm?(vi->play.ptr>=vi->play.cache->dend)
 									:(vi->samplestoend==0),
-				 hitirq=(vi->samplestoirq==0),
-				 hitenv=(vi->envsamples==0);
+					hitirq=(vi->samplestoirq==0),
+					hitenv=(vi->envsamples==0);
 
 		// Update loop cache pointer if we are playing a loop cache
 
@@ -1858,9 +1805,9 @@ bool spu_device::process_voice(const unsigned int v,
 		if (hitirq)
 		{
 			// Went past IRQ address, trigger IRQ
-			m_irq_cb(this, 1);
+			m_irq_handler(1);
 
-			vi->samplestoirq=infinity;
+			vi->samplestoirq=spu_infinity;
 			vi->hitirq=true;
 		}
 
@@ -1904,10 +1851,10 @@ bool spu_device::process_voice(const unsigned int v,
 //
 
 void spu_device::generate_voice(const unsigned int v,
-														 void *ptr,
-														 void *noiseptr,
-														 void *outxptr,
-														 const unsigned int sz)
+															void *ptr,
+															void *noiseptr,
+															void *outxptr,
+															const unsigned int sz)
 {
 	voiceinfo *vi=&voice[v];
 	signed short *fp,*sp;
@@ -1933,9 +1880,9 @@ void spu_device::generate_voice(const unsigned int v,
 
 	// Calculate fixed point envelope levels/deltas premultiplied by channel volume
 
-	int	vol_l=outxptr?0x3fff:vi->vol[0],
+	int vol_l=outxptr?0x3fff:vi->vol[0],
 			vol_r=outxptr?0x3fff:vi->vol[1],
-		  env_l=(int)(vi->env_level*2.0f*vol_l),
+			env_l=(int)(vi->env_level*2.0f*vol_l),
 			env_r=(int)(vi->env_level*2.0f*vol_r),
 			envdelta_l=(int)(vi->env_delta*2.0f*vol_l),
 			envdelta_r=(int)(vi->env_delta*2.0f*vol_r);
@@ -2231,7 +2178,7 @@ bool spu_device::update_envelope(const int v)
 					voice[v].envsamples=(unsigned int)((voice[v].env_sl-1.0f)/voice[v].env_dr);
 				} else
 				{
-					voice[v].envsamples=infinity;
+					voice[v].envsamples=spu_infinity;
 				}
 				break;
 
@@ -2248,12 +2195,12 @@ bool spu_device::update_envelope(const int v)
 					voice[v].envsamples=(unsigned int)(voice[v].env_level/-voice[v].env_sr);
 				} else
 				{
-					voice[v].envsamples=infinity;
+					voice[v].envsamples=spu_infinity;
 				}
 				break;
 
 			case 3: // sustain end
-				voice[v].envsamples=infinity;
+				voice[v].envsamples=spu_infinity;
 				voice[v].env_delta=0.0f;
 				if (voice[v].env_sr<=0.0f)
 				{
@@ -2268,9 +2215,9 @@ bool spu_device::update_envelope(const int v)
 			case 4: // release
 				voice[v].env_level=mindb(1.0f,maxdb(0.0f,voice[v].env_level));
 				voice[v].env_delta=voice[v].env_rr;
-				if (voice[v].env_rr == -0.0f)	// 0.0 release means infinite time
+				if (voice[v].env_rr == -0.0f)   // 0.0 release means infinite time
 				{
-					voice[v].envsamples=infinity;
+					voice[v].envsamples=spu_infinity;
 				}
 				else
 				{
@@ -2281,7 +2228,7 @@ bool spu_device::update_envelope(const int v)
 			case 5: // release end
 				voice[v].env_level=0.0f;
 				voice[v].env_delta=0.0f;
-				voice[v].envsamples=infinity;
+				voice[v].envsamples=spu_infinity;
 				return false;
 		}
 	}
@@ -2383,11 +2330,11 @@ void spu_device::key_on(const int v)
 void spu_device::set_xa_format(const float _freq, const int channels)
 {
 	// Adjust frequency to compensate for slightly slower/faster frame rate
-	float freq=44100.0; //(_freq*get_adjusted_frame_rate())/ps1hw.rcnt->get_vertical_refresh();
+//  float freq=44100.0; //(_freq*get_adjusted_frame_rate())/ps1hw.rcnt->get_vertical_refresh();
 
-	xa_freq=(unsigned int)((freq/44100.0)*4096.0f);
+	xa_freq=(unsigned int)((_freq/44100.0)*4096.0f);
 	xa_channels=channels;
-	xa_spf=(unsigned int)(freq/60.0)*channels;
+	xa_spf=(unsigned int)(_freq/60.0)*channels;
 }
 
 //
@@ -2412,9 +2359,9 @@ void spu_device::generate_xa(void *ptr, const unsigned int sz)
 
 		int n=sz>>2;
 		signed short *sp=(signed short *)xa_buffer->get_tail_ptr(),
-								 *dp=(signed short *)ptr;
+									*dp=(signed short *)ptr;
 		unsigned int noff=(1<<xa_channels),
-								 oldtail=xa_buffer->get_tail_offset();
+									oldtail=xa_buffer->get_tail_offset();
 
 		assert((xa_channels==1) || (xa_channels==2));
 
@@ -2422,8 +2369,8 @@ void spu_device::generate_xa(void *ptr, const unsigned int sz)
 
 		int voll=spureg.cdvol_l,
 				volr=spureg.cdvol_r;
-		voll=(voll*xa_voll)>>15;
-		volr=(volr*xa_volr)>>15;
+		voll=(voll*xa_voll)>>14;
+		volr=(volr*xa_volr)>>14;
 
 		// Generate requested number of XA samples
 
@@ -2439,7 +2386,7 @@ void spu_device::generate_xa(void *ptr, const unsigned int sz)
 			if (1) //settings.sound_interpolate)
 			{
 				signed short *nsp=(signed short *)xa_buffer->get_tail_ptr(noff);
-				int	vdl=nsp[0]-vl,
+				int vdl=nsp[0]-vl,
 						vdr=nsp[xa_channels-1]-vr;
 
 				vl+=(vdl*(int)xa_cnt)>>12;
@@ -2505,7 +2452,7 @@ void spu_device::generate_cdda(void *ptr, const unsigned int sz)
 	if (cdda_buffer->get_bytes_in())
 	{
 		unsigned int cdda_spf=(44100*4)/60.0,
-								 freq=(unsigned int)((cdda_freq*60.0)/60.0);
+									freq=(unsigned int)((cdda_freq*60.0)/60.0);
 
 		if ((! cdda_playing) && (cdda_buffer->get_bytes_in()<(cdda_spf<<3)))
 			return;
@@ -2514,7 +2461,7 @@ void spu_device::generate_cdda(void *ptr, const unsigned int sz)
 
 		int n=sz>>2;
 		signed short *sp=(signed short *)cdda_buffer->get_tail_ptr(),
-								 *dp=(signed short *)ptr;
+									*dp=(signed short *)ptr;
 		unsigned int oldtail=cdda_buffer->get_tail_offset();
 
 		int voll=spureg.cdvol_l,
@@ -2522,8 +2469,19 @@ void spu_device::generate_cdda(void *ptr, const unsigned int sz)
 
 		while ((cdda_buffer->get_bytes_in()) && (n--))
 		{
-			dp[0]=clamp(dp[0]+((sp[0]*voll)>>15));
-			dp[1]=clamp(dp[1]+((sp[1]*volr)>>15));
+			INT16 vl = ((sp[0]*voll)>>15);
+			INT16 vr = ((sp[1]*volr)>>15);
+
+			// if the volume adjusted samples are stored here, vibribbon does nothing
+			*(signed short *)(spu_ram+m_cd_out_ptr)=sp[0];
+			*(signed short *)(spu_ram+m_cd_out_ptr+0x400)=sp[1];
+			m_cd_out_ptr=(m_cd_out_ptr+2)&0x3ff;
+
+			//if((m_cd_out_ptr == ((spureg.irq_addr << 3) & ~0x400)) && (spureg.ctrl & spuctrl_irq_enable))
+			//  m_irq_handler(1);
+
+			dp[0]=clamp(dp[0]+vl);
+			dp[1]=clamp(dp[1]+vr);
 			dp+=2;
 
 			cdda_cnt+=freq;
@@ -2544,7 +2502,15 @@ void spu_device::generate_cdda(void *ptr, const unsigned int sz)
 		if (! cdda_buffer->get_bytes_in())
 			cdda_playing=false;
 
-		if (n>0) printf("cdda buffer underflow (n=%d cdda_in=%d spf=%d)\n",n,cdda_buffer->get_bytes_in(),cdda_spf);
+//      if (n>0) printf("cdda buffer underflow (n=%d cdda_in=%d spf=%d)\n",n,cdda_buffer->get_bytes_in(),cdda_spf);
+	}
+	else if(((spureg.irq_addr << 3) < 0x800) && (spureg.ctrl & spuctrl_irq_enable))
+	{
+		UINT16 irq_addr = (spureg.irq_addr << 3) & ~0x400;
+		UINT32 end = m_cd_out_ptr + (sz >> 1);
+		if(((m_cd_out_ptr < irq_addr) && (end > irq_addr)) || ((m_cd_out_ptr > (end & 0x3ff)) && ((end & 0x3ff) > irq_addr)))
+			m_irq_handler(1);
+		m_cd_out_ptr =  end & 0x3fe;
 	}
 }
 
@@ -2620,11 +2586,11 @@ void spu_device::generate(void *ptr, const unsigned int sz)
 		memcpy(dp,output_buf[0]+output_head,n);
 
 		rev->process((signed short *)dp,
-								 (signed short *)(output_buf[1]+output_head),
-								 spu_reverb_cfg,
-								 (signed short)spureg.rvol_l,
-								 (signed short)spureg.rvol_r,
-								 n);
+									(signed short *)(output_buf[1]+output_head),
+									spu_reverb_cfg,
+									(signed short)spureg.rvol_l,
+									(signed short)spureg.rvol_r,
+									n);
 
 		output_size-=n;
 		output_head+=n;
@@ -2650,15 +2616,15 @@ void spu_device::update_irq_event()
 {
 	if (spureg.ctrl&spuctrl_irq_enable)
 	{
-		unsigned int samplestoirq=infinity;
+		unsigned int samplestoirq=spu_infinity;
 		for (int i=0; i<24; i++)
-			if (voice[i].samplestoirq!=infinity)
+			if (voice[i].samplestoirq!=spu_infinity)
 			{
 				if (voice[i].samplestoirq==0)
 				{
-					m_irq_cb(this, 1);
+					m_irq_handler(1);
 
-					voice[i].samplestoirq=infinity;
+					voice[i].samplestoirq=spu_infinity;
 					voice[i].hitirq=true;
 				} else
 				{
@@ -2750,9 +2716,9 @@ void spu_device::process_until(const unsigned int tsample)
 		{
 			unsigned int tleft=process_samples;
 			bool isfmin=((i<23) && (spureg.fm&(1<<(i+1)))),
-					 isfm=(spureg.fm&(1<<i))!=0,
-					 isnoise=(spureg.noise&(1<<i))!=0,
-					 isreverb=(spureg.reverb&(1<<i))!=0;
+						isfm=(spureg.fm&(1<<i))!=0,
+						isnoise=(spureg.noise&(1<<i))!=0,
+						isreverb=(spureg.reverb&(1<<i))!=0;
 
 			// This channel is an FM input for the next channel - clear the
 			// FM input buffer
@@ -2768,7 +2734,7 @@ void spu_device::process_until(const unsigned int tsample)
 														process_samples,
 														isreverb?reverbptr:outptr,
 														isnoise?noiseptr
-														       :(isfm?fmptr:NULL),
+																:(isfm?fmptr:NULL),
 														isfmin?fmptr:NULL,
 														&tleft))
 				{
@@ -2811,7 +2777,7 @@ void spu_device::sound_stream_update(sound_stream &stream, stream_sample_t **inp
 	outL = outputs[0];
 	outR = outputs[1];
 
-	generate(temp, samples*4);	// second parameter is bytes, * 2 (size of INT16) * 2 (stereo)
+	generate(temp, samples*4);  // second parameter is bytes, * 2 (size of INT16) * 2 (stereo)
 
 	src = &temp[0];
 	for (int i = 0; i < samples; i++)
@@ -2854,7 +2820,7 @@ void spu_device::start_dma(UINT8 *mainram, bool to_spu, UINT32 size)
 //
 
 void spu_device::decode_xa_mono(const unsigned char *xa,
-														 unsigned char *ptr)
+															unsigned char *ptr)
 {
 	signed short *dp=(signed short *)ptr;
 
@@ -2909,7 +2875,7 @@ void spu_device::decode_xa_mono(const unsigned char *xa,
 //
 
 void spu_device::decode_xa_stereo(const unsigned char *xa,
-															 unsigned char *ptr)
+																unsigned char *ptr)
 {
 	signed short *dp=(signed short *)ptr;
 
@@ -2990,11 +2956,11 @@ bool spu_device::play_xa(const unsigned int sector, const unsigned char *xa)
 	float freq;
 	int channels;
 
-	switch (hdr[3]&0x3f)	// ignore emphasis and reserved bits
+	switch (hdr[3]&0x3f)    // ignore emphasis and reserved bits
 	{
 		case 0:
 			channels=1;
-			freq=37800.0f;	//18900.0f;
+			freq=37800.0f;  //18900.0f;
 			break;
 
 		case 1:
@@ -3004,12 +2970,12 @@ bool spu_device::play_xa(const unsigned int sector, const unsigned char *xa)
 
 		case 4:
 			channels=1;
-			freq=18900.0f;	///2.0f;
+			freq=18900.0f;  ///2.0f;
 			break;
 
 		case 5:
 			channels=2;
-			freq=18900.0f;	//37800.0f/2.0f;
+			freq=18900.0f;  //37800.0f/2.0f;
 			break;
 
 		default:
@@ -3034,7 +3000,6 @@ bool spu_device::play_xa(const unsigned int sector, const unsigned char *xa)
 	}
 
 	// Return that we processed the sector
-
 	return true;
 }
 
@@ -3069,6 +3034,18 @@ bool spu_device::play_cdda(const unsigned int sector, const unsigned char *cdda)
 	signed short *dp=(signed short *)cdda_buffer->add_sector(sector);
 	memcpy(dp,cdda,cdda_sector_size);
 
+	// data coming in in MAME is big endian as stored on the CD
+	unsigned char *flip = (unsigned char *)dp;
+	for (int i = 0; i < cdda_sector_size; i+= 2)
+	{
+		unsigned char temp = flip[i];
+		flip[i] = flip[i+1];
+		flip[i+1] = temp;
+	}
+	// this should be done in generate but sound_stream_update may not be called frequently enough
+	if(((spureg.irq_addr << 3) < 0x800) && (spureg.ctrl & spuctrl_irq_enable))
+		m_irq_handler(1);
+
 	return true;
 }
 
@@ -3086,44 +3063,18 @@ void spu_device::flush_cdda(const unsigned int sector)
 	}
 }
 
-// MAME I/O stuff.  This can get cleaner when machine/psx.c does.
-
-void spu_device::dma_read( UINT32 n_address, INT32 n_size )
+void spu_device::dma_read( UINT32 *p_n_ram, UINT32 n_address, INT32 n_size )
 {
-	UINT8 *psxram = (UINT8 *)memory_get_shared(machine(), "share1");
+	UINT8 *psxram = (UINT8 *)p_n_ram;
 
 	start_dma(psxram + n_address, false, n_size*4);
 }
 
-void spu_device::dma_write( UINT32 n_address, INT32 n_size )
+void spu_device::dma_write( UINT32 *p_n_ram, UINT32 n_address, INT32 n_size )
 {
-	UINT8 *psxram = (UINT8 *)memory_get_shared(machine(), "share1");
+	UINT8 *psxram = (UINT8 *)p_n_ram;
 
 //  printf("SPU DMA write from %x, size %x\n", n_address, n_size);
 
 	start_dma(psxram + n_address, true, n_size*4);
-}
-
-READ16_HANDLER( spu_r )
-{
-	spu_device *spu = space->machine().device<spu_device>("spu");
-
-	if (spu == NULL )
-	{
-		return 0;
-	}
-
-	return spu->read_word(offset*2);
-}
-
-WRITE16_HANDLER( spu_w )
-{
-	spu_device *spu = space->machine().device<spu_device>("spu");
-
-	if (spu == NULL)
-	{
-		return;
-	}
-
-	spu->write_word(offset*2, data);
 }

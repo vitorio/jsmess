@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Miodrag Milanovic, Robbbert
 /***************************************************************************
 
         PK-8000
@@ -18,26 +20,69 @@
 #include "machine/ram.h"
 
 
-class pk8000_state : public driver_device
+class pk8000_state : public pk8000_base_state
 {
 public:
 	pk8000_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: pk8000_base_state(mconfig, type, tag)
+		, m_maincpu(*this, "maincpu")
+		, m_cassette(*this, "cassette")
+		, m_ram(*this, RAM_TAG)
+		, m_speaker(*this, "speaker")
+		, m_region_maincpu(*this, "maincpu")
+		, m_bank1(*this, "bank1")
+		, m_bank2(*this, "bank2")
+		, m_bank3(*this, "bank3")
+		, m_bank4(*this, "bank4")
+		, m_bank5(*this, "bank5")
+		, m_bank6(*this, "bank6")
+		, m_bank7(*this, "bank7")
+		, m_bank8(*this, "bank8")
+		, m_io_joy1(*this, "JOY1")
+		, m_io_joy2(*this, "JOY2")
+	{ }
 
 	UINT8 m_keyboard_line;
+	DECLARE_READ8_MEMBER(pk8000_joy_1_r);
+	DECLARE_READ8_MEMBER(pk8000_joy_2_r);
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void video_start();
+	UINT32 screen_update_pk8000(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	INTERRUPT_GEN_MEMBER(pk8000_interrupt);
+	DECLARE_WRITE8_MEMBER(pk8000_80_porta_w);
+	DECLARE_READ8_MEMBER(pk8000_80_portb_r);
+	DECLARE_WRITE8_MEMBER(pk8000_80_portc_w);
+
+	IRQ_CALLBACK_MEMBER(pk8000_irq_callback);
+
+protected:
+	required_device<cpu_device> m_maincpu;
+	required_device<cassette_image_device> m_cassette;
+	required_device<ram_device> m_ram;
+	required_device<speaker_sound_device> m_speaker;
+	required_memory_region m_region_maincpu;
+	required_memory_bank m_bank1;
+	required_memory_bank m_bank2;
+	required_memory_bank m_bank3;
+	required_memory_bank m_bank4;
+	required_memory_bank m_bank5;
+	required_memory_bank m_bank6;
+	required_memory_bank m_bank7;
+	required_memory_bank m_bank8;
+	required_ioport m_io_joy1;
+	required_ioport m_io_joy2;
+	ioport_port *m_io_port[10];
+
+	void pk8000_set_bank(UINT8 data);
 };
 
 
 
-static cassette_image_device *cassette_device_image(running_machine &machine)
+void pk8000_state::pk8000_set_bank(UINT8 data)
 {
-	return machine.device<cassette_image_device>(CASSETTE_TAG);
-}
-
-static void pk8000_set_bank(running_machine &machine,UINT8 data)
-{
-	UINT8 *rom = machine.region("maincpu")->base();
-	UINT8 *ram = ram_get_ptr(machine.device(RAM_TAG));
+	UINT8 *rom = m_region_maincpu->base();
+	UINT8 *ram = m_ram->pointer();
 	UINT8 block1 = data & 3;
 	UINT8 block2 = (data >> 2) & 3;
 	UINT8 block3 = (data >> 4) & 3;
@@ -45,130 +90,111 @@ static void pk8000_set_bank(running_machine &machine,UINT8 data)
 
 	switch(block1) {
 		case 0:
-				memory_set_bankptr(machine, "bank1", rom + 0x10000);
-				memory_set_bankptr(machine, "bank5", ram);
+				m_bank1->set_base(rom + 0x10000);
+				m_bank5->set_base(ram);
 				break;
 		case 1: break;
 		case 2: break;
 		case 3:
-				memory_set_bankptr(machine, "bank1", ram);
-				memory_set_bankptr(machine, "bank5", ram);
+				m_bank1->set_base(ram);
+				m_bank5->set_base(ram);
 				break;
 	}
 
 	switch(block2) {
 		case 0:
-				memory_set_bankptr(machine, "bank2", rom + 0x14000);
-				memory_set_bankptr(machine, "bank6", ram + 0x4000);
+				m_bank2->set_base(rom + 0x14000);
+				m_bank6->set_base(ram + 0x4000);
 				break;
 		case 1: break;
 		case 2: break;
 		case 3:
-				memory_set_bankptr(machine, "bank2", ram + 0x4000);
-				memory_set_bankptr(machine, "bank6", ram + 0x4000);
+				m_bank2->set_base(ram + 0x4000);
+				m_bank6->set_base(ram + 0x4000);
 				break;
 	}
 	switch(block3) {
 		case 0:
-				memory_set_bankptr(machine, "bank3", rom + 0x18000);
-				memory_set_bankptr(machine, "bank7", ram + 0x8000);
+				m_bank3->set_base(rom + 0x18000);
+				m_bank7->set_base(ram + 0x8000);
 				break;
 		case 1: break;
 		case 2: break;
 		case 3:
-				memory_set_bankptr(machine, "bank3", ram + 0x8000);
-				memory_set_bankptr(machine, "bank7", ram + 0x8000);
+				m_bank3->set_base(ram + 0x8000);
+				m_bank7->set_base(ram + 0x8000);
 				break;
 	}
 	switch(block4) {
 		case 0:
-				memory_set_bankptr(machine, "bank4", rom + 0x1c000);
-				memory_set_bankptr(machine, "bank8", ram + 0xc000);
+				m_bank4->set_base(rom + 0x1c000);
+				m_bank8->set_base(ram + 0xc000);
 				break;
 		case 1: break;
 		case 2: break;
 		case 3:
-				memory_set_bankptr(machine, "bank4", ram + 0xc000);
-				memory_set_bankptr(machine, "bank8", ram + 0xc000);
+				m_bank4->set_base(ram + 0xc000);
+				m_bank8->set_base(ram + 0xc000);
 				break;
 	}
 }
-static WRITE8_DEVICE_HANDLER(pk8000_80_porta_w)
+WRITE8_MEMBER(pk8000_state::pk8000_80_porta_w)
 {
-	pk8000_set_bank(device->machine(),data);
+	pk8000_set_bank(data);
 }
 
-static READ8_DEVICE_HANDLER(pk8000_80_portb_r)
+READ8_MEMBER(pk8000_state::pk8000_80_portb_r)
 {
-	pk8000_state *state = device->machine().driver_data<pk8000_state>();
-	static const char *const keynames[] = { "LINE0", "LINE1", "LINE2", "LINE3", "LINE4", "LINE5", "LINE6", "LINE7", "LINE8", "LINE9" };
-	if(state->m_keyboard_line>9) {
+	if(m_keyboard_line>9) {
 		return 0xff;
 	}
-	return input_port_read(device->machine(),keynames[state->m_keyboard_line]);
+	return m_io_port[m_keyboard_line]->read();
 }
 
-static WRITE8_DEVICE_HANDLER(pk8000_80_portc_w)
+WRITE8_MEMBER(pk8000_state::pk8000_80_portc_w)
 {
-	pk8000_state *state = device->machine().driver_data<pk8000_state>();
-	state->m_keyboard_line = data & 0x0f;
+	m_keyboard_line = data & 0x0f;
 
-	speaker_level_w(device->machine().device(SPEAKER_TAG), BIT(data,7));
+	m_speaker->level_w(BIT(data, 7));
 
-	cassette_device_image(device->machine())->change_state(
-						(BIT(data,4)) ? CASSETTE_MOTOR_ENABLED : CASSETTE_MOTOR_DISABLED,
-						CASSETTE_MASK_MOTOR);
-	cassette_device_image(device->machine())->output((BIT(data,6)) ? +1.0 : 0.0);
+	m_cassette->change_state((BIT(data, 4)) ? CASSETTE_MOTOR_ENABLED : CASSETTE_MOTOR_DISABLED, CASSETTE_MASK_MOTOR);
+	m_cassette->output((BIT(data, 6)) ? +1.0 : 0.0);
 }
 
 static I8255_INTERFACE( pk8000_ppi8255_interface_1 )
 {
 	DEVCB_NULL,
-	DEVCB_HANDLER(pk8000_80_porta_w),
-	DEVCB_HANDLER(pk8000_80_portb_r),
+	DEVCB_DRIVER_MEMBER(pk8000_state,pk8000_80_porta_w),
+	DEVCB_DRIVER_MEMBER(pk8000_state,pk8000_80_portb_r),
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_HANDLER(pk8000_80_portc_w)
+	DEVCB_DRIVER_MEMBER(pk8000_state,pk8000_80_portc_w)
 };
 
-static READ8_DEVICE_HANDLER(pk8000_84_porta_r)
-{
-	return pk8000_video_mode;
-}
-
-static WRITE8_DEVICE_HANDLER(pk8000_84_porta_w)
-{
-	pk8000_video_mode = data;
-}
-
-static WRITE8_DEVICE_HANDLER(pk8000_84_portc_w)
-{
-	pk8000_video_enable = BIT(data,4);
-}
 static I8255_INTERFACE( pk8000_ppi8255_interface_2 )
 {
-	DEVCB_HANDLER(pk8000_84_porta_r),
-	DEVCB_HANDLER(pk8000_84_porta_w),
+	DEVCB_DRIVER_MEMBER(pk8000_base_state,pk8000_84_porta_r),
+	DEVCB_DRIVER_MEMBER(pk8000_base_state,pk8000_84_porta_w),
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_HANDLER(pk8000_84_portc_w)
+	DEVCB_DRIVER_MEMBER(pk8000_base_state,pk8000_84_portc_w)
 };
 
-static READ8_HANDLER(pk8000_joy_1_r)
+READ8_MEMBER(pk8000_state::pk8000_joy_1_r)
 {
-	UINT8 retVal = (cassette_device_image(space->machine())->input() > 0.0038 ? 0x80 : 0);
-	retVal |= input_port_read(space->machine(), "JOY1") & 0x7f;
+	UINT8 retVal = (m_cassette->input() > 0.0038 ? 0x80 : 0);
+	retVal |= m_io_joy1->read() & 0x7f;
 	return retVal;
 }
-static READ8_HANDLER(pk8000_joy_2_r)
+READ8_MEMBER(pk8000_state::pk8000_joy_2_r)
 {
-	UINT8 retVal = (cassette_device_image(space->machine())->input() > 0.0038 ? 0x80 : 0);
-	retVal |= input_port_read(space->machine(), "JOY2") & 0x7f;
+	UINT8 retVal = (m_cassette->input() > 0.0038 ? 0x80 : 0);
+	retVal |= m_io_joy2->read() & 0x7f;
 	return retVal;
 }
 
-static ADDRESS_MAP_START(pk8000_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(pk8000_mem, AS_PROGRAM, 8, pk8000_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE( 0x0000, 0x3fff ) AM_READ_BANK("bank1") AM_WRITE_BANK("bank5")
 	AM_RANGE( 0x4000, 0x7fff ) AM_READ_BANK("bank2") AM_WRITE_BANK("bank6")
@@ -176,10 +202,10 @@ static ADDRESS_MAP_START(pk8000_mem, AS_PROGRAM, 8)
 	AM_RANGE( 0xc000, 0xffff ) AM_READ_BANK("bank4") AM_WRITE_BANK("bank8")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pk8000_io , AS_IO, 8)
+static ADDRESS_MAP_START( pk8000_io , AS_IO, 8, pk8000_state )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x80, 0x83) AM_DEVREADWRITE_MODERN("ppi8255_1", i8255_device, read, write)
-	AM_RANGE(0x84, 0x87) AM_DEVREADWRITE_MODERN("ppi8255_2", i8255_device, read, write)
+	AM_RANGE(0x80, 0x83) AM_DEVREADWRITE("ppi8255_1", i8255_device, read, write)
+	AM_RANGE(0x84, 0x87) AM_DEVREADWRITE("ppi8255_2", i8255_device, read, write)
 	AM_RANGE(0x88, 0x88) AM_READWRITE(pk8000_video_color_r,pk8000_video_color_w)
 	AM_RANGE(0x8c, 0x8c) AM_READ(pk8000_joy_1_r)
 	AM_RANGE(0x8d, 0x8d) AM_READ(pk8000_joy_2_r)
@@ -283,49 +309,59 @@ static INPUT_PORTS_START( pk8000 )
 		PORT_BIT(0x40, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Begin page") PORT_CODE(KEYCODE_PGUP)
 		PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_UNUSED)
 	PORT_START("JOY1")
-		PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP) PORT_CATEGORY(10) PORT_PLAYER(1)
-		PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN) PORT_CATEGORY(10) PORT_PLAYER(1)
-		PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT) PORT_CATEGORY(10) PORT_PLAYER(1)
-		PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT) PORT_CATEGORY(10) PORT_PLAYER(1)
-		PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_BUTTON1) PORT_CATEGORY(10) PORT_PLAYER(1)
-		PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_BUTTON2) PORT_CATEGORY(10) PORT_PLAYER(1)
+		PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP) PORT_PLAYER(1)
+		PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN) PORT_PLAYER(1)
+		PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT) PORT_PLAYER(1)
+		PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT) PORT_PLAYER(1)
+		PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_BUTTON1) PORT_PLAYER(1)
+		PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_BUTTON2) PORT_PLAYER(1)
 		PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_UNUSED)
 		PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_UNUSED)
 	PORT_START("JOY2")
-		PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP) PORT_CATEGORY(10) PORT_PLAYER(2)
-		PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN) PORT_CATEGORY(10) PORT_PLAYER(2)
-		PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT) PORT_CATEGORY(10) PORT_PLAYER(2)
-		PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT) PORT_CATEGORY(10) PORT_PLAYER(2)
-		PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_BUTTON1) PORT_CATEGORY(10) PORT_PLAYER(2)
-		PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_BUTTON2) PORT_CATEGORY(10) PORT_PLAYER(2)
+		PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP) PORT_PLAYER(2)
+		PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN) PORT_PLAYER(2)
+		PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT) PORT_PLAYER(2)
+		PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT) PORT_PLAYER(2)
+		PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_BUTTON1) PORT_PLAYER(2)
+		PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_BUTTON2) PORT_PLAYER(2)
 		PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_UNUSED)
 		PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_UNUSED)
 INPUT_PORTS_END
 
-static INTERRUPT_GEN( pk8000_interrupt )
+INTERRUPT_GEN_MEMBER(pk8000_state::pk8000_interrupt)
 {
-	device_set_input_line(device, 0, HOLD_LINE);
+	device.execute().set_input_line(0, HOLD_LINE);
 }
 
-static IRQ_CALLBACK(pk8000_irq_callback)
+IRQ_CALLBACK_MEMBER(pk8000_state::pk8000_irq_callback)
 {
 	return 0xff;
 }
 
 
-static MACHINE_RESET(pk8000)
+void pk8000_state::machine_start()
 {
-	pk8000_set_bank(machine,0);
-	device_set_irq_callback(machine.device("maincpu"), pk8000_irq_callback);
+	static const char *const keynames[] = { "LINE0", "LINE1", "LINE2", "LINE3", "LINE4", "LINE5", "LINE6", "LINE7", "LINE8", "LINE9" };
+
+	for ( int i = 0; i < 10; i++ )
+	{
+		m_io_port[i] = ioport(keynames[i]);
+	}
 }
 
-static VIDEO_START( pk8000 )
+void pk8000_state::machine_reset()
+{
+	pk8000_set_bank(0);
+	m_maincpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(pk8000_state::pk8000_irq_callback),this));
+}
+
+void pk8000_state::video_start()
 {
 }
 
-static SCREEN_UPDATE( pk8000 )
+UINT32 pk8000_state::screen_update_pk8000(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	return pk8000_video_update(screen, bitmap, cliprect, ram_get_ptr(screen->machine().device(RAM_TAG)));
+	return pk8000_video_update(screen, bitmap, cliprect, m_ram->pointer());
 }
 
 /* Machine driver */
@@ -343,35 +379,31 @@ static MACHINE_CONFIG_START( pk8000, pk8000_state )
 	MCFG_CPU_ADD("maincpu",I8080, 1780000)
 	MCFG_CPU_PROGRAM_MAP(pk8000_mem)
 	MCFG_CPU_IO_MAP(pk8000_io)
-	MCFG_CPU_VBLANK_INT("screen", pk8000_interrupt)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", pk8000_state,  pk8000_interrupt)
 
-	MCFG_MACHINE_RESET(pk8000)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256+32, 192+32)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256+32-1, 0, 192+32-1)
-	MCFG_SCREEN_UPDATE(pk8000)
+	MCFG_SCREEN_UPDATE_DRIVER(pk8000_state, screen_update_pk8000)
 
 	MCFG_PALETTE_LENGTH(16)
-	MCFG_PALETTE_INIT(pk8000)
 
-	MCFG_VIDEO_START(pk8000)
 
 	MCFG_I8255_ADD( "ppi8255_1", pk8000_ppi8255_interface_1 )
 	MCFG_I8255_ADD( "ppi8255_2", pk8000_ppi8255_interface_2 )
 
 	/* audio hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-	MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, pk8000_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", pk8000_cassette_interface )
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -397,7 +429,6 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT     COMPANY   FULLNAME       FLAGS */
-COMP( 1987, vesta,  0,       0, 	pk8000, 	pk8000, 	 0,   "BP EVM",   "PK8000 Vesta",		0)
-COMP( 1987, hobby,  vesta,   0, 	pk8000, 	pk8000, 	 0,   "BP EVM",   "PK8000 Sura/Hobby",	0)
-COMP( 1987, pk8002, vesta,   0, 	pk8000, 	pk8000, 	 0,   "<unknown>",   "PK8002 Elf",	GAME_NOT_WORKING)
-
+COMP( 1987, vesta,  0,       0,     pk8000,     pk8000, driver_device,   0,   "BP EVM",   "PK8000 Vesta",       0)
+COMP( 1987, hobby,  vesta,   0,     pk8000,     pk8000, driver_device,   0,   "BP EVM",   "PK8000 Sura/Hobby",  0)
+COMP( 1987, pk8002, vesta,   0,     pk8000,     pk8000, driver_device,   0,   "<unknown>",   "PK8002 Elf",  GAME_NOT_WORKING)

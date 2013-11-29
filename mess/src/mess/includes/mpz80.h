@@ -1,52 +1,48 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 #pragma once
 
 #ifndef __MPZ80__
 #define __MPZ80__
 
-#define ADDRESS_MAP_MODERN
-
 #include "emu.h"
+#include "bus/s100/s100.h"
 #include "cpu/z80/z80.h"
-#include "formats/basicdsk.h"
-#include "imagedev/flopdrv.h"
 #include "machine/ram.h"
-#include "machine/s100.h"
-#include "machine/s100_dj2db.h"
-#include "machine/s100_djdma.h"
-#include "machine/s100_mm65k16s.h"
-#include "machine/s100_wunderbus.h"
-#include "machine/terminal.h"
 
-#define Z80_TAG			"17a"
-#define AM9512_TAG		"17d"
-#define TERMINAL_TAG	"terminal"
+#define Z80_TAG         "17a"
+#define AM9512_TAG      "17d"
 
 class mpz80_state : public driver_device
 {
 public:
 	mpz80_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, Z80_TAG),
-		  m_ram(*this, RAM_TAG),
-		  m_terminal(*this, TERMINAL_TAG),
-		  m_s100(*this, S100_TAG),
-		  m_nmi(1),
-		  m_pint(1),
-		  m_int_pend(0),
-		  m_pretrap(0),
-		  m_trap(0),
-		  m_trap_reset(0),
-		  m_trap_void(1),
-		  m_trap_halt(1),
-		  m_trap_int(1),
-		  m_trap_stop(1),
-		  m_trap_aux(1)
+			m_maincpu(*this, Z80_TAG),
+			m_ram(*this, RAM_TAG),
+			m_s100(*this, S100_TAG),
+			m_rom(*this, Z80_TAG),
+			m_map_ram(*this, "map_ram"),
+			m_16c(*this, "16C"),
+			m_nmi(1),
+			m_pint(1),
+			m_int_pend(0),
+			m_pretrap(0),
+			m_trap(0),
+			m_trap_reset(0),
+			m_trap_void(1),
+			m_trap_halt(1),
+			m_trap_int(1),
+			m_trap_stop(1),
+			m_trap_aux(1)
 	{ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_ram;
-	required_device<device_t> m_terminal;
+	required_device<ram_device> m_ram;
 	required_device<s100_device> m_s100;
+	required_memory_region m_rom;
+	optional_shared_ptr<UINT8> m_map_ram;
+	required_ioport m_16c;
 
 	virtual void machine_start();
 	virtual void machine_reset();
@@ -72,10 +68,10 @@ public:
 	DECLARE_WRITE8_MEMBER( terminal_w );
 	DECLARE_WRITE_LINE_MEMBER( s100_pint_w );
 	DECLARE_WRITE_LINE_MEMBER( s100_nmi_w );
+	DECLARE_DIRECT_UPDATE_MEMBER(mpz80_direct_update_handler);
 
 	// memory state
 	UINT32 m_addr;
-	UINT8 *m_map_ram;
 	UINT8 m_task;
 	UINT8 m_mask;
 
@@ -97,6 +93,7 @@ public:
 	int m_trap_int;
 	int m_trap_stop;
 	int m_trap_aux;
+	DECLARE_DRIVER_INIT(mpz80);
 };
 
 #endif

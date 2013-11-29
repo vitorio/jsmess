@@ -1,11 +1,9 @@
 /***************************************************************************
 
-    SAM Coupe
+    Miles Gordon Technology SAM Coupe
 
-    Miles Gordon Technology, 1989
-
-    Driver by Lee Hammerton, Dirk Best
-
+    license: MAME
+    copyright-holders: Lee Hammerton, Dirk Best
 
     Notes:
     ------
@@ -34,16 +32,15 @@
 
 /* components */
 #include "cpu/z80/z80.h"
-#include "machine/wd17xx.h"
+#include "machine/wd_fdc.h"
 #include "machine/msm6242.h"
-#include "machine/ctronics.h"
+#include "bus/centronics/ctronics.h"
 #include "sound/saa1099.h"
 #include "sound/speaker.h"
 
 /* devices */
 #include "imagedev/cassette.h"
 #include "formats/tzx_cas.h"
-#include "imagedev/flopdrv.h"
 #include "formats/coupedsk.h"
 #include "machine/ram.h"
 
@@ -56,50 +53,80 @@
 
 
 /***************************************************************************
+    TIMERS
+***************************************************************************/
+
+void samcoupe_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+{
+	switch (id)
+	{
+	case TIMER_IRQ_OFF:
+		irq_off(ptr, param);
+		break;
+	case TIMER_MOUSE_RESET:
+		samcoupe_mouse_reset(ptr, param);
+		break;
+	case TIMER_VIDEO_UPDATE:
+		sam_video_update_callback(ptr, param);
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in samcoupe_state::device_timer");
+	}
+}
+
+/***************************************************************************
     I/O PORTS
 ***************************************************************************/
 
-static READ8_HANDLER( samcoupe_disk_r )
+READ8_MEMBER(samcoupe_state::samcoupe_disk_r)
 {
-	device_t *fdc = space->machine().device("wd1772");
+	wd1772_t *fdc = machine().device<wd1772_t>("wd1772");
 
 	/* drive and side is encoded into bit 5 and 3 */
-	wd17xx_set_drive(fdc, (offset >> 4) & 1);
-	wd17xx_set_side(fdc, (offset >> 2) & 1);
+	floppy_connector *con = machine().device<floppy_connector>(BIT(offset, 4) ? "wd1772:1" : "wd1772:0");
+	floppy_image_device *floppy = con ? con->get_device() : 0;
+
+	if(floppy)
+		floppy->ss_w(BIT(offset, 2));
+	fdc->set_floppy(floppy);
 
 	/* bit 1 and 2 select the controller register */
 	switch (offset & 0x03)
 	{
-	case 0: return wd17xx_status_r(fdc, 0);
-	case 1: return wd17xx_track_r(fdc, 0);
-	case 2: return wd17xx_sector_r(fdc, 0);
-	case 3: return wd17xx_data_r(fdc, 0);
+	case 0: return fdc->status_r();
+	case 1: return fdc->track_r();
+	case 2: return fdc->sector_r();
+	case 3: return fdc->data_r();
 	}
 
 	return 0xff;
 }
 
-static WRITE8_HANDLER( samcoupe_disk_w )
+WRITE8_MEMBER(samcoupe_state::samcoupe_disk_w)
 {
-	device_t *fdc = space->machine().device("wd1772");
+	wd1772_t *fdc = machine().device<wd1772_t>("wd1772");
 
 	/* drive and side is encoded into bit 5 and 3 */
-	wd17xx_set_drive(fdc, (offset >> 4) & 1);
-	wd17xx_set_side(fdc, (offset >> 2) & 1);
+	floppy_connector *con = machine().device<floppy_connector>(BIT(offset, 4) ? "wd1772:1" : "wd1772:0");
+	floppy_image_device *floppy = con ? con->get_device() : 0;
+
+	if(floppy)
+		floppy->ss_w(BIT(offset, 2));
+	fdc->set_floppy(floppy);
 
 	/* bit 1 and 2 select the controller register */
 	switch (offset & 0x03)
 	{
-	case 0: wd17xx_command_w(fdc, 0, data); break;
-	case 1: wd17xx_track_w(fdc, 0, data);   break;
-	case 2: wd17xx_sector_w(fdc, 0, data);  break;
-	case 3: wd17xx_data_w(fdc, 0, data);    break;
+	case 0: fdc->cmd_w(data);     break;
+	case 1: fdc->track_w(data);   break;
+	case 2: fdc->sector_w(data);  break;
+	case 3: fdc->data_w(data);    break;
 	}
 }
 
-static READ8_HANDLER( samcoupe_pen_r )
+READ8_MEMBER(samcoupe_state::samcoupe_pen_r)
 {
-	screen_device *scr = space->machine().primary_screen;
+	screen_device *scr = machine().primary_screen;
 	UINT8 data;
 
 	if (offset & 0x100)
@@ -121,124 +148,114 @@ static READ8_HANDLER( samcoupe_pen_r )
 	return data;
 }
 
-static WRITE8_HANDLER( samcoupe_clut_w )
+WRITE8_MEMBER(samcoupe_state::samcoupe_clut_w)
 {
-	samcoupe_state *state = space->machine().driver_data<samcoupe_state>();
-	state->m_clut[(offset >> 8) & 0x0f] = data & 0x7f;
+	m_clut[(offset >> 8) & 0x0f] = data & 0x7f;
 }
 
-static READ8_HANDLER( samcoupe_status_r )
+READ8_MEMBER(samcoupe_state::samcoupe_status_r)
 {
-	samcoupe_state *state = space->machine().driver_data<samcoupe_state>();
 	UINT8 data = 0xe0;
 
 	/* bit 5-7, keyboard input */
-	if (!BIT(offset,  8)) data &= input_port_read(space->machine(), "keyboard_row_fe") & 0xe0;
-	if (!BIT(offset,  9)) data &= input_port_read(space->machine(), "keyboard_row_fd") & 0xe0;
-	if (!BIT(offset, 10)) data &= input_port_read(space->machine(), "keyboard_row_fb") & 0xe0;
-	if (!BIT(offset, 11)) data &= input_port_read(space->machine(), "keyboard_row_f7") & 0xe0;
-	if (!BIT(offset, 12)) data &= input_port_read(space->machine(), "keyboard_row_ef") & 0xe0;
-	if (!BIT(offset, 13)) data &= input_port_read(space->machine(), "keyboard_row_df") & 0xe0;
-	if (!BIT(offset, 14)) data &= input_port_read(space->machine(), "keyboard_row_bf") & 0xe0;
-	if (!BIT(offset, 15)) data &= input_port_read(space->machine(), "keyboard_row_7f") & 0xe0;
+	if (!BIT(offset,  8)) data &= ioport("keyboard_row_fe")->read() & 0xe0;
+	if (!BIT(offset,  9)) data &= ioport("keyboard_row_fd")->read() & 0xe0;
+	if (!BIT(offset, 10)) data &= ioport("keyboard_row_fb")->read() & 0xe0;
+	if (!BIT(offset, 11)) data &= ioport("keyboard_row_f7")->read() & 0xe0;
+	if (!BIT(offset, 12)) data &= ioport("keyboard_row_ef")->read() & 0xe0;
+	if (!BIT(offset, 13)) data &= ioport("keyboard_row_df")->read() & 0xe0;
+	if (!BIT(offset, 14)) data &= ioport("keyboard_row_bf")->read() & 0xe0;
+	if (!BIT(offset, 15)) data &= ioport("keyboard_row_7f")->read() & 0xe0;
 
 	/* bit 0-4, interrupt source */
-	data |= state->m_status;
+	data |= m_status;
 
 	return data;
 }
 
-static WRITE8_HANDLER( samcoupe_line_int_w )
+WRITE8_MEMBER(samcoupe_state::samcoupe_line_int_w)
 {
-	samcoupe_state *state = space->machine().driver_data<samcoupe_state>();
-	state->m_line_int = data;
+	m_line_int = data;
 }
 
-static READ8_HANDLER( samcoupe_lmpr_r )
+READ8_MEMBER(samcoupe_state::samcoupe_lmpr_r)
 {
-	samcoupe_state *state = space->machine().driver_data<samcoupe_state>();
-	return state->m_lmpr;
+	return m_lmpr;
 }
 
-static WRITE8_HANDLER( samcoupe_lmpr_w )
+WRITE8_MEMBER(samcoupe_state::samcoupe_lmpr_w)
 {
-	address_space *space_program = space->machine().device("maincpu")->memory().space(AS_PROGRAM);
-	samcoupe_state *state = space->machine().driver_data<samcoupe_state>();
+	address_space &space_program = m_maincpu->space(AS_PROGRAM);
 
-	state->m_lmpr = data;
+	m_lmpr = data;
 	samcoupe_update_memory(space_program);
 }
 
-static READ8_HANDLER( samcoupe_hmpr_r )
+READ8_MEMBER(samcoupe_state::samcoupe_hmpr_r)
 {
-	samcoupe_state *state = space->machine().driver_data<samcoupe_state>();
-	return state->m_hmpr;
+	return m_hmpr;
 }
 
-static WRITE8_HANDLER( samcoupe_hmpr_w )
+WRITE8_MEMBER(samcoupe_state::samcoupe_hmpr_w)
 {
-	address_space *space_program = space->machine().device("maincpu")->memory().space(AS_PROGRAM);
-	samcoupe_state *state = space->machine().driver_data<samcoupe_state>();
+	address_space &space_program = m_maincpu->space(AS_PROGRAM);
 
-	state->m_hmpr = data;
+	m_hmpr = data;
 	samcoupe_update_memory(space_program);
 }
 
-static READ8_HANDLER( samcoupe_vmpr_r )
+READ8_MEMBER(samcoupe_state::samcoupe_vmpr_r)
 {
-	samcoupe_state *state = space->machine().driver_data<samcoupe_state>();
-	return state->m_vmpr;
+	return m_vmpr;
 }
 
-static WRITE8_HANDLER( samcoupe_vmpr_w )
+WRITE8_MEMBER(samcoupe_state::samcoupe_vmpr_w)
 {
-	address_space *space_program = space->machine().device("maincpu")->memory().space(AS_PROGRAM);
-	samcoupe_state *state = space->machine().driver_data<samcoupe_state>();
+	address_space &space_program = m_maincpu->space(AS_PROGRAM);
 
-	state->m_vmpr = data;
+	m_vmpr = data;
 	samcoupe_update_memory(space_program);
 }
 
-static READ8_HANDLER( samcoupe_midi_r )
+READ8_MEMBER(samcoupe_state::samcoupe_midi_r)
 {
-	logerror("%s: read from midi port\n", space->machine().describe_context());
+	logerror("%s: read from midi port\n", machine().describe_context());
 	return 0xff;
 }
 
-static WRITE8_HANDLER( samcoupe_midi_w )
+WRITE8_MEMBER(samcoupe_state::samcoupe_midi_w)
 {
-	logerror("%s: write to midi port: 0x%02x\n", space->machine().describe_context(), data);
+	logerror("%s: write to midi port: 0x%02x\n", machine().describe_context(), data);
 }
 
-static READ8_HANDLER( samcoupe_keyboard_r )
+READ8_MEMBER(samcoupe_state::samcoupe_keyboard_r)
 {
-	cassette_image_device *cassette = space->machine().device<cassette_image_device>(CASSETTE_TAG);
 	UINT8 data = 0x1f;
 
 	/* bit 0-4, keyboard input */
-	if (!BIT(offset,  8)) data &= input_port_read(space->machine(), "keyboard_row_fe") & 0x1f;
-	if (!BIT(offset,  9)) data &= input_port_read(space->machine(), "keyboard_row_fd") & 0x1f;
-	if (!BIT(offset, 10)) data &= input_port_read(space->machine(), "keyboard_row_fb") & 0x1f;
-	if (!BIT(offset, 11)) data &= input_port_read(space->machine(), "keyboard_row_f7") & 0x1f;
-	if (!BIT(offset, 12)) data &= input_port_read(space->machine(), "keyboard_row_ef") & 0x1f;
-	if (!BIT(offset, 13)) data &= input_port_read(space->machine(), "keyboard_row_df") & 0x1f;
-	if (!BIT(offset, 14)) data &= input_port_read(space->machine(), "keyboard_row_bf") & 0x1f;
-	if (!BIT(offset, 15)) data &= input_port_read(space->machine(), "keyboard_row_7f") & 0x1f;
+	if (!BIT(offset,  8)) data &= ioport("keyboard_row_fe")->read() & 0x1f;
+	if (!BIT(offset,  9)) data &= ioport("keyboard_row_fd")->read() & 0x1f;
+	if (!BIT(offset, 10)) data &= ioport("keyboard_row_fb")->read() & 0x1f;
+	if (!BIT(offset, 11)) data &= ioport("keyboard_row_f7")->read() & 0x1f;
+	if (!BIT(offset, 12)) data &= ioport("keyboard_row_ef")->read() & 0x1f;
+	if (!BIT(offset, 13)) data &= ioport("keyboard_row_df")->read() & 0x1f;
+	if (!BIT(offset, 14)) data &= ioport("keyboard_row_bf")->read() & 0x1f;
+	if (!BIT(offset, 15)) data &= ioport("keyboard_row_7f")->read() & 0x1f;
 
 	if (offset == 0xff00)
 	{
-		data &= input_port_read(space->machine(), "keyboard_row_ff") & 0x1f;
+		data &= ioport("keyboard_row_ff")->read() & 0x1f;
 
 		/* if no key has been pressed, return the mouse state */
 		if (data == 0x1f)
-			data = samcoupe_mouse_r(space->machine());
+			data = samcoupe_mouse_r();
 	}
 
 	/* bit 5, lightpen strobe */
 	data |= 1 << 5;
 
 	/* bit 6, cassette input */
-	data |= ((cassette)->input() > 0 ? 1 : 0) << 6;
+	data |= (m_cassette->input() > 0 ? 1 : 0) << 6;
 
 	/* bit 7, external memory */
 	data |= 1 << 7;
@@ -246,45 +263,44 @@ static READ8_HANDLER( samcoupe_keyboard_r )
 	return data;
 }
 
-static WRITE8_HANDLER( samcoupe_border_w )
+WRITE8_MEMBER(samcoupe_state::samcoupe_border_w)
 {
-	cassette_image_device *cassette = space->machine().device<cassette_image_device>(CASSETTE_TAG);
-	device_t *speaker = space->machine().device(SPEAKER_TAG);
-	samcoupe_state *state = space->machine().driver_data<samcoupe_state>();
-
-	state->m_border = data;
+	m_border = data;
 
 	/* bit 3, cassette output */
-	cassette->output( BIT(data, 3) ? -1.0 : +1.0);
+	m_cassette->output( BIT(data, 3) ? -1.0 : +1.0);
 
 	/* bit 4, beep */
-	speaker_level_w(speaker, BIT(data, 4));
+	m_speaker->level_w(BIT(data, 4));
 }
 
-static READ8_HANDLER( samcoupe_attributes_r )
+READ8_MEMBER(samcoupe_state::samcoupe_attributes_r)
 {
-	samcoupe_state *state = space->machine().driver_data<samcoupe_state>();
-	return state->m_attribute;
+	return m_attribute;
 }
 
-static READ8_DEVICE_HANDLER( samcoupe_lpt1_busy_r )
+READ8_MEMBER(samcoupe_state::samcoupe_lpt1_busy_r)
 {
-	return centronics_busy_r(device);
+	centronics_device *centronics = machine().device<centronics_device>("lpt1");
+	return centronics->busy_r();
 }
 
-static WRITE8_DEVICE_HANDLER( samcoupe_lpt1_strobe_w )
+WRITE8_MEMBER(samcoupe_state::samcoupe_lpt1_strobe_w)
 {
-	centronics_strobe_w(device, data);
+	centronics_device *centronics = machine().device<centronics_device>("lpt1");
+	centronics->strobe_w(data);
 }
 
-static READ8_DEVICE_HANDLER( samcoupe_lpt2_busy_r )
+READ8_MEMBER(samcoupe_state::samcoupe_lpt2_busy_r)
 {
-	return centronics_busy_r(device);
+	centronics_device *centronics = machine().device<centronics_device>("lpt2");
+	return centronics->busy_r();
 }
 
-static WRITE8_DEVICE_HANDLER( samcoupe_lpt2_strobe_w )
+WRITE8_MEMBER(samcoupe_state::samcoupe_lpt2_strobe_w)
 {
-	centronics_strobe_w(device, data);
+	centronics_device *centronics = machine().device<centronics_device>("lpt2");
+	centronics->strobe_w(data);
 }
 
 
@@ -292,20 +308,20 @@ static WRITE8_DEVICE_HANDLER( samcoupe_lpt2_strobe_w )
     ADDRESS MAPS
 ***************************************************************************/
 
-static ADDRESS_MAP_START( samcoupe_mem, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x3fff) AM_RAMBANK("bank1")
-	AM_RANGE(0x4000, 0x7fff) AM_RAMBANK("bank2")
-	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK("bank3")
-	AM_RANGE(0xc000, 0xffff) AM_RAMBANK("bank4")
+static ADDRESS_MAP_START( samcoupe_mem, AS_PROGRAM, 8, samcoupe_state )
+	AM_RANGE(0x0000, 0x3fff) AM_RAM AM_READWRITE(sam_bank1_r, sam_bank1_w) // AM_RAMBANK("bank1")
+	AM_RANGE(0x4000, 0x7fff) AM_RAM AM_READWRITE(sam_bank2_r, sam_bank2_w) // AM_RAMBANK("bank2")
+	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_READWRITE(sam_bank3_r, sam_bank3_w) // AM_RAMBANK("bank3")
+	AM_RANGE(0xc000, 0xffff) AM_RAM AM_READWRITE(sam_bank4_r, sam_bank4_w) // AM_RAMBANK("bank4")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( samcoupe_io, AS_IO, 8 )
+static ADDRESS_MAP_START( samcoupe_io, AS_IO, 8, samcoupe_state )
 	AM_RANGE(0x0080, 0x0081) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_WRITE(samcoupe_ext_mem_w)
 	AM_RANGE(0x00e0, 0x00e7) AM_MIRROR(0xff10) AM_MASK(0xffff) AM_READWRITE(samcoupe_disk_r, samcoupe_disk_w)
-	AM_RANGE(0x00e8, 0x00e8) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_DEVWRITE("lpt1", centronics_data_w)
-	AM_RANGE(0x00e9, 0x00e9) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_DEVREADWRITE("lpt1", samcoupe_lpt1_busy_r, samcoupe_lpt1_strobe_w)
-	AM_RANGE(0x00ea, 0x00ea) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_DEVWRITE("lpt2", centronics_data_w)
-	AM_RANGE(0x00eb, 0x00eb) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_DEVREADWRITE("lpt2", samcoupe_lpt2_busy_r, samcoupe_lpt2_strobe_w)
+	AM_RANGE(0x00e8, 0x00e8) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_DEVWRITE("lpt1", centronics_device, write)
+	AM_RANGE(0x00e9, 0x00e9) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(samcoupe_lpt1_busy_r, samcoupe_lpt1_strobe_w)
+	AM_RANGE(0x00ea, 0x00ea) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_DEVWRITE("lpt2", centronics_device, write)
+	AM_RANGE(0x00eb, 0x00eb) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(samcoupe_lpt2_busy_r, samcoupe_lpt2_strobe_w)
 	AM_RANGE(0x00f8, 0x00f8) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(samcoupe_pen_r, samcoupe_clut_w)
 	AM_RANGE(0x00f9, 0x00f9) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(samcoupe_status_r, samcoupe_line_int_w)
 	AM_RANGE(0x00fa, 0x00fa) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(samcoupe_lmpr_r, samcoupe_lmpr_w)
@@ -314,8 +330,8 @@ static ADDRESS_MAP_START( samcoupe_io, AS_IO, 8 )
 	AM_RANGE(0x00fd, 0x00fd) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(samcoupe_midi_r, samcoupe_midi_w)
 	AM_RANGE(0x00fe, 0x00fe) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(samcoupe_keyboard_r, samcoupe_border_w)
 	AM_RANGE(0x00ff, 0x00ff) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READ(samcoupe_attributes_r)
-	AM_RANGE(0x00ff, 0x00ff) AM_MIRROR(0xfe00) AM_MASK(0xffff) AM_DEVWRITE("saa1099", saa1099_data_w)
-	AM_RANGE(0x01ff, 0x01ff) AM_MIRROR(0xfe00) AM_MASK(0xffff) AM_DEVWRITE("saa1099", saa1099_control_w)
+	AM_RANGE(0x00ff, 0x00ff) AM_MIRROR(0xfe00) AM_MASK(0xffff) AM_DEVWRITE("saa1099", saa1099_device, saa1099_data_w)
+	AM_RANGE(0x01ff, 0x01ff) AM_MIRROR(0xfe00) AM_MASK(0xffff) AM_DEVWRITE("saa1099", saa1099_device, saa1099_control_w)
 ADDRESS_MAP_END
 
 
@@ -323,34 +339,31 @@ ADDRESS_MAP_END
     INTERRUPTS
 ***************************************************************************/
 
-static TIMER_CALLBACK( irq_off )
+TIMER_CALLBACK_MEMBER(samcoupe_state::irq_off)
 {
-	samcoupe_state *state = machine.driver_data<samcoupe_state>();
 	/* adjust STATUS register */
-	state->m_status |= param;
+	m_status |= param;
 
 	/* clear interrupt */
-	if ((state->m_status & 0x1f) == 0x1f)
-		cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
+	if ((m_status & 0x1f) == 0x1f)
+		m_maincpu->set_input_line(0, CLEAR_LINE);
 
 }
 
-void samcoupe_irq(device_t *device, UINT8 src)
+void samcoupe_state::samcoupe_irq(UINT8 src)
 {
-	samcoupe_state *state = device->machine().driver_data<samcoupe_state>();
-
 	/* assert irq and a timer to set it off again */
-	device_set_input_line(device, 0, ASSERT_LINE);
-	device->machine().scheduler().timer_set(attotime::from_usec(20), FUNC(irq_off), src);
+	m_maincpu->set_input_line(0, ASSERT_LINE);
+	timer_set(attotime::from_usec(20), TIMER_IRQ_OFF, src);
 
 	/* adjust STATUS register */
-	state->m_status &= ~src;
+	m_status &= ~src;
 }
 
-static INTERRUPT_GEN( samcoupe_frame_interrupt )
+INTERRUPT_GEN_MEMBER(samcoupe_state::samcoupe_frame_interrupt)
 {
 	/* signal frame interrupt */
-	samcoupe_irq(device, SAM_FRAME_INT);
+	samcoupe_irq(SAM_FRAME_INT);
 }
 
 
@@ -476,7 +489,7 @@ INPUT_PORTS_END
          nothing   G+4     R+4     B+4    ALL+1    G+2     R+2     B+2
 
 */
-static PALETTE_INIT( samcoupe )
+void samcoupe_state::palette_init()
 {
 	for (int i = 0; i < 128; i++)
 	{
@@ -484,10 +497,14 @@ static PALETTE_INIT( samcoupe )
 		UINT8 r = BIT(i, 1) * 2 + BIT(i, 5) * 4 + BIT(i, 3);
 		UINT8 g = BIT(i, 2) * 2 + BIT(i, 6) * 4 + BIT(i, 3);
 
-		palette_set_color(machine, i, MAKE_RGB(r, g, b));
+		r <<= 5;
+		g <<= 5;
+		b <<= 5;
+
+		palette_set_color(machine(), i, MAKE_RGB(r, g, b));
 	}
 
-	palette_normalize_range(machine.palette, 0, 127, 0, 255);
+	palette_normalize_range(machine().palette, 0, 127, 0, 255);
 }
 
 
@@ -500,60 +517,21 @@ static const cassette_interface samcoupe_cassette_interface =
 	tzx_cassette_formats,
 	NULL,
 	(cassette_state)(CASSETTE_STOPPED | CASSETTE_SPEAKER_ENABLED | CASSETTE_MOTOR_ENABLED),
-	NULL,
+	"samcoupe_cass",
 	NULL
 };
 
+FLOPPY_FORMATS_MEMBER( samcoupe_state::floppy_formats )
+	FLOPPY_MGT_FORMAT
+FLOPPY_FORMATS_END
 
-static FLOPPY_OPTIONS_START( samcoupe )
-	FLOPPY_OPTION
-	(
-		coupe_mgt, "mgt,dsk,sad", "SAM Coupe MGT disk image", coupe_mgt_identify, coupe_mgt_construct, NULL,
-		HEADS([2])
-		TRACKS([80])
-		SECTORS(9-[10])
-		SECTOR_LENGTH([512])
-		FIRST_SECTOR_ID([1])
-	)
-	FLOPPY_OPTION
-	(
-		coupe_sad, "sad,dsk", "SAM Coupe SAD disk image", coupe_sad_identify, coupe_sad_construct, NULL,
-		HEADS(1-[2]-255)
-		TRACKS(1-[80]-255)
-		SECTORS(1-[10]-255)
-		SECTOR_LENGTH(64/128/256/[512]/1024/2048/4096)
-		FIRST_SECTOR_ID([1])
-	)
-	FLOPPY_OPTION
-	(
-		coupe_sdf, "sdf,dsk,sad", "SAM Coupe SDF disk image", coupe_sdf_identify, coupe_sdf_construct, NULL,
-		HEADS(1-[2])
-		TRACKS(1-[80]-83)
-		SECTORS(1-[10]-12)
-		SECTOR_LENGTH(128/256/[512]/1024)
-		FIRST_SECTOR_ID([1])
-	)
-FLOPPY_OPTIONS_END
+static SLOT_INTERFACE_START( samcoupe_floppies )
+	SLOT_INTERFACE( "35dd", FLOPPY_35_DD )
+SLOT_INTERFACE_END
 
-static const floppy_interface samcoupe_floppy_interface =
+static MSM6242_INTERFACE( samcoupe_rtc_intf )
 {
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	FLOPPY_STANDARD_5_25_DSHD,
-	FLOPPY_OPTIONS_NAME(samcoupe),
-	NULL,
-	NULL
-};
-
-static const wd17xx_interface samcoupe_wd17xx_intf =
-{
-	DEVCB_LINE_GND,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	{ FLOPPY_0, FLOPPY_1, NULL, NULL }
+	DEVCB_NULL
 };
 
 static MACHINE_CONFIG_START( samcoupe, samcoupe_state )
@@ -561,37 +539,35 @@ static MACHINE_CONFIG_START( samcoupe, samcoupe_state )
 	MCFG_CPU_ADD("maincpu", Z80, SAMCOUPE_XTAL_X1 / 4) /* 6 MHz */
 	MCFG_CPU_PROGRAM_MAP(samcoupe_mem)
 	MCFG_CPU_IO_MAP(samcoupe_io)
-	MCFG_CPU_VBLANK_INT("screen", samcoupe_frame_interrupt)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", samcoupe_state,  samcoupe_frame_interrupt)
 
-	MCFG_MACHINE_START(samcoupe)
-	MCFG_MACHINE_RESET(samcoupe)
 
-    /* video hardware */
+	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_RAW_PARAMS(SAMCOUPE_XTAL_X1/2, SAM_TOTAL_WIDTH, 0, SAM_BORDER_LEFT + SAM_SCREEN_WIDTH + SAM_BORDER_RIGHT, SAM_TOTAL_HEIGHT, 0, SAM_BORDER_TOP + SAM_SCREEN_HEIGHT + SAM_BORDER_BOTTOM)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MCFG_SCREEN_UPDATE(generic_bitmapped)
+	MCFG_SCREEN_UPDATE_DRIVER(samcoupe_state, screen_update)
 
 	MCFG_PALETTE_LENGTH(128)
-	MCFG_PALETTE_INIT(samcoupe)
-
-	MCFG_VIDEO_START(generic_bitmapped)
 
 	/* devices */
-	MCFG_CENTRONICS_ADD("lpt1", standard_centronics)
-	MCFG_CENTRONICS_ADD("lpt2", standard_centronics)
-	MCFG_MSM6242_ADD("sambus_clock")
-	MCFG_WD1772_ADD("wd1772", samcoupe_wd17xx_intf)
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, samcoupe_cassette_interface)
+	MCFG_CENTRONICS_PRINTER_ADD("lpt1", standard_centronics)
+	MCFG_CENTRONICS_PRINTER_ADD("lpt2", standard_centronics)
+	MCFG_MSM6242_ADD("sambus_clock", samcoupe_rtc_intf)
+	MCFG_CASSETTE_ADD("cassette", samcoupe_cassette_interface)
+	MCFG_SOFTWARE_LIST_ADD("cass_list","samcoupe_cass")
+
+	MCFG_WD1772x_ADD("wd1772", SAMCOUPE_XTAL_X1/3)
+	MCFG_FLOPPY_DRIVE_ADD("wd1772:0", samcoupe_floppies, "35dd", samcoupe_state::floppy_formats)
+	MCFG_FLOPPY_DRIVE_ADD("wd1772:1", samcoupe_floppies, "35dd", samcoupe_state::floppy_formats)
+	MCFG_SOFTWARE_LIST_ADD("flop_list","samcoupe_flop")
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-	MCFG_SOUND_ADD("saa1099", SAA1099, SAMCOUPE_XTAL_X1/3) /* 8 MHz */
+	MCFG_SAA1099_ADD("saa1099", SAMCOUPE_XTAL_X1/3) /* 8 MHz */
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_FLOPPY_2_DRIVES_ADD(samcoupe_floppy_interface)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -646,4 +622,4 @@ ROM_END
 ***************************************************************************/
 
 /*    YEAR  NAME      PARENT  COMPAT  MACHINE   INPUT     INIT  COMPANY                        FULLNAME     FLAGS */
-COMP( 1989, samcoupe, 0,      0,      samcoupe, samcoupe, 0,    "Miles Gordon Technology plc", "SAM Coupe", 0 )
+COMP( 1989, samcoupe, 0,      0,      samcoupe, samcoupe, driver_device, 0,    "Miles Gordon Technology plc", "SAM Coupe", 0 )

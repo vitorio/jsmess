@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 #include "includes/cidelsa.h"
 
 /* CDP1802 Interface */
@@ -34,45 +36,45 @@ WRITE8_MEMBER( draco_state::sound_bankswitch_w )
 {
 	/*
 
-        pin     description
+	    pin     description
 
-        D0      not connected
-        D1      not connected
-        D2      not connected
-        D3      2716 A10
+	    D0      not connected
+	    D1      not connected
+	    D2      not connected
+	    D3      2716 A10
 
-    */
+	*/
 
 	int bank = BIT(data, 3);
 
-	memory_set_bank(machine(), "bank1", bank);
+	membank("bank1")->set_entry(bank);
 }
 
 WRITE8_MEMBER( draco_state::sound_g_w )
 {
 	/*
 
-     G1 G0  description
+	 G1 G0  description
 
-      0  0  IAB     inactive
-      0  1  DWS     write to PSG
-      1  0  DTB     read from PSG
-      1  1  INTAK   latch address
+	  0  0  IAB     inactive
+	  0  1  DWS     write to PSG
+	  1  0  DTB     read from PSG
+	  1  1  INTAK   latch address
 
-    */
+	*/
 
 	switch (data)
 	{
 	case 0x01:
-		ay8910_data_w(m_psg, 0, m_psg_latch);
+		m_psg->data_w(space, 0, m_psg_latch);
 		break;
 
 	case 0x02:
-		m_psg_latch = ay8910_r(m_psg, 0);
+		m_psg_latch = m_psg->data_r(space, 0);
 		break;
 
 	case 0x03:
-		ay8910_address_w(m_psg, 0, m_psg_latch);
+		m_psg->address_w(space, 0, m_psg_latch);
 		break;
 	}
 }
@@ -97,17 +99,17 @@ WRITE8_MEMBER( draco_state::psg_w )
 WRITE8_MEMBER( cidelsa_state::destryer_out1_w )
 {
 	/*
-      bit   description
+	  bit   description
 
-        0
-        1
-        2
-        3
-        4
-        5
-        6
-        7
-    */
+	    0
+	    1
+	    2
+	    3
+	    4
+	    5
+	    6
+	    7
+	*/
 }
 
 /* CDP1852 Interfaces */
@@ -115,17 +117,17 @@ WRITE8_MEMBER( cidelsa_state::destryer_out1_w )
 WRITE8_MEMBER( cidelsa_state::altair_out1_w )
 {
 	/*
-      bit   description
+	  bit   description
 
-        0   S1 (CARTUCHO)
-        1   S2 (CARTUCHO)
-        2   S3 (CARTUCHO)
-        3   LG1
-        4   LG2
-        5   LGF
-        6   CONT. M2
-        7   CONT. M1
-    */
+	    0   S1 (CARTUCHO)
+	    1   S2 (CARTUCHO)
+	    2   S3 (CARTUCHO)
+	    3   LG1
+	    4   LG2
+	    5   LGF
+	    6   CONT. M2
+	    7   CONT. M1
+	*/
 
 	set_led_status(machine(), 0, data & 0x08); // 1P
 	set_led_status(machine(), 1, data & 0x10); // 2P
@@ -135,17 +137,17 @@ WRITE8_MEMBER( cidelsa_state::altair_out1_w )
 WRITE8_MEMBER( draco_state::out1_w )
 {
 	/*
-      bit   description
+	  bit   description
 
-        0   3K9 -> Green signal
-        1   820R -> Blue signal
-        2   510R -> Red signal
-        3   1K -> not connected
-        4   not connected
-        5   SONIDO A -> COP402 IN0
-        6   SONIDO B -> COP402 IN1
-        7   SONIDO C -> COP402 IN2
-    */
+	    0   3K9 -> Green signal
+	    1   820R -> Blue signal
+	    2   510R -> Red signal
+	    3   1K -> not connected
+	    4   not connected
+	    5   SONIDO A -> COP402 IN0
+	    6   SONIDO B -> COP402 IN1
+	    7   SONIDO C -> COP402 IN2
+	*/
 
 	m_sound = (data & 0xe0) >> 5;
 }
@@ -190,14 +192,6 @@ static CDP1852_INTERFACE( draco_cdp1852_out1_intf )
 	DEVCB_NULL
 };
 
-/* COP400 Interface */
-
-static COP400_INTERFACE( draco_cop_intf )
-{
-	COP400_CKI_DIVISOR_16, // ???
-	COP400_CKO_OSCILLATOR_OUTPUT, // ???
-	COP400_MICROBUS_DISABLED
-};
 
 /* Memory Maps */
 
@@ -206,15 +200,15 @@ static COP400_INTERFACE( draco_cop_intf )
 static ADDRESS_MAP_START( destryer_map, AS_PROGRAM, 8, cidelsa_state )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x20ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xf400, 0xf7ff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, char_ram_r, char_ram_w)
-	AM_RANGE(0xf800, 0xffff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, page_ram_r, page_ram_w)
+	AM_RANGE(0xf400, 0xf7ff) AM_DEVICE(CDP1869_TAG, cdp1869_device, char_map)
+	AM_RANGE(0xf800, 0xffff) AM_DEVICE(CDP1869_TAG, cdp1869_device, page_map)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( destryera_map, AS_PROGRAM, 8, cidelsa_state )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x3000, 0x30ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xf400, 0xf7ff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, char_ram_r, char_ram_w)
-	AM_RANGE(0xf800, 0xffff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, page_ram_r, page_ram_w)
+	AM_RANGE(0xf400, 0xf7ff) AM_DEVICE(CDP1869_TAG, cdp1869_device, char_map)
+	AM_RANGE(0xf800, 0xffff) AM_DEVICE(CDP1869_TAG, cdp1869_device, page_map)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( destryer_io_map, AS_IO, 8, cidelsa_state )
@@ -228,8 +222,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( altair_map, AS_PROGRAM, 8, cidelsa_state )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x3000, 0x30ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xf400, 0xf7ff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, char_ram_r, char_ram_w)
-	AM_RANGE(0xf800, 0xffff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, page_ram_r, page_ram_w)
+	AM_RANGE(0xf400, 0xf7ff) AM_DEVICE(CDP1869_TAG, cdp1869_device, char_map)
+	AM_RANGE(0xf800, 0xffff) AM_DEVICE(CDP1869_TAG, cdp1869_device, page_map)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( altair_io_map, AS_IO, 8, cidelsa_state )
@@ -244,15 +238,15 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( draco_map, AS_PROGRAM, 8, draco_state )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xf400, 0xf7ff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, char_ram_r, char_ram_w)
-	AM_RANGE(0xf800, 0xffff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, page_ram_r, page_ram_w)
+	AM_RANGE(0xf400, 0xf7ff) AM_DEVICE(CDP1869_TAG, cdp1869_device, char_map)
+	AM_RANGE(0xf800, 0xffff) AM_DEVICE(CDP1869_TAG, cdp1869_device, page_map)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( draco_io_map, AS_IO, 8, draco_state )
 	AM_RANGE(0x01, 0x01) AM_DEVREAD("ic29", cdp1852_device, read) AM_DEVWRITE("ic32", cdp1852_device, write)
 	AM_RANGE(0x02, 0x02) AM_DEVREAD("ic30", cdp1852_device, read)
 	AM_RANGE(0x04, 0x04) AM_DEVREAD("ic31", cdp1852_device, read)
-	AM_RANGE(0x03, 0x07) AM_WRITE_BASE(cidelsa_state, cdp1869_w)
+	AM_RANGE(0x03, 0x07) AM_WRITE(cdp1869_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( draco_sound_map, AS_PROGRAM, 8, draco_state )
@@ -270,16 +264,14 @@ ADDRESS_MAP_END
 
 /* Input Ports */
 
-static CUSTOM_INPUT( cdp1869_pcb_r )
+CUSTOM_INPUT_MEMBER(cidelsa_state::cdp1869_pcb_r)
 {
-	cidelsa_state *state = field.machine().driver_data<cidelsa_state>();
-
-	return state->m_cdp1869_pcb;
+	return m_cdp1869_pcb;
 }
 
-static INPUT_CHANGED( ef_w )
+INPUT_CHANGED_MEMBER(cidelsa_state::ef_w)
 {
-	cputag_set_input_line(field.machine(), CDP1802_TAG, (int)(FPTR)param, newval);
+	m_maincpu->set_input_line((int)(FPTR)param, newval);
 }
 
 static INPUT_PORTS_START( destryer )
@@ -291,7 +283,7 @@ static INPUT_PORTS_START( destryer )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) // LF
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 ) // FR
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(cdp1869_pcb_r, NULL)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM_MEMBER(DEVICE_SELF, cidelsa_state,cdp1869_pcb_r, NULL)
 
 	PORT_START("IN1")
 	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Difficulty ) )
@@ -317,9 +309,9 @@ static INPUT_PORTS_START( destryer )
 
 	PORT_START("EF")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) // inverted CDP1869 PRD, pushed
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SERVICE ) PORT_CHANGED(ef_w, (void*)COSMAC_INPUT_LINE_EF2)
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_COIN2 ) PORT_CHANGED(ef_w, (void*)COSMAC_INPUT_LINE_EF3)
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_CHANGED(ef_w, (void*)COSMAC_INPUT_LINE_EF4)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SERVICE ) PORT_CHANGED_MEMBER(DEVICE_SELF, cidelsa_state,ef_w, (void*)COSMAC_INPUT_LINE_EF2)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_COIN2 ) PORT_CHANGED_MEMBER(DEVICE_SELF, cidelsa_state,ef_w, (void*)COSMAC_INPUT_LINE_EF3)
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_CHANGED_MEMBER(DEVICE_SELF, cidelsa_state,ef_w, (void*)COSMAC_INPUT_LINE_EF4)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( altair )
@@ -331,7 +323,7 @@ static INPUT_PORTS_START( altair )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) // LF
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 ) // FR
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(cdp1869_pcb_r, NULL)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM_MEMBER(DEVICE_SELF, cidelsa_state,cdp1869_pcb_r, NULL)
 
 	PORT_START("IN1")
 	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Difficulty ) )
@@ -367,9 +359,9 @@ static INPUT_PORTS_START( altair )
 
 	PORT_START("EF")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) // inverted CDP1869 PRD, pushed
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SERVICE ) PORT_CHANGED(ef_w, (void*)COSMAC_INPUT_LINE_EF2)
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_COIN2 ) PORT_CHANGED(ef_w, (void*)COSMAC_INPUT_LINE_EF3)
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_CHANGED(ef_w, (void*)COSMAC_INPUT_LINE_EF4)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SERVICE ) PORT_CHANGED_MEMBER(DEVICE_SELF, cidelsa_state,ef_w, (void*)COSMAC_INPUT_LINE_EF2)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_COIN2 ) PORT_CHANGED_MEMBER(DEVICE_SELF, cidelsa_state,ef_w, (void*)COSMAC_INPUT_LINE_EF3)
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_CHANGED_MEMBER(DEVICE_SELF, cidelsa_state,ef_w, (void*)COSMAC_INPUT_LINE_EF4)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( draco )
@@ -381,7 +373,7 @@ static INPUT_PORTS_START( draco )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(cdp1869_pcb_r, NULL)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM_MEMBER(DEVICE_SELF, cidelsa_state,cdp1869_pcb_r, NULL)
 
 	PORT_START("IN1")
 	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Difficulty ) )
@@ -419,18 +411,23 @@ static INPUT_PORTS_START( draco )
 
 	PORT_START("EF")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) // CDP1869 PRD, pushed
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SERVICE ) PORT_CHANGED(ef_w, (void*)COSMAC_INPUT_LINE_EF2)
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_COIN2 ) PORT_CHANGED(ef_w, (void*)COSMAC_INPUT_LINE_EF3)
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_CHANGED(ef_w, (void*)COSMAC_INPUT_LINE_EF4)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SERVICE ) PORT_CHANGED_MEMBER(DEVICE_SELF, cidelsa_state,ef_w, (void*)COSMAC_INPUT_LINE_EF2)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_COIN2 ) PORT_CHANGED_MEMBER(DEVICE_SELF, cidelsa_state,ef_w, (void*)COSMAC_INPUT_LINE_EF3)
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_CHANGED_MEMBER(DEVICE_SELF, cidelsa_state,ef_w, (void*)COSMAC_INPUT_LINE_EF4)
 INPUT_PORTS_END
 
 /* Machine Start */
 
-static TIMER_CALLBACK( set_cpu_mode )
+void cidelsa_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	cidelsa_state *state = machine.driver_data<cidelsa_state>();
-
-	state->m_reset = 1;
+	switch (id)
+	{
+	case TIMER_SET_CPU_MODE:
+		m_reset = 1;
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in cidelsa_state::device_timer");
+	}
 }
 
 void cidelsa_state::machine_start()
@@ -442,8 +439,8 @@ void cidelsa_state::machine_start()
 void draco_state::machine_start()
 {
 	/* setup COP402 memory banking */
-	memory_configure_bank(machine(), "bank1", 0, 2, machine().region(COP402N_TAG)->base(), 0x400);
-	memory_set_bank(machine(), "bank1", 0);
+	membank("bank1")->configure_entries(0, 2, memregion(COP402N_TAG)->base(), 0x400);
+	membank("bank1")->set_entry(0);
 
 	/* register for state saving */
 	save_item(NAME(m_reset));
@@ -457,14 +454,14 @@ void cidelsa_state::machine_reset()
 {
 	/* reset the CPU */
 	m_reset = 0;
-	machine().scheduler().timer_set(attotime::from_msec(200), FUNC(set_cpu_mode));
+	timer_set(attotime::from_msec(200), TIMER_SET_CPU_MODE);
 }
 
 /* Machine Drivers */
 
 static MACHINE_CONFIG_START( destryer, cidelsa_state )
 	/* basic system hardware */
-	MCFG_CPU_ADD(CDP1802_TAG, COSMAC, DESTRYER_CHR1)
+	MCFG_CPU_ADD(CDP1802_TAG, CDP1802, DESTRYER_CHR1)
 	MCFG_CPU_PROGRAM_MAP(destryer_map)
 	MCFG_CPU_IO_MAP(destryer_io_map)
 	MCFG_CPU_CONFIG(cidelsa_cdp1802_config)
@@ -476,7 +473,7 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( destryera, cidelsa_state )
 	/* basic system hardware */
-	MCFG_CPU_ADD(CDP1802_TAG, COSMAC, DESTRYER_CHR1)
+	MCFG_CPU_ADD(CDP1802_TAG, CDP1802, DESTRYER_CHR1)
 	MCFG_CPU_PROGRAM_MAP(destryera_map)
 	MCFG_CPU_IO_MAP(destryer_io_map)
 	MCFG_CPU_CONFIG(cidelsa_cdp1802_config)
@@ -488,17 +485,17 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( altair, cidelsa_state )
 	/* basic system hardware */
-	MCFG_CPU_ADD(CDP1802_TAG, COSMAC, ALTAIR_CHR1)
+	MCFG_CPU_ADD(CDP1802_TAG, CDP1802, ALTAIR_CHR1)
 	MCFG_CPU_PROGRAM_MAP(altair_map)
 	MCFG_CPU_IO_MAP(altair_io_map)
 	MCFG_CPU_CONFIG(cidelsa_cdp1802_config)
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* input/output hardware */
-	MCFG_CDP1852_ADD("ic23", CDP1852_CLOCK_HIGH, cidelsa_cdp1852_in0_intf)	/* clock is really tied to CDP1869 CMSEL (pin 37) */
+	MCFG_CDP1852_ADD("ic23", CDP1852_CLOCK_HIGH, cidelsa_cdp1852_in0_intf)  /* clock is really tied to CDP1869 CMSEL (pin 37) */
 	MCFG_CDP1852_ADD("ic24", CDP1852_CLOCK_HIGH, cidelsa_cdp1852_in1_intf)
 	MCFG_CDP1852_ADD("ic25", CDP1852_CLOCK_HIGH, cidelsa_cdp1852_in2_intf)
-	MCFG_CDP1852_ADD("ic26", ALTAIR_CHR1 / 8, altair_cdp1852_out1_intf)		/* clock is CDP1802 TPB */
+	MCFG_CDP1852_ADD("ic26", ALTAIR_CHR1 / 8, altair_cdp1852_out1_intf)     /* clock is CDP1802 TPB */
 
 	/* sound and video hardware */
 	MCFG_FRAGMENT_ADD(altair_video)
@@ -506,7 +503,7 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( draco, draco_state )
 	/* basic system hardware */
-	MCFG_CPU_ADD(CDP1802_TAG, COSMAC, DRACO_CHR1)
+	MCFG_CPU_ADD(CDP1802_TAG, CDP1802, DRACO_CHR1)
 	MCFG_CPU_PROGRAM_MAP(draco_map)
 	MCFG_CPU_IO_MAP(draco_io_map)
 	MCFG_CPU_CONFIG(cidelsa_cdp1802_config)
@@ -515,13 +512,13 @@ static MACHINE_CONFIG_START( draco, draco_state )
 	MCFG_CPU_ADD(COP402N_TAG, COP402, DRACO_SND_CHR1)
 	MCFG_CPU_PROGRAM_MAP(draco_sound_map)
 	MCFG_CPU_IO_MAP(draco_sound_io_map)
-	MCFG_CPU_CONFIG(draco_cop_intf)
+	MCFG_COP400_CONFIG( COP400_CKI_DIVISOR_16, COP400_CKO_OSCILLATOR_OUTPUT, COP400_MICROBUS_DISABLED )
 
 	/* input/output hardware */
-	MCFG_CDP1852_ADD("ic29", CDP1852_CLOCK_HIGH, cidelsa_cdp1852_in0_intf)	/* clock is really tied to CDP1876 CMSEL (pin 32) */
+	MCFG_CDP1852_ADD("ic29", CDP1852_CLOCK_HIGH, cidelsa_cdp1852_in0_intf)  /* clock is really tied to CDP1876 CMSEL (pin 32) */
 	MCFG_CDP1852_ADD("ic30", CDP1852_CLOCK_HIGH, cidelsa_cdp1852_in1_intf)
 	MCFG_CDP1852_ADD("ic31", CDP1852_CLOCK_HIGH, cidelsa_cdp1852_in2_intf)
-	MCFG_CDP1852_ADD("ic32", DRACO_CHR1 / 8, draco_cdp1852_out1_intf)		/* clock is CDP1802 TPB */
+	MCFG_CDP1852_ADD("ic32", DRACO_CHR1 / 8, draco_cdp1852_out1_intf)       /* clock is CDP1802 TPB */
 
 	/* sound and video hardware */
 	MCFG_FRAGMENT_ADD(draco_video)
@@ -573,7 +570,7 @@ ROM_END
 
 /* Game Drivers */
 
-GAME( 1980, destryer, 0,        destryer, destryer, 0, ROT90, "Cidelsa", "Destroyer (Cidelsa) (set 1)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1980, destryera,destryer, destryera,destryer, 0, ROT90, "Cidelsa", "Destroyer (Cidelsa) (set 2)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1981, altair,   0,        altair,   altair,   0, ROT90, "Cidelsa", "Altair", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1981, draco,    0,        draco,    draco,    0, ROT90, "Cidelsa", "Draco", GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1980, destryer, 0,        destryer, destryer, driver_device, 0, ROT90, "Cidelsa", "Destroyer (Cidelsa) (set 1)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1980, destryera,destryer, destryera,destryer, driver_device, 0, ROT90, "Cidelsa", "Destroyer (Cidelsa) (set 2)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1981, altair,   0,        altair,   altair, driver_device,   0, ROT90, "Cidelsa", "Altair", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1981, draco,    0,        draco,    draco, driver_device,    0, ROT90, "Cidelsa", "Draco", GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )

@@ -92,7 +92,7 @@
  *      there are no extra bytes in front of the sector data.
  *
  *  H. Sector attribute byte
- *      This byte is put at the begining of every sector if the header flag
+ *      This byte is put at the beginning of every sector if the header flag
  *      is turned on. The information this byte contains is the same as the
  *      status register (of the wd179x) would contain when a 'Read Sector'
  *      command was issued. The bit fields are defined as:
@@ -112,7 +112,7 @@
  *
  * ----------------------------------------------------------------------- */
 
-static int coco_jvc_decode_header(floppy_image *floppy, UINT64 size,
+static int coco_jvc_decode_header(floppy_image_legacy *floppy, UINT64 size,
 	struct basicdsk_geometry *geometry)
 {
 	UINT8 header[256];
@@ -156,7 +156,7 @@ static int coco_jvc_decode_header(floppy_image *floppy, UINT64 size,
 	/* byte offset 4 - sector attribute flag */
 	sector_attribute_flag = (header_size > 4) ? header[4] : 0;
 	if (sector_attribute_flag != 0)
-		return -1;	/* we do not support sector attribute flags */
+		return -1;  /* we do not support sector attribute flags */
 
 	physical_bytes_per_sector = geometry->sector_length;
 	if (sector_attribute_flag)
@@ -197,11 +197,11 @@ static FLOPPY_CONSTRUCT(coco_jvc_construct)
 	{
 		/* create */
 		memset(&geometry, 0, sizeof(geometry));
-		geometry.heads				= option_resolution_lookup_int(params, PARAM_HEADS);
-		geometry.tracks				= option_resolution_lookup_int(params, PARAM_TRACKS);
-		geometry.sectors			= option_resolution_lookup_int(params, PARAM_SECTORS);
-		geometry.first_sector_id	= option_resolution_lookup_int(params, PARAM_FIRST_SECTOR_ID);
-		geometry.sector_length		= option_resolution_lookup_int(params, PARAM_SECTOR_LENGTH);
+		geometry.heads              = option_resolution_lookup_int(params, PARAM_HEADS);
+		geometry.tracks             = option_resolution_lookup_int(params, PARAM_TRACKS);
+		geometry.sectors            = option_resolution_lookup_int(params, PARAM_SECTORS);
+		geometry.first_sector_id    = option_resolution_lookup_int(params, PARAM_FIRST_SECTOR_ID);
+		geometry.sector_length      = option_resolution_lookup_int(params, PARAM_SECTOR_LENGTH);
 
 		header[0] = (UINT8) geometry.sectors;
 		header[1] = (UINT8) geometry.heads;
@@ -294,7 +294,7 @@ static FLOPPY_CONSTRUCT(coco_jvc_construct)
  * $3F      1       value $02     LSN for start of this directory
  * ----------------------------------------------------------------------- */
 
-static floperr_t coco_os9_readheader(floppy_image *floppy, struct basicdsk_geometry *geometry)
+static floperr_t coco_os9_readheader(floppy_image_legacy *floppy, struct basicdsk_geometry *geometry)
 {
 	UINT8 header[0x20];
 	int total_sectors;
@@ -322,7 +322,7 @@ static floperr_t coco_os9_readheader(floppy_image *floppy, struct basicdsk_geome
 
 
 
-static floperr_t coco_os9_post_format(floppy_image *floppy, option_resolution *params)
+static floperr_t coco_os9_post_format(floppy_image_legacy *floppy, option_resolution *params)
 {
 	UINT8 header[0x0400];
 	floperr_t err;
@@ -330,9 +330,9 @@ static floperr_t coco_os9_post_format(floppy_image *floppy, option_resolution *p
 	struct tm *ltime;
 	int heads, tracks, sectors, total_sectors;
 
-	heads	= option_resolution_lookup_int(params, PARAM_HEADS);
-	tracks	= option_resolution_lookup_int(params, PARAM_TRACKS);
-	sectors	= option_resolution_lookup_int(params, PARAM_SECTORS);
+	heads   = option_resolution_lookup_int(params, PARAM_HEADS);
+	tracks  = option_resolution_lookup_int(params, PARAM_TRACKS);
+	sectors = option_resolution_lookup_int(params, PARAM_SECTORS);
 	total_sectors = heads * tracks * sectors;
 
 	/* write the initial header */
@@ -436,11 +436,11 @@ static FLOPPY_CONSTRUCT(coco_os9_construct)
 	{
 		/* create */
 		memset(&geometry, 0, sizeof(geometry));
-		geometry.heads				= option_resolution_lookup_int(params, PARAM_HEADS);
-		geometry.tracks				= option_resolution_lookup_int(params, PARAM_TRACKS);
-		geometry.sectors			= option_resolution_lookup_int(params, PARAM_SECTORS);
-		geometry.first_sector_id	= option_resolution_lookup_int(params, PARAM_FIRST_SECTOR_ID);
-		geometry.sector_length		= option_resolution_lookup_int(params, PARAM_SECTOR_LENGTH);
+		geometry.heads              = option_resolution_lookup_int(params, PARAM_HEADS);
+		geometry.tracks             = option_resolution_lookup_int(params, PARAM_TRACKS);
+		geometry.sectors            = option_resolution_lookup_int(params, PARAM_SECTORS);
+		geometry.first_sector_id    = option_resolution_lookup_int(params, PARAM_FIRST_SECTOR_ID);
+		geometry.sector_length      = option_resolution_lookup_int(params, PARAM_SECTOR_LENGTH);
 	}
 	else
 	{
@@ -484,10 +484,11 @@ static FLOPPY_CONSTRUCT(coco_os9_construct)
 
 
 
-static int coco_vdk_decode_header(floppy_image *floppy, struct basicdsk_geometry *geometry)
+static int coco_vdk_decode_header(floppy_image_legacy *floppy, struct basicdsk_geometry *geometry)
 {
 	UINT8 header[12];
-	int heads, tracks, sectors, sector_length, offset;
+	UINT8 heads, tracks, sectors;
+	UINT16 sector_length, offset;
 	UINT64 size;
 
 	size = floppy_image_size(floppy);
@@ -508,9 +509,9 @@ static int coco_vdk_decode_header(floppy_image *floppy, struct basicdsk_geometry
 	sectors = 18;
 	sector_length = 0x100;
 
-	offset = ((int) header[3]) * 0x100 + header[2];
+	offset = header[3] * 0x100 + header[2];
 
-	if (size != (heads * tracks * sectors * sector_length + offset))
+	if (size != ((UINT32) heads * tracks * sectors * sector_length + offset))
 		return -1;
 
 	if (geometry)
@@ -603,7 +604,7 @@ static FLOPPY_CONSTRUCT(coco_vdk_construct)
  *
  * Each track begins with a track TOC, consisting of 64 little endian 16-bit
  * integers.  Each integer has the following format:
- *      bit 0-13:   Offset from begining of track to 'FE' byte of IDAM
+ *      bit 0-13:   Offset from beginning of track to 'FE' byte of IDAM
  *                  Note these are always sorted from first to last. All empty
  *                  entries are 0x00
  *      bit 14:     Undefined (reserved)
@@ -617,29 +618,29 @@ struct dmk_tag
 	UINT32 track_size;
 };
 
-#define DMK_HEADER_LEN			16
-#define DMK_TOC_LEN				64
-#define DMK_IDAM_LENGTH			7
-#define DMK_DATA_GAP			80
-#define DMK_LEAD_IN				32
-#define DMK_EXTRA_TRACK_LENGTH	156
+#define DMK_HEADER_LEN          16
+#define DMK_TOC_LEN             64
+#define DMK_IDAM_LENGTH         7
+#define DMK_DATA_GAP            80
+#define DMK_LEAD_IN             32
+#define DMK_EXTRA_TRACK_LENGTH  156
 
-#define dmk_idam_type(x)			(x)[0]
-#define dmk_idam_track(x)			(x)[1]
-#define dmk_idam_side(x)			(x)[2]
-#define dmk_idam_sector(x)			(x)[3]
-#define dmk_idam_sectorlength(x)	(x)[4]
-#define dmk_idam_crc(x)				(((x)[5] << 8) + (x)[6])
-#define dmk_idam_set_crc(x, crc)	(x)[5] = ((crc) >> 8); (x)[6] = ((crc) >> 0);
+#define dmk_idam_type(x)            (x)[0]
+#define dmk_idam_track(x)           (x)[1]
+#define dmk_idam_side(x)            (x)[2]
+#define dmk_idam_sector(x)          (x)[3]
+#define dmk_idam_sectorlength(x)    (x)[4]
+#define dmk_idam_crc(x)             (((x)[5] << 8) + (x)[6])
+#define dmk_idam_set_crc(x, crc)    (x)[5] = ((crc) >> 8); (x)[6] = ((crc) >> 0);
 
 
-static struct dmk_tag *get_dmk_tag(floppy_image *floppy)
+static struct dmk_tag *get_dmk_tag(floppy_image_legacy *floppy)
 {
 	return (dmk_tag *)floppy_tag(floppy);
 }
 
 
-static floperr_t coco_dmk_get_offset(floppy_image *floppy, int head, int track, UINT64 *offset)
+static floperr_t coco_dmk_get_offset(floppy_image_legacy *floppy, int head, int track, UINT64 *offset)
 {
 	struct dmk_tag *tag = get_dmk_tag(floppy);
 
@@ -665,7 +666,7 @@ static UINT32 coco_dmk_min_track_size(int sectors, int sector_length)
 
 
 
-static floperr_t coco_dmk_read_track(floppy_image *floppy, int head, int track, UINT64 offset, void *buffer, size_t buflen)
+static floperr_t coco_dmk_read_track(floppy_image_legacy *floppy, int head, int track, UINT64 offset, void *buffer, size_t buflen)
 {
 	floperr_t err;
 	UINT64 track_offset;
@@ -680,7 +681,7 @@ static floperr_t coco_dmk_read_track(floppy_image *floppy, int head, int track, 
 
 
 
-static floperr_t coco_dmk_write_track(floppy_image *floppy, int head, int track, UINT64 offset, const void *buffer, size_t buflen)
+static floperr_t coco_dmk_write_track(floppy_image_legacy *floppy, int head, int track, UINT64 offset, const void *buffer, size_t buflen)
 {
 	floperr_t err;
 	UINT64 track_offset;
@@ -695,7 +696,7 @@ static floperr_t coco_dmk_write_track(floppy_image *floppy, int head, int track,
 
 
 
-static floperr_t coco_dmk_get_track_data_offset(floppy_image *floppy, int head, int track, UINT64 *offset)
+static floperr_t coco_dmk_get_track_data_offset(floppy_image_legacy *floppy, int head, int track, UINT64 *offset)
 {
 	*offset = DMK_TOC_LEN + 1;
 	return FLOPPY_ERROR_SUCCESS;
@@ -703,7 +704,7 @@ static floperr_t coco_dmk_get_track_data_offset(floppy_image *floppy, int head, 
 
 
 
-static floperr_t coco_dmk_format_track(floppy_image *floppy, int head, int track, option_resolution *params)
+static floperr_t coco_dmk_format_track(floppy_image_legacy *floppy, int head, int track, option_resolution *params)
 {
 	int sectors;
 	int sector_length;
@@ -720,16 +721,16 @@ static floperr_t coco_dmk_format_track(floppy_image *floppy, int head, int track
 	UINT32 max_track_size;
 	int *sector_map = NULL;
 
-	sectors			= option_resolution_lookup_int(params, PARAM_SECTORS);
-	sector_length	= option_resolution_lookup_int(params, PARAM_SECTOR_LENGTH);
-	interleave		= option_resolution_lookup_int(params, PARAM_INTERLEAVE);
-	first_sector_id	= option_resolution_lookup_int(params, PARAM_FIRST_SECTOR_ID);
+	sectors         = option_resolution_lookup_int(params, PARAM_SECTORS);
+	sector_length   = option_resolution_lookup_int(params, PARAM_SECTOR_LENGTH);
+	interleave      = option_resolution_lookup_int(params, PARAM_INTERLEAVE);
+	first_sector_id = option_resolution_lookup_int(params, PARAM_FIRST_SECTOR_ID);
 
 	max_track_size = get_dmk_tag(floppy)->track_size;
 
 	if (sectors > DMK_TOC_LEN)
 	{
-        err = FLOPPY_ERROR_INTERNAL;
+		err = FLOPPY_ERROR_INTERNAL;
 		goto done;
 	}
 
@@ -790,13 +791,13 @@ static floperr_t coco_dmk_format_track(floppy_image *floppy, int head, int track
 			track_position += 3;
 
 			idam_offset = track_position | 0x8000;
-			dmk_idam_type(				&track_data[track_position]) = 0xFE;
-			dmk_idam_track(				&track_data[track_position]) = track;
-			dmk_idam_side(				&track_data[track_position]) = head;
-			dmk_idam_sector(			&track_data[track_position]) = logical_sector;
-			dmk_idam_sectorlength(		&track_data[track_position]) = compute_log2(sector_length / 128);
-			crc = ccitt_crc16(0xcdb4,	&track_data[track_position], DMK_IDAM_LENGTH - 2);
-			dmk_idam_set_crc(			&track_data[track_position], crc);
+			dmk_idam_type(              &track_data[track_position]) = 0xFE;
+			dmk_idam_track(             &track_data[track_position]) = track;
+			dmk_idam_side(              &track_data[track_position]) = head;
+			dmk_idam_sector(            &track_data[track_position]) = logical_sector;
+			dmk_idam_sectorlength(      &track_data[track_position]) = compute_log2(sector_length / 128);
+			crc = ccitt_crc16(0xcdb4,   &track_data[track_position], DMK_IDAM_LENGTH - 2);
+			dmk_idam_set_crc(           &track_data[track_position], crc);
 			track_position += DMK_IDAM_LENGTH;
 
 			memset(&track_data[track_position], 0x4E, 22);
@@ -838,33 +839,33 @@ static floperr_t coco_dmk_format_track(floppy_image *floppy, int head, int track
 done:
 	if (sector_map)
 		free(sector_map);
-	return FLOPPY_ERROR_SUCCESS;
+	return err;
 }
 
 
 
-static int coco_dmk_get_heads_per_disk(floppy_image *floppy)
+static int coco_dmk_get_heads_per_disk(floppy_image_legacy *floppy)
 {
 	return get_dmk_tag(floppy)->heads;
 }
 
 
 
-static int coco_dmk_get_tracks_per_disk(floppy_image *floppy)
+static int coco_dmk_get_tracks_per_disk(floppy_image_legacy *floppy)
 {
 	return get_dmk_tag(floppy)->tracks;
 }
 
 
 
-static UINT32 coco_dmk_get_track_size(floppy_image *floppy, int head, int track)
+static UINT32 coco_dmk_get_track_size(floppy_image_legacy *floppy, int head, int track)
 {
 	return get_dmk_tag(floppy)->track_size;
 }
 
 
 
-static floperr_t coco_dmk_seek_sector_in_track(floppy_image *floppy, int head, int track, int sector, int sector_is_index, int dirtify, UINT8 **sector_data, UINT32 *sector_length)
+static floperr_t coco_dmk_seek_sector_in_track(floppy_image_legacy *floppy, int head, int track, int sector, int sector_is_index, int dirtify, UINT8 **sector_data, UINT32 *sector_length)
 {
 	struct dmk_tag *tag = get_dmk_tag(floppy);
 	floperr_t err;
@@ -914,7 +915,7 @@ static floperr_t coco_dmk_seek_sector_in_track(floppy_image *floppy, int head, i
 			else
 			{
 				/* check IDAM integrity and check for matching sector */
-				if ((sector == dmk_idam_sector(&track_data[idam_offset]))
+				if (sector == dmk_idam_sector(&track_data[idam_offset])
 /*                  && (track == dmk_idam_track(&track_data[idam_offset]))  */
 /*                  && (head == dmk_idam_side(&track_data[idam_offset]))    */
 					)
@@ -962,14 +963,14 @@ static floperr_t coco_dmk_seek_sector_in_track(floppy_image *floppy, int head, i
 
 
 
-static floperr_t coco_dmk_get_sector_length(floppy_image *floppy, int head, int track, int sector, UINT32 *sector_length)
+static floperr_t coco_dmk_get_sector_length(floppy_image_legacy *floppy, int head, int track, int sector, UINT32 *sector_length)
 {
 	return coco_dmk_seek_sector_in_track(floppy, head, track, sector, FALSE, FALSE, NULL, sector_length);
 }
 
 
 
-static floperr_t coco_dmk_get_indexed_sector_info(floppy_image *floppy, int head, int track, int sector_index, int *cylinder, int *side, int *sector, UINT32 *sector_length, unsigned long *flags)
+static floperr_t coco_dmk_get_indexed_sector_info(floppy_image_legacy *floppy, int head, int track, int sector_index, int *cylinder, int *side, int *sector, UINT32 *sector_length, unsigned long *flags)
 {
 	floperr_t err;
 	UINT32 idam_offset;
@@ -1008,7 +1009,7 @@ static floperr_t coco_dmk_get_indexed_sector_info(floppy_image *floppy, int head
 
 
 
-static floperr_t internal_coco_dmk_read_sector(floppy_image *floppy, int head, int track, int sector, int sector_is_index, void *buffer, size_t buflen)
+static floperr_t internal_coco_dmk_read_sector(floppy_image_legacy *floppy, int head, int track, int sector, int sector_is_index, void *buffer, size_t buflen)
 {
 	floperr_t err;
 	UINT32 sector_length;
@@ -1035,7 +1036,7 @@ static floperr_t internal_coco_dmk_read_sector(floppy_image *floppy, int head, i
 
 
 
-static floperr_t internal_coco_dmk_write_sector(floppy_image *floppy, int head, int track, int sector, int sector_is_index, const void *buffer, size_t buflen, int ddam)
+static floperr_t internal_coco_dmk_write_sector(floppy_image_legacy *floppy, int head, int track, int sector, int sector_is_index, const void *buffer, size_t buflen, int ddam)
 {
 	floperr_t err;
 	UINT32 sector_length;
@@ -1059,29 +1060,29 @@ static floperr_t internal_coco_dmk_write_sector(floppy_image *floppy, int head, 
 
 
 
-static floperr_t coco_dmk_read_sector(floppy_image *floppy, int head, int track, int sector, void *buffer, size_t buflen)
+static floperr_t coco_dmk_read_sector(floppy_image_legacy *floppy, int head, int track, int sector, void *buffer, size_t buflen)
 {
 	return internal_coco_dmk_read_sector(floppy, head, track, sector, FALSE, buffer, buflen);
 }
 
-static floperr_t coco_dmk_write_sector(floppy_image *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
+static floperr_t coco_dmk_write_sector(floppy_image_legacy *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
 {
 	return internal_coco_dmk_write_sector(floppy, head, track, sector, FALSE, buffer, buflen, ddam);
 }
 
-static floperr_t coco_dmk_read_indexed_sector(floppy_image *floppy, int head, int track, int sector, void *buffer, size_t buflen)
+static floperr_t coco_dmk_read_indexed_sector(floppy_image_legacy *floppy, int head, int track, int sector, void *buffer, size_t buflen)
 {
 	return internal_coco_dmk_read_sector(floppy, head, track, sector, TRUE, buffer, buflen);
 }
 
-static floperr_t coco_dmk_write_indexed_sector(floppy_image *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
+static floperr_t coco_dmk_write_indexed_sector(floppy_image_legacy *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
 {
 	return internal_coco_dmk_write_sector(floppy, head, track, sector, TRUE, buffer, buflen, ddam);
 }
 
 
 
-static void coco_dmk_interpret_header(floppy_image *floppy, int *heads, int *tracks, int *track_size)
+static void coco_dmk_interpret_header(floppy_image_legacy *floppy, int *heads, int *tracks, int *track_size)
 {
 	UINT8 header[DMK_HEADER_LEN];
 
@@ -1106,10 +1107,10 @@ FLOPPY_CONSTRUCT(coco_dmk_construct)
 
 	if (params)
 	{
-		heads			= option_resolution_lookup_int(params, PARAM_HEADS);
-		tracks			= option_resolution_lookup_int(params, PARAM_TRACKS);
-		sectors			= option_resolution_lookup_int(params, PARAM_SECTORS);
-		sector_length	= option_resolution_lookup_int(params, PARAM_SECTOR_LENGTH);
+		heads           = option_resolution_lookup_int(params, PARAM_HEADS);
+		tracks          = option_resolution_lookup_int(params, PARAM_TRACKS);
+		sectors         = option_resolution_lookup_int(params, PARAM_SECTORS);
+		sector_length   = option_resolution_lookup_int(params, PARAM_SECTOR_LENGTH);
 
 		track_size = coco_dmk_min_track_size(sectors, sector_length) + DMK_EXTRA_TRACK_LENGTH;
 
@@ -1169,30 +1170,30 @@ FLOPPY_IDENTIFY(coco_dmk_identify)
 
 /* ----------------------------------------------------------------------- */
 
-FLOPPY_OPTIONS_START( coco )
-	FLOPPY_OPTION( coco_jvc, "dsk",			"CoCo JVC disk image",	coco_jvc_identify,	coco_jvc_construct, NULL,
+LEGACY_FLOPPY_OPTIONS_START( coco )
+	LEGACY_FLOPPY_OPTION( coco_jvc, "dsk",          "CoCo JVC disk image",  coco_jvc_identify,  coco_jvc_construct, NULL,
 		HEADS([1]-2)
 		TRACKS([35]-255)
 		SECTORS(1-[18]-255)
 		SECTOR_LENGTH(128/[256]/512/1024)
 		FIRST_SECTOR_ID(0-[1]))
-	FLOPPY_OPTION( coco_os9, "os9",			"CoCo OS-9 disk image",	coco_os9_identify,	coco_os9_construct, NULL,
+	LEGACY_FLOPPY_OPTION( coco_os9, "os9",          "CoCo OS-9 disk image", coco_os9_identify,  coco_os9_construct, NULL,
 		HEADS([1]-2)
 		TRACKS([35]-255)
 		SECTORS(1-[18]-255)
 		SECTOR_LENGTH([256])
 		FIRST_SECTOR_ID([1]))
-	FLOPPY_OPTION( coco_vdk, "vdk",			"CoCo VDK disk image",	coco_vdk_identify,	coco_vdk_construct, NULL,
+	LEGACY_FLOPPY_OPTION( coco_vdk, "vdk",          "CoCo VDK disk image",  coco_vdk_identify,  coco_vdk_construct, NULL,
 		HEADS([1]-2)
 		TRACKS([35]-255)
 		SECTORS([18])
 		SECTOR_LENGTH([256])
 		FIRST_SECTOR_ID([1]))
-	FLOPPY_OPTION( coco_dmk, "dsk,dmk",	"CoCo DMK disk image",	coco_dmk_identify,	coco_dmk_construct, NULL,
+	LEGACY_FLOPPY_OPTION( coco_dmk, "dsk,dmk",  "CoCo DMK disk image",  coco_dmk_identify,  coco_dmk_construct, NULL,
 		HEADS([1]-2)
 		TRACKS([35]-255)
 		SECTORS(1-[18])
 		SECTOR_LENGTH(128/[256]/512/1024/2048/4096/8192)
 		INTERLEAVE(0-[6]-17)
 		FIRST_SECTOR_ID(0-[1]))
-FLOPPY_OPTIONS_END
+LEGACY_FLOPPY_OPTIONS_END

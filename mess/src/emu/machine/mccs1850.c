@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     Motorola MCCS1850 Serial Real-Time Clock emulation
@@ -54,44 +56,44 @@ enum
 
 
 // clock status/interrupt register
-#define STATUS_TM		0x20	// test mode
-#define STATUS_FTU		0x10	// first time up
-#define STATUS_IT		0x08	// interrupt true
-#define STATUS_LB		0x04	// low battery
-#define STATUS_AI		0x02	// alarm
-#define STATUS_RPD		0x01	// request to power down
+#define STATUS_TM       0x20    // test mode
+#define STATUS_FTU      0x10    // first time up
+#define STATUS_IT       0x08    // interrupt true
+#define STATUS_LB       0x04    // low battery
+#define STATUS_AI       0x02    // alarm
+#define STATUS_RPD      0x01    // request to power down
 
 
 // clock control register
-#define CONTROL_STR_STP	0x80	// start/stop
-#define CONTROL_PD		0x40	// power down
-#define CONTROL_AR		0x20	// auto restart
-#define CONTROL_AE		0x10	// alarm enable
-#define CONTROL_AC		0x08	// alarm clear
-#define CONTROL_FTUC	0x04	// first time up clear
-#define CONTROL_LBE		0x02	// low battery enable
-#define CONTROL_RPCD	0x01	// request to power down clear
+#define CONTROL_STR_STP 0x80    // start/stop
+#define CONTROL_PD      0x40    // power down
+#define CONTROL_AR      0x20    // auto restart
+#define CONTROL_AE      0x10    // alarm enable
+#define CONTROL_AC      0x08    // alarm clear
+#define CONTROL_FTUC    0x04    // first time up clear
+#define CONTROL_LBE     0x02    // low battery enable
+#define CONTROL_RPCD    0x01    // request to power down clear
 
 
 // test register 1
-#define TEST1_DIV1		0x80	// divide by 1
-#define TEST1_VOVR		0x40	// Vdd override
-#define TEST1_VDDUP		0x20	// Vdd up
-#define TEST1_VDDON		0x10	// Vdd on
-#define TEST1_VRT		0x08	// valid RAM and time
-#define TEST1_LOW_BAT	0x08	// low battery
-#define TEST1_PCC		0x04	// programmable capacitor C (10.0 pF)
-#define TEST1_PCB		0x02	// programmable capacitor B (5.0 pF)
-#define TEST1_PCA		0x01	// programmable capacitor A (2.5 pF)
+#define TEST1_DIV1      0x80    // divide by 1
+#define TEST1_VOVR      0x40    // Vdd override
+#define TEST1_VDDUP     0x20    // Vdd up
+#define TEST1_VDDON     0x10    // Vdd on
+#define TEST1_VRT       0x08    // valid RAM and time
+#define TEST1_LOW_BAT   0x08    // low battery
+#define TEST1_PCC       0x04    // programmable capacitor C (10.0 pF)
+#define TEST1_PCB       0x02    // programmable capacitor B (5.0 pF)
+#define TEST1_PCA       0x01    // programmable capacitor A (2.5 pF)
 
 
 // test register 2
-#define TEST2_OSCBY		0x80	// oscillator bypass
-#define TEST2_COMPOVR	0x40	// comparator override
-#define TEST2_POR		0x20	// power on reset
-#define TEST2_SELTCK	0x10	// select test clock
-#define TEST2_FRZ		0x08	// freeze mode
-#define TEST2_DV_MASK	0x07	// divider bits select
+#define TEST2_OSCBY     0x80    // oscillator bypass
+#define TEST2_COMPOVR   0x40    // comparator override
+#define TEST2_POR       0x20    // power on reset
+#define TEST2_SELTCK    0x10    // select test clock
+#define TEST2_FRZ       0x08    // freeze mode
+#define TEST2_DV_MASK   0x07    // divider bits select
 
 
 
@@ -117,10 +119,10 @@ inline void mccs1850_device::check_interrupt()
 	UINT8 status = m_ram[REGISTER_STATUS];
 	UINT8 control = m_ram[REGISTER_CONTROL];
 
-	bool interrupt = (((status & STATUS_AI) && (control & CONTROL_AE))		// alarm interrupt
-					|| ((status & STATUS_LB) && (control & CONTROL_LBE))	// low battery
-					|| (status & STATUS_FTU)								// first time up
-					|| (status & STATUS_RPD));								// request to power down
+	bool interrupt = (((status & STATUS_AI) && (control & CONTROL_AE))      // alarm interrupt
+					|| ((status & STATUS_LB) && (control & CONTROL_LBE))    // low battery
+					|| (status & STATUS_FTU)                                // first time up
+					|| (status & STATUS_RPD));                              // request to power down
 
 	if (interrupt)
 	{
@@ -131,7 +133,8 @@ inline void mccs1850_device::check_interrupt()
 		m_ram[REGISTER_STATUS] &= ~STATUS_IT;
 	}
 
-	m_out_int_func(interrupt ? ASSERT_LINE : CLEAR_LINE);
+	if(!int_cb.isnull())
+		int_cb(interrupt);
 }
 
 
@@ -139,11 +142,12 @@ inline void mccs1850_device::check_interrupt()
 //  set_pse_line -
 //-------------------------------------------------
 
-inline void mccs1850_device::set_pse_line(int state)
+inline void mccs1850_device::set_pse_line(bool state)
 {
 	m_pse = state;
 
-	m_out_pse_func(m_pse);
+	if(!pse_cb.isnull())
+		pse_cb(m_pse);
 }
 
 
@@ -156,6 +160,7 @@ inline UINT8 mccs1850_device::read_register(offs_t offset)
 	switch (offset)
 	{
 	case REGISTER_COUNTER_LATCH:
+	case REGISTER_COUNTER_LATCH+3: // Required by the NeXT power on test
 		// load counter value into latch
 		m_ram[REGISTER_COUNTER_LATCH] = m_counter >> 24;
 		m_ram[REGISTER_COUNTER_LATCH + 1] = m_counter >> 16;
@@ -195,7 +200,7 @@ inline void mccs1850_device::write_register(offs_t offset, UINT8 data)
 		if (data & CONTROL_PD)
 		{
 			if (LOG) logerror("MCCS1850 '%s' Power Down\n", tag());
-			set_pse_line(0);
+			set_pse_line(false);
 		}
 
 		if (data & CONTROL_AR)
@@ -262,7 +267,7 @@ inline void mccs1850_device::advance_seconds()
 		else
 		{
 			// wake up
-			set_pse_line(1);
+			set_pse_line(true);
 		}
 	}
 }
@@ -278,40 +283,25 @@ inline void mccs1850_device::advance_seconds()
 //-------------------------------------------------
 
 mccs1850_device::mccs1850_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, MCCS1850, "MCCS1850", tag, owner, clock),
-	  device_rtc_interface(mconfig, *this),
-	  device_nvram_interface(mconfig, *this),
-	  m_pse(1),
-	  m_ce(0),
-	  m_sck(0),
-	  m_sdo(1),
-	  m_sdi(0),
-	  m_state(STATE_ADDRESS),
-	  m_bits(0)
+	: device_t(mconfig, MCCS1850, "MCCS1850", tag, owner, clock, "mccs1850", __FILE__),
+		device_rtc_interface(mconfig, *this),
+		device_nvram_interface(mconfig, *this),
+		m_pse(1),
+		m_counter(0),
+		m_ce(0),
+		m_sck(0),
+		m_sdo(1),
+		m_sdi(0),
+		m_state(STATE_ADDRESS),
+		m_bits(0)
 {
 }
 
-
-//-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
-//-------------------------------------------------
-
-void mccs1850_device::device_config_complete()
+void mccs1850_device::set_cb(line_cb_t _int_cb, line_cb_t _pse_cb, line_cb_t _nuc_cb)
 {
-	// inherit a copy of the static data
-	const mccs1850_interface *intf = reinterpret_cast<const mccs1850_interface *>(static_config());
-	if (intf != NULL)
-		*static_cast<mccs1850_interface *>(this) = *intf;
-
-	// or initialize to defaults if none provided
-	else
-	{
-		memset(&m_out_int_cb, 0, sizeof(m_out_int_cb));
-		memset(&m_out_pse_cb, 0, sizeof(m_out_pse_cb));
-		memset(&m_out_nuc_cb, 0, sizeof(m_out_nuc_cb));
-	}
+	int_cb = _int_cb;
+	pse_cb = _pse_cb;
+	nuc_cb = _nuc_cb;
 }
 
 
@@ -321,11 +311,6 @@ void mccs1850_device::device_config_complete()
 
 void mccs1850_device::device_start()
 {
-	// resolve callbacks
-	m_out_int_func.resolve(m_out_int_cb, *this);
-	m_out_pse_func.resolve(m_out_pse_cb, *this);
-	m_out_nuc_func.resolve(m_out_nuc_cb, *this);
-
 	// allocate timers
 	m_clock_timer = timer_alloc(TIMER_CLOCK);
 	m_clock_timer->adjust(attotime::from_hz(clock() / 32768), 0, attotime::from_hz(clock() / 32768));
@@ -371,16 +356,6 @@ void mccs1850_device::device_timer(emu_timer &timer, device_timer_id id, int par
 
 
 //-------------------------------------------------
-//  rtc_set_time - called to initialize the RTC to
-//  a known state
-//-------------------------------------------------
-
-void mccs1850_device::rtc_set_time(int year, int month, int day, int day_of_week, int hour, int minute, int second)
-{
-}
-
-
-//-------------------------------------------------
 //  nvram_default - called to initialize NVRAM to
 //  its default state
 //-------------------------------------------------
@@ -389,9 +364,9 @@ void mccs1850_device::nvram_default()
 {
 	memset(m_ram, 0xff, RAM_SIZE);
 
-	if (machine().region(tag()) != NULL)
+	if (machine().root_device().memregion(tag()) != NULL)
 	{
-		UINT8 *nvram = machine().region(tag())->base();
+		UINT8 *nvram = machine().root_device().memregion(tag())->base();
 
 		// initialize NVRAM
 		memcpy(m_ram, nvram, 0x20);
@@ -456,7 +431,7 @@ WRITE_LINE_MEMBER( mccs1850_device::sck_w )
 
 			if (m_bits == 8)
 			{
-				if (LOG) logerror("MCCS1850 '%s' %s Address %u\n", tag(), BIT(m_address, 7) ? "Write" : "Read", m_address & 0x7f);
+				if (LOG) logerror("MCCS1850 '%s' %s Address %02x\n", tag(), BIT(m_address, 7) ? "Write" : "Read", m_address & 0x7f);
 
 				m_bits = 0;
 				m_state = STATE_DATA;
@@ -559,7 +534,7 @@ WRITE_LINE_MEMBER( mccs1850_device::pwrsw_w )
 			check_interrupt();
 		}
 
-		set_pse_line(1);
+		set_pse_line(true);
 	}
 }
 

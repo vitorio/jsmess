@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Miodrag Milanovic
 /***************************************************************************
 
         Poly-88 driver by Miodrag Milanovic
@@ -12,7 +14,7 @@
 #include "sound/wave.h"
 #include "includes/poly88.h"
 
-static ADDRESS_MAP_START(poly88_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(poly88_mem, AS_PROGRAM, 8, poly88_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x03ff) AM_ROM // Monitor ROM
 	AM_RANGE(0x0400, 0x0bff) AM_ROM // ROM Expansion
@@ -20,29 +22,29 @@ static ADDRESS_MAP_START(poly88_mem, AS_PROGRAM, 8)
 	AM_RANGE(0x1000, 0x1fff) AM_ROM // System Expansion area
 	AM_RANGE(0x2000, 0x3fff) AM_RAM // Minimal user RAM area
 	AM_RANGE(0x4000, 0xf7ff) AM_RAM
-	AM_RANGE(0xf800, 0xfbff) AM_RAM AM_BASE_MEMBER(poly88_state, m_video_ram) // Video RAM
+	AM_RANGE(0xf800, 0xfbff) AM_RAM AM_SHARE("video_ram") // Video RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( poly88_io, AS_IO, 8)
+static ADDRESS_MAP_START( poly88_io, AS_IO, 8, poly88_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("uart", msm8251_data_r,msm8251_data_w)
-	AM_RANGE(0x01, 0x01) AM_DEVREADWRITE("uart", msm8251_status_r,msm8251_control_w)
+	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("uart", i8251_device, data_r, data_w)
+	AM_RANGE(0x01, 0x01) AM_DEVREADWRITE("uart", i8251_device, status_r, control_w)
 	AM_RANGE(0x04, 0x04) AM_WRITE(poly88_baud_rate_w)
 	AM_RANGE(0x08, 0x08) AM_WRITE(poly88_intr_w)
 	AM_RANGE(0xf8, 0xf8) AM_READ(poly88_keyboard_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(poly8813_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(poly8813_mem, AS_PROGRAM, 8, poly88_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x03ff) AM_ROM // Monitor ROM
 	AM_RANGE(0x0400, 0x0bff) AM_ROM // Disk System ROM
 	AM_RANGE(0x0c00, 0x0fff) AM_RAM // System RAM
-	AM_RANGE(0x1800, 0x1bff) AM_RAM AM_BASE_MEMBER(poly88_state, m_video_ram) // Video RAM
+	AM_RANGE(0x1800, 0x1bff) AM_RAM AM_SHARE("video_ram") // Video RAM
 	AM_RANGE(0x2000, 0xffff) AM_RAM // RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( poly8813_io, AS_IO, 8)
+static ADDRESS_MAP_START( poly8813_io, AS_IO, 8, poly88_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 ADDRESS_MAP_END
@@ -132,9 +134,9 @@ INPUT_PORTS_END
 
 static const struct CassetteOptions poly88_cassette_options =
 {
-	1,		/* channels */
-	16,		/* bits per sample */
-	7200	/* sample frequency */
+	1,      /* channels */
+	16,     /* bits per sample */
+	7200    /* sample frequency */
 };
 
 static const cassette_interface poly88_cassette_interface =
@@ -149,15 +151,15 @@ static const cassette_interface poly88_cassette_interface =
 /* F4 Character Displayer */
 static const gfx_layout poly88_charlayout =
 {
-	8, 16,					/* text = 7 x 9 */
-	128,					/* 128 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 16,                  /* text = 7 x 9 */
+	128,                    /* 128 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8, 8*8, 9*8, 10*8, 11*8, 12*8, 13*8, 14*8, 15*8 },
-	8*16					/* every char takes 16 bytes */
+	8*16                    /* every char takes 16 bytes */
 };
 
 static GFXDECODE_START( poly88 )
@@ -169,38 +171,36 @@ static MACHINE_CONFIG_START( poly88, poly88_state )
 	MCFG_CPU_ADD("maincpu",I8080, 1853000)
 	MCFG_CPU_PROGRAM_MAP(poly88_mem)
 	MCFG_CPU_IO_MAP(poly88_io)
-	MCFG_CPU_VBLANK_INT("screen", poly88_interrupt)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", poly88_state,  poly88_interrupt)
 
-	MCFG_MACHINE_RESET(poly88)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*10, 16*15)
 	MCFG_SCREEN_VISIBLE_AREA(0, 64*10-1, 0, 16*15-1)
-	MCFG_SCREEN_UPDATE(poly88)
+	MCFG_SCREEN_UPDATE_DRIVER(poly88_state, screen_update_poly88)
 
 	MCFG_GFXDECODE(poly88)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
-	MCFG_VIDEO_START(poly88)
 
 	/* audio hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	/* cassette */
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, poly88_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", poly88_cassette_interface )
 
 	/* uart */
-	MCFG_MSM8251_ADD("uart", poly88_usart_interface)
+	MCFG_I8251_ADD("uart", poly88_usart_interface)
+	MCFG_SERIAL_SOURCE_ADD("sercas")
 
 	/* snapshot */
-	MCFG_SNAPSHOT_ADD("snapshot", poly88, "img", 0)
+	MCFG_SNAPSHOT_ADD("snapshot", poly88_state, poly88, "img", 0)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( poly8813, poly88 )
@@ -232,6 +232,5 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY                   FULLNAME       FLAGS */
-COMP( 1976, poly88,  0,     0,		 poly88,	poly88,  poly88, "PolyMorphic Systems",   "Poly-88",	 0)
-COMP( 1977, poly8813,poly88,0,		 poly8813,	poly88,  poly88, "PolyMorphic Systems",   "Poly-8813",GAME_NOT_WORKING)
-
+COMP( 1976, poly88,  0,     0,       poly88,    poly88, poly88_state,  poly88, "PolyMorphic Systems",   "Poly-88",   0)
+COMP( 1977, poly8813,poly88,0,       poly8813,  poly88, poly88_state,  poly88, "PolyMorphic Systems",   "Poly-8813",GAME_NOT_WORKING)

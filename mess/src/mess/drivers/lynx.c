@@ -7,27 +7,27 @@
 ******************************************************************************/
 
 #include "emu.h"
-#include "cpu/m6502/m6502.h"
+#include "cpu/m6502/m65sc02.h"
+#include "audio/lynx.h"
 #include "includes/lynx.h"
 
 #include "imagedev/snapquik.h"
+#include "lynx.lh"
 
-static QUICKLOAD_LOAD( lynx );
-
-static ADDRESS_MAP_START( lynx_mem , AS_PROGRAM, 8)
-	AM_RANGE(0x0000, 0xfbff) AM_RAM AM_BASE_MEMBER(lynx_state, m_mem_0000)
-	AM_RANGE(0xfc00, 0xfcff) AM_RAM AM_BASE_MEMBER(lynx_state, m_mem_fc00)
-	AM_RANGE(0xfd00, 0xfdff) AM_RAM AM_BASE_MEMBER(lynx_state, m_mem_fd00)
-	AM_RANGE(0xfe00, 0xfff7) AM_READ_BANK("bank3") AM_WRITEONLY AM_BASE_MEMBER(lynx_state, m_mem_fe00) AM_SIZE_MEMBER(lynx_state, m_mem_fe00_size)
+static ADDRESS_MAP_START( lynx_mem , AS_PROGRAM, 8, lynx_state )
+	AM_RANGE(0x0000, 0xfbff) AM_RAM AM_SHARE("mem_0000")
+	AM_RANGE(0xfc00, 0xfcff) AM_RAM AM_SHARE("mem_fc00")
+	AM_RANGE(0xfd00, 0xfdff) AM_RAM AM_SHARE("mem_fd00")
+	AM_RANGE(0xfe00, 0xfff7) AM_READ_BANK("bank3") AM_WRITEONLY AM_SHARE("mem_fe00")
 	AM_RANGE(0xfff8, 0xfff8) AM_RAM
 	AM_RANGE(0xfff9, 0xfff9) AM_READWRITE(lynx_memory_config_r, lynx_memory_config_w)
-	AM_RANGE(0xfffa, 0xffff) AM_READ_BANK("bank4") AM_WRITEONLY AM_BASE_MEMBER(lynx_state, m_mem_fffa)
+	AM_RANGE(0xfffa, 0xffff) AM_READ_BANK("bank4") AM_WRITEONLY AM_SHARE("mem_fffa")
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( lynx )
 	PORT_START("JOY")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("A")
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_NAME("B")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_NAME("A")
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("B")
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Opt 2") PORT_CODE(KEYCODE_2)
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Opt 1") PORT_CODE(KEYCODE_1)
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT )
@@ -38,26 +38,36 @@ static INPUT_PORTS_START( lynx )
 	PORT_START("PAUSE")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME(DEF_STR(Pause)) PORT_CODE(KEYCODE_3)
 	// power on and power off buttons
-
-	PORT_START("ROTATION")
-	PORT_CONFNAME ( 0x03, 0x03, "90 Degree Rotation" )
-	PORT_CONFSETTING(	  0x00, DEF_STR( None ) )
-	PORT_CONFSETTING(	  0x01, "Clockwise" )
-	PORT_CONFSETTING(	  0x02, "Counterclockwise" )
-	PORT_CONFSETTING(	  0x03, "Crcfile" )
 INPUT_PORTS_END
 
-static PALETTE_INIT( lynx )
+void lynx_state::palette_init()
 {
-    int i;
+	int i;
 
-    for (i=0; i< 0x1000; i++)
+	for (i=0; i< 0x1000; i++)
 	{
-		palette_set_color_rgb(machine, i,
+		palette_set_color_rgb(machine(), i,
 			((i >> 0) & 0x0f) * 0x11,
 			((i >> 4) & 0x0f) * 0x11,
 			((i >> 8) & 0x0f) * 0x11);
 	}
+}
+
+void lynx_state::video_start()
+{
+	machine().primary_screen->register_screen_bitmap(m_bitmap);
+}
+
+UINT32 lynx_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+{
+	copybitmap(bitmap, m_bitmap, 0, 0, 0, 0, cliprect);
+	return 0;
+}
+
+// callback for Mikey call of shift(3) which shall act on the lynx_timer_count_down
+void lynx_state::sound_cb()
+{
+	lynx_timer_count_down(1);
 }
 
 
@@ -65,33 +75,28 @@ static MACHINE_CONFIG_START( lynx, lynx_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M65SC02, 4000000)        /* vti core, integrated in vlsi, stz, but not bbr bbs */
 	MCFG_CPU_PROGRAM_MAP(lynx_mem)
-	MCFG_CPU_VBLANK_INT("screen", lynx_frame_int)
 	MCFG_QUANTUM_TIME(attotime::from_hz(60))
 
-	MCFG_MACHINE_START( lynx )
 
-    /* video hardware */
+	/* video hardware */
 	MCFG_SCREEN_ADD("screen", LCD)
 	MCFG_SCREEN_REFRESH_RATE(LCD_FRAMES_PER_SECOND)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	/*MCFG_SCREEN_SIZE(160, 102)*/
-	MCFG_SCREEN_SIZE(160, 160)
+	MCFG_SCREEN_UPDATE_DRIVER(lynx_state, screen_update)
+	MCFG_SCREEN_SIZE(160, 102)
 	MCFG_SCREEN_VISIBLE_AREA(0, 160-1, 0, 102-1)
-	MCFG_SCREEN_UPDATE( generic_bitmapped )
+	MCFG_DEFAULT_LAYOUT(layout_lynx)
 
 	MCFG_PALETTE_LENGTH(0x1000)
-	MCFG_PALETTE_INIT( lynx )
-
-	MCFG_VIDEO_START( generic_bitmapped )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("custom", LYNX, 0)
+	MCFG_SOUND_ADD("custom", LYNX_SND, 0)
+	MCFG_LYNX_SND_SET_TIMER(lynx_state, sound_cb)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	/* devices */
-	MCFG_QUICKLOAD_ADD("quickload", lynx, "o", 0)
+	MCFG_QUICKLOAD_ADD("quickload", lynx_state, lynx, "o", 0)
 
 	MCFG_FRAGMENT_ADD(lynx_cartslot)
 MACHINE_CONFIG_END
@@ -103,14 +108,15 @@ static MACHINE_CONFIG_DERIVED( lynx2, lynx )
 	MCFG_DEVICE_REMOVE("mono")
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 	MCFG_DEVICE_REMOVE("lynx")
-	MCFG_SOUND_ADD("custom", LYNX2, 0)
+	MCFG_SOUND_ADD("custom", LYNX2_SND, 0)
+	MCFG_LYNX_SND_SET_TIMER(lynx_state, sound_cb)
 	MCFG_SOUND_ROUTE(0, "lspeaker", 0.50)
 	MCFG_SOUND_ROUTE(1, "rspeaker", 0.50)
 MACHINE_CONFIG_END
 #endif
 
 /* these 2 dumps are saved from an running machine,
-   and therefor the rom byte at 0xff09 is not readable!
+   and therefor the rom byte at 0xfff9 is not readable!
    (memory configuration)
    these 2 dumps differ only in this byte!
 */
@@ -137,12 +143,11 @@ ROM_START(lynx2)
 ROM_END
 
 
-static QUICKLOAD_LOAD( lynx )
+QUICKLOAD_LOAD_MEMBER( lynx_state, lynx )
 {
-	device_t *cpu = image.device().machine().device("maincpu");
-	address_space *space = image.device().machine().device("maincpu")->memory().space(AS_PROGRAM);
+	address_space &space = m_maincpu->space(AS_PROGRAM);
 	UINT8 *data = NULL;
-	UINT8 *rom = image.device().machine().region("maincpu")->base();
+	UINT8 *rom = memregion("maincpu")->base();
 	UINT8 header[10]; // 80 08 dw Start dw Len B S 9 3
 	UINT16 start, length;
 	int i;
@@ -167,18 +172,16 @@ static QUICKLOAD_LOAD( lynx )
 	}
 
 	for (i = 0; i < length; i++)
-		space->write_byte(start + i, data[i]);
+		space.write_byte(start + i, data[i]);
 
 	free(data);
 
 	rom[0x1fc] = start & 0xff;
 	rom[0x1fd] = start >> 8;
-	space->write_byte(0x1fc, start & 0xff);
-	space->write_byte(0x1fd, start >> 8);
+	space.write_byte(0x1fc, start & 0xff);
+	space.write_byte(0x1fd, start >> 8);
 
-	lynx_crc_keyword((device_image_interface&)*image.device().machine().device("quickload"));
-
-	cpu_set_reg(cpu, STATE_GENPC, start);
+	m_maincpu->set_pc(start);
 
 	return IMAGE_INIT_PASS;
 }
@@ -190,5 +193,5 @@ static QUICKLOAD_LOAD( lynx )
 ***************************************************************************/
 
 /*    YEAR  NAME    PARENT  COMPAT  MACHINE INPUT   INIT    COMPANY   FULLNAME      FLAGS */
-CONS( 1989, lynx,   0,      0,      lynx,   lynx,   0,       "Atari",  "Lynx",       GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
-// CONS( 1991, lynx2,  lynx,   0,      lynx2,  lynx,   0,       "Atari",  "Lynx II",    GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
+CONS( 1989, lynx,   0,      0,      lynx,   lynx, driver_device,   0,       "Atari",  "Lynx", GAME_SUPPORTS_SAVE )
+// CONS( 1991, lynx2,  lynx,   0,      lynx2,  lynx, driver_device,   0,       "Atari",  "Lynx II",    GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )

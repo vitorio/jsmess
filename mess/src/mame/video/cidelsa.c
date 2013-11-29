@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 #include "emu.h"
 #include "cpu/cosmac/cosmac.h"
 #include "sound/cdp1869.h"
@@ -113,12 +115,12 @@ WRITE_LINE_MEMBER( cidelsa_state::prd_w )
 
 /* Page RAM */
 
-static ADDRESS_MAP_START( cidelsa_page_ram, AS_0, 8 )
+static ADDRESS_MAP_START( cidelsa_page_ram, AS_0, 8, driver_device )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000, 0x3ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( draco_page_ram, AS_0, 8 )
+static ADDRESS_MAP_START( draco_page_ram, AS_0, 8, driver_device )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000, 0x7ff) AM_RAM
 ADDRESS_MAP_END
@@ -127,7 +129,6 @@ ADDRESS_MAP_END
 
 static CDP1869_INTERFACE( destryer_vis_intf )
 {
-	SCREEN_TAG,
 	0,
 	CDP1869_PAL,
 	cidelsa_pcb_r,
@@ -138,7 +139,6 @@ static CDP1869_INTERFACE( destryer_vis_intf )
 
 static CDP1869_INTERFACE( altair_vis_intf )
 {
-	SCREEN_TAG,
 	0,
 	CDP1869_PAL,
 	cidelsa_pcb_r,
@@ -149,7 +149,6 @@ static CDP1869_INTERFACE( altair_vis_intf )
 
 static CDP1869_INTERFACE( draco_vis_intf )
 {
-	SCREEN_TAG,
 	0,
 	CDP1869_PAL,
 	draco_pcb_r,
@@ -163,8 +162,8 @@ static CDP1869_INTERFACE( draco_vis_intf )
 void cidelsa_state::video_start()
 {
 	// allocate memory
-	m_pcbram = auto_alloc_array(machine(), UINT8, CIDELSA_CHARRAM_SIZE);
-	m_charram = auto_alloc_array(machine(), UINT8, CIDELSA_CHARRAM_SIZE);
+	m_pcbram = auto_alloc_array_clear(machine(), UINT8, CIDELSA_CHARRAM_SIZE);
+	m_charram = auto_alloc_array_clear(machine(), UINT8, CIDELSA_CHARRAM_SIZE);
 
 	// register for state saving
 	save_item(NAME(m_cdp1869_pcb));
@@ -178,18 +177,18 @@ WRITE8_MEMBER( draco_state::psg_pb_w )
 {
 	/*
 
-      bit   description
+	  bit   description
 
-        0   RELE0
-        1   RELE1
-        2   sound output -> * -> 22K capacitor -> GND
-        3   sound output -> * -> 220K capacitor -> GND
-        4   5V -> 1K resistor -> * -> 10uF capacitor -> GND (volume pot voltage adjustment)
-        5   not connected
-        6   not connected
-        7   not connected
+	    0   RELE0
+	    1   RELE1
+	    2   sound output -> * -> 22K capacitor -> GND
+	    3   sound output -> * -> 220K capacitor -> GND
+	    4   5V -> 1K resistor -> * -> 10uF capacitor -> GND (volume pot voltage adjustment)
+	    5   not connected
+	    6   not connected
+	    7   not connected
 
-    */
+	*/
 }
 
 static const ay8910_interface psg_intf =
@@ -205,7 +204,7 @@ static const ay8910_interface psg_intf =
 /* Machine Drivers */
 
 MACHINE_CONFIG_FRAGMENT( destryer_video )
-	MCFG_CDP1869_SCREEN_PAL_ADD(SCREEN_TAG, DESTRYER_CHR2)
+	MCFG_CDP1869_SCREEN_PAL_ADD(CDP1869_TAG, SCREEN_TAG, DESTRYER_CHR2)
 	MCFG_SCREEN_DEFAULT_POSITION(1.226, 0.012, 1.4, 0.044)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -214,7 +213,7 @@ MACHINE_CONFIG_FRAGMENT( destryer_video )
 MACHINE_CONFIG_END
 
 MACHINE_CONFIG_FRAGMENT( altair_video )
-	MCFG_CDP1869_SCREEN_PAL_ADD(SCREEN_TAG, ALTAIR_CHR2)
+	MCFG_CDP1869_SCREEN_PAL_ADD(CDP1869_TAG, SCREEN_TAG, ALTAIR_CHR2)
 	MCFG_SCREEN_DEFAULT_POSITION(1.226, 0.012, 1.4, 0.044)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -223,7 +222,7 @@ MACHINE_CONFIG_FRAGMENT( altair_video )
 MACHINE_CONFIG_END
 
 MACHINE_CONFIG_FRAGMENT( draco_video )
-	MCFG_CDP1869_SCREEN_PAL_ADD(SCREEN_TAG, DRACO_CHR2)
+	MCFG_CDP1869_SCREEN_PAL_ADD(CDP1869_TAG, SCREEN_TAG, DRACO_CHR2)
 	MCFG_SCREEN_DEFAULT_POSITION(1.226, 0.012, 1.360, 0.024)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")

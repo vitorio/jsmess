@@ -10,6 +10,7 @@
 
 #include "emu.h"
 #include "machine/isa.h"
+#include "machine/upd765.h"
 
 //**************************************************************************
 //  TYPE DEFINITIONS
@@ -18,49 +19,67 @@
 // ======================> isa8_fdc_device
 
 class isa8_fdc_device :
-		public device_t,
-		public device_isa8_card_interface,
-		public device_slot_card_interface
+	public device_t,
+	public device_isa8_card_interface
 {
 public:
-        // construction/destruction
-        isa8_fdc_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	// construction/destruction
+	isa8_fdc_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source);
 
-		// optional information overrides
-		virtual machine_config_constructor device_mconfig_additions() const;
+	required_device<pc_fdc_interface> fdc;
+
+	DECLARE_FLOPPY_FORMATS( floppy_formats );
+
 protected:
-        // device-level overrides
-        virtual void device_start();
-        virtual void device_reset();
+	// device-level overrides
+	virtual void device_start();
+	virtual void device_reset();
+
+	virtual UINT8 dack_r(int line);
+	virtual void dack_w(int line, UINT8 data);
+	virtual void eop_w(int state);
 
 private:
-        // internal state
-public:
-		virtual UINT8 dack_r(int line);
-		virtual void dack_w(int line,UINT8 data);
-		virtual void eop_w(int state);
-		virtual bool have_dack(int line);
+	void irq_w(bool state);
+	void drq_w(bool state);
 
-		int status_register_a;
-		int status_register_b;
-		int digital_output_register;
-		int tape_drive_register;
-		int data_rate_register;
-		int digital_input_register;
-		int configuration_control_register;
-
-		/* stored tc state - state present at pins */
-		int tc_state;
-		/* stored dma drq state */
-		int dma_state;
-		/* stored int state */
-		int int_state;
-
-		required_device<device_t> m_upd765;
 };
 
+class isa8_fdc_xt_device : public isa8_fdc_device {
+public:
+	isa8_fdc_xt_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	virtual machine_config_constructor device_mconfig_additions() const;
+};
+
+class isa8_fdc_at_device : public isa8_fdc_device {
+public:
+	isa8_fdc_at_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	virtual machine_config_constructor device_mconfig_additions() const;
+};
+
+class isa8_fdc_smc_device : public isa8_fdc_device {
+public:
+	isa8_fdc_smc_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	virtual machine_config_constructor device_mconfig_additions() const;
+};
+
+class isa8_fdc_ps2_device : public isa8_fdc_device {
+public:
+	isa8_fdc_ps2_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	virtual machine_config_constructor device_mconfig_additions() const;
+};
+
+class isa8_fdc_superio_device : public isa8_fdc_device {
+public:
+	isa8_fdc_superio_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	virtual machine_config_constructor device_mconfig_additions() const;
+};
 
 // device type definition
-extern const device_type ISA8_FDC;
+extern const device_type ISA8_FDC_XT;
+extern const device_type ISA8_FDC_AT;
+extern const device_type ISA8_FDC_SMC;
+extern const device_type ISA8_FDC_PS2;
+extern const device_type ISA8_FDC_SUPERIO;
 
 #endif  /* ISA_FDC_H */

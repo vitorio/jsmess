@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Miodrag Milanovic
 /***************************************************************************
 
         PP-01 driver by Miodrag Milanovic
@@ -7,14 +9,11 @@
 ****************************************************************************/
 
 
-#include "emu.h"
-#include "cpu/i8085/i8085.h"
-#include "machine/ram.h"
 #include "includes/pp01.h"
 
 
 /* Address maps */
-static ADDRESS_MAP_START(pp01_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(pp01_mem, AS_PROGRAM, 8, pp01_state )
 	AM_RANGE(0x0000, 0x0fff) AM_RAMBANK("bank1")
 	AM_RANGE(0x1000, 0x1fff) AM_RAMBANK("bank2")
 	AM_RANGE(0x2000, 0x2fff) AM_RAMBANK("bank3")
@@ -33,13 +32,14 @@ static ADDRESS_MAP_START(pp01_mem, AS_PROGRAM, 8)
 	AM_RANGE(0xf000, 0xffff) AM_RAMBANK("bank16")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pp01_io, AS_IO, 8 )
-	AM_RANGE(0xc0, 0xc3) AM_DEVREADWRITE_MODERN("ppi8255", i8255_device, read, write)
-	//AM_RANGE(0xc4, 0xc7) AM_DEVREADWRITE_MODERN("ppi8255", i8255_device, read, write)
+static ADDRESS_MAP_START( pp01_io, AS_IO, 8, pp01_state )
+	AM_RANGE(0xc0, 0xc3) AM_DEVREADWRITE("ppi8255", i8255_device, read, write) // system
+	//AM_RANGE(0xc4, 0xc7) AM_DEVREADWRITE("ppi8255", i8255_device, read, write) // user
+	AM_RANGE(0xc8, 0xc8) AM_MIRROR(2) AM_DEVREADWRITE("uart", i8251_device, data_r, data_w)
+	AM_RANGE(0xc9, 0xc9) AM_MIRROR(2) AM_DEVREADWRITE("uart", i8251_device, status_r, control_w)
 	AM_RANGE(0xcc, 0xcf) AM_WRITE(pp01_video_write_mode_w)
-	AM_RANGE(0xd0, 0xd3) AM_DEVREADWRITE("pit8253", pit8253_r, pit8253_w)
-	AM_RANGE(0xe0, 0xef) AM_READWRITE(pp01_mem_block_r, pp01_mem_block_w)
-	AM_RANGE(0xf0, 0xff) AM_READWRITE(pp01_mem_block_r, pp01_mem_block_w)
+	AM_RANGE(0xd0, 0xd3) AM_DEVREADWRITE("pit8253", pit8253_device, read, write)
+	AM_RANGE(0xe0, 0xef) AM_MIRROR(0x10) AM_READWRITE(pp01_mem_block_r, pp01_mem_block_w)
 ADDRESS_MAP_END
 
 /* Input ports */
@@ -138,7 +138,7 @@ static INPUT_PORTS_START( pp01 )
 		PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_UNUSED)
 		PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_UNUSED)
 		PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_UNUSED)
-		PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME(":") PORT_CODE(KEYCODE_COLON)
+		PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME(":") PORT_CODE(KEYCODE_QUOTE)
 		PORT_BIT(0x10, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("J") PORT_CODE(KEYCODE_J)
 		PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Z") PORT_CODE(KEYCODE_Z)
 		PORT_BIT(0x40, IP_ACTIVE_LOW, IPT_UNUSED)
@@ -185,7 +185,7 @@ static INPUT_PORTS_START( pp01 )
 		PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_UNUSED)
 		PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("/") PORT_CODE(KEYCODE_SLASH)
 		PORT_BIT(0x10, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("O") PORT_CODE(KEYCODE_O)
-		PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("_") PORT_CODE(KEYCODE_TILDE)
+		PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("_") PORT_CODE(KEYCODE_HOME)
 		PORT_BIT(0x40, IP_ACTIVE_LOW, IPT_UNUSED)
 		PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_UNUSED)
 	PORT_START("LINEALL")
@@ -201,25 +201,25 @@ static MACHINE_CONFIG_START( pp01, pp01_state )
 	MCFG_CPU_PROGRAM_MAP(pp01_mem)
 	MCFG_CPU_IO_MAP(pp01_io)
 
-	MCFG_MACHINE_START( pp01 )
-	MCFG_MACHINE_RESET( pp01 )
-
-    /* video hardware */
+	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
-	MCFG_SCREEN_UPDATE(pp01)
-
+	MCFG_SCREEN_UPDATE_DRIVER(pp01_state, screen_update_pp01)
 	MCFG_PALETTE_LENGTH(8)
-	MCFG_PALETTE_INIT(pp01)
 
-	MCFG_VIDEO_START(pp01)
+	/* sound hardware */
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	//MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
+	//MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
+	/* Devices */
+	MCFG_I8251_ADD("uart", pp01_uart_intf)
 	MCFG_PIT8253_ADD( "pit8253", pp01_pit8253_intf )
-
 	MCFG_I8255A_ADD( "ppi8255", pp01_ppi8255_interface )
 
 	/* internal ram */
@@ -254,5 +254,5 @@ ROM_END
 
 /* Driver */
 
-/*    YEAR  NAME    PARENT  COMPAT  MACHINE     INPUT       INIT     COMPANY                  FULLNAME   FLAGS */
-COMP( 198?, pp01,	0,		0,		pp01,		pp01,		0,  	 "ZVT",					 "PP-01",	 GAME_NOT_WORKING | GAME_NO_SOUND)
+/*    YEAR  NAME    PARENT  COMPAT  MACHINE     INPUT   CLASS           INIT     COMPANY   FULLNAME   FLAGS */
+COMP( 198?, pp01,   0,      0,      pp01,       pp01,   driver_device,   0,       "ZVT",   "PP-01", GAME_NOT_WORKING )

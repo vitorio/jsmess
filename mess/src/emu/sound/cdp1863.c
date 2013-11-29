@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     RCA CDP1863 CMOS 8-Bit Programmable Frequency Generator emulation
@@ -26,7 +28,7 @@
 #define LOG 0
 
 
-#define CDP1863_DEFAULT_LATCH	0x35
+#define CDP1863_DEFAULT_LATCH   0x35
 
 
 
@@ -48,11 +50,11 @@ const device_type CDP1863 = &device_creator<cdp1863_device>;
 //-------------------------------------------------
 
 cdp1863_device::cdp1863_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, CDP1863, "CDP1863", tag, owner, clock),
-	  device_sound_interface(mconfig, *this),
-	  m_stream(NULL),
-	  m_clock1(clock),
-	  m_clock2(0)
+	: device_t(mconfig, CDP1863, "CDP1863", tag, owner, clock, "cdp1863", __FILE__),
+		device_sound_interface(mconfig, *this),
+		m_stream(NULL),
+		m_clock1(clock),
+		m_clock2(0)
 {
 }
 

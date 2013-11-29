@@ -10,14 +10,12 @@
 #include "emu.h"
 #include "includes/orao.h"
 
-
-VIDEO_START( orao )
+void orao_state::video_start()
 {
 }
 
-SCREEN_UPDATE( orao )
+UINT32 orao_state::screen_update_orao(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	orao_state *state = screen->machine().driver_data<orao_state>();
 	UINT8 code;
 	int y, x, b;
 
@@ -27,14 +25,12 @@ SCREEN_UPDATE( orao )
 		int horpos = 0;
 		for (x = 0; x < 32; x++)
 		{
-			code = state->m_video_ram[addr++];
+			code = m_video_ram[addr++];
 			for (b = 0; b < 8; b++)
 			{
-				*BITMAP_ADDR16(bitmap, y, horpos++) =  (code >> b) & 0x01;
+				bitmap.pix16(y, horpos++) =  (code >> b) & 0x01;
 			}
 		}
 	}
 	return 0;
 }
-
-

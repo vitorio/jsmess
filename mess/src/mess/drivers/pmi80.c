@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
         Tesla PMI-80
@@ -14,7 +16,7 @@ ToDo:
 
 Notes:
 - Keyboard consists of 16 black hex keys, and 9 blue function keys
-- The hex keys are 0 thru 9, A thru F on our keyboard
+- The hex keys are 0 through 9, A through F on our keyboard
 - The function keys are mostly not worked out although I've guessed a few
 - The function key labels are RE, I, EX, R, BR, M, L, S, =
 - The letter M shows as an inverted U in the display
@@ -30,7 +32,6 @@ Notes:
    things. Perhaps it connected to discrete LEDs or output lines.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i8085/i8085.h"
@@ -40,15 +41,19 @@ class pmi80_state : public driver_device
 {
 public:
 	pmi80_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag),
-	m_ledready(0)
+		: driver_device(mconfig, type, tag)
+		, m_ledready(0)
+		, m_maincpu(*this, "maincpu")
 	{ }
 
 	DECLARE_READ8_MEMBER(keyboard_r);
 	DECLARE_WRITE8_MEMBER(keyboard_w);
 	DECLARE_WRITE8_MEMBER(leds_w);
+private:
 	UINT8 m_keyrow;
 	bool m_ledready;
+	virtual void machine_reset();
+	required_device<cpu_device> m_maincpu;
 };
 
 
@@ -56,7 +61,7 @@ READ8_MEMBER( pmi80_state::keyboard_r)
 {
 	char kbdrow[6];
 	sprintf(kbdrow,"%X",m_keyrow);
-	return input_port_read(machine(), kbdrow);
+	return ioport(kbdrow)->read();
 }
 
 WRITE8_MEMBER( pmi80_state::keyboard_w )
@@ -142,7 +147,7 @@ static INPUT_PORTS_START( pmi80 )
 INPUT_PORTS_END
 
 
-static MACHINE_RESET( pmi80 )
+void pmi80_state::machine_reset()
 {
 }
 
@@ -153,7 +158,6 @@ static MACHINE_CONFIG_START( pmi80, pmi80_state )
 	MCFG_CPU_PROGRAM_MAP(pmi80_mem)
 	MCFG_CPU_IO_MAP(pmi80_io)
 
-	MCFG_MACHINE_RESET(pmi80)
 
 	/* video hardware */
 	MCFG_DEFAULT_LAYOUT(layout_pmi80)
@@ -168,4 +172,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1982, pmi80,  0,       0,      pmi80,     pmi80,   0,      "Tesla",  "PMI-80", GAME_NO_SOUND_HW)
+COMP( 1982, pmi80,  0,       0,      pmi80,     pmi80, driver_device,   0,      "Tesla",  "PMI-80", GAME_NO_SOUND_HW)

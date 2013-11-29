@@ -31,38 +31,38 @@
 static void msx_cpu_setbank (running_machine &machine, int page, UINT8 *mem)
 {
 	msx_state *state = machine.driver_data<msx_state>();
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space &space = state->m_maincpu->space(AS_PROGRAM);
 	switch (page)
 	{
 	case 1:
-		memory_set_bankptr (machine,"bank1", mem);
+		state->m_bank1->set_base (mem);
 		break;
 	case 2:
-		memory_set_bankptr (machine,"bank2", mem);
+		state->m_bank2->set_base (mem);
 		break;
 	case 3:
-		memory_set_bankptr (machine,"bank3", mem);
+		state->m_bank3->set_base (mem);
 		break;
 	case 4:
-		memory_set_bankptr (machine,"bank4", mem);
-		memory_set_bankptr (machine,"bank5", mem + 0x1ff8);
-		space->install_read_bank(0x7ff8, 0x7fff, "bank5");
+		state->m_bank4->set_base (mem);
+		state->m_bank5->set_base (mem + 0x1ff8);
+		space.install_read_bank(0x7ff8, 0x7fff, "bank5");
 		break;
 	case 5:
-		memory_set_bankptr (machine,"bank6", mem);
-		memory_set_bankptr (machine,"bank7", mem + 0x1800);
-		space->install_read_bank(0x9800, 0x9fff, "bank7");
+		state->m_bank6->set_base (mem);
+		state->m_bank7->set_base (mem + 0x1800);
+		space.install_read_bank(0x9800, 0x9fff, "bank7");
 		break;
 	case 6:
-		memory_set_bankptr (machine,"bank8", mem);
-		memory_set_bankptr (machine,"bank9", mem + 0x1800);
-		space->install_read_bank(0xb800, 0xbfff, "bank9");
+		state->m_bank8->set_base (mem);
+		state->m_bank9->set_base (mem + 0x1800);
+		space.install_read_bank(0xb800, 0xbfff, "bank9");
 		break;
 	case 7:
-		memory_set_bankptr (machine,"bank10", mem);
+		state->m_bank10->set_base (mem);
 		break;
 	case 8:
-		memory_set_bankptr (machine,"bank11", mem);
+		state->m_bank11->set_base (mem);
 		state->m_top_page = mem;
 		break;
 	}
@@ -138,9 +138,6 @@ MSX_SLOT_RESET(ram)
 MSX_SLOT_INIT(rammm)
 {
 	int i, mask, nsize;
-#ifdef MONMSX
-	FILE *f;
-#endif
 
 	nsize = 0x10000; /* 64 kb */
 	mask = 3;
@@ -156,21 +153,11 @@ MSX_SLOT_INIT(rammm)
 	if (i == 6)
 	{
 		logerror ("ram mapper: error: must be 64kb, 128kb, 256kb, 512kb, "
-				  "1mb, 2mb or 4mb\n");
+					"1mb, 2mb or 4mb\n");
 		return 1;
 	}
 	state->m_mem = auto_alloc_array(machine, UINT8, size);
 	memset (state->m_mem, 0, size);
-
-#ifdef MONMSX
-	f = fopen ("/home/sean/msx/hack/monmsx.bin", "r");
-	if (f)
-	{
-		fseek (f, 6L, SEEK_SET);
-		fread (state->m_mem, 1, 6151 - 6, f);
-		fclose (f);
-	}
-#endif
 
 	state->m_type = SLOT_RAM_MM;
 	state->m_start_page = page;
@@ -253,7 +240,6 @@ MSX_SLOT_INIT(konami)
 	{
 		logerror ("konami: warning: truncating to 2mb\n");
 		size = 0x200000;
-		return 1;
 	}
 	banks = size / 0x2000;
 	if (size != banks * 0x2000 || (~(banks - 1) % banks))
@@ -337,7 +323,6 @@ MSX_SLOT_INIT(konami_scc)
 	{
 		logerror ("konami_scc: warning: truncating to 2mb\n");
 		size = 0x200000;
-		return 1;
 	}
 	banks = size / 0x2000;
 	if (size != banks * 0x2000 || (~(banks - 1) % banks))
@@ -364,19 +349,18 @@ MSX_SLOT_RESET(konami_scc)
 
 static READ8_HANDLER (konami_scc_bank5)
 {
+	msx_state *drvstate = space.machine().driver_data<msx_state>();
 	if (offset & 0x80)
 	{
-#if 0
 		if ((offset & 0xff) >= 0xe0)
 		{
-			/* write 0xff to deformation register */
+			return drvstate->m_k051649->k051649_test_r(space, offset & 0xff);
 		}
-#endif
 		return 0xff;
 	}
 	else
 	{
-		return k051649_waveform_r (space->machine().device("k051649"), offset & 0x7f);
+		return drvstate->m_k051649->k051649_waveform_r(space, offset & 0x7f);
 	}
 }
 
@@ -396,9 +380,11 @@ MSX_SLOT_MAP(konami_scc)
 		msx_cpu_setbank (machine, 5, state->m_mem + state->m_banks[2] * 0x2000);
 		msx_cpu_setbank (machine, 6, state->m_mem + state->m_banks[3] * 0x2000);
 		if (state->m_cart.scc.active ) {
-			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x9800, 0x9fff, FUNC(konami_scc_bank5));
+			msx_state *drvstate = machine.driver_data<msx_state>();
+			drvstate->m_maincpu->space(AS_PROGRAM).install_legacy_read_handler(0x9800, 0x9fff, FUNC(konami_scc_bank5));
 		} else {
-			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x9800, 0x9fff,"bank7");
+			msx_state *drvstate = machine.driver_data<msx_state>();
+			drvstate->m_maincpu->space(AS_PROGRAM).install_read_bank(0x9800, 0x9fff,"bank7");
 		}
 		break;
 	case 3:
@@ -410,7 +396,7 @@ MSX_SLOT_MAP(konami_scc)
 MSX_SLOT_WRITE(konami_scc)
 {
 	msx_state *drvstate = machine.driver_data<msx_state>();
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space &space = drvstate->m_maincpu->space(AS_PROGRAM);
 	if (addr >= 0x5000 && addr < 0x5800)
 	{
 		state->m_banks[0] = val & state->m_bank_mask;
@@ -441,35 +427,32 @@ MSX_SLOT_WRITE(konami_scc)
 	}
 	else if (state->m_cart.scc.active && addr >= 0x9800 && addr < 0xa000)
 	{
-		device_t *k051649 = space->machine().device("k051649");
 		int offset = addr & 0xff;
 
 		if (offset < 0x80)
 		{
-			k051649_waveform_w (k051649, offset, val);
+			drvstate->m_k051649->k051649_waveform_w (space, offset, val);
 		}
 		else if (offset < 0xa0)
 		{
 			offset &= 0xf;
 			if (offset < 0xa)
 			{
-				k051649_frequency_w (k051649, offset, val);
+				drvstate->m_k051649->k051649_frequency_w (space, offset, val);
 			}
 			else if (offset < 0xf)
 			{
-				k051649_volume_w (k051649, offset - 0xa, val);
+				drvstate->m_k051649->k051649_volume_w (space, offset - 0xa, val);
 			}
 			else
 			{
-				k051649_keyonoff_w (k051649, 0, val);
+				drvstate->m_k051649->k051649_keyonoff_w (space, 0, val);
 			}
 		}
-#if 0
 		else if (offset >= 0xe0)
 		{
-			/* deformation register */
+			drvstate->m_k051649->k051649_test_w (space, offset, val);
 		}
-#endif
 	}
 	else if (addr >= 0xb000 && addr < 0xb800)
 	{
@@ -490,7 +473,6 @@ MSX_SLOT_INIT(ascii8)
 	{
 		logerror ("ascii8: warning: truncating to 2mb\n");
 		size = 0x200000;
-		return 1;
 	}
 	banks = size / 0x2000;
 	if (size != banks * 0x2000 || (~(banks - 1) % banks))
@@ -510,7 +492,7 @@ MSX_SLOT_RESET(ascii8)
 {
 	int i;
 
-	for (i=0; i<4; i++) state->m_banks[i] = i;
+	for (i=0; i<4; i++) state->m_banks[i] = 0;
 }
 
 MSX_SLOT_MAP(ascii8)
@@ -585,7 +567,7 @@ MSX_SLOT_RESET(ascii16)
 {
 	int i;
 
-	for (i=0; i<2; i++) state->m_banks[i] = i;
+	for (i=0; i<2; i++) state->m_banks[i] = 0;
 }
 
 MSX_SLOT_MAP(ascii16)
@@ -643,7 +625,6 @@ MSX_SLOT_INIT(ascii8_sram)
 	{
 		logerror ("ascii8_sram: warning: truncating to 1mb\n");
 		size = 0x100000;
-		return 1;
 	}
 	banks = size / 0x2000;
 	if (size != banks * 0x2000 || (~(banks - 1) % banks))
@@ -670,7 +651,7 @@ MSX_SLOT_RESET(ascii8_sram)
 {
 	int i;
 
-	for (i=0; i<4; i++) state->m_banks[i] = i;
+	for (i=0; i<4; i++) state->m_banks[i] = 0;
 }
 
 static UINT8 *ascii8_sram_bank_select (msx_state *drvstate, slot_state *state, int bankno)
@@ -737,7 +718,7 @@ MSX_SLOT_WRITE(ascii8_sram)
 	{
 		bank = addr < 0xa000 ? 2 : 3;
 		if (!(state->m_banks[bank] & state->m_cart.sram.empty_mask) &&
-		     (state->m_banks[bank] & state->m_cart.sram.sram_mask))
+				(state->m_banks[bank] & state->m_cart.sram.sram_mask))
 		{
 			state->m_cart.sram.mem[addr & 0x1fff] = val;
 		}
@@ -830,7 +811,7 @@ MSX_SLOT_RESET(ascii16_sram)
 {
 	int i;
 
-	for (i=0; i<2; i++) state->m_banks[i] = i;
+	for (i=0; i<2; i++) state->m_banks[i] = 0;
 }
 
 static UINT8 *ascii16_sram_bank_select (msx_state *drvstate, slot_state *state, int bankno)
@@ -897,7 +878,7 @@ MSX_SLOT_WRITE(ascii16_sram)
 	else if (addr >= 0x8000 && addr < 0xc000)
 	{
 		if (!(state->m_banks[1] & state->m_cart.sram.empty_mask) &&
-		     (state->m_banks[1] & state->m_cart.sram.sram_mask))
+				(state->m_banks[1] & state->m_cart.sram.sram_mask))
 		{
 			int offset, i;
 
@@ -1249,20 +1230,19 @@ MSX_SLOT_INIT(diskrom)
 
 MSX_SLOT_RESET(diskrom)
 {
-	device_t *fdc = machine.device("wd179x");
-	wd17xx_reset(fdc);
+	msx_state *drvstate = machine.driver_data<msx_state>();
+	wd17xx_reset(drvstate->m_wd179x);
 }
 
 static READ8_HANDLER (msx_diskrom_page1_r)
 {
-	msx_state *state = space->machine().driver_data<msx_state>();
-	device_t *fdc = space->machine().device("wd179x");
+	msx_state *state = space.machine().driver_data<msx_state>();
 	switch (offset)
 	{
-	case 0: return wd17xx_status_r (fdc, 0);
-	case 1: return wd17xx_track_r (fdc, 0);
-	case 2: return wd17xx_sector_r (fdc, 0);
-	case 3: return wd17xx_data_r (fdc, 0);
+	case 0: return wd17xx_status_r (state->m_wd179x, space, 0);
+	case 1: return wd17xx_track_r (state->m_wd179x, space, 0);
+	case 2: return wd17xx_sector_r (state->m_wd179x, space, 0);
+	case 3: return wd17xx_data_r (state->m_wd179x, space, 0);
 	case 7: return state->m_dsk_stat;
 	default:
 		return state->m_state[1]->m_mem[offset + 0x3ff8];
@@ -1271,20 +1251,19 @@ static READ8_HANDLER (msx_diskrom_page1_r)
 
 static READ8_HANDLER (msx_diskrom_page2_r)
 {
-	msx_state *state = space->machine().driver_data<msx_state>();
-	device_t *fdc = space->machine().device("wd179x");
+	msx_state *state = space.machine().driver_data<msx_state>();
 	if (offset >= 0x7f8)
 	{
 		switch (offset)
 		{
 		case 0x7f8:
-			return wd17xx_status_r (fdc, 0);
+			return wd17xx_status_r (state->m_wd179x, space, 0);
 		case 0x7f9:
-			return wd17xx_track_r (fdc, 0);
+			return wd17xx_track_r (state->m_wd179x, space, 0);
 		case 0x7fa:
-			return wd17xx_sector_r (fdc, 0);
+			return wd17xx_sector_r (state->m_wd179x, space, 0);
 		case 0x7fb:
-			return wd17xx_data_r (fdc, 0);
+			return wd17xx_data_r (state->m_wd179x, space, 0);
 		case 0x7ff:
 			return state->m_dsk_stat;
 		default:
@@ -1300,7 +1279,7 @@ static READ8_HANDLER (msx_diskrom_page2_r)
 MSX_SLOT_MAP(diskrom)
 {
 	msx_state *drvstate = machine.driver_data<msx_state>();
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space &space = drvstate->m_maincpu->space(AS_PROGRAM);
 	switch (page)
 	{
 	case 0:
@@ -1310,12 +1289,12 @@ MSX_SLOT_MAP(diskrom)
 	case 1:
 		msx_cpu_setbank (machine, 3, state->m_mem);
 		msx_cpu_setbank (machine, 4, state->m_mem + 0x2000);
-		space->install_legacy_read_handler(0x7ff8, 0x7fff, FUNC(msx_diskrom_page1_r));
+		space.install_legacy_read_handler(0x7ff8, 0x7fff, FUNC(msx_diskrom_page1_r));
 		break;
 	case 2:
 		msx_cpu_setbank (machine, 5, drvstate->m_empty);
 		msx_cpu_setbank (machine, 6, drvstate->m_empty);
-		space->install_legacy_read_handler(0xb800, 0xbfff, FUNC(msx_diskrom_page2_r));
+		space.install_legacy_read_handler(0xb800, 0xbfff, FUNC(msx_diskrom_page2_r));
 		break;
 	case 3:
 		msx_cpu_setbank (machine, 7, drvstate->m_empty);
@@ -1326,7 +1305,8 @@ MSX_SLOT_MAP(diskrom)
 
 MSX_SLOT_WRITE(diskrom)
 {
-	device_t *fdc = machine.device("wd179x");
+	msx_state *drvstate = machine.driver_data<msx_state>();
+	address_space &space = drvstate->m_maincpu->space(AS_PROGRAM);
 	if (addr >= 0xa000 && addr < 0xc000)
 	{
 		addr -= 0x4000;
@@ -1334,23 +1314,23 @@ MSX_SLOT_WRITE(diskrom)
 	switch (addr)
 	{
 	case 0x7ff8:
-		wd17xx_command_w (fdc, 0, val);
+		wd17xx_command_w (drvstate->m_wd179x, space, 0, val);
 		break;
 	case 0x7ff9:
-		wd17xx_track_w (fdc, 0, val);
+		wd17xx_track_w (drvstate->m_wd179x, space, 0, val);
 		break;
 	case 0x7ffa:
-		wd17xx_sector_w (fdc, 0, val);
+		wd17xx_sector_w (drvstate->m_wd179x, space, 0, val);
 		break;
 	case 0x7ffb:
-		wd17xx_data_w (fdc, 0, val);
+		wd17xx_data_w (drvstate->m_wd179x, space, 0, val);
 		break;
 	case 0x7ffc:
-		wd17xx_set_side (fdc,val & 1);
+		wd17xx_set_side (drvstate->m_wd179x,val & 1);
 		state->m_mem[0x3ffc] = val | 0xfe;
 		break;
 	case 0x7ffd:
-		wd17xx_set_drive (fdc,val & 1);
+		wd17xx_set_drive (drvstate->m_wd179x,val & 1);
 		if ((state->m_mem[0x3ffd] ^ val) & 0x40)
 		{
 			set_led_status (machine, 0, !(val & 0x40));
@@ -1377,20 +1357,19 @@ MSX_SLOT_INIT(diskrom2)
 
 MSX_SLOT_RESET(diskrom2)
 {
-	device_t *fdc = machine.device("wd179x");
-	wd17xx_reset (fdc);
+	msx_state *drvstate = machine.driver_data<msx_state>();
+	wd17xx_reset (drvstate->m_wd179x);
 }
 
 static READ8_HANDLER (msx_diskrom2_page1_r)
 {
-	msx_state *state = space->machine().driver_data<msx_state>();
-	device_t *fdc = space->machine().device("wd179x");
+	msx_state *state = space.machine().driver_data<msx_state>();
 	switch (offset)
 	{
-	case 0: return wd17xx_status_r(fdc, 0);
-	case 1: return wd17xx_track_r(fdc, 0);
-	case 2: return wd17xx_sector_r(fdc, 0);
-	case 3: return wd17xx_data_r(fdc, 0);
+	case 0: return wd17xx_status_r(state->m_wd179x, space, 0);
+	case 1: return wd17xx_track_r(state->m_wd179x, space, 0);
+	case 2: return wd17xx_sector_r(state->m_wd179x, space, 0);
+	case 3: return wd17xx_data_r(state->m_wd179x, space, 0);
 	case 4: return state->m_dsk_stat;
 	default:
 		return state->m_state[1]->m_mem[offset + 0x3ff8];
@@ -1399,20 +1378,19 @@ static READ8_HANDLER (msx_diskrom2_page1_r)
 
 static  READ8_HANDLER (msx_diskrom2_page2_r)
 {
-	msx_state *state = space->machine().driver_data<msx_state>();
-	device_t *fdc = space->machine().device("wd179x");
+	msx_state *state = space.machine().driver_data<msx_state>();
 	if (offset >= 0x7b8)
 	{
 		switch (offset)
 		{
 		case 0x7b8:
-			return wd17xx_status_r (fdc, 0);
+			return wd17xx_status_r (state->m_wd179x, space, 0);
 		case 0x7b9:
-			return wd17xx_track_r (fdc, 0);
+			return wd17xx_track_r (state->m_wd179x, space, 0);
 		case 0x7ba:
-			return wd17xx_sector_r (fdc, 0);
+			return wd17xx_sector_r (state->m_wd179x, space, 0);
 		case 0x7bb:
-			return wd17xx_data_r (fdc, 0);
+			return wd17xx_data_r (state->m_wd179x, space, 0);
 		case 0x7bc:
 			return state->m_dsk_stat;
 		default:
@@ -1428,7 +1406,7 @@ static  READ8_HANDLER (msx_diskrom2_page2_r)
 MSX_SLOT_MAP(diskrom2)
 {
 	msx_state *drvstate = machine.driver_data<msx_state>();
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space &space = drvstate->m_maincpu->space(AS_PROGRAM);
 	switch (page)
 	{
 	case 0:
@@ -1438,12 +1416,12 @@ MSX_SLOT_MAP(diskrom2)
 	case 1:
 		msx_cpu_setbank (machine, 3, state->m_mem);
 		msx_cpu_setbank (machine, 4, state->m_mem + 0x2000);
-		space->install_legacy_read_handler(0x7fb8, 0x7fbc, FUNC(msx_diskrom2_page1_r));
+		space.install_legacy_read_handler(0x7fb8, 0x7fbc, FUNC(msx_diskrom2_page1_r));
 		break;
 	case 2:
 		msx_cpu_setbank (machine, 5, drvstate->m_empty);
 		msx_cpu_setbank (machine, 6, drvstate->m_empty);
-		space->install_legacy_read_handler(0xb800, 0xbfbc, FUNC(msx_diskrom2_page2_r));
+		space.install_legacy_read_handler(0xb800, 0xbfbc, FUNC(msx_diskrom2_page2_r));
 		break;
 	case 3:
 		msx_cpu_setbank (machine, 7, drvstate->m_empty);
@@ -1453,7 +1431,8 @@ MSX_SLOT_MAP(diskrom2)
 
 MSX_SLOT_WRITE(diskrom2)
 {
-	device_t *fdc = machine.device("wd179x");
+	msx_state *drvstate = machine.driver_data<msx_state>();
+	address_space &space = drvstate->m_maincpu->space(AS_PROGRAM);
 	if (addr >= 0xa000 && addr < 0xc000)
 	{
 		addr -= 0x4000;
@@ -1461,21 +1440,21 @@ MSX_SLOT_WRITE(diskrom2)
 	switch (addr)
 	{
 	case 0x7fb8:
-		wd17xx_command_w (fdc, 0, val);
+		wd17xx_command_w (drvstate->m_wd179x, space, 0, val);
 		break;
 	case 0x7fb9:
-		wd17xx_track_w (fdc, 0, val);
+		wd17xx_track_w (drvstate->m_wd179x, space, 0, val);
 		break;
 	case 0x7fba:
-		wd17xx_sector_w (fdc, 0, val);
+		wd17xx_sector_w (drvstate->m_wd179x, space, 0, val);
 		break;
 	case 0x7fbb:
-		wd17xx_data_w (fdc, 0, val);
+		wd17xx_data_w (drvstate->m_wd179x, space, 0, val);
 		break;
 	case 0x7fbc:
-		wd17xx_set_side (fdc,val & 1);
+		wd17xx_set_side (drvstate->m_wd179x,val & 1);
 		state->m_mem[0x3fbc] = val | 0xfe;
-		wd17xx_set_drive (fdc,val & 1);
+		wd17xx_set_drive (drvstate->m_wd179x,val & 1);
 		if ((state->m_mem[0x3fbc] ^ val) & 0x40)
 		{
 			set_led_status (machine, 0, !(val & 0x40));
@@ -1531,7 +1510,8 @@ MSX_SLOT_WRITE(synthesizer)
 {
 	if (addr >= 0x4000 && addr < 0x8000 && !(addr & 0x0010))
 	{
-		dac_data_w (machine.device("dac"), val);
+		msx_state *drvstate = machine.driver_data<msx_state>();
+		drvstate->m_dac->write_unsigned8(val);
 	}
 }
 
@@ -1588,7 +1568,7 @@ MSX_SLOT_WRITE(majutsushi)
 	msx_state *drvstate = machine.driver_data<msx_state>();
 	if (addr >= 0x5000 && addr < 0x6000)
 	{
-		dac_data_w (machine.device("dac"), val);
+		drvstate->m_dac->write_unsigned8(val);
 	}
 	else if (addr >= 0x6000 && addr < 0x8000)
 	{
@@ -1704,7 +1684,7 @@ MSX_SLOT_MAP(fmpac)
 MSX_SLOT_WRITE(fmpac)
 {
 	msx_state *drvstate = machine.driver_data<msx_state>();
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space &space = drvstate->m_maincpu->space(AS_PROGRAM);
 	int i, data;
 
 	if (addr >= 0x4000 && addr < 0x6000 && state->m_cart.fmpac.sram_support)
@@ -1716,7 +1696,7 @@ MSX_SLOT_WRITE(fmpac)
 
 		state->m_cart.fmpac.sram_active =
 				(state->m_cart.fmpac.mem[0x1ffe] == 0x4d &&
-				 state->m_cart.fmpac.mem[0x1fff] == 0x69);
+					state->m_cart.fmpac.mem[0x1fff] == 0x69);
 	}
 
 	switch (addr)
@@ -1724,13 +1704,13 @@ MSX_SLOT_WRITE(fmpac)
 	case 0x7ff4:
 		if (state->m_cart.fmpac.opll_active)
 		{
-			ym2413_w (space->machine().device("ay8910"), 0, val);
+			drvstate->m_ym->write(space, 0, val);
 		}
 		break;
 	case 0x7ff5:
 		if (state->m_cart.fmpac.opll_active)
 		{
-			ym2413_w (space->machine().device("ay8910"), 1, val);
+			drvstate->m_ym->write(space, 1, val);
 		}
 		break;
 	case 0x7ff6:
@@ -1824,15 +1804,15 @@ MSX_SLOT_SAVESRAM(fmpac)
 	return 1;
 }
 
-MSX_SLOT_INIT(superloadrunner)
+MSX_SLOT_INIT(superloderunner)
 {
 	if (size != 0x20000)
 	{
-		logerror ("superloadrunner: error: rom file should be exactly "
-				  "128kb\n");
+		logerror ("superloderunner: error: rom file should be exactly "
+					"128kb\n");
 		return 1;
 	}
-	state->m_type = SLOT_SUPERLOADRUNNER;
+	state->m_type = SLOT_SUPERLODERUNNER;
 	state->m_mem = mem;
 	state->m_size = size;
 	state->m_start_page = page;
@@ -1841,19 +1821,19 @@ MSX_SLOT_INIT(superloadrunner)
 	return 0;
 }
 
-MSX_SLOT_RESET(superloadrunner)
+MSX_SLOT_RESET(superloderunner)
 {
 	msx_state *drvstate = machine.driver_data<msx_state>();
-	drvstate->m_superloadrunner_bank = 0;
+	drvstate->m_superloderunner_bank = 0;
 }
 
-MSX_SLOT_MAP(superloadrunner)
+MSX_SLOT_MAP(superloderunner)
 {
 	msx_state *drvstate = machine.driver_data<msx_state>();
 	if (page == 2)
 	{
 		UINT8 *mem = state->m_mem +
-				(drvstate->m_superloadrunner_bank & state->m_bank_mask) * 0x4000;
+				(drvstate->m_superloderunner_bank & state->m_bank_mask) * 0x4000;
 
 		msx_cpu_setbank (machine, 5, mem);
 		msx_cpu_setbank (machine, 6, mem + 0x2000);
@@ -2203,7 +2183,7 @@ MSX_SLOT_RESET(soundcartridge)
 
 static  READ8_HANDLER (soundcartridge_scc)
 {
-	msx_state *state = space->machine().driver_data<msx_state>();
+	msx_state *state = space.machine().driver_data<msx_state>();
 	int reg;
 
 
@@ -2217,7 +2197,7 @@ static  READ8_HANDLER (soundcartridge_scc)
 
 	if (reg < 0x80)
 	{
-		return k051649_waveform_r (space->machine().device("k051649"), reg);
+		return state->m_k051649->k051649_waveform_r (space, reg);
 	}
 	else if (reg < 0xa0)
 	{
@@ -2226,21 +2206,19 @@ static  READ8_HANDLER (soundcartridge_scc)
 	else if (reg < 0xc0)
 	{
 		/* read wave 5 */
-		return k051649_waveform_r (space->machine().device("k051649"), 0x80 + (reg & 0x1f));
+		return state->m_k051649->k051649_waveform_r (space, 0x80 + (reg & 0x1f));
 	}
-#if 0
 	else if (reg < 0xe0)
 	{
-		/* write 0xff to deformation register */
+		return state->m_k051649->k051649_test_r (space, reg);
 	}
-#endif
 
 	return 0xff;
 }
 
 static  READ8_HANDLER (soundcartridge_sccp)
 {
-	msx_state *state = space->machine().driver_data<msx_state>();
+	msx_state *state = space.machine().driver_data<msx_state>();
 	int reg;
 
 	if (offset >= 0x7e0)
@@ -2253,21 +2231,20 @@ static  READ8_HANDLER (soundcartridge_sccp)
 
 	if (reg < 0xa0)
 	{
-		return k051649_waveform_r (space->machine().device("k051649"), reg);
+		return state->m_k051649->k051649_waveform_r (space, reg);
 	}
-#if 0
 	else if (reg >= 0xc0 && reg < 0xe0)
 	{
-		/* write 0xff to deformation register */
+		return state->m_k051649->k051649_test_r (space, reg);
 	}
-#endif
 
 	return 0xff;
 }
 
 MSX_SLOT_MAP(soundcartridge)
 {
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	msx_state *drvstate = machine.driver_data<msx_state>();
+	address_space &space = drvstate->m_maincpu->space(AS_PROGRAM);
 	switch (page)
 	{
 	case 0:
@@ -2282,14 +2259,14 @@ MSX_SLOT_MAP(soundcartridge)
 		msx_cpu_setbank (machine, 5, state->m_mem + state->m_banks[2] * 0x2000);
 		msx_cpu_setbank (machine, 6, state->m_mem + state->m_banks[3] * 0x2000);
 		if (state->m_cart.sccp.scc_active) {
-			space->install_legacy_read_handler(0x9800, 0x9fff, FUNC(soundcartridge_scc));
+			space.install_legacy_read_handler(0x9800, 0x9fff, FUNC(soundcartridge_scc));
 		} else {
-			space->install_read_bank(0x9800, 0x9fff, "bank7");
+			space.install_read_bank(0x9800, 0x9fff, "bank7");
 		}
 		if (state->m_cart.sccp.scc_active) {
-			space->install_legacy_read_handler(0xb800, 0xbfff, FUNC(soundcartridge_sccp));
+			space.install_legacy_read_handler(0xb800, 0xbfff, FUNC(soundcartridge_sccp));
 		} else {
-			space->install_read_bank(0xb800, 0xbfff, "bank9");
+			space.install_read_bank(0xb800, 0xbfff, "bank9");
 		}
 		break;
 	case 3:
@@ -2302,7 +2279,7 @@ MSX_SLOT_MAP(soundcartridge)
 MSX_SLOT_WRITE(soundcartridge)
 {
 	msx_state *drvstate = machine.driver_data<msx_state>();
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space &space = drvstate->m_maincpu->space(AS_PROGRAM);
 	int i;
 
 	if (addr < 0x4000)
@@ -2364,12 +2341,11 @@ MSX_SLOT_WRITE(soundcartridge)
 		}
 		else if (addr >= 0x9800 && state->m_cart.sccp.scc_active)
 		{
-			device_t *k051649 = space->machine().device("k051649");
 			int offset = addr & 0xff;
 
 			if (offset < 0x80)
 			{
-				k051649_waveform_w (k051649, offset, val);
+				drvstate->m_k051649->k051649_waveform_w (space, offset, val);
 			}
 			else if (offset < 0xa0)
 			{
@@ -2377,23 +2353,21 @@ MSX_SLOT_WRITE(soundcartridge)
 
 				if (offset < 0xa)
 				{
-					k051649_frequency_w (k051649, offset, val);
+					drvstate->m_k051649->k051649_frequency_w (space, offset, val);
 				}
 				else if (offset < 0x0f)
 				{
-					k051649_volume_w (k051649, offset - 0xa, val);
+					drvstate->m_k051649->k051649_volume_w (space, offset - 0xa, val);
 				}
 				else if (offset == 0x0f)
 				{
-					k051649_keyonoff_w (k051649, 0, val);
+					drvstate->m_k051649->k051649_keyonoff_w (space, 0, val);
 				}
 			}
-#if 0
 			else if (offset < 0xe0)
 			{
-				/* write to deformation register */
+				drvstate->m_k051649->k051649_test_w (space, offset, val);
 			}
-#endif
 		}
 	}
 	else if (addr < 0xbffe)
@@ -2416,12 +2390,11 @@ MSX_SLOT_WRITE(soundcartridge)
 		}
 		else if (addr >= 0xb800 && state->m_cart.sccp.sccp_active)
 		{
-			device_t *k051649 = space->machine().device("k051649");
 			int offset = addr & 0xff;
 
 			if (offset < 0xa0)
 			{
-				k052539_waveform_w (k051649, offset, val);
+				drvstate->m_k051649->k051649_waveform_w (space, offset, val);
 			}
 			else if (offset < 0xc0)
 			{
@@ -2429,23 +2402,21 @@ MSX_SLOT_WRITE(soundcartridge)
 
 				if (offset < 0x0a)
 				{
-					k051649_frequency_w (k051649, offset, val);
+					drvstate->m_k051649->k051649_frequency_w (space, offset, val);
 				}
 				else if (offset < 0x0f)
 				{
-					k051649_volume_w (k051649, offset - 0x0a, val);
+					drvstate->m_k051649->k051649_volume_w (space, offset - 0x0a, val);
 				}
 				else if (offset == 0x0f)
 				{
-					k051649_keyonoff_w (k051649, 0, val);
+					drvstate->m_k051649->k051649_keyonoff_w (space, 0, val);
 				}
 			}
-#if 0
 			else if (offset < 0xe0)
 			{
-				/* write to deformation register */
+				drvstate->m_k051649->k051649_test_w (space, offset, val);
 			}
-#endif
 		}
 	}
 	else if (addr < 0xc000)
@@ -2498,7 +2469,7 @@ MSX_SLOT_START
 	MSX_SLOT (SLOT_RTYPE, rtype)
 	MSX_SLOT (SLOT_MAJUTSUSHI, majutsushi)
 	MSX_SLOT_SRAM (SLOT_FMPAC, fmpac)
-	MSX_SLOT_ROM (SLOT_SUPERLOADRUNNER, superloadrunner)
+	MSX_SLOT_ROM (SLOT_SUPERLODERUNNER, superloderunner)
 	MSX_SLOT (SLOT_SYNTHESIZER, synthesizer)
 	MSX_SLOT (SLOT_CROSS_BLAIM, crossblaim)
 	MSX_SLOT (SLOT_DISK_ROM, diskrom)
@@ -2513,4 +2484,3 @@ MSX_SLOT_START
 	MSX_SLOT_NULL (SLOT_CARTRIDGE2)
 	MSX_SLOT (SLOT_DISK_ROM2, diskrom2)
 MSX_SLOT_END
-

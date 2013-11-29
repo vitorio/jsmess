@@ -3,21 +3,29 @@
       Dynax hardware
 
 ***************************************************************************/
-
+#include "sound/msm5205.h"
 #include "sound/okim6295.h"
 
 class dynax_state : public driver_device
 {
 public:
 	dynax_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+			m_dsw_sel16(*this, "dsw_sel16"),
+			m_protection1(*this, "protection1"),
+			m_protection2(*this, "protection2"),
+			m_maincpu(*this, "maincpu"),
+			m_soundcpu(*this, "soundcpu"),
+			m_oki(*this, "oki"),
+			m_msm(*this, "msm")
+		{ }
 
 	// up to 8 layers, 2 images per layer (interleaved on screen)
 	UINT8 *  m_pixmap[8][2];
 	UINT8 *  m_ddenlovr_pixmap[8];
 
 	/* irq */
-	void (*m_update_irq_func)(running_machine &machine);	// some games trigger IRQ at blitter end, some don't
+	void (*m_update_irq_func)(running_machine &machine);    // some games trigger IRQ at blitter end, some don't
 	UINT8 m_sound_irq;
 	UINT8 m_vblank_irq;
 	UINT8 m_blitter_irq;
@@ -94,8 +102,8 @@ public:
 	int m_ddenlovr_transparency_pen[8];
 	int m_ddenlovr_transparency_mask[8];
 	int m_ddenlovr_blit_latch;
-	int m_ddenlovr_blit_pen_mask;	// not implemented
-	int m_ddenlovr_blit_rom_bits;			// usually 8, 16 in hanakanz
+	int m_ddenlovr_blit_pen_mask;   // not implemented
+	int m_ddenlovr_blit_rom_bits;           // usually 8, 16 in hanakanz
 	const int *m_ddenlovr_blit_commands;
 	int m_ddenlovr_blit_regs[2];
 
@@ -131,14 +139,14 @@ public:
 	int m_okibank;
 	UINT8 m_rongrong_blitter_busy_select;
 
-	UINT16 *m_dsw_sel16;
-	UINT16 *m_protection1;
-	UINT16 *m_protection2;
+	optional_shared_ptr<UINT16> m_dsw_sel16;
+	optional_shared_ptr<UINT16> m_protection1;
+	optional_shared_ptr<UINT16> m_protection2;
 	UINT8 m_prot_val;
 	UINT16 m_prot_16;
 	UINT16 m_quiz365_protection[2];
 
-	UINT16 m_mmpanic_leds;	/* A led for each of the 9 buttons */
+	UINT16 m_mmpanic_leds;  /* A led for each of the 9 buttons */
 	UINT8 m_funkyfig_lockout;
 	UINT8 m_romdata[2];
 	int m_palette_index;
@@ -150,91 +158,180 @@ public:
 
 
 	/* devices */
-	device_t *m_maincpu;
-	device_t *m_soundcpu;
+	required_device<cpu_device> m_maincpu;
+	optional_device<cpu_device> m_soundcpu;
 	device_t *m_rtc;
 	device_t *m_ymsnd;
-	okim6295_device *m_oki;
+	optional_device<okim6295_device> m_oki;
+	optional_device<msm5205_device> m_msm;
 	device_t *m_top_scr;
 	device_t *m_bot_scr;
+	DECLARE_WRITE8_MEMBER(dynax_vblank_ack_w);
+	DECLARE_WRITE8_MEMBER(dynax_blitter_ack_w);
+	DECLARE_WRITE8_MEMBER(jantouki_vblank_ack_w);
+	DECLARE_WRITE8_MEMBER(jantouki_blitter_ack_w);
+	DECLARE_WRITE8_MEMBER(jantouki_blitter2_ack_w);
+	DECLARE_WRITE8_MEMBER(jantouki_sound_vblank_ack_w);
+	DECLARE_WRITE8_MEMBER(dynax_coincounter_0_w);
+	DECLARE_WRITE8_MEMBER(dynax_coincounter_1_w);
+	DECLARE_READ8_MEMBER(ret_ff);
+	DECLARE_READ8_MEMBER(hanamai_keyboard_0_r);
+	DECLARE_READ8_MEMBER(hanamai_keyboard_1_r);
+	DECLARE_WRITE8_MEMBER(hanamai_keyboard_w);
+	DECLARE_WRITE8_MEMBER(dynax_rombank_w);
+	DECLARE_WRITE8_MEMBER(jantouki_sound_rombank_w);
+	DECLARE_WRITE8_MEMBER(hnoridur_rombank_w);
+	DECLARE_WRITE8_MEMBER(hnoridur_palbank_w);
+	DECLARE_WRITE8_MEMBER(hnoridur_palette_w);
+	DECLARE_WRITE8_MEMBER(yarunara_palette_w);
+	DECLARE_WRITE8_MEMBER(nanajign_palette_w);
+	DECLARE_WRITE8_MEMBER(adpcm_data_w);
+	DECLARE_WRITE8_MEMBER(yarunara_layer_half_w);
+	DECLARE_WRITE8_MEMBER(yarunara_layer_half2_w);
+	DECLARE_WRITE8_MEMBER(hjingi_bank_w);
+	DECLARE_WRITE8_MEMBER(hjingi_lockout_w);
+	DECLARE_WRITE8_MEMBER(hjingi_hopper_w);
+	UINT8 hjingi_hopper_bit();
+	DECLARE_READ8_MEMBER(hjingi_keyboard_0_r);
+	DECLARE_READ8_MEMBER(hjingi_keyboard_1_r);
+	DECLARE_WRITE8_MEMBER(yarunara_input_w);
+	DECLARE_READ8_MEMBER(yarunara_input_r);
+	DECLARE_WRITE8_MEMBER(yarunara_rombank_w);
+	DECLARE_WRITE8_MEMBER(yarunara_flipscreen_w);
+	DECLARE_WRITE8_MEMBER(yarunara_flipscreen_inv_w);
+	DECLARE_WRITE8_MEMBER(yarunara_blit_romregion_w);
+	DECLARE_READ8_MEMBER(jantouki_soundlatch_ack_r);
+	DECLARE_WRITE8_MEMBER(jantouki_soundlatch_w);
+	DECLARE_READ8_MEMBER(jantouki_blitter_busy_r);
+	DECLARE_WRITE8_MEMBER(jantouki_rombank_w);
+	DECLARE_WRITE8_MEMBER(jantouki_soundlatch_ack_w);
+	DECLARE_READ8_MEMBER(jantouki_soundlatch_r);
+	DECLARE_READ8_MEMBER(jantouki_soundlatch_status_r);
+	DECLARE_READ8_MEMBER(mjelctrn_keyboard_1_r);
+	DECLARE_READ8_MEMBER(mjelctrn_dsw_r);
+	DECLARE_WRITE8_MEMBER(mjelctrn_blitter_ack_w);
+	DECLARE_WRITE8_MEMBER(tenkai_ipsel_w);
+	DECLARE_WRITE8_MEMBER(tenkai_ip_w);
+	DECLARE_READ8_MEMBER(tenkai_ip_r);
+	DECLARE_READ8_MEMBER(tenkai_palette_r);
+	DECLARE_WRITE8_MEMBER(tenkai_palette_w);
+	DECLARE_READ8_MEMBER(tenkai_p3_r);
+	DECLARE_WRITE8_MEMBER(tenkai_p3_w);
+	DECLARE_WRITE8_MEMBER(tenkai_p4_w);
+	DECLARE_READ8_MEMBER(tenkai_p5_r);
+	DECLARE_WRITE8_MEMBER(tenkai_p6_w);
+	DECLARE_WRITE8_MEMBER(tenkai_p7_w);
+	DECLARE_WRITE8_MEMBER(tenkai_p8_w);
+	DECLARE_READ8_MEMBER(tenkai_p8_r);
+	DECLARE_READ8_MEMBER(tenkai_8000_r);
+	DECLARE_WRITE8_MEMBER(tenkai_8000_w);
+	DECLARE_WRITE8_MEMBER(tenkai_6c_w);
+	DECLARE_WRITE8_MEMBER(tenkai_70_w);
+	DECLARE_WRITE8_MEMBER(tenkai_blit_romregion_w);
+	DECLARE_READ8_MEMBER(gekisha_keyboard_0_r);
+	DECLARE_READ8_MEMBER(gekisha_keyboard_1_r);
+	DECLARE_WRITE8_MEMBER(gekisha_hopper_w);
+	DECLARE_WRITE8_MEMBER(gekisha_p4_w);
+	DECLARE_READ8_MEMBER(gekisha_8000_r);
+	DECLARE_WRITE8_MEMBER(gekisha_8000_w);
+	DECLARE_WRITE8_MEMBER(dynax_extra_scrollx_w);
+	DECLARE_WRITE8_MEMBER(dynax_extra_scrolly_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit_pen_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit2_pen_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit_dest_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit2_dest_w);
+	DECLARE_WRITE8_MEMBER(tenkai_blit_dest_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit_backpen_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit_palette01_w);
+	DECLARE_WRITE8_MEMBER(tenkai_blit_palette01_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit_palette45_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit_palette23_w);
+	DECLARE_WRITE8_MEMBER(tenkai_blit_palette23_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit_palette67_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit_palbank_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit2_palbank_w);
+	DECLARE_WRITE8_MEMBER(hanamai_layer_half_w);
+	DECLARE_WRITE8_MEMBER(hnoridur_layer_half2_w);
+	DECLARE_WRITE8_MEMBER(mjdialq2_blit_dest_w);
+	DECLARE_WRITE8_MEMBER(dynax_layer_enable_w);
+	DECLARE_WRITE8_MEMBER(jantouki_layer_enable_w);
+	DECLARE_WRITE8_MEMBER(mjdialq2_layer_enable_w);
+	DECLARE_WRITE8_MEMBER(dynax_flipscreen_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit_romregion_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit2_romregion_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit_scroll_w);
+	DECLARE_WRITE8_MEMBER(tenkai_blit_scroll_w);
+	DECLARE_WRITE8_MEMBER(dynax_blit2_scroll_w);
+	DECLARE_WRITE8_MEMBER(dynax_blitter_rev2_w);
+	DECLARE_WRITE8_MEMBER(tenkai_blitter_rev2_w);
+	DECLARE_WRITE8_MEMBER(jantouki_blitter_rev2_w);
+	DECLARE_WRITE8_MEMBER(jantouki_blitter2_rev2_w);
+	DECLARE_WRITE8_MEMBER(hanamai_priority_w);
+	DECLARE_WRITE8_MEMBER(tenkai_priority_w);
+	DECLARE_DRIVER_INIT(mjelct3);
+	DECLARE_DRIVER_INIT(blktouch);
+	DECLARE_DRIVER_INIT(mjelct3a);
+	DECLARE_DRIVER_INIT(mjreach);
+	DECLARE_DRIVER_INIT(maya);
+	UINT32 screen_update_hanamai(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	UINT32 screen_update_hnoridur(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	UINT32 screen_update_sprtmtch(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	UINT32 screen_update_mjdialq2(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	UINT32 screen_update_jantouki_top(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	UINT32 screen_update_jantouki_bottom(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	INTERRUPT_GEN_MEMBER(sprtmtch_vblank_interrupt);
+	INTERRUPT_GEN_MEMBER(jantouki_vblank_interrupt);
+	INTERRUPT_GEN_MEMBER(jantouki_sound_vblank_interrupt);
+	INTERRUPT_GEN_MEMBER(yarunara_clock_interrupt);
+	INTERRUPT_GEN_MEMBER(mjelctrn_vblank_interrupt);
+	TIMER_DEVICE_CALLBACK_MEMBER(neruton_irq_scanline);
+	TIMER_DEVICE_CALLBACK_MEMBER(majxtal7_vblank_interrupt);
+	TIMER_DEVICE_CALLBACK_MEMBER(tenkai_interrupt);
+	void tenkai_update_rombank();
+	void gekisha_bank_postload();
+	DECLARE_WRITE_LINE_MEMBER(sprtmtch_sound_callback);
+	DECLARE_WRITE_LINE_MEMBER(jantouki_sound_callback);
+	DECLARE_WRITE_LINE_MEMBER(adpcm_int);
+	DECLARE_WRITE_LINE_MEMBER(adpcm_int_cpu1);
+
+	DECLARE_MACHINE_RESET(adpcm);
+	DECLARE_WRITE8_MEMBER(adpcm_reset_w);
+	DECLARE_MACHINE_START(gekisha);
+	DECLARE_MACHINE_RESET(gekisha);
+	DECLARE_MACHINE_START(tenkai);
+	DECLARE_WRITE8_MEMBER(tenkai_dswsel_w);
+	DECLARE_READ8_MEMBER(tenkai_dsw_r);
+	DECLARE_WRITE_LINE_MEMBER(tenkai_rtc_irq);
+	DECLARE_MACHINE_RESET(dynax);
+	DECLARE_MACHINE_START(dynax);
+	DECLARE_MACHINE_START(hanamai);
+	DECLARE_VIDEO_START(hanamai);
+	DECLARE_MACHINE_START(hnoridur);
+	DECLARE_VIDEO_START(hnoridur);
+	DECLARE_PALETTE_INIT(sprtmtch);
+	DECLARE_VIDEO_START(sprtmtch);
+	DECLARE_MACHINE_START(jantouki);
+	DECLARE_VIDEO_START(jantouki);
+	DECLARE_VIDEO_START(mjelctrn);
+	DECLARE_VIDEO_START(mjdialq2);
+	DECLARE_VIDEO_START(mcnpshnt);
+	DECLARE_PALETTE_INIT(janyuki);
+	DECLARE_VIDEO_START(neruton);
+	inline void blitter_plot_pixel( int layer, int mask, int x, int y, int pen, int wrap, int flags );
+	int blitter_drawgfx( int layer, int mask, const char *gfx, int src, int pen, int x, int y, int wrap, int flags );
+	void dynax_blitter_start( int flags );
+	void jantouki_blitter_start( int flags );
+	void jantouki_blitter2_start( int flags );
+	void jantouki_copylayer( bitmap_ind16 &bitmap, const rectangle &cliprect, int i, int y );
+	void mjdialq2_copylayer( bitmap_ind16 &bitmap, const rectangle &cliprect, int i );
+	void hanamai_copylayer(bitmap_ind16 &bitmap, const rectangle &cliprect, int i );
+	int debug_mask();
+	int debug_viewer( bitmap_ind16 &bitmap, const rectangle &cliprect );
+	void dynax_common_reset();
 };
 
 //----------- defined in drivers/dynax.c -----------
-
 void sprtmtch_update_irq(running_machine &machine);
 void jantouki_update_irq(running_machine &machine);
 void mjelctrn_update_irq(running_machine &machine);
 void neruton_update_irq(running_machine &machine);
-
-//----------- defined in video/dynax.c -----------
-
-WRITE8_HANDLER( dynax_blitter_rev2_w );
-WRITE8_HANDLER( jantouki_blitter_rev2_w );
-WRITE8_HANDLER( jantouki_blitter2_rev2_w );
-WRITE8_HANDLER( tenkai_blitter_rev2_w );
-
-WRITE8_HANDLER( dynax_blit_pen_w );
-WRITE8_HANDLER( dynax_blit2_pen_w );
-WRITE8_HANDLER( dynax_blit_backpen_w );
-WRITE8_HANDLER( dynax_blit_dest_w );
-WRITE8_HANDLER( dynax_blit2_dest_w );
-WRITE8_HANDLER( dynax_blit_palbank_w );
-WRITE8_HANDLER( dynax_blit2_palbank_w );
-WRITE8_HANDLER( dynax_blit_palette01_w );
-WRITE8_HANDLER( dynax_blit_palette23_w );
-WRITE8_HANDLER( dynax_blit_palette45_w );
-WRITE8_HANDLER( dynax_blit_palette67_w );
-WRITE8_HANDLER( dynax_layer_enable_w );
-WRITE8_HANDLER( jantouki_layer_enable_w );
-WRITE8_HANDLER( dynax_flipscreen_w );
-WRITE8_HANDLER( dynax_extra_scrollx_w );
-WRITE8_HANDLER( dynax_extra_scrolly_w );
-WRITE8_HANDLER( dynax_blit_romregion_w );
-WRITE8_HANDLER( dynax_blit2_romregion_w );
-
-WRITE8_HANDLER( hanamai_layer_half_w );
-WRITE8_HANDLER( hnoridur_layer_half2_w );
-
-WRITE8_HANDLER( hanamai_priority_w );
-WRITE8_HANDLER( tenkai_priority_w );
-
-WRITE8_HANDLER( mjdialq2_blit_dest_w );
-WRITE8_HANDLER( tenkai_blit_dest_w );
-
-WRITE8_HANDLER( mjdialq2_layer_enable_w );
-
-WRITE8_HANDLER( tenkai_blit_palette01_w );
-WRITE8_HANDLER( tenkai_blit_palette23_w );
-
-VIDEO_START( hanamai );
-VIDEO_START( hnoridur );
-VIDEO_START( mcnpshnt );
-VIDEO_START( sprtmtch );
-VIDEO_START( mjdialq2 );
-VIDEO_START( jantouki );
-VIDEO_START( mjelctrn );
-VIDEO_START( neruton );
-VIDEO_START( htengoku );
-
-SCREEN_UPDATE( hanamai );
-SCREEN_UPDATE( hnoridur );
-SCREEN_UPDATE( sprtmtch );
-SCREEN_UPDATE( mjdialq2 );
-SCREEN_UPDATE( jantouki );
-SCREEN_UPDATE( htengoku );
-
-PALETTE_INIT( sprtmtch );
-
-
-//----------- defined in drivers/ddenlovr.c -----------
-
-WRITE8_HANDLER( ddenlovr_bgcolor_w );
-WRITE8_HANDLER( ddenlovr_priority_w );
-WRITE8_HANDLER( ddenlovr_layer_enable_w );
-WRITE8_HANDLER( ddenlovr_palette_base_w );
-WRITE8_HANDLER( ddenlovr_palette_mask_w );
-WRITE8_HANDLER( ddenlovr_transparency_pen_w );
-WRITE8_HANDLER( ddenlovr_transparency_mask_w );
-
-VIDEO_START(ddenlovr);
-SCREEN_UPDATE(ddenlovr);

@@ -1,5 +1,4 @@
 #include "emu.h"
-#include "video/konicdev.h"
 #include "includes/rollerg.h"
 
 /***************************************************************************
@@ -44,11 +43,10 @@ void rollerg_zoom_callback( running_machine &machine, int *code, int *color, int
 
 ***************************************************************************/
 
-VIDEO_START( rollerg )
+void rollerg_state::video_start()
 {
-	rollerg_state *state = machine.driver_data<rollerg_state>();
-	state->m_sprite_colorbase = 16;
-	state->m_zoom_colorbase = 0;
+	m_sprite_colorbase = 16;
+	m_zoom_colorbase = 0;
 }
 
 
@@ -59,14 +57,13 @@ VIDEO_START( rollerg )
 
 ***************************************************************************/
 
-SCREEN_UPDATE( rollerg )
+UINT32 rollerg_state::screen_update_rollerg(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	rollerg_state *state = screen->machine().driver_data<rollerg_state>();
 	int bg_colorbase = 16;
 
-	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
-	bitmap_fill(bitmap, cliprect, 16 * bg_colorbase);
-	k051316_zoom_draw(state->m_k051316, bitmap, cliprect, 0, 1);
-	k053245_sprites_draw(state->m_k053244, bitmap, cliprect);
+	screen.priority().fill(0, cliprect);
+	bitmap.fill(16 * bg_colorbase, cliprect);
+	m_k051316->zoom_draw(screen, bitmap, cliprect, 0, 1);
+	m_k053244->k053245_sprites_draw(bitmap, cliprect, screen.priority());
 	return 0;
 }

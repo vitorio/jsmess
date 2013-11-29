@@ -24,7 +24,6 @@
 */
 #include "emu.h"
 #include "fm_scsi.h"
-#include "machine/devhelpr.h"
 #include "debugger.h"
 
 /*
@@ -33,85 +32,59 @@
 
 const device_type FMSCSI = &device_creator<fmscsi_device>;
 
-void fmscsi_device::device_config_complete()
-{
-    // copy static configuration if present
-	const FMSCSIinterface *intf = reinterpret_cast<const FMSCSIinterface *>(static_config());
-	if (intf != NULL)
-		*static_cast<FMSCSIinterface *>(this) = *intf;
-
-    // otherwise, initialize it to defaults
-    else
-    {
-		scsidevs = NULL;
-		memset(&irq_callback,0,sizeof(irq_callback));
-		memset(&drq_callback,0,sizeof(drq_callback));
-    }
-}
-
 /*
  * Device
  */
 
 fmscsi_device::fmscsi_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, FMSCSI, "FM-SCSI", tag, owner, clock)
+	: device_t(mconfig, FMSCSI, "FM-SCSI", tag, owner, clock, "fmscsi", __FILE__),
+	m_irq_handler(*this),
+	m_drq_handler(*this)
 {
 }
 
 void fmscsi_device::device_start()
 {
-	int x;
+	m_input_lines = 0;
+	m_output_lines = 0;
+	m_data = 0;
+	m_command_index = 0;
+	m_last_id = 0;
+	m_target = 0;
+	m_phase = SCSI_PHASE_BUS_FREE;
 
-    m_input_lines = 0;
-    m_output_lines = 0;
-    m_data = 0;
-    m_command_index = 0;
-    m_last_id = 0;
-    m_target = 0;
-    m_phase = SCSI_PHASE_BUS_FREE;
+	m_irq_handler.resolve_safe();
+	m_drq_handler.resolve_safe();
 
-    m_irq_func.resolve(irq_callback,*this);
-    m_drq_func.resolve(drq_callback,*this);
+	memset(m_SCSIdevices,0,sizeof(m_SCSIdevices));
 
-    memset(m_SCSIdevices,0,sizeof(m_SCSIdevices));
+	// try to open the devices
+	for( device_t *device = owner()->first_subdevice(); device != NULL; device = device->next() )
+	{
+		scsihle_device *scsidev = dynamic_cast<scsihle_device *>(device);
+		if( scsidev != NULL )
+		{
+			m_SCSIdevices[scsidev->GetDeviceID()] = scsidev;
+		}
+	}
 
-    // initialise SCSI devices, if any present
-    for(x=0;x<scsidevs->devs_present;x++)
-    {
-    	SCSIAllocInstance(machine(), scsidevs->devices[x].scsiClass,
-				&m_SCSIdevices[scsidevs->devices[x].scsiID],
-				scsidevs->devices[x].diskregion );
-    }
-
-    // allocate read timer
-    m_transfer_timer = timer_alloc(TIMER_TRANSFER);
-    m_phase_timer = timer_alloc(TIMER_PHASE);
+	// allocate read timer
+	m_transfer_timer = timer_alloc(TIMER_TRANSFER);
+	m_phase_timer = timer_alloc(TIMER_PHASE);
 }
 
 void fmscsi_device::device_reset()
 {
-    m_input_lines = 0;
-    m_output_lines = 0;
-    m_data = 0;
-    m_command_index = 0;
-    m_last_id = 0;
-    m_target = 0;
-    m_result_length = 0;
-    m_result_index = 0;
+	m_input_lines = 0;
+	m_output_lines = 0;
+	m_data = 0;
+	m_command_index = 0;
+	m_last_id = 0;
+	m_target = 0;
+	m_result_length = 0;
+	m_result_index = 0;
 
-    m_phase = SCSI_PHASE_BUS_FREE;
-    fmscsi_rescan();
-}
-
-void fmscsi_device::device_stop()
-{
-	int x;
-
-	// clean up the devices
-	for (x=0;x<scsidevs->devs_present;x++)
-	{
-		SCSIDeleteInstance( m_SCSIdevices[scsidevs->devices[x].scsiID] );
-	}
+	m_phase = SCSI_PHASE_BUS_FREE;
 }
 
 // get the length of a SCSI command based on it's command byte type
@@ -125,28 +98,9 @@ int fmscsi_device::get_scsi_cmd_len(UINT8 cbyte)
 	if (group == 1 || group == 2) return 10;
 	if (group == 5) return 12;
 
-	fatalerror("fmscsi: Unknown SCSI command group %d", group);
+	fatalerror("fmscsi: Unknown SCSI command group %d\n", group);
 
 	return 6;
-}
-
-void fmscsi_device::fmscsi_rescan()
-{
-	int i;
-
-	// try to open the devices
-	for (i = 0; i < scsidevs->devs_present; i++)
-	{
-		// if a device wasn't already allocated
-//      if (!m_SCSIdevices[scsidevs->devices[i].scsiID])
-		{
-			SCSIDeleteInstance( m_SCSIdevices[scsidevs->devices[i].scsiID] );
-			SCSIAllocInstance( machine(),
-					scsidevs->devices[i].scsiClass,
-					&m_SCSIdevices[scsidevs->devices[i].scsiID],
-					scsidevs->devices[i].diskregion );
-		}
-	}
 }
 
 void fmscsi_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
@@ -158,7 +112,7 @@ void fmscsi_device::device_timer(emu_timer &timer, device_timer_id id, int param
 		//logerror("FMSCSI: timer triggered: %i/%i\n",m_result_index,m_result_length);
 		if(m_output_lines & FMSCSI_LINE_DMAE)
 		{
-			m_drq_func(1);
+			m_drq_handler(1);
 		}
 		break;
 	case TIMER_PHASE:
@@ -179,7 +133,7 @@ UINT8 fmscsi_device::fmscsi_data_r(void)
 		//logerror("FMSCSI: DATAIN phase read data %02x\n",m_data);
 		m_result_index++;
 		if(m_result_index % 512 == 0)
-			SCSIReadData(m_SCSIdevices[m_target],m_buffer,512);  // read next sector
+			m_SCSIdevices[m_target]->ReadData(m_buffer,512);  // read next sector
 
 		if(m_result_index >= m_result_length)
 		{
@@ -188,7 +142,7 @@ UINT8 fmscsi_device::fmscsi_data_r(void)
 			m_phase_timer->adjust(attotime::from_usec(800),SCSI_PHASE_STATUS);
 			if(m_output_lines & FMSCSI_LINE_DMAE)
 			{
-				m_drq_func(0);
+				m_drq_handler(0);
 			}
 			logerror("FMSCSI: Stopping transfer : (%i/%i)\n",m_result_index,m_result_length);
 		}
@@ -244,7 +198,7 @@ void fmscsi_device::fmscsi_data_w(UINT8 data)
 		m_buffer[m_result_index % 512] = m_data;
 		m_result_index++;
 		if(m_result_index % 512 == 0)
-			SCSIWriteData(m_SCSIdevices[m_target],m_buffer,512);  // write buffer to disc
+			m_SCSIdevices[m_target]->WriteData(m_buffer,512);  // write buffer to disc
 		if(m_result_index >= m_result_length)
 		{
 			// end of data transfer
@@ -252,7 +206,7 @@ void fmscsi_device::fmscsi_data_w(UINT8 data)
 			m_phase_timer->adjust(attotime::from_usec(800),SCSI_PHASE_STATUS);
 			if(m_output_lines & FMSCSI_LINE_DMAE)
 			{
-				m_drq_func(0);
+				m_drq_handler(0);
 			}
 			logerror("FMSCSI: Stopping transfer : (%i/%i)\n",m_result_index,m_result_length);
 		}
@@ -265,9 +219,10 @@ void fmscsi_device::fmscsi_data_w(UINT8 data)
 		if(m_command_index >= get_scsi_cmd_len(m_command[0]))
 		{
 			// command complete
-			SCSISetCommand(m_SCSIdevices[m_target],m_command,m_command_index);
-			SCSIExecCommand(m_SCSIdevices[m_target],&m_result_length);
-			SCSIGetPhase(m_SCSIdevices[m_target],&phase);
+			m_SCSIdevices[m_target]->SetCommand(m_command,m_command_index);
+			m_SCSIdevices[m_target]->ExecCommand();
+			m_SCSIdevices[m_target]->GetLength(&m_result_length);
+			m_SCSIdevices[m_target]->GetPhase(&phase);
 			if(m_command[0] == 1)  // rezero unit command - not implemented in SCSI code
 				m_phase_timer->adjust(attotime::from_usec(800),SCSI_PHASE_STATUS);
 			else
@@ -320,7 +275,7 @@ void fmscsi_device::set_phase(int phase)
 		set_input_line(FMSCSI_LINE_REQ,1);
 		// start transfer timer
 		m_transfer_timer->adjust(attotime::zero,0,attotime::from_hz(3000000));  // arbitrary value for now
-		SCSIReadData(m_SCSIdevices[m_target],m_buffer,512);
+		m_SCSIdevices[m_target]->ReadData(m_buffer,512);
 		m_result_index = 0;
 		logerror("FMSCSI: Starting transfer (%i)\n",m_result_length);
 		break;
@@ -363,7 +318,7 @@ void fmscsi_device::set_input_line(UINT8 line, UINT8 state)
 			if(m_output_lines & FMSCSI_LINE_IMSK && m_phase != SCSI_PHASE_DATAIN && m_phase != SCSI_PHASE_DATAOUT)
 			{
 				set_input_line(FMSCSI_LINE_INT,1);
-				m_irq_func(1);
+				m_irq_handler(1);
 				logerror("FMSCSI: IRQ high\n");
 			}
 		}
@@ -372,7 +327,7 @@ void fmscsi_device::set_input_line(UINT8 line, UINT8 state)
 			if(m_output_lines & FMSCSI_LINE_IMSK && m_phase != SCSI_PHASE_DATAIN && m_phase != SCSI_PHASE_DATAOUT)
 			{
 				set_input_line(FMSCSI_LINE_INT,0);
-				m_irq_func(0);
+				m_irq_handler(0);
 				logerror("FMSCSI: IRQ low\n");
 			}
 		}
@@ -391,8 +346,6 @@ UINT8 fmscsi_device::get_input_line(UINT8 line)
 
 void fmscsi_device::set_output_line(UINT8 line, UINT8 state)
 {
-	device_image_interface* image;
-
 	if(line == FMSCSI_LINE_RST && state != 0)
 	{
 		device_reset();
@@ -401,10 +354,11 @@ void fmscsi_device::set_output_line(UINT8 line, UINT8 state)
 
 	if(line == FMSCSI_LINE_SEL)
 	{
-		image = dynamic_cast<device_image_interface*>(machine().device(scsidevs->devices[m_target].diskregion));
 		if(state != 0 && !(m_output_lines & FMSCSI_LINE_SEL)) // low to high transition
 		{
-			if (image->exists())  // if device is mounted
+			void *image;
+			m_SCSIdevices[m_target]->GetDevice(&image);
+			if (image != NULL)  // if device is mounted
 			{
 				m_phase_timer->adjust(attotime::from_usec(800),SCSI_PHASE_COMMAND);
 				m_data = 0x08;

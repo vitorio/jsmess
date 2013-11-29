@@ -1,3 +1,5 @@
+// license:?
+// copyright-holders:Kevin Thacker,Sandro Ronco
 /*****************************************************************************
  *
  * includes/z88.h
@@ -7,92 +9,85 @@
 #ifndef Z88_H_
 #define Z88_H_
 
+#include "emu.h"
+#include "cpu/z80/z80.h"
+#include "machine/upd65031.h"
+#include "machine/ram.h"
+#include "bus/z88/z88.h"
+#include "bus/z88/flash.h"
+#include "bus/z88/ram.h"
+#include "bus/z88/rom.h"
+#include "sound/speaker.h"
+#include "rendlay.h"
 
 #define Z88_NUM_COLOURS 3
 
-#define Z88_SCREEN_WIDTH        856
+#define Z88_SCREEN_WIDTH        640
 #define Z88_SCREEN_HEIGHT       64
-
-#define RTC_MIN_INT (1<<2) /* once a minute */
-#define RTC_SEC_INT (1<<1) /* once a second */
-#define RTC_TICK_INT (1<<0) /* 100 times a second */
-
-/* sta bits */
-#define STA_TIME (1<<0)
-#define STA_KEY (1<<2)
-
-/* ints bits */
-#define INT_TIME (1<<1)
-#define INT_GINT (1<<0)
-#define INT_KWAIT (1<<7)
 
 #define Z88_SCR_HW_REV  (1<<4)
 #define Z88_SCR_HW_HRS  (1<<5)
 #define Z88_SCR_HW_UND  (1<<1)
 #define Z88_SCR_HW_FLS  (1<<3)
 #define Z88_SCR_HW_GRY  (1<<2)
+#define Z88_SCR_HW_CURS (Z88_SCR_HW_HRS|Z88_SCR_HW_FLS|Z88_SCR_HW_REV)
+#define Z88_SCR_HW_NULL (Z88_SCR_HW_HRS|Z88_SCR_HW_GRY|Z88_SCR_HW_REV)
 
-#define Z88_AWAKE	0
-#define Z88_SNOOZE	1
-#define Z88_COMA	2
-
-#define Z88_SNOOZE_TRIGGER 2
-
-typedef struct
+enum
 {
-	int z88_state;
-	int pb[4];
-	int sbr;
-
-    /* screen */
-    int sbf;
-    int lores0;
-    int lores1;
-    int hires0;
-    int hires1;
-
-	int com;
-	int ints;
-	int sta;
-	int ack;
-	int mem[4];
-
-	/* rtc acknowledge */
-	/* bit 2 = min */
-	/* bit 1 = sec */
-	/* bit 0 = tick */
-	int tack;
-	/* rtc interrupt mask */
-	int tmk;
-	/* rtc interrupt status */
-	int tsta;
-	/* real time clock registers */
-	/* tim0 = 5ms counter */
-	/* tim1 = second counter */
-	/* tim2 = minute counter */
-	/* tim3 = 256 minute counter */
-	/* tim4 = 64k minute counter */
-	int tim[5];
-} blink_hw_t;
+	Z88_BANK_ROM = 1,
+	Z88_BANK_RAM,
+	Z88_BANK_CART,
+	Z88_BANK_UNMAP
+};
 
 
 class z88_state : public driver_device
 {
 public:
 	z88_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+			m_maincpu(*this, "maincpu"),
+			m_ram(*this, RAM_TAG)
+	{ }
 
-	int m_frame_number;
-	int m_flash_invert;
-	blink_hw_t m_blink;
+	required_device<cpu_device> m_maincpu;
+	required_device<ram_device> m_ram;
+
+	virtual void machine_start();
+	virtual void machine_reset();
+	void bankswitch_update(int bank, UINT16 page, int rams);
+	DECLARE_READ8_MEMBER(kb_r);
+
+	// cartridges read/write
+	DECLARE_READ8_MEMBER(bank0_cart_r);
+	DECLARE_READ8_MEMBER(bank1_cart_r);
+	DECLARE_READ8_MEMBER(bank2_cart_r);
+	DECLARE_READ8_MEMBER(bank3_cart_r);
+	DECLARE_WRITE8_MEMBER(bank0_cart_w);
+	DECLARE_WRITE8_MEMBER(bank1_cart_w);
+	DECLARE_WRITE8_MEMBER(bank2_cart_w);
+	DECLARE_WRITE8_MEMBER(bank3_cart_w);
+
+	// defined in video/z88.c
+	inline void plot_pixel(bitmap_ind16 &bitmap, int x, int y, UINT16 color);
+	inline UINT8* convert_address(UINT32 offset);
+	void vh_render_8x8(bitmap_ind16 &bitmap, int x, int y, UINT16 pen0, UINT16 pen1, UINT8 *gfx);
+	void vh_render_6x8(bitmap_ind16 &bitmap, int x, int y, UINT16 pen0, UINT16 pen1, UINT8 *gfx);
+	void vh_render_line(bitmap_ind16 &bitmap, int x, int y, UINT16 pen);
+	void lcd_update(bitmap_ind16 &bitmap, UINT16 sbf, UINT16 hires0, UINT16 hires1, UINT16 lores0, UINT16 lores1, int flash);
+
+	struct
+	{
+		UINT8 slot;
+		UINT8 page;
+	} m_bank[4];
+
+	int                   m_bank_type[4];
+	UINT8 *               m_bios;
+	UINT8 *               m_ram_base;
+	z88cart_slot_device * m_carts[4];
+	virtual void palette_init();
 };
-
-
-/*----------- defined in video/z88.c -----------*/
-
-extern PALETTE_INIT( z88 );
-extern SCREEN_UPDATE( z88 );
-extern SCREEN_EOF( z88 );
-
 
 #endif /* Z88_H_ */

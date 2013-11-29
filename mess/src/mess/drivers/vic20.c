@@ -1,143 +1,347 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /*
-
-[CBM systems which belong to this driver (info to be moved to sysinfo.dat soon)]
-(most of the informations are taken from http://www.zimmers.net/cbmpics/ )
-
-
-* VIC-1001 (1981, Japan)
-
-  The first model released was the Japanese one. It featured support for the
-Japanese katakana character.
-
-CPU: MOS Technology 6502 (1.01 MHz)
-RAM: 5 kilobytes (Expanded to 21k though an external 16k unit)
-ROM: 20 kilobytes
-Video: MOS Technology 6560 "VIC"(Text: 22 columns, 23 rows; Hires: 176x184
-pixels bitmapped; 8 text colors, 16 background colors)
-Sound: MOS Technology 6560 "VIC" (3 voices -square wave-, noise and volume)
-Ports: 6522 VIA x2 (1 Joystick/Mouse port; CBM Serial port; 'Cartridge /
-    Game / Expansion' port; CBM Monitor port; CBM 'USER' port; Power and
-    reset switches; Power connector)
-Keyboard: Full-sized QWERTY 66 key (8 programmable function keys; 2 sets of
-    Keyboardable graphic characters; 2 key direction cursor-pad)
-
-
-* VIC 20 (1981)
-
-  This system was the first computer to sell more than one million units
-worldwide. It was sold both in Europe and in the US. In Germany the
-computer was renamed as VC 20 (apparently, it stands for 'VolksComputer'
-
-CPU: MOS Technology 6502A (1.01 MHz)
-RAM: 5 kilobytes (Expanded to 32k)
-ROM: 20 kilobytes
-Video: MOS Technology 6560 "VIC"(Text: 22 columns, 23 rows; Hires: 176x184
-pixels bitmapped; 8 text colors, 16 background colors)
-Sound: MOS Technology 6560 "VIC" (3 voices -square wave-, noise and volume)
-Ports: 6522 VIA x2 (1 Joystick/Mouse port; CBM Serial port; 'Cartridge /
-    Game / Expansion' port; CBM Monitor port; CBM 'USER' port; Power and
-    reset switches; Power connector)
-Keyboard: Full-sized QWERTY 66 key (8 programmable function keys; 2 sets of
-    Keyboardable graphic characters; 2 key direction cursor-pad)
-
-
-* VIC 21 (1983)
-
-  It consists of a VIC 20 with built-in RAM expansion, to reach a RAM
-  capability of 21 kilobytes.
-
-
-* VIC 20CR
-
-  CR stands for Cost Reduced, as it consisted of a board with only 2 (larger)
-block of RAM instead of 8.
-
-*******************************************************************************
-
     TODO:
 
     - C1540 is not working currently
-    - clean up inputs
-    - clean up VIA interface
-    - access violation in mos6560.c
-        * In the Chips (Japan, USA).60
-        * K-Star Patrol (Europe).60
-        * Seafox (Japan, USA).60
-    - SHIFT LOCK
-    - restore key
-    - light pen
+    - mos6560_port_r/w should respond at 0x1000-0x100f
     - VIC21 (built in 21K ram)
 
 */
 
-#include "emu.h"
 #include "includes/vic20.h"
-#include "includes/cbm.h"
-#include "formats/cbm_snqk.h"
-#include "cpu/m6502/m6502.h"
-#include "imagedev/cartslot.h"
-#include "machine/ram.h"
-#include "machine/6522via.h"
-#include "machine/c1541.h"
-#include "machine/c2031.h"
-#include "machine/cbmiec.h"
-#include "machine/ieee488.h"
-#include "machine/vic1112.h"
-#include "machine/cbmipt.h"
-#include "sound/mos6560.h"
-#include "sound/dac.h"
 
-/* Memory Maps */
 
-static ADDRESS_MAP_START( vic20_mem, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x03ff) AM_RAM
-//  AM_RANGE(0x0400, 0x07ff) RAM1
-//  AM_RANGE(0x0800, 0x0bff) RAM2
-//  AM_RANGE(0x0c00, 0x0fff) RAM3
-	AM_RANGE(0x1000, 0x1fff) AM_RAM
-//  AM_RANGE(0x2000, 0x3fff) BLK1
-//  AM_RANGE(0x4000, 0x5fff) BLK2
-//  AM_RANGE(0x6000, 0x7fff) BLK3
-	AM_RANGE(0x8000, 0x8fff) AM_ROM
-	AM_RANGE(0x9000, 0x900f) AM_DEVREADWRITE(M6560_TAG, mos6560_port_r, mos6560_port_w)
-	AM_RANGE(0x9110, 0x911f) AM_DEVREADWRITE_MODERN(M6522_0_TAG, via6522_device, read, write)
-	AM_RANGE(0x9120, 0x912f) AM_DEVREADWRITE_MODERN(M6522_1_TAG, via6522_device, read, write)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM
-//  AM_RANGE(0x9800, 0x9bff) I/O2
-//  AM_RANGE(0x9c00, 0x9fff) I/O3
-//  AM_RANGE(0xa000, 0xbfff) BLK5
-	AM_RANGE(0xc000, 0xffff) AM_ROM
+
+QUICKLOAD_LOAD_MEMBER( vic20_state, cbm_vc20 )
+{
+	return general_cbm_loadsnap(image, file_type, quickload_size, 0, cbm_quick_sethiaddress);
+}
+
+//**************************************************************************
+//  MEMORY MANAGEMENT
+//**************************************************************************
+
+//-------------------------------------------------
+//  read -
+//-------------------------------------------------
+
+READ8_MEMBER( vic20_state::read )
+{
+	UINT8 data = m_vic->bus_r();
+
+	int ram1 = 1, ram2 = 1, ram3 = 1;
+	int blk1 = 1, blk2 = 1, blk3 = 1, blk5 = 1;
+	int io2 = 1, io3 = 1;
+
+	switch ((offset >> 13) & 0x07)
+	{
+	case BLK0:
+		switch ((offset >> 10) & 0x07)
+		{
+		case RAM0:
+			data = m_ram->pointer()[offset & 0x3ff];
+			break;
+
+		case RAM1: ram1 = 0; break;
+		case RAM2: ram2 = 0; break;
+		case RAM3: ram3 = 0; break;
+
+		default:
+			data = m_ram->pointer()[0x400 + (offset & 0xfff)];
+			break;
+		}
+		break;
+
+	case BLK1: blk1 = 0; break;
+	case BLK2: blk2 = 0; break;
+	case BLK3: blk3 = 0; break;
+
+	case BLK4:
+		switch ((offset >> 10) & 0x07)
+		{
+		default:
+			data = m_charom->base()[offset & 0xfff];
+			break;
+
+		case IO0:
+			if (BIT(offset, 4))
+			{
+				data = m_via1->read(space, offset & 0x0f);
+			}
+			else if (BIT(offset, 5))
+			{
+				data = m_via2->read(space, offset & 0x0f);
+			}
+			else if (offset >= 0x9000 && offset < 0x9010)
+			{
+				data = m_vic->read(space, offset & 0x0f);
+			}
+			break;
+
+		case COLOR:
+			data = m_color_ram[offset & 0x3ff];
+			break;
+
+		case IO2: io2 = 0; break;
+		case IO3: io3 = 0; break;
+		}
+		break;
+
+	case BLK5: blk5 = 0; break;
+
+	case BLK6:
+		data = m_basic->base()[offset & 0x1fff];
+		break;
+
+	case BLK7:
+		data = m_kernal->base()[offset & 0x1fff];
+		break;
+	}
+
+	return m_exp->cd_r(space, offset & 0x1fff, data, ram1, ram2, ram3, blk1, blk2, blk3, blk5, io2, io3);
+}
+
+
+//-------------------------------------------------
+//  write -
+//-------------------------------------------------
+
+WRITE8_MEMBER( vic20_state::write )
+{
+	int ram1 = 1, ram2 = 1, ram3 = 1;
+	int blk1 = 1, blk2 = 1, blk3 = 1, blk5 = 1;
+	int io2 = 1, io3 = 1;
+
+	switch ((offset >> 13) & 0x07)
+	{
+	case BLK0:
+		switch ((offset >> 10) & 0x07)
+		{
+		case RAM0:
+			m_ram->pointer()[offset] = data;
+			break;
+
+		case RAM1: ram1 = 0; break;
+		case RAM2: ram2 = 0; break;
+		case RAM3: ram3 = 0; break;
+
+		default:
+			m_ram->pointer()[0x400 + (offset & 0xfff)] = data;
+			break;
+		}
+		break;
+
+	case BLK1: blk1 = 0; break;
+	case BLK2: blk2 = 0; break;
+	case BLK3: blk3 = 0; break;
+
+	case BLK4:
+		switch ((offset >> 10) & 0x07)
+		{
+		case IO0:
+			if (BIT(offset, 4))
+			{
+				m_via1->write(space, offset & 0x0f, data);
+			}
+			else if (BIT(offset, 5))
+			{
+				m_via2->write(space, offset & 0x0f, data);
+			}
+			else if (offset >= 0x9000 && offset < 0x9010)
+			{
+				m_vic->write(space, offset & 0x0f, data);
+			}
+			break;
+
+		case COLOR:
+			m_color_ram[offset & 0x3ff] = data & 0x0f;
+			break;
+
+		case IO2: io2 = 0; break;
+		case IO3: io3 = 0; break;
+		}
+		break;
+
+	case BLK5: blk5 = 0; break;
+	}
+
+	m_exp->cd_w(space, offset & 0x1fff, data, ram1, ram2, ram3, blk1, blk2, blk3, blk5, io2, io3);
+}
+
+
+//-------------------------------------------------
+//  vic_videoram_r -
+//-------------------------------------------------
+
+READ8_MEMBER( vic20_state::vic_videoram_r )
+{
+	int ram1 = 1, ram2 = 1, ram3 = 1;
+	int blk1 = 1, blk2 = 1, blk3 = 1, blk5 = 1;
+	int io2 = 1, io3 = 1;
+
+	UINT8 data = 0;
+
+	if (BIT(offset, 13))
+	{
+		switch ((offset >> 10) & 0x07)
+		{
+		case RAM0:
+			data = m_ram->pointer()[offset & 0x3ff];
+			break;
+
+		case RAM1: ram1 = 0; break;
+		case RAM2: ram2 = 0; break;
+		case RAM3: ram3 = 0; break;
+
+		default:
+			data = m_ram->pointer()[0x400 + (offset & 0xfff)];
+			break;
+		}
+	}
+	else
+	{
+		data = m_charom->base()[offset & 0xfff];
+	}
+
+	return m_exp->cd_r(space, offset & 0x1fff, data, ram1, ram2, ram3, blk1, blk2, blk3, blk5, io2, io3);
+}
+
+
+
+//**************************************************************************
+//  ADDRESS MAPS
+//**************************************************************************
+
+//-------------------------------------------------
+//  ADDRESS_MAP( vic20_mem )
+//-------------------------------------------------
+
+static ADDRESS_MAP_START( vic20_mem, AS_PROGRAM, 8, vic20_state )
+	AM_RANGE(0x0000, 0xffff) AM_READWRITE(read, write)
 ADDRESS_MAP_END
 
-/* Input Ports */
 
-#ifdef UNUSED_FUNCTION
-static INPUT_PORTS_START( vic_lightpen_6560 )
-	PORT_START( "LIGHTX" )
-	PORT_BIT( 0xff, 0, IPT_PADDLE ) PORT_NAME("Lightpen X Axis") PORT_CROSSHAIR(X, 1.0, 0.0, 0) PORT_SENSITIVITY(30) PORT_KEYDELTA(2) PORT_MINMAX(0,(MOS6560_MAME_XSIZE - 1)) PORT_CATEGORY(12) PORT_CODE_DEC(KEYCODE_LEFT) PORT_CODE_INC(KEYCODE_RIGHT) PORT_CODE_DEC(JOYCODE_X_LEFT_SWITCH) PORT_CODE_INC(JOYCODE_X_RIGHT_SWITCH)
+//-------------------------------------------------
+//  ADDRESS_MAP( vic_videoram_map )
+//-------------------------------------------------
 
-	PORT_START( "LIGHTY" )
-	PORT_BIT( 0xff, 0, IPT_PADDLE ) PORT_NAME("Lightpen Y Axis") PORT_CROSSHAIR(Y, 1.0, 0.0, 0) PORT_SENSITIVITY(30) PORT_KEYDELTA(2) PORT_MINMAX(0,(MOS6560_MAME_YSIZE - 1)) PORT_CATEGORY(12) PORT_CODE_DEC(KEYCODE_UP) PORT_CODE_INC(KEYCODE_DOWN) PORT_CODE_DEC(JOYCODE_Y_UP_SWITCH) PORT_CODE_INC(JOYCODE_Y_DOWN_SWITCH)
-INPUT_PORTS_END
+static ADDRESS_MAP_START( vic_videoram_map, AS_0, 8, vic20_state )
+	AM_RANGE(0x0000, 0x3fff) AM_READ(vic_videoram_r)
+ADDRESS_MAP_END
 
 
-static INPUT_PORTS_START( vic_lightpen_6561 )
-	PORT_START( "LIGHTX" )
-	PORT_BIT( 0xff, 0, IPT_PADDLE ) PORT_NAME("Lightpen X Axis") PORT_CROSSHAIR(X, 1.0, 0.0, 0) PORT_SENSITIVITY(30) PORT_KEYDELTA(2) PORT_MINMAX(0,(MOS6560_MAME_XSIZE - 1)) PORT_CATEGORY(12) PORT_CODE_DEC(KEYCODE_LEFT) PORT_CODE_INC(KEYCODE_RIGHT) PORT_CODE_DEC(JOYCODE_X_LEFT_SWITCH) PORT_CODE_INC(JOYCODE_X_RIGHT_SWITCH)
+//-------------------------------------------------
+//  ADDRESS_MAP( vic_colorram_map )
+//-------------------------------------------------
 
-	PORT_START( "LIGHTY" )
-	PORT_BIT( 0x1ff, 0, IPT_PADDLE ) PORT_NAME("Lightpen Y Axis") PORT_CROSSHAIR(Y, 1.0, 0.0, 0) PORT_SENSITIVITY(30) PORT_KEYDELTA(2) PORT_MINMAX(0,(MOS6561_MAME_YSIZE - 1)) PORT_CATEGORY(12) PORT_CODE_DEC(KEYCODE_UP) PORT_CODE_INC(KEYCODE_DOWN) PORT_CODE_DEC(JOYCODE_Y_UP_SWITCH) PORT_CODE_INC(JOYCODE_Y_DOWN_SWITCH)
-INPUT_PORTS_END
-#endif
+static ADDRESS_MAP_START( vic_colorram_map, AS_1, 8, vic20_state )
+	AM_RANGE(0x000, 0x3ff) AM_RAM AM_SHARE("color_ram")
+ADDRESS_MAP_END
+
+
+
+//**************************************************************************
+//  INPUT PORTS
+//**************************************************************************
+
+//-------------------------------------------------
+//  INPUT_PORTS( vic20 )
+//-------------------------------------------------
 
 static INPUT_PORTS_START( vic20 )
-	PORT_INCLUDE( vic_keyboard )       /* ROW0 -> ROW7 */
+	PORT_START( "ROW0" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Del  Inst") PORT_CODE(KEYCODE_BACKSPACE) PORT_CHAR(8) PORT_CHAR(UCHAR_MAMEKEY(INSERT))
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_BACKSLASH2)     PORT_CHAR('\xA3')
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_MINUS)          PORT_CHAR('+')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_9)              PORT_CHAR('9') PORT_CHAR(')')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_7)              PORT_CHAR('7') PORT_CHAR('\'')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_5)              PORT_CHAR('5') PORT_CHAR('%')
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_3)              PORT_CHAR('3') PORT_CHAR('#')
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_1)              PORT_CHAR('1') PORT_CHAR('!')
 
-	PORT_INCLUDE( vic_special )        /* SPECIAL */
+	PORT_START( "ROW1" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Return") PORT_CODE(KEYCODE_ENTER) PORT_CHAR(13)
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_CLOSEBRACE)     PORT_CHAR('*')
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_P)              PORT_CHAR('P')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_I)              PORT_CHAR('I')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Y)              PORT_CHAR('Y')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_R)              PORT_CHAR('R')
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_W)              PORT_CHAR('W')
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("\xE2\x86\x90") PORT_CODE(KEYCODE_TILDE) PORT_CHAR(0x2190)
 
-	PORT_INCLUDE( vic_controls )       /* CTRLSEL, JOY, FAKE0, FAKE1, PADDLE0, PADDLE1 */
+	PORT_START( "ROW2" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Crsr Right Left") PORT_CODE(KEYCODE_RCONTROL) PORT_CHAR(UCHAR_MAMEKEY(RIGHT)) PORT_CHAR(UCHAR_MAMEKEY(LEFT))
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_QUOTE)          PORT_CHAR(';') PORT_CHAR(']')
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_L)              PORT_CHAR('L')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_J)              PORT_CHAR('J')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_G)              PORT_CHAR('G')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_D)              PORT_CHAR('D')
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_A)              PORT_CHAR('A')
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_TAB)            PORT_CHAR(UCHAR_SHIFT_2)
+
+	PORT_START( "ROW3" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Crsr Down Up") PORT_CODE(KEYCODE_RALT) PORT_CHAR(UCHAR_MAMEKEY(DOWN)) PORT_CHAR(UCHAR_MAMEKEY(UP))
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_SLASH)          PORT_CHAR('/') PORT_CHAR('?')
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_COMMA)          PORT_CHAR(',') PORT_CHAR('<')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_N)              PORT_CHAR('N')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_V)              PORT_CHAR('V')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_X)              PORT_CHAR('X')
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Shift (Left)") PORT_CODE(KEYCODE_LSHIFT)
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Stop Run") PORT_CODE(KEYCODE_HOME)
+
+	PORT_START( "ROW4" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F1)             PORT_CHAR(UCHAR_MAMEKEY(F1)) PORT_CHAR(UCHAR_MAMEKEY(F2))
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Shift (Right)") PORT_CODE(KEYCODE_RSHIFT) PORT_CHAR(UCHAR_SHIFT_1)
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_STOP)           PORT_CHAR('.') PORT_CHAR('>')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_M)              PORT_CHAR('M')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_B)              PORT_CHAR('B')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_C)              PORT_CHAR('C')
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Z)              PORT_CHAR('Z')
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_SPACE)          PORT_CHAR(' ')
+
+	PORT_START( "ROW5" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F2)             PORT_CHAR(UCHAR_MAMEKEY(F3)) PORT_CHAR(UCHAR_MAMEKEY(F4))
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_BACKSLASH)      PORT_CHAR('=')
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_COLON)          PORT_CHAR(':') PORT_CHAR('[')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_K)              PORT_CHAR('K')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_H)              PORT_CHAR('H')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F)              PORT_CHAR('F')
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_S)              PORT_CHAR('S')
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("CBM") PORT_CODE(KEYCODE_LCONTROL)
+
+	PORT_START( "ROW6" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F3)             PORT_CHAR(UCHAR_MAMEKEY(F5)) PORT_CHAR(UCHAR_MAMEKEY(F6))
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("\xE2\x86\x91  Pi") PORT_CODE(KEYCODE_DEL) PORT_CHAR(0x2191) PORT_CHAR(0x03C0)
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_OPENBRACE)      PORT_CHAR('@')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_O)              PORT_CHAR('O')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_U)              PORT_CHAR('U')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_T)              PORT_CHAR('T')
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_E)              PORT_CHAR('E')
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Q)              PORT_CHAR('Q')
+
+	PORT_START( "ROW7" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F4)             PORT_CHAR(UCHAR_MAMEKEY(F7)) PORT_CHAR(UCHAR_MAMEKEY(F8))
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Home  Clr") PORT_CODE(KEYCODE_INSERT) PORT_CHAR(UCHAR_MAMEKEY(HOME))
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_EQUALS)         PORT_CHAR('-')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_0)              PORT_CHAR('0')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_8)              PORT_CHAR('8') PORT_CHAR('(')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_6)              PORT_CHAR('6') PORT_CHAR('&')
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_4)              PORT_CHAR('4') PORT_CHAR('$')
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_2)              PORT_CHAR('2') PORT_CHAR('"')
+
+	PORT_START( "RESTORE" )
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("RESTORE") PORT_CODE(KEYCODE_PRTSCR) PORT_WRITE_LINE_DEVICE_MEMBER(M6522_1_TAG, via6522_device, write_ca1)
+
+	PORT_START( "LOCK" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("SHIFT LOCK") PORT_CODE(KEYCODE_CAPSLOCK) PORT_TOGGLE PORT_CHAR(UCHAR_MAMEKEY(CAPSLOCK))
+	PORT_BIT( 0x7f, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
+
+//-------------------------------------------------
+//  INPUT_PORTS( vic1001 )
+//-------------------------------------------------
 
 static INPUT_PORTS_START( vic1001 )
 	PORT_INCLUDE( vic20 )
@@ -147,666 +351,474 @@ static INPUT_PORTS_START( vic1001 )
 INPUT_PORTS_END
 
 
+//-------------------------------------------------
+//  INPUT_PORTS( vic20s )
+//-------------------------------------------------
+
 static INPUT_PORTS_START( vic20s )
 	PORT_INCLUDE( vic20 )
 
 	PORT_MODIFY( "ROW0" )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_BACKSLASH2)		PORT_CHAR(':') PORT_CHAR('*')
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_MINUS)			PORT_CHAR('-')
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_BACKSLASH2)     PORT_CHAR(':') PORT_CHAR('*')
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_MINUS)          PORT_CHAR('-')
+
 	PORT_MODIFY( "ROW1" )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_CLOSEBRACE)		PORT_CHAR('@')
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_CLOSEBRACE)     PORT_CHAR('@')
+
 	PORT_MODIFY( "ROW2" )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_QUOTE)			PORT_CHAR(0x00C4)
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_QUOTE)          PORT_CHAR(0x00C4)
+
 	PORT_MODIFY( "ROW5" )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_BACKSLASH)		PORT_CHAR(';') PORT_CHAR('+')
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_COLON)			PORT_CHAR(0x00D6)
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_BACKSLASH)      PORT_CHAR(';') PORT_CHAR('+')
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_COLON)          PORT_CHAR(0x00D6)
+
 	PORT_MODIFY( "ROW6" )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_OPENBRACE)		PORT_CHAR(0x00C5)
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_OPENBRACE)      PORT_CHAR(0x00C5)
+
 	PORT_MODIFY( "ROW7" )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_EQUALS)			PORT_CHAR('=')
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_EQUALS)         PORT_CHAR('=')
 INPUT_PORTS_END
 
-/* VIA 0 Interface */
 
-static READ8_DEVICE_HANDLER( via0_pa_r )
+
+//**************************************************************************
+//  DEVICE CONFIGURATION
+//**************************************************************************
+
+//-------------------------------------------------
+//  via6522_interface via1_intf
+//-------------------------------------------------
+
+READ8_MEMBER( vic20_state::via1_pa_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     SERIAL CLK IN
-        PA1     SERIAL DATA IN
-        PA2     JOY 0
-        PA3     JOY 1
-        PA4     JOY 2
-        PA5     LITE PEN
-        PA6     CASS SWITCH
-        PA7     SERIAL ATN OUT
+	    PA0     SERIAL CLK IN
+	    PA1     SERIAL DATA IN
+	    PA2     JOY 0 (UP)
+	    PA3     JOY 1 (DOWN)
+	    PA4     JOY 2 (LEFT)
+	    PA5     LITE PEN (FIRE)
+	    PA6     CASS SWITCH
+	    PA7
 
-    */
+	*/
 
-	vic20_state *state = device->machine().driver_data<vic20_state>();
-	UINT8 data = 0xfc;
+	UINT8 data = 0;
 
-	/* serial clock in */
-	data |= state->m_iec->clk_r();
+	// serial clock in
+	data |= m_iec->clk_r();
 
-	/* serial data in */
-	data |= state->m_iec->data_r() << 1;
+	// serial data in
+	data |= m_iec->data_r() << 1;
 
-	/* joystick */
-	data &= ~(input_port_read(device->machine(), "JOY") & 0x3c);
+	// joystick / user port
+	UINT8 joy = m_joy1->joy_r();
 
-	/* cassette switch */
-	if ((state->m_cassette->get_state() & CASSETTE_MASK_UISTATE) != CASSETTE_STOPPED)
-		data &= ~0x40;
-	else
-		data |=  0x40;
+	data |= (m_user->joy0_r() && BIT(joy, 0)) << 2;
+	data |= (m_user->joy1_r() && BIT(joy, 1)) << 3;
+	data |= (m_user->joy2_r() && BIT(joy, 2)) << 4;
+	data |= (m_user->light_pen_r() && BIT(joy, 5)) << 5;
+
+	// cassette switch
+	data |= (m_user->cassette_switch_r() && m_cassette->sense_r()) << 6;
 
 	return data;
 }
 
-static WRITE8_DEVICE_HANDLER( via0_pa_w )
+WRITE8_MEMBER( vic20_state::via1_pa_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     SERIAL CLK IN
-        PA1     SERIAL DATA IN
-        PA2     JOY 0
-        PA3     JOY 1
-        PA4     JOY 2
-        PA5     LITE PEN
-        PA6     CASS SWITCH
-        PA7     SERIAL ATN OUT
+	    PA0
+	    PA1
+	    PA2
+	    PA3
+	    PA4
+	    PA5     LITE PEN (FIRE)
+	    PA6
+	    PA7     SERIAL ATN OUT
 
-    */
+	*/
 
-	vic20_state *state = device->machine().driver_data<vic20_state>();
+	// light pen strobe
+	m_vic->lp_w(BIT(data, 5));
 
-	/* serial attention out */
-	state->m_iec->atn_w(!BIT(data, 7));
+	// serial attention out
+	m_iec->atn_w(!BIT(data, 7));
 }
 
-static READ8_DEVICE_HANDLER( via0_pb_r )
+static const via6522_interface via1_intf =
 {
-	/*
-
-        bit     description
-
-        PB0     USER PORT C
-        PB1     USER PORT D
-        PB2     USER PORT E
-        PB3     USER PORT F
-        PB4     USER PORT H
-        PB5     USER PORT J
-        PB6     USER PORT K
-        PB7     USER PORT L
-
-    */
-
-	return 0;
-}
-
-static WRITE8_DEVICE_HANDLER( via0_pb_w )
-{
-	/*
-
-        bit     description
-
-        PB0     USER PORT C
-        PB1     USER PORT D
-        PB2     USER PORT E
-        PB3     USER PORT F
-        PB4     USER PORT H
-        PB5     USER PORT J
-        PB6     USER PORT K
-        PB7     USER PORT L
-
-    */
-}
-
-static WRITE8_DEVICE_HANDLER( via0_ca2_w )
-{
-	vic20_state *state = device->machine().driver_data<vic20_state>();
-
-	if (!BIT(data, 0))
-	{
-		state->m_cassette->change_state(CASSETTE_MOTOR_ENABLED, CASSETTE_MASK_MOTOR);
-		state->m_cassette_timer->enable(true);
-	}
-	else
-	{
-		state->m_cassette->change_state(CASSETTE_MOTOR_DISABLED, CASSETTE_MASK_MOTOR);
-		state->m_cassette_timer->enable(false);
-	}
-}
-
-static const via6522_interface vic20_via0_intf =
-{
-	DEVCB_HANDLER(via0_pa_r),
-	DEVCB_HANDLER(via0_pb_r),
-	DEVCB_NULL, // RESTORE
+	DEVCB_DRIVER_MEMBER(vic20_state, via1_pa_r),
+	DEVCB_DEVICE_MEMBER(VIC20_USER_PORT_TAG, vic20_user_port_device, pb_r),
+	DEVCB_INPUT_PORT("RESTORE"),
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_HANDLER(via0_pa_w),
-	DEVCB_HANDLER(via0_pb_w),
+	DEVCB_DRIVER_MEMBER(vic20_state, via1_pa_w),
+	DEVCB_DEVICE_MEMBER(VIC20_USER_PORT_TAG, vic20_user_port_device, pb_w),
 	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_HANDLER(via0_ca2_w), // CASS MOTOR
-	DEVCB_NULL,
-	DEVCB_CPU_INPUT_LINE(M6502_TAG, INPUT_LINE_NMI)
+	DEVCB_DEVICE_LINE_MEMBER(VIC20_USER_PORT_TAG, vic20_user_port_device, cb1_w),
+	DEVCB_DEVICE_LINE_MEMBER(PET_DATASSETTE_PORT_TAG, pet_datassette_port_device, motor_w),
+	DEVCB_DEVICE_LINE_MEMBER(VIC20_USER_PORT_TAG, vic20_user_port_device, cb2_w),
+	DEVCB_CPU_INPUT_LINE(M6502_TAG, M6502_NMI_LINE)
 };
 
-/* VIA 1 Interface */
 
-static READ8_DEVICE_HANDLER( via1_pa_r )
+//-------------------------------------------------
+//  via6522_interface via2_intf
+//-------------------------------------------------
+
+READ8_MEMBER( vic20_state::via2_pa_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     ROW 0
-        PA1     ROW 1
-        PA2     ROW 2
-        PA3     ROW 3
-        PA4     ROW 4
-        PA5     ROW 5
-        PA6     ROW 6
-        PA7     ROW 7
+	    PA0     ROW 0
+	    PA1     ROW 1
+	    PA2     ROW 2
+	    PA3     ROW 3
+	    PA4     ROW 4
+	    PA5     ROW 5
+	    PA6     ROW 6
+	    PA7     ROW 7
 
-    */
+	*/
 
-	vic20_state *state = device->machine().driver_data<vic20_state>();
 	UINT8 data = 0xff;
 
-	if (!BIT(state->m_key_col, 0)) data &= input_port_read(device->machine(), "ROW0");
-	if (!BIT(state->m_key_col, 1)) data &= input_port_read(device->machine(), "ROW1");
-	if (!BIT(state->m_key_col, 2)) data &= input_port_read(device->machine(), "ROW2");
-	if (!BIT(state->m_key_col, 3)) data &= input_port_read(device->machine(), "ROW3");
-	if (!BIT(state->m_key_col, 4)) data &= input_port_read(device->machine(), "ROW4");
-	if (!BIT(state->m_key_col, 5)) data &= input_port_read(device->machine(), "ROW5");
-	if (!BIT(state->m_key_col, 6)) data &= input_port_read(device->machine(), "ROW6");
-	if (!BIT(state->m_key_col, 7)) data &= input_port_read(device->machine(), "ROW7");
+	if (!BIT(m_key_col, 0)) data &= m_row0->read();
+	if (!BIT(m_key_col, 1)) data &= m_row1->read();
+	if (!BIT(m_key_col, 2)) data &= m_row2->read();
+	if (!BIT(m_key_col, 3)) data &= m_row3->read();
+	if (!BIT(m_key_col, 4)) data &= m_row4->read();
+	if (!BIT(m_key_col, 5)) data &= m_row5->read();
+	if (!BIT(m_key_col, 6)) data &= m_row6->read();
+	if (!BIT(m_key_col, 7)) data &= m_row7->read();
 
 	return data;
 }
 
-static READ8_DEVICE_HANDLER( via1_pb_r )
+READ8_MEMBER( vic20_state::via2_pb_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0     COL 0
-        PB1     COL 1
-        PB2     COL 2
-        PB3     COL 3, CASS WRITE
-        PB4     COL 4
-        PB5     COL 5
-        PB6     COL 6
-        PB7     COL 7, JOY 3
+	    PB0     COL 0
+	    PB1     COL 1
+	    PB2     COL 2
+	    PB3     COL 3
+	    PB4     COL 4
+	    PB5     COL 5
+	    PB6     COL 6
+	    PB7     COL 7, JOY 3 (RIGHT)
 
-    */
+	*/
 
 	UINT8 data = 0xff;
 
-	/* joystick */
-	data &= ~(input_port_read(device->machine(), "JOY") & 0x80);
+	// joystick
+	UINT8 joy = m_joy1->joy_r();
+
+	data &= BIT(joy, 3) << 7;
 
 	return data;
 }
 
-static WRITE8_DEVICE_HANDLER( via1_pb_w )
+WRITE8_MEMBER( vic20_state::via2_pb_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0     COL 0
-        PB1     COL 1
-        PB2     COL 2
-        PB3     COL 3, CASS WRITE
-        PB4     COL 4
-        PB5     COL 5
-        PB6     COL 6
-        PB7     COL 7, JOY 3
+	    PB0     COL 0
+	    PB1     COL 1
+	    PB2     COL 2
+	    PB3     COL 3, CASS WRITE
+	    PB4     COL 4
+	    PB5     COL 5
+	    PB6     COL 6
+	    PB7     COL 7
 
-    */
+	*/
 
-	vic20_state *state = device->machine().driver_data<vic20_state>();
+	// cassette write
+	m_cassette->write(BIT(data, 3));
 
-	/* cassette write */
-	device->machine().device<cassette_image_device>(CASSETTE_TAG)->output(BIT(data, 3) ? -(0x5a9e >> 1) : +(0x5a9e >> 1));
-
-	/* keyboard column */
-	state->m_key_col = data;
+	// keyboard column
+	m_key_col = data;
 }
 
-static WRITE_LINE_DEVICE_HANDLER( via1_ca2_w )
+WRITE_LINE_MEMBER( vic20_state::via2_ca2_w )
 {
-	vic20_state *driver_state = device->machine().driver_data<vic20_state>();
-
-	/* serial clock out */
-	driver_state->m_iec->clk_w(!state);
+	// serial clock out
+	m_iec->clk_w(!state);
 }
 
-static WRITE_LINE_DEVICE_HANDLER( via1_cb2_w )
+WRITE_LINE_MEMBER( vic20_state::via2_cb2_w )
 {
-	vic20_state *driver_state = device->machine().driver_data<vic20_state>();
-
-	/* serial data out */
-	driver_state->m_iec->data_w(!state);
+	// serial data out
+	m_iec->data_w(!state);
 }
 
-static const via6522_interface vic20_via1_intf =
+static const via6522_interface via2_intf =
 {
-	DEVCB_HANDLER(via1_pa_r),
-	DEVCB_HANDLER(via1_pb_r),
-	DEVCB_NULL, /* CASS READ */
+	DEVCB_DRIVER_MEMBER(vic20_state, via2_pa_r),
+	DEVCB_DRIVER_MEMBER(vic20_state, via2_pb_r),
+	DEVCB_DEVICE_LINE_MEMBER(PET_DATASSETTE_PORT_TAG, pet_datassette_port_device, read),
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
 
 	DEVCB_NULL,
-	DEVCB_HANDLER(via1_pb_w),
+	DEVCB_DRIVER_MEMBER(vic20_state, via2_pb_w),
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_LINE(via1_ca2_w),
-	DEVCB_LINE(via1_cb2_w),
+	DEVCB_DRIVER_LINE_MEMBER(vic20_state, via2_ca2_w),
+	DEVCB_DRIVER_LINE_MEMBER(vic20_state, via2_cb2_w),
 
 	DEVCB_CPU_INPUT_LINE(M6502_TAG, M6502_IRQ_LINE)
 };
 
-/* Cassette Interface */
 
-static TIMER_DEVICE_CALLBACK( cassette_tick )
+//-------------------------------------------------
+//  VIC20_EXPANSION_INTERFACE( expansion_intf )
+//-------------------------------------------------
+
+WRITE_LINE_MEMBER( vic20_state::exp_reset_w )
 {
-	vic20_state *state = timer.machine().driver_data<vic20_state>();
-	int data = (state->m_cassette->input() > +0.0) ? 1 : 0;
-
-	state->m_via1->write_ca1(data);
+	if (state == ASSERT_LINE)
+	{
+		machine_reset();
+	}
 }
 
-/* IEC Serial Bus */
 
-static CBM_IEC_DAISY( cbm_iec_daisy )
-{
-	{ C1541_TAG },
-	{ NULL }
-};
+//-------------------------------------------------
+//  VIC20_USER_PORT_INTERFACE( user_intf )
+//-------------------------------------------------
 
-static CBM_IEC_INTERFACE( cbm_iec_intf )
+static VIC20_USER_PORT_INTERFACE( user_intf )
 {
+	DEVCB_DEVICE_LINE_MEMBER(M6560_TAG, mos6560_device, lp_w),
 	DEVCB_DEVICE_LINE_MEMBER(M6522_1_TAG, via6522_device, write_cb1),
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL
-};
-
-/* IEEE-488 Bus */
-
-#ifdef INCLUDE_VIC1112
-static IEEE488_DAISY( ieee488_daisy )
-{
-	{ C2031_TAG },
-	{ NULL}
-};
-
-#endif
-
-/* MOS6560 Interface */
-
-#define VC20ADDR2MOS6560ADDR(a) (((a) > 0x8000) ? ((a) & 0x1fff) : ((a) | 0x2000))
-#define MOS6560ADDR2VC20ADDR(a) (((a) > 0x2000) ? ((a) & 0x1fff) : ((a) | 0x8000))
-
-static int vic20_dma_read_color( running_machine &machine, int offset )
-{
-	address_space *program = machine.device(M6502_TAG)->memory().space(AS_PROGRAM);
-
-	return program->read_byte(0x9400 | (offset & 0x3ff));
-}
-
-static int vic20_dma_read( running_machine &machine, int offset )
-{
-	address_space *program = machine.device(M6502_TAG)->memory().space(AS_PROGRAM);
-
-	return program->read_byte(MOS6560ADDR2VC20ADDR(offset));
-}
-
-static UINT8 vic20_lightx_cb( running_machine &machine )
-{
-	return (input_port_read_safe(machine, "LIGHTX", 0) & ~0x01);
-}
-
-static UINT8 vic20_lighty_cb( running_machine &machine )
-{
-	return (input_port_read_safe(machine, "LIGHTY", 0) & ~0x01);
-}
-
-static UINT8 vic20_lightbut_cb( running_machine &machine )
-{
-	return (((input_port_read(machine, "CTRLSEL") & 0xf0) == 0x20) && (input_port_read(machine, "JOY") & 0x40));
-}
-
-static UINT8 vic20_paddle0_cb( running_machine &machine )
-{
-	return input_port_read(machine, "PADDLE0");
-}
-
-static UINT8 vic20_paddle1_cb( running_machine &machine )
-{
-	return input_port_read(machine, "PADDLE1");
-}
-
-static const mos6560_interface vic20_6560_intf =
-{
-	"screen",	/* screen */
-	MOS6560,
-	vic20_lightx_cb, vic20_lighty_cb, vic20_lightbut_cb,	/* lightgun cb */
-	vic20_paddle0_cb, vic20_paddle1_cb,		/* paddle cb */
-	vic20_dma_read, vic20_dma_read_color	/* DMA */
-};
-
-static const mos6560_interface vic20_6561_intf =
-{
-	"screen",	/* screen */
-	MOS6561,
-	vic20_lightx_cb, vic20_lighty_cb, vic20_lightbut_cb,	/* lightgun cb */
-	vic20_paddle0_cb, vic20_paddle1_cb,		/* paddle cb */
-	vic20_dma_read, vic20_dma_read_color	/* DMA */
+	DEVCB_DEVICE_LINE_MEMBER(M6522_1_TAG, via6522_device, write_cb2),
+	DEVCB_DRIVER_LINE_MEMBER(vic20_state, exp_reset_w)
 };
 
 
-/* Machine Initialization */
 
-static MACHINE_START( vic20 )
+//**************************************************************************
+//  MACHINE INITIALIZATION
+//**************************************************************************
+
+//-------------------------------------------------
+//  MACHINE_START( vic20 )
+//-------------------------------------------------
+
+void vic20_state::machine_start()
 {
-	vic20_state *state = machine.driver_data<vic20_state>();
-	address_space *program = machine.device(M6502_TAG)->memory().space(AS_PROGRAM);
+	// initialize memory
+	UINT8 data = 0xff;
 
-	/* find devices */
-	state->m_cassette_timer = machine.device<timer_device>(TIMER_C1530_TAG);
-
-	/* memory expansions */
-	switch (ram_get_size(machine.device(RAM_TAG)))
+	for (offs_t offset = 0; offset < m_ram->size(); offset++)
 	{
-	case 32*1024:
-		program->install_ram(0x6000, 0x7fff, NULL);
-		/* fallthru */
-	case 24*1024:
-		program->install_ram(0x4000, 0x5fff, NULL);
-		/* fallthru */
-	case 16*1024:
-		program->install_ram(0x2000, 0x3fff, NULL);
-		/* fallthru */
-	case 8*1024:
-		program->install_ram(0x0400, 0x0fff, NULL);
+		m_ram->pointer()[offset] = data;
+		if (!(offset % 64)) data ^= 0xff;
 	}
 
-	/* register for state saving */
-	state->save_item(NAME(state->m_key_col));
+	// state saving
+	save_item(NAME(m_key_col));
 }
 
 
-/* Cartridge */
-
-static DEVICE_IMAGE_LOAD( vic20_cart )
+void vic20_state::machine_reset()
 {
-	address_space *program = image.device().machine().device(M6502_TAG)->memory().space(AS_PROGRAM);
-	const char *filetype = image.filetype();
-	UINT32 address = 0;
-	UINT32 size;
-	UINT8 *ptr = image.device().machine().region(M6502_TAG)->base();
+	m_maincpu->reset();
 
-	if (image.software_entry() == NULL)
-	{
-		size = image.length();
+	m_vic->reset();
+	m_via1->reset();
+	m_via2->reset();
 
-		if (!mame_stricmp(filetype, "20"))
-			address = 0x2000;
-		else if (!mame_stricmp(filetype, "40"))
-			address = 0x4000;
-		else if (!mame_stricmp(filetype, "60"))
-			address = 0x6000;
-		else if (!mame_stricmp(filetype, "70"))
-			address = 0x7000;
-		else if (!mame_stricmp(filetype, "a0"))
-			address = 0xa000;
-		else if (!mame_stricmp(filetype, "b0"))
-			address = 0xb000;
-
-		// special case for a 16K image containing two 8K files glued together
-		if (size == 0x4000 && address != 0x4000)
-		{
-			image.fread(ptr + address, 0x2000);
-			image.fread(ptr + 0xa000, 0x2000);
-
-			program->install_rom(address, address + 0x1fff, ptr + address);
-			program->install_rom(0xa000, 0xbfff, ptr + 0xa000);
-		}
-		else
-		{
-			image.fread(ptr + address, size);
-			program->install_rom(address, (address + size) - 1, ptr + address);
-		}
-	}
-	else
-	{
-		size = image.get_software_region_length("2000");
-		if (size)
-		{
-			address = 0x2000;
-			memcpy(ptr + address, image.get_software_region("2000"), size);
-			program->install_rom(address, (address + size) - 1, ptr + address);
-		}
-
-		size = image.get_software_region_length("4000");
-		if (size)
-		{
-			address = 0x4000;
-			memcpy(ptr + address, image.get_software_region("4000"), size);
-			program->install_rom(address, (address + size) - 1, ptr + address);
-		}
-
-		size = image.get_software_region_length("6000");
-		if (size)
-		{
-			address = 0x6000;
-			memcpy(ptr + address, image.get_software_region("6000"), size);
-			program->install_rom(address, (address + size) - 1, ptr + address);
-		}
-
-		size = image.get_software_region_length("a000");
-		if (size)
-		{
-			address = 0xa000;
-			memcpy(ptr + address, image.get_software_region("a000"), size);
-			program->install_rom(address, (address + size) - 1, ptr + address);
-		}
-
-		size = image.get_software_region_length("b000");
-		if (size)
-		{
-			address = 0xb000;
-			memcpy(ptr + address, image.get_software_region("b000"), size);
-			program->install_rom(address, (address + size) - 1, ptr + address);
-		}
-	}
-
-	return IMAGE_INIT_PASS;
+	m_iec->reset();
+	m_exp->reset();
+	m_user->reset();
 }
 
-/* Graphics Definitions and Video Emulation */
 
-static const unsigned char mos6560_palette[] =
-{
-/* ripped from vice, a very excellent emulator */
-/* black, white, red, cyan */
-	0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xf0, 0x00, 0x00, 0x00, 0xf0, 0xf0,
-/* purple, green, blue, yellow */
-	0x60, 0x00, 0x60, 0x00, 0xa0, 0x00, 0x00, 0x00, 0xf0, 0xd0, 0xd0, 0x00,
-/* orange, light orange, pink, light cyan, */
-	0xc0, 0xa0, 0x00, 0xff, 0xa0, 0x00, 0xf0, 0x80, 0x80, 0x00, 0xff, 0xff,
-/* light violett, light green, light blue, light yellow */
-	0xff, 0x00, 0xff, 0x00, 0xff, 0x00, 0x00, 0xa0, 0xff, 0xff, 0xff, 0x00
-};
 
-static PALETTE_INIT( vic20 )
-{
-	int i;
+//**************************************************************************
+//  MACHINE DRIVERS
+//**************************************************************************
 
-	for (i = 0; i < sizeof(mos6560_palette) / 3; i++)
-	{
-		palette_set_color_rgb(machine, i, mos6560_palette[i * 3], mos6560_palette[i * 3 + 1], mos6560_palette[i * 3 + 2]);
-	}
-}
+//-------------------------------------------------
+//  MACHINE_CONFIG( vic20_common )
+//-------------------------------------------------
 
-static SCREEN_UPDATE( vic20 )
-{
-	vic20_state *state = screen->machine().driver_data<vic20_state>();
-	mos6560_video_update(state->m_mos6560, bitmap, cliprect);
-	return 0;
-}
+static MACHINE_CONFIG_START( vic20, vic20_state )
+	// devices
+	MCFG_VIA6522_ADD(M6522_1_TAG, 0, via1_intf)
+	MCFG_VIA6522_ADD(M6522_2_TAG, 0, via2_intf)
+	MCFG_PET_DATASSETTE_PORT_ADD(PET_DATASSETTE_PORT_TAG, cbm_datassette_devices, "c1530", DEVWRITELINE(M6522_2_TAG, via6522_device, write_ca1))
+	MCFG_CBM_IEC_ADD("c1541")
+	MCFG_CBM_IEC_BUS_SRQ_CALLBACK(DEVWRITELINE(M6522_2_TAG, via6522_device, write_cb1))
+	MCFG_VIC20_USER_PORT_ADD(VIC20_USER_PORT_TAG, user_intf, vic20_user_port_cards, NULL)
+	MCFG_QUICKLOAD_ADD("quickload", vic20_state, cbm_vc20, "p00,prg", CBM_QUICKLOAD_DELAY_SECONDS)
 
-/* Machine Driver */
-
-static INTERRUPT_GEN( vic20_raster_interrupt )
-{
-	vic20_state *state = device->machine().driver_data<vic20_state>();
-	mos6560_raster_interrupt_gen(state->m_mos6560);
-}
-
-static MACHINE_CONFIG_START( vic20_common, vic20_state )
-	MCFG_TIMER_ADD_PERIODIC(TIMER_C1530_TAG, cassette_tick, attotime::from_hz(44100))
-
-	/* devices */
-	MCFG_VIA6522_ADD(M6522_0_TAG, 0, vic20_via0_intf)
-	MCFG_VIA6522_ADD(M6522_1_TAG, 0, vic20_via1_intf)
-
-	MCFG_QUICKLOAD_ADD("quickload", cbm_vc20, "p00,prg", CBM_QUICKLOAD_DELAY_SECONDS)
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, cbm_cassette_interface )
-	MCFG_CBM_IEC_CONFIG_ADD(cbm_iec_daisy, cbm_iec_intf)
-	MCFG_C1541_ADD(C1541_TAG, 8)
-#ifdef INCLUDE_VIC1112
-    MCFG_VIC1112_ADD(ieee488_daisy)
-    MCFG_C2031_ADD(C2031_TAG, 9)
-#endif
-	MCFG_CARTSLOT_ADD("cart")
-	MCFG_CARTSLOT_EXTENSION_LIST("20,40,60,70,a0,b0")
-	MCFG_CARTSLOT_NOT_MANDATORY
-	MCFG_CARTSLOT_INTERFACE("vic1001_cart")
-	MCFG_CARTSLOT_LOAD(vic20_cart)
-
-	/* software lists */
+	// software lists
 	MCFG_SOFTWARE_LIST_ADD("cart_list", "vic1001_cart")
-	MCFG_SOFTWARE_LIST_ADD("disk_list", "vic1001_flop")
+	MCFG_SOFTWARE_LIST_ADD("cass_list", "vic1001_cass")
+	MCFG_SOFTWARE_LIST_ADD("flop_list", "vic1001_flop")
 
-	/* internal ram */
+	// internal ram
 	MCFG_RAM_ADD(RAM_TAG)
 	MCFG_RAM_DEFAULT_SIZE("5K")
-	MCFG_RAM_EXTRA_OPTIONS("8K,16K,24K,32K")
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_DERIVED( vic20_ntsc, vic20_common )
-	/* basic machine hardware */
+
+//-------------------------------------------------
+//  MACHINE_CONFIG( ntsc )
+//-------------------------------------------------
+
+static MACHINE_CONFIG_DERIVED( ntsc, vic20 )
+	// basic machine hardware
 	MCFG_CPU_ADD(M6502_TAG, M6502, MOS6560_CLOCK)
 	MCFG_CPU_PROGRAM_MAP(vic20_mem)
-	MCFG_CPU_PERIODIC_INT(vic20_raster_interrupt, MOS656X_HRETRACERATE)
 
-	MCFG_MACHINE_START(vic20)
-
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(MOS6560_VRETRACERATE)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MCFG_SCREEN_SIZE((MOS6560_XSIZE + 7) & ~7, MOS6560_YSIZE)
-	MCFG_SCREEN_VISIBLE_AREA(MOS6560_MAME_XPOS, MOS6560_MAME_XPOS + MOS6560_MAME_XSIZE - 1, MOS6560_MAME_YPOS, MOS6560_MAME_YPOS + MOS6560_MAME_YSIZE - 1)
-	MCFG_SCREEN_UPDATE( vic20 )
-
-	MCFG_PALETTE_LENGTH(16)
-	MCFG_PALETTE_INIT( vic20 )
-
-	/* sound hardware */
+	// video/sound hardware
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_MOS656X_ADD(M6560_TAG, vic20_6560_intf)
+	MCFG_MOS6560_ADD(M6560_TAG, SCREEN_TAG, MOS6560_CLOCK, vic_videoram_map, vic_colorram_map, DEVREAD8(CONTROL1_TAG, vcs_control_port_device, pot_x_r), DEVREAD8(CONTROL1_TAG, vcs_control_port_device, pot_y_r))
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+
+	// devices
+	MCFG_VIC20_EXPANSION_SLOT_ADD(VIC20_EXPANSION_SLOT_TAG, MOS6560_CLOCK, vic20_expansion_cards, NULL)
+	MCFG_VIC20_EXPANSION_SLOT_IRQ_CALLBACKS(INPUTLINE(M6502_TAG, M6502_IRQ_LINE), INPUTLINE(M6502_TAG, M6502_NMI_LINE), WRITELINE(vic20_state, exp_reset_w))
+	MCFG_VCS_CONTROL_PORT_ADD(CONTROL1_TAG, vcs_control_port_devices, "joy")
+	MCFG_VCS_CONTROL_PORT_TRIGGER_HANDLER(DEVWRITELINE(M6560_TAG, mos6560_device, lp_w))
+
+	// software lists
+	MCFG_SOFTWARE_LIST_FILTER("cart_list", "NTSC")
+	MCFG_SOFTWARE_LIST_FILTER("cass_list", "NTSC")
+	MCFG_SOFTWARE_LIST_FILTER("flop_list", "NTSC")
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_DERIVED( vic20_pal, vic20_common )
-	/* basic machine hardware */
+
+//-------------------------------------------------
+//  MACHINE_CONFIG( pal )
+//-------------------------------------------------
+
+static MACHINE_CONFIG_DERIVED( pal, vic20 )
+	// basic machine hardware
 	MCFG_CPU_ADD(M6502_TAG, M6502, MOS6561_CLOCK)
 	MCFG_CPU_PROGRAM_MAP(vic20_mem)
-	MCFG_CPU_PERIODIC_INT(vic20_raster_interrupt, MOS656X_HRETRACERATE)
 
-	MCFG_MACHINE_START(vic20)
-
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(MOS6561_VRETRACERATE)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MCFG_SCREEN_SIZE((MOS6561_XSIZE + 7) & ~7, MOS6561_YSIZE)
-	MCFG_SCREEN_VISIBLE_AREA(MOS6561_MAME_XPOS, MOS6561_MAME_XPOS + MOS6561_MAME_XSIZE - 1, MOS6561_MAME_YPOS, MOS6561_MAME_YPOS + MOS6561_MAME_YSIZE - 1)
-	MCFG_SCREEN_UPDATE( vic20 )
-
-	MCFG_PALETTE_LENGTH(16)
-	MCFG_PALETTE_INIT( vic20 )
-
-	/* sound hardware */
+	// video/sound hardware
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_MOS656X_ADD(M6560_TAG, vic20_6561_intf)
+	MCFG_MOS6561_ADD(M6560_TAG, SCREEN_TAG, MOS6561_CLOCK, vic_videoram_map, vic_colorram_map, DEVREAD8(CONTROL1_TAG, vcs_control_port_device, pot_x_r), DEVREAD8(CONTROL1_TAG, vcs_control_port_device, pot_y_r))
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+
+	// devices
+	MCFG_VIC20_EXPANSION_SLOT_ADD(VIC20_EXPANSION_SLOT_TAG, MOS6561_CLOCK, vic20_expansion_cards, NULL)
+	MCFG_VIC20_EXPANSION_SLOT_IRQ_CALLBACKS(INPUTLINE(M6502_TAG, M6502_IRQ_LINE), INPUTLINE(M6502_TAG, M6502_NMI_LINE), WRITELINE(vic20_state, exp_reset_w))
+	MCFG_VCS_CONTROL_PORT_ADD(CONTROL1_TAG, vcs_control_port_devices, "joy")
+	MCFG_VCS_CONTROL_PORT_TRIGGER_HANDLER(DEVWRITELINE(M6561_TAG, mos6561_device, lp_w))
+
+	// software lists
+	MCFG_SOFTWARE_LIST_FILTER("cart_list", "PAL")
+	MCFG_SOFTWARE_LIST_FILTER("cass_list", "PAL")
+	MCFG_SOFTWARE_LIST_FILTER("flop_list", "PAL")
 MACHINE_CONFIG_END
 
-/* ROMs */
+
+
+//**************************************************************************
+//  ROM DEFINITIONS
+//**************************************************************************
+
+//-------------------------------------------------
+//  ROM( vic1001 )
+//-------------------------------------------------
 
 ROM_START( vic1001 )
-	ROM_REGION( 0x10000, M6502_TAG, 0 )
-	ROM_LOAD( "901460-02", 0x8000, 0x1000, CRC(fcfd8a4b) SHA1(dae61ac03065aa2904af5c123ce821855898c555) )
-	ROM_LOAD( "901486-01", 0xc000, 0x2000, CRC(db4c43c1) SHA1(587d1e90950675ab6b12d91248a3f0d640d02e8d) )
-	ROM_LOAD( "901486-02", 0xe000, 0x2000, CRC(336900d7) SHA1(c9ead45e6674d1042ca6199160e8583c23aeac22) )
+	ROM_REGION( 0x2000, "basic", 0 )
+	ROM_LOAD( "901486-01", 0x0000, 0x2000, CRC(db4c43c1) SHA1(587d1e90950675ab6b12d91248a3f0d640d02e8d) )
+
+	ROM_REGION( 0x2000, "kernal", 0 )
+	ROM_LOAD( "901486-02", 0x0000, 0x2000, CRC(336900d7) SHA1(c9ead45e6674d1042ca6199160e8583c23aeac22) )
+
+	ROM_REGION( 0x1000, "charom", 0 )
+	ROM_LOAD( "901460-02", 0x0000, 0x1000, CRC(fcfd8a4b) SHA1(dae61ac03065aa2904af5c123ce821855898c555) )
 ROM_END
+
+
+//-------------------------------------------------
+//  ROM( vic20 )
+//-------------------------------------------------
 
 ROM_START( vic20 )
-	ROM_REGION( 0x10000, M6502_TAG, 0 )
-	ROM_LOAD( "901460-03.ud7",  0x8000, 0x1000, CRC(83e032a6) SHA1(4fd85ab6647ee2ac7ba40f729323f2472d35b9b4) )
-	ROM_LOAD( "901486-01.ue11", 0xc000, 0x2000, CRC(db4c43c1) SHA1(587d1e90950675ab6b12d91248a3f0d640d02e8d) )
+	ROM_REGION( 0x2000, "basic", 0 )
+	ROM_LOAD( "901486-01.ue11", 0x0000, 0x2000, CRC(db4c43c1) SHA1(587d1e90950675ab6b12d91248a3f0d640d02e8d) )
+
+	ROM_REGION( 0x2000, "kernal", 0 )
 	ROM_SYSTEM_BIOS( 0, "cbm", "Original" )
-	ROMX_LOAD( "901486-06.ue12", 0xe000, 0x2000, CRC(e5e7c174) SHA1(06de7ec017a5e78bd6746d89c2ecebb646efeb19), ROM_BIOS(1) )
+	ROMX_LOAD( "901486-06.ue12", 0x0000, 0x2000, CRC(e5e7c174) SHA1(06de7ec017a5e78bd6746d89c2ecebb646efeb19), ROM_BIOS(1) )
 	ROM_SYSTEM_BIOS( 1, "jiffydos", "JiffyDOS" )
-	ROMX_LOAD( "jiffydos vic-20 ntsc.ue12", 0xe000, 0x2000, CRC(683a757f) SHA1(83fb83e97b5a840311dbf7e1fe56fe828f41936d), ROM_BIOS(2) )
+	ROMX_LOAD( "jiffydos vic-20 ntsc.ue12", 0x0000, 0x2000, CRC(683a757f) SHA1(83fb83e97b5a840311dbf7e1fe56fe828f41936d), ROM_BIOS(2) )
+
+	ROM_REGION( 0x1000, "charom", 0 )
+	ROM_LOAD( "901460-03.ud7", 0x0000, 0x1000, CRC(83e032a6) SHA1(4fd85ab6647ee2ac7ba40f729323f2472d35b9b4) )
 ROM_END
+
+
+//-------------------------------------------------
+//  ROM( vic20p )
+//-------------------------------------------------
 
 ROM_START( vic20p )
-	ROM_REGION( 0x10000, M6502_TAG, 0 )
-	ROM_LOAD( "901460-03.ud7",  0x8000, 0x1000, CRC(83e032a6) SHA1(4fd85ab6647ee2ac7ba40f729323f2472d35b9b4) )
-	ROM_LOAD( "901486-01.ue11", 0xc000, 0x2000, CRC(db4c43c1) SHA1(587d1e90950675ab6b12d91248a3f0d640d02e8d) )
+	ROM_REGION( 0x2000, "basic", 0 )
+	ROM_LOAD( "901486-01.ue11", 0x0000, 0x2000, CRC(db4c43c1) SHA1(587d1e90950675ab6b12d91248a3f0d640d02e8d) )
+
+	ROM_REGION( 0x2000, "kernal", 0 )
 	ROM_SYSTEM_BIOS( 0, "cbm", "Original" )
-	ROMX_LOAD( "901486-07.ue12", 0xe000, 0x2000, CRC(4be07cb4) SHA1(ce0137ed69f003a299f43538fa9eee27898e621e), ROM_BIOS(1) )
+	ROMX_LOAD( "901486-07.ue12", 0x0000, 0x2000, CRC(4be07cb4) SHA1(ce0137ed69f003a299f43538fa9eee27898e621e), ROM_BIOS(1) )
 	ROM_SYSTEM_BIOS( 1, "jiffydos", "JiffyDOS" )
-	ROMX_LOAD( "jiffydos vic-20 pal.ue12", 0xe000, 0x2000, CRC(705e7810) SHA1(5a03623a4b855531b8bffd756f701306f128be2d), ROM_BIOS(2) )
+	ROMX_LOAD( "jiffydos vic-20 pal.ue12", 0x0000, 0x2000, CRC(705e7810) SHA1(5a03623a4b855531b8bffd756f701306f128be2d), ROM_BIOS(2) )
+
+	ROM_REGION( 0x1000, "charom", 0 )
+	ROM_LOAD( "901460-03.ud7", 0x0000, 0x1000, CRC(83e032a6) SHA1(4fd85ab6647ee2ac7ba40f729323f2472d35b9b4) )
 ROM_END
 
-ROM_START( vic20s )
-	ROM_REGION( 0x10000, M6502_TAG, 0 )
-	ROM_LOAD( "nec22101.207",   0x8000, 0x1000, CRC(d808551d) SHA1(f403f0b0ce5922bd61bbd768bdd6f0b38e648c9f) )
-	ROM_LOAD( "901486-01.ue11",	0xc000, 0x2000, CRC(db4c43c1) SHA1(587d1e90950675ab6b12d91248a3f0d640d02e8d) )
-	ROM_LOAD( "nec22081.206",   0xe000, 0x2000, CRC(b2a60662) SHA1(cb3e2f6e661ea7f567977751846ce9ad524651a3) )
+
+//-------------------------------------------------
+//  ROM( vic20_se )
+//-------------------------------------------------
+
+ROM_START( vic20_se )
+	ROM_REGION( 0x2000, "basic", 0 )
+	ROM_LOAD( "901486-01.ue11", 0x0000, 0x2000, CRC(db4c43c1) SHA1(587d1e90950675ab6b12d91248a3f0d640d02e8d) )
+
+	ROM_REGION( 0x2000, "kernal", 0 )
+	ROM_LOAD( "nec22081.206", 0x0000, 0x2000, CRC(b2a60662) SHA1(cb3e2f6e661ea7f567977751846ce9ad524651a3) )
+
+	ROM_REGION( 0x1000, "charom", 0 )
+	ROM_LOAD( "nec22101.207", 0x0000, 0x1000, CRC(d808551d) SHA1(f403f0b0ce5922bd61bbd768bdd6f0b38e648c9f) )
 ROM_END
 
-/* System Drivers */
 
-/*    YEAR  NAME        PARENT      COMPAT  MACHINE     INPUT        INIT        COMPANY                             FULLNAME                    FLAGS */
-COMP( 1980, vic1001,    0,          0,      vic20_ntsc,  vic1001,    0,          "Commodore Business Machines",      "VIC-1001 (Japan)",         GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-COMP( 1981, vic20,      vic1001,    0,      vic20_ntsc,  vic20,      0,          "Commodore Business Machines",      "VIC-20 (NTSC)",            GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-COMP( 1981, vic20p,     vic1001,    0,      vic20_pal,   vic20,      0,          "Commodore Business Machines",      "VIC-20 / VC-20 (PAL)",     GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-COMP( 1981, vic20s,     vic1001,    0,      vic20_pal,   vic20s,     0,          "Commodore Business Machines",      "VIC-20 (Sweden/Finland)",  GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+
+//**************************************************************************
+//  GAME DRIVERS
+//**************************************************************************
+
+//    YEAR  NAME        PARENT      COMPAT  MACHINE      INPUT      INIT                        COMPANY                             FULLNAME                    FLAGS
+COMP( 1980, vic1001,    0,          0,      ntsc,       vic1001,    driver_device,  0,          "Commodore Business Machines",      "VIC-1001 (Japan)",         GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+COMP( 1981, vic20,      vic1001,    0,      ntsc,       vic20,      driver_device,  0,          "Commodore Business Machines",      "VIC-20 (NTSC)",            GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+COMP( 1981, vic20p,     vic1001,    0,      pal,        vic20,      driver_device,  0,          "Commodore Business Machines",      "VIC-20 / VC-20 (PAL)",     GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+COMP( 1981, vic20_se,   vic1001,    0,      pal,        vic20s,     driver_device,  0,          "Commodore Business Machines",      "VIC-20 (Sweden/Finland)",  GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

@@ -1,247 +1,125 @@
-/*****************************************************************************
- *
- * machine/serial.h
- *
- * internal serial transmission
- *
- * This code is used to transmit a file stored on the host filesystem
- * (e.g. PC harddrive) to an emulated system.
- *
- * The file is converted into a serial bit-stream which can be received
- * by the emulated serial chip in the emulated system.
- *
- * The file can be transmitted using different protocols.
- *
- * A and B are two computers linked with a serial connection
- * A and B can transmit and receive data, through the same connection
- *
- * These flags apply to A and B, and give the state of the input & output
- * signals at each side.
- *
- ****************************************************************************/
+#ifndef __SERIAL_H__
+#define __SERIAL_H__
 
-#ifndef SERIAL_H_
-#define SERIAL_H_
+#include "emu.h"
 
+#define MCFG_SERIAL_PORT_ADD(_tag, _intf, _slot_intf, _def_slot) \
+	MCFG_DEVICE_ADD(_tag, SERIAL_PORT, 0) \
+	MCFG_DEVICE_CONFIG(_intf) \
+	MCFG_DEVICE_SLOT_INTERFACE(_slot_intf, _def_slot, false)
 
-/*
-    CTS = Clear to Send. (INPUT)
-    Other end of connection is ready to accept data
+#define MCFG_RS232_PORT_ADD(_tag, _intf, _slot_intf, _def_slot) \
+	MCFG_DEVICE_ADD(_tag, RS232_PORT, 0) \
+	MCFG_DEVICE_CONFIG(_intf) \
+	MCFG_DEVICE_SLOT_INTERFACE(_slot_intf, _def_slot, false)
 
-
-    NOTE:
-
-      This output is active low on serial chips (e.g. 0 is CTS is set),
-      but here it is active high!
-*/
-#define SERIAL_STATE_CTS	0x0001
-
-/*
-    RTS = Request to Send. (OUTPUT)
-    This end is ready to send data, and requests if the other
-    end is ready to accept it
-
-    NOTE:
-
-      This output is active low on serial chips (e.g. 0 is RTS is set),
-      but here it is active high!
-*/
-#define SERIAL_STATE_RTS	0x0002
-
-/*
-    DSR = Data Set ready. (INPUT)
-    Other end of connection has data
-
-
-    NOTE:
-
-      This output is active low on serial chips (e.g. 0 is DSR is set),
-      but here it is active high!
-*/
-#define SERIAL_STATE_DSR	0x0004
-
-/*
-    DTR = Data terminal Ready. (OUTPUT)
-    TX contains new data.
-
-    NOTE:
-
-      This output is active low on serial chips (e.g. 0 is DTR is set),
-      but here it is active high!
-*/
-#define SERIAL_STATE_DTR	0x0008
-/* RX = Recieve data. (INPUT) */
-#define SERIAL_STATE_RX_DATA	0x00010
-/* TX = Transmit data. (OUTPUT) */
-#define SERIAL_STATE_TX_DATA	0x00020
-
-/* parity selections */
-/* if all the bits are added in a byte, if the result is:
-    even -> parity is even
-    odd -> parity is odd
-*/
-enum
+struct serial_port_interface
 {
-	SERIAL_PARITY_NONE,		/* no parity. a parity bit will not be in the transmitted/received data */
-	SERIAL_PARITY_ODD,		/* odd parity */
-	SERIAL_PARITY_EVEN		/* even parity */
+	devcb_write_line    m_out_rx_cb;
 };
 
-/* this macro is used to extract the received data from the status */
-#define get_in_data_bit(x) ((x & SERIAL_STATE_RX_DATA)>>4)
-
-/* this macro is used to set the transmitted data in the status */
-#define set_out_data_bit(x, data) \
-	x&=~SERIAL_STATE_TX_DATA; \
-	x|=(data<<5)
-
-
-/*******************************************************************************/
-/**** SERIAL CONNECTION ***/
-
-
-/* this structure represents a serial connection */
-typedef struct _serial_connection serial_connection;
-struct _serial_connection
+class device_serial_port_interface : public device_slot_card_interface
 {
-	int id;
-	/* state of this side */
-	unsigned long State;
+public:
+	device_serial_port_interface(const machine_config &mconfig, device_t &device);
+	virtual ~device_serial_port_interface();
 
-	/* state of other side - store here */
-	unsigned long input_state;
-
-	/* this callback is executed when this side has refreshed it's state,
-    to let the other end know */
-	void	(*out_callback)(running_machine &machine, int id, unsigned long state);
-	/* this callback is executed when the other side has refreshed it's state,
-    to let the other end know */
-	void	(*in_callback)(running_machine &machine, int id, unsigned long state);
+	virtual void tx(UINT8 state) { m_tbit = state; }
+	virtual UINT8 rx() { return m_rbit; }
+protected:
+	UINT8 m_rbit;
+	UINT8 m_tbit;
 };
 
-/*----------- defined in machine/serial.c -----------*/
-
-/* setup out and in callbacks */
-void serial_connection_init(running_machine &machine, serial_connection *connection);
-
-/* set callback which will be executed when in status has changed */
-void serial_connection_set_in_callback(running_machine &machine, serial_connection *connection, void (*in_cb)(running_machine &machine, int id, unsigned long status));
-
-/* output status, if callback is setup it will be executed with the new status */
-void serial_connection_out(running_machine &machine, serial_connection *connection);
-
-/* join two serial connections */
-void serial_connection_link(running_machine &machine, serial_connection *connection_a, serial_connection *connection_b);
-
-
-/*******************************************************************************/
-
-/* form of data being transmitted and received */
-typedef struct _data_form data_form;
-struct _data_form
+class serial_port_device : public device_t,
+							public serial_port_interface,
+							public device_slot_interface
 {
-	/* length of word in bits */
-	unsigned long word_length;
-	/* parity state */
-	unsigned long parity;
-	/* number of stop bits */
-	unsigned long stop_bit_count;
+public:
+	serial_port_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	serial_port_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source);
+	virtual ~serial_port_device();
+
+	DECLARE_WRITE_LINE_MEMBER( tx ) { if(m_dev) m_dev->tx(state); }
+	DECLARE_READ_LINE_MEMBER( rx )  { return (m_dev) ? m_dev->rx() : 1; }
+
+	void out_rx(UINT8 param)  { m_out_rx_func(param); }
+protected:
+	virtual void device_start();
+	virtual void device_config_complete();
+	device_serial_port_interface *m_dev;
+private:
+	devcb_resolved_write_line m_out_rx_func;
 };
 
-/*******************************************************************************/
+extern const device_type SERIAL_PORT;
 
-/*******************************************************************************/
-/**** RECEIVE AND TRANSMIT GENERIC CODE ****/
-
-/* this can be used by most of the serial chip implementations,
-because they all work in roughly the same way.
-There is generic code to send and receive data in the specified form */
-
-/* receive is waiting for start bit. The transition from high-low indicates
-start of start bit. This is used to synchronise with the data being transfered */
-#define RECEIVE_REGISTER_WAITING_FOR_START_BIT 0x01
-/* receive is synchronised with data, data bits will be clocked in */
-#define RECEIVE_REGISTER_SYNCHRONISED 0x02
-/* set if receive register has been filled */
-#define RECEIVE_REGISTER_FULL 0x04
-
-
-/* the receive register holds data in receive form! */
-/* this must be extracted to get the data byte received */
-typedef struct _serial_receive_register serial_receive_register;
-struct _serial_receive_register
+struct rs232_port_interface
 {
-	/* data */
-	unsigned long register_data;
-	/* flags */
-	unsigned long flags;
-	/* bit count received */
-	unsigned long bit_count_received;
-	/* length of data to receive - includes data bits, parity bit and stop bit */
-	unsigned long bit_count;
-
-	/* the byte of data received */
-	unsigned char byte_received;
+	devcb_write_line    m_out_rx_cb;
+	devcb_write_line    m_out_dcd_cb;
+	devcb_write_line    m_out_dsr_cb;
+	devcb_write_line    m_out_ri_cb;
+	devcb_write_line    m_out_cts_cb;
 };
 
-void	receive_register_setup(serial_receive_register *receive, data_form *data_form);
-void	receive_register_update_bit(serial_receive_register *receive, int bit_state);
-void	receive_register_extract(serial_receive_register *receive_reg, data_form *data_form);
-void	receive_register_reset(serial_receive_register *receive_reg);
-
-/* the transmit register is the final stage
-in the serial transmit procedure */
-/* normally, data is written to the transmit reg,
-then it is assembled into transmit form and transmitted */
-/* the transmit register holds data in transmit form */
-
-/* register is empty and ready to be filled with data */
-#define TRANSMIT_REGISTER_EMPTY 0x0001
-
-typedef struct _serial_transmit_register serial_transmit_register;
-struct _serial_transmit_register
+class device_rs232_port_interface : public device_serial_port_interface
 {
-	/* data */
-	unsigned long register_data;
-	/* flags */
-	unsigned long flags;
-	/* number of bits transmitted */
-	unsigned long bit_count_transmitted;
-	/* length of data to send */
-	unsigned long bit_count;
+public:
+	device_rs232_port_interface(const machine_config &mconfig, device_t &device);
+	virtual ~device_rs232_port_interface();
+
+	virtual void dtr_w(UINT8 state) { m_dtr = state; }
+	virtual void rts_w(UINT8 state) { m_rts = state; }
+
+	virtual UINT8 dcd_r() { return m_dcd; }
+	virtual UINT8 dsr_r() { return m_dsr; }
+	virtual UINT8 ri_r()  { return m_ri; }
+	virtual UINT8 cts_r() { return m_cts; }
+protected:
+	UINT8 m_dtr;
+	UINT8 m_rts;
+	UINT8 m_dcd;
+	UINT8 m_dsr;
+	UINT8 m_ri;
+	UINT8 m_cts;
 };
 
-/* setup transmit reg ready for transmit */
-void transmit_register_setup(serial_transmit_register *transmit_reg, data_form *data_form,unsigned char data_byte);
-void	transmit_register_send_bit(running_machine &machine, serial_transmit_register *transmit_reg, serial_connection *connection);
-void	transmit_register_reset(serial_transmit_register *transmit_reg);
+class rs232_port_device : public serial_port_device,
+							public rs232_port_interface
+{
+public:
+	rs232_port_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	virtual ~rs232_port_device();
 
-/*******************************************************************************/
-/**** SERIAL HELPER ****/
+	DECLARE_WRITE_LINE_MEMBER( dtr_w );
+	DECLARE_WRITE_LINE_MEMBER( rts_w );
 
-void serial_helper_setup(void);
+	DECLARE_READ_LINE_MEMBER( dcd_r ) { return (m_dev) ? m_dev->dcd_r() : loopdtr; }
+	DECLARE_READ_LINE_MEMBER( dsr_r ) { return (m_dev) ? m_dev->dsr_r() : loopdtr; }
+	DECLARE_READ_LINE_MEMBER( ri_r )  { return (m_dev) ? m_dev->ri_r() : 0; }
+	DECLARE_READ_LINE_MEMBER( cts_r ) { return (m_dev) ? m_dev->cts_r() : looprts; }
 
-/*******************************************************************************/
-/**** SERIAL DEVICE ****/
+	void out_dcd(UINT8 param) { m_out_dcd_func(param); }
+	void out_dsr(UINT8 param) { m_out_dsr_func(param); }
+	void out_ri(UINT8 param)  { m_out_ri_func(param); }
+	void out_cts(UINT8 param) { m_out_cts_func(param); }
 
-unsigned long serial_device_get_state(device_t *device);
+protected:
+	virtual void device_start();
+	virtual void device_config_complete();
+	device_rs232_port_interface *m_dev;
+private:
+	devcb_resolved_write_line m_out_dcd_func;
+	devcb_resolved_write_line m_out_dsr_func;
+	devcb_resolved_write_line m_out_ri_func;
+	devcb_resolved_write_line m_out_cts_func;
+	UINT8 loopdtr;
+	UINT8 looprts;
+};
 
-/* connect this device to the emulated serial chip */
-/* id is the serial device to connect to */
-/* connection is the serial connection to connect to the serial device */
-void serial_device_connect(device_t *image, serial_connection *connection);
+extern const device_type RS232_PORT;
 
-DECLARE_LEGACY_IMAGE_DEVICE(SERIAL, serial);
+SLOT_INTERFACE_EXTERN( default_rs232_devices );
 
-#define MCFG_SERIAL_ADD(_tag) \
-	MCFG_DEVICE_ADD(_tag, SERIAL, 0)
-
-DEVICE_START(serial);
-DEVICE_IMAGE_LOAD(serial);
-
-void serial_device_setup(device_t *image, int baud_rate, int num_data_bits, int stop_bit_count, int parity_code);
-
-/* set the transmit state of the serial device */
-void serial_device_set_transmit_state(device_t *image, int state);
-
-#endif /* SERIAL_H_ */
+#endif

@@ -17,171 +17,156 @@
      bits 0..6 keyboard output select matrix line
 */
 
-WRITE8_HANDLER(pc1403_asic_write)
+WRITE8_MEMBER(pc1403_state::pc1403_asic_write)
 {
-	pc1403_state *state = space->machine().driver_data<pc1403_state>();
-    state->m_asic[offset>>9]=data;
-    switch( (offset>>9) ){
-    case 0/*0x3800*/:
-	// output
-	logerror ("asic write %.4x %.2x\n",offset, data);
-	break;
-    case 1/*0x3a00*/:
-	logerror ("asic write %.4x %.2x\n",offset, data);
-	break;
-    case 2/*0x3c00*/:
-	memory_set_bankptr(space->machine(), "bank1", space->machine().region("user1")->base()+((data&7)<<14));
-	logerror ("asic write %.4x %.2x\n",offset, data);
-	break;
-    case 3/*0x3e00*/: break;
-    }
+	m_asic[offset>>9]=data;
+	switch( (offset>>9) ){
+		case 0/*0x3800*/:
+				// output
+				logerror ("asic write %.4x %.2x\n",offset, data);
+				break;
+		case 1/*0x3a00*/:
+				logerror ("asic write %.4x %.2x\n",offset, data);
+				break;
+		case 2/*0x3c00*/:
+				membank("bank1")->set_base(memregion("user1")->base()+((data&7)<<14));
+				logerror ("asic write %.4x %.2x\n",offset, data);
+				break;
+		case 3/*0x3e00*/: break;
+	}
 }
 
-READ8_HANDLER(pc1403_asic_read)
+READ8_MEMBER(pc1403_state::pc1403_asic_read)
 {
-	pc1403_state *state = space->machine().driver_data<pc1403_state>();
-    UINT8 data=state->m_asic[offset>>9];
-    switch( (offset>>9) ){
-    case 0: case 1: case 2:
-	logerror ("asic read %.4x %.2x\n",offset, data);
-	break;
-    }
-    return data;
+	UINT8 data=m_asic[offset>>9];
+	switch( (offset>>9) ){
+		case 0: case 1: case 2:
+			logerror ("asic read %.4x %.2x\n",offset, data);
+			break;
+	}
+	return data;
 }
 
-void pc1403_outa(device_t *device, int data)
+WRITE8_MEMBER(pc1403_state::pc1403_outa)
 {
-	pc1403_state *state = device->machine().driver_data<pc1403_state>();
-    state->m_outa=data;
+	m_outa=data;
 }
 
-int pc1403_ina(device_t *device)
+READ8_MEMBER(pc1403_state::pc1403_ina)
 {
-	pc1403_state *state = device->machine().driver_data<pc1403_state>();
-    UINT8 data=state->m_outa;
+	UINT8 data=m_outa;
 
-    if (state->m_asic[3] & 0x01)
-		data |= input_port_read(device->machine(), "KEY0");
+	if (m_asic[3] & 0x01)
+		data |= ioport("KEY0")->read();
 
-    if (state->m_asic[3] & 0x02)
-		data |= input_port_read(device->machine(), "KEY1");
+	if (m_asic[3] & 0x02)
+		data |= ioport("KEY1")->read();
 
-    if (state->m_asic[3] & 0x04)
-		data |= input_port_read(device->machine(), "KEY2");
+	if (m_asic[3] & 0x04)
+		data |= ioport("KEY2")->read();
 
-    if (state->m_asic[3] & 0x08)
-		data |= input_port_read(device->machine(), "KEY3");
+	if (m_asic[3] & 0x08)
+		data |= ioport("KEY3")->read();
 
-    if (state->m_asic[3] & 0x10)
-		data |= input_port_read(device->machine(), "KEY4");
+	if (m_asic[3] & 0x10)
+		data |= ioport("KEY4")->read();
 
-    if (state->m_asic[3] & 0x20)
-		data |= input_port_read(device->machine(), "KEY5");
+	if (m_asic[3] & 0x20)
+		data |= ioport("KEY5")->read();
 
-    if (state->m_asic[3] & 0x40)
-		data |= input_port_read(device->machine(), "KEY6");
+	if (m_asic[3] & 0x40)
+		data |= ioport("KEY6")->read();
 
-    if (state->m_outa & 0x01)
+	if (m_outa & 0x01)
 	{
-		data |= input_port_read(device->machine(), "KEY7");
+		data |= ioport("KEY7")->read();
 
 		/* At Power Up we fake a 'C-CE' pressure */
-		if (state->m_power)
+		if (m_power)
 			data |= 0x02;
 	}
 
-    if (state->m_outa & 0x02)
-		data |= input_port_read(device->machine(), "KEY8");
+	if (m_outa & 0x02)
+		data |= ioport("KEY8")->read();
 
-    if (state->m_outa & 0x04)
-		data |= input_port_read(device->machine(), "KEY9");
+	if (m_outa & 0x04)
+		data |= ioport("KEY9")->read();
 
-    if (state->m_outa & 0x08)
-		data |= input_port_read(device->machine(), "KEY10");
+	if (m_outa & 0x08)
+		data |= ioport("KEY10")->read();
 
-    if (state->m_outa & 0x10)
-		data |= input_port_read(device->machine(), "KEY11");
+	if (m_outa & 0x10)
+		data |= ioport("KEY11")->read();
 
-    if (state->m_outa & 0x20)
-		data |= input_port_read(device->machine(), "KEY12");
+	if (m_outa & 0x20)
+		data |= ioport("KEY12")->read();
 
-    if (state->m_outa & 0x40)
-		data |= input_port_read(device->machine(), "KEY13");
+	if (m_outa & 0x40)
+		data |= ioport("KEY13")->read();
 
-    return data;
+	return data;
 }
 
 #if 0
-int pc1403_inb(void)
+READ8_MEMBER(pc1403_state::pc1403_inb)
 {
-	pc1403_state *state = machine.driver_data<pc140_state>();
-	int data = state->m_outb;
+	int data = m_outb;
 
-	if (input_port_read(machine, "KEY13"))
+	if (ioport("KEY13")->read())
 		data |= 1;
 
 	return data;
 }
 #endif
 
-void pc1403_outc(device_t *device, int data)
+WRITE8_MEMBER(pc1403_state::pc1403_outc)
 {
-	pc1403_state *state = device->machine().driver_data<pc1403_state>();
-    state->m_portc = data;
-//    logerror("%g pc %.4x outc %.2x\n", device->machine().time().as_double(), cpu_get_pc(device->machine().device("maincpu")), data);
+	m_portc = data;
+//    logerror("%g pc %.4x outc %.2x\n", device->machine().time().as_double(), device->m_maincpu->safe_pc(), data);
 }
 
 
-int pc1403_brk(device_t *device)
+READ_LINE_MEMBER(pc1403_state::pc1403_brk)
 {
-	return (input_port_read(device->machine(), "EXTRA") & 0x01);
+	return (ioport("EXTRA")->read() & 0x01);
 }
 
-int pc1403_reset(device_t *device)
+READ_LINE_MEMBER(pc1403_state::pc1403_reset)
 {
-	return (input_port_read(device->machine(), "EXTRA") & 0x02);
+	return (ioport("EXTRA")->read() & 0x02);
 }
 
-/* currently enough to save the external ram */
-NVRAM_HANDLER( pc1403 )
+void pc1403_state::machine_start()
 {
-	device_t *main_cpu = machine.device("maincpu");
-	UINT8 *ram = machine.region("maincpu")->base() + 0x8000;
+	device_t *main_cpu = m_maincpu;
+	UINT8 *ram = memregion("maincpu")->base() + 0x8000;
 	UINT8 *cpu = sc61860_internal_ram(main_cpu);
 
-	if (read_or_write)
+	machine().device<nvram_device>("cpu_nvram")->set_base(cpu, 96);
+	machine().device<nvram_device>("ram_nvram")->set_base(ram, 0x8000);
+}
+
+void pc1403_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+{
+	switch (id)
 	{
-		file->write(cpu, 96);
-		file->write(ram, 0x8000);
-	}
-	else if (file)
-	{
-		file->read(cpu, 96);
-		file->read(ram, 0x8000);
-	}
-	else
-	{
-		memset(cpu, 0, 96);
-		memset(ram, 0, 0x8000);
+	case TIMER_POWER_UP:
+		m_power=0;
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in pc1403_state::device_timer");
 	}
 }
 
-static TIMER_CALLBACK(pc1403_power_up)
+DRIVER_INIT_MEMBER(pc1403_state,pc1403)
 {
-	pc1403_state *state = machine.driver_data<pc1403_state>();
-	state->m_power=0;
-}
-
-DRIVER_INIT( pc1403 )
-{
-	pc1403_state *state = machine.driver_data<pc1403_state>();
 	int i;
-	UINT8 *gfx=machine.region("gfx1")->base();
+	UINT8 *gfx=memregion("gfx1")->base();
 
 	for (i=0; i<128; i++) gfx[i]=i;
 
-	state->m_power = 1;
-	machine.scheduler().timer_set(attotime::from_seconds(1), FUNC(pc1403_power_up));
+	m_power = 1;
+	timer_set(attotime::from_seconds(1), TIMER_POWER_UP);
 
-	memory_set_bankptr(machine, "bank1", machine.region("user1")->base());
+	membank("bank1")->set_base(memregion("user1")->base());
 }

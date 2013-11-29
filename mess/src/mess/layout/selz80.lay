@@ -2,7 +2,7 @@
 <mamelayout version="2">
 	<element name="digit" defstate="0">
 		<led7seg>
-			<color red="0.75" green="0.0" blue="0.0" />
+			<color red="1.0" green="0.0" blue="0.0" />
 		</led7seg>
 	</element>
 	<element name="background">
@@ -12,10 +12,10 @@
 		</rect>
 	</element>
 
-	<view name="SEL Z80 Trainer">
+	<view name="Default Layout">
 		<!-- Black background -->
 		<bezel element="background">
-			<bounds left="1" top="1" right="600" bottom="480" />
+			<bounds left="1" top="95" right="501" bottom="195" />
 		</bezel>
 		<bezel name="digit0" element="digit">
 			<bounds left="11" top="105" right="59" bottom="185" />

@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /******************************************************************************
 
     palette.c
 
     Palette handling functions.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ******************************************************************************/
 
@@ -48,46 +19,45 @@
 ***************************************************************************/
 
 /* object to track dirty states */
-typedef struct _dirty_state dirty_state;
-struct _dirty_state
+struct dirty_state
 {
-	UINT32 *		dirty;						/* bitmap of dirty entries */
-	UINT32			mindirty;					/* minimum dirty entry */
-	UINT32			maxdirty;					/* minimum dirty entry */
+	UINT32 *        dirty;                      /* bitmap of dirty entries */
+	UINT32          mindirty;                   /* minimum dirty entry */
+	UINT32          maxdirty;                   /* minimum dirty entry */
 };
 
 
 /* a single palette client */
-struct _palette_client
+struct palette_client
 {
-	palette_client *next;						/* pointer to next client */
-	palette_t *		palette;					/* reference to the palette */
-	dirty_state		live;						/* live dirty state */
-	dirty_state		previous;					/* previous dirty state */
+	palette_client *next;                       /* pointer to next client */
+	palette_t *     palette;                    /* reference to the palette */
+	dirty_state     live;                       /* live dirty state */
+	dirty_state     previous;                   /* previous dirty state */
 };
 
 
 /* a palette object */
-struct _palette_t
+struct palette_t
 {
-	UINT32			refcount;					/* reference count on the palette */
-	UINT32			numcolors;					/* number of colors in the palette */
-	UINT32			numgroups;					/* number of groups in the palette */
+	UINT32          refcount;                   /* reference count on the palette */
+	UINT32          numcolors;                  /* number of colors in the palette */
+	UINT32          numgroups;                  /* number of groups in the palette */
 
-	float			brightness;					/* overall brightness value */
-	float			contrast;					/* overall contrast value */
-	float			gamma;						/* overall gamma value */
-	UINT8			gamma_map[256];				/* gamma map */
+	float           brightness;                 /* overall brightness value */
+	float           contrast;                   /* overall contrast value */
+	float           gamma;                      /* overall gamma value */
+	UINT8           gamma_map[256];             /* gamma map */
 
-	rgb_t *			entry_color;				/* array of raw colors */
-	float *			entry_contrast;				/* contrast value for each entry */
-	rgb_t *			adjusted_color;				/* array of adjusted colors */
-	rgb_t *			adjusted_rgb15;				/* array of adjusted colors as RGB15 */
+	rgb_t *         entry_color;                /* array of raw colors */
+	float *         entry_contrast;             /* contrast value for each entry */
+	rgb_t *         adjusted_color;             /* array of adjusted colors */
+	rgb_t *         adjusted_rgb15;             /* array of adjusted colors as RGB15 */
 
-	float *			group_bright;				/* brightness value for each group */
-	float *			group_contrast;				/* contrast value for each group */
+	float *         group_bright;               /* brightness value for each group */
+	float *         group_contrast;             /* contrast value for each group */
 
-	palette_client *client_list;				/* list of clients for this palette */
+	palette_client *client_list;                /* list of clients for this palette */
 };
 
 

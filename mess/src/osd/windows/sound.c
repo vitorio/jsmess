@@ -1,41 +1,8 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 //============================================================
 //
 //  sound.c - Win32 implementation of MAME sound routines
-//
-//============================================================
-//
-//  Copyright Aaron Giles
-//  All rights reserved.
-//
-//  Redistribution and use in source and binary forms, with or
-//  without modification, are permitted provided that the
-//  following conditions are met:
-//
-//    * Redistributions of source code must retain the above
-//      copyright notice, this list of conditions and the
-//      following disclaimer.
-//    * Redistributions in binary form must reproduce the
-//      above copyright notice, this list of conditions and
-//      the following disclaimer in the documentation and/or
-//      other materials provided with the distribution.
-//    * Neither the name 'MAME' nor the names of its
-//      contributors may be used to endorse or promote
-//      products derived from this software without specific
-//      prior written permission.
-//
-//  THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND
-//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-//  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
-//  FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
-//  EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-//  DAMAGE (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-//  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-//  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-//  ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-//  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-//  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-//  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //============================================================
 
@@ -66,7 +33,7 @@
 //  DEBUGGING
 //============================================================
 
-#define LOG_SOUND				0
+#define LOG_SOUND               0
 
 #define LOG(x) do { if (LOG_SOUND) logerror x; } while(0)
 
@@ -76,35 +43,35 @@
 //============================================================
 
 // DirectSound objects
-static LPDIRECTSOUND		dsound;
-static DSCAPS				dsound_caps;
+static LPDIRECTSOUND        dsound;
+static DSCAPS               dsound_caps;
 
 // sound buffers
-static LPDIRECTSOUNDBUFFER	primary_buffer;
-static LPDIRECTSOUNDBUFFER	stream_buffer;
-static UINT32				stream_buffer_size;
-static UINT32				stream_buffer_in;
+static LPDIRECTSOUNDBUFFER  primary_buffer;
+static LPDIRECTSOUNDBUFFER  stream_buffer;
+static UINT32               stream_buffer_size;
+static UINT32               stream_buffer_in;
 
 // descriptors and formats
-static DSBUFFERDESC			primary_desc;
-static DSBUFFERDESC			stream_desc;
-static WAVEFORMATEX			primary_format;
-static WAVEFORMATEX			stream_format;
+static DSBUFFERDESC         primary_desc;
+static DSBUFFERDESC         stream_desc;
+static WAVEFORMATEX         primary_format;
+static WAVEFORMATEX         stream_format;
 
 // buffer over/underflow counts
-static int					buffer_underflows;
-static int					buffer_overflows;
+static int                  buffer_underflows;
+static int                  buffer_overflows;
 
 
 //============================================================
 //  PROTOTYPES
 //============================================================
 
-static void 		sound_exit(running_machine &machine);
-static HRESULT		dsound_init(running_machine &machine);
-static void			dsound_kill(void);
-static HRESULT		dsound_create_buffers(void);
-static void			dsound_destroy_buffers(void);
+static void         sound_exit(running_machine &machine);
+static HRESULT      dsound_init(running_machine &machine);
+static void         dsound_kill(void);
+static HRESULT      dsound_create_buffers(void);
+static void         dsound_destroy_buffers(void);
 
 
 
@@ -297,12 +264,12 @@ static HRESULT dsound_init(running_machine &machine)
 	}
 
 	// make a format description for what we want
-	stream_format.wBitsPerSample	= 16;
-	stream_format.wFormatTag		= WAVE_FORMAT_PCM;
-	stream_format.nChannels			= 2;
-	stream_format.nSamplesPerSec	= machine.sample_rate();
-	stream_format.nBlockAlign		= stream_format.wBitsPerSample * stream_format.nChannels / 8;
-	stream_format.nAvgBytesPerSec	= stream_format.nSamplesPerSec * stream_format.nBlockAlign;
+	stream_format.wBitsPerSample    = 16;
+	stream_format.wFormatTag        = WAVE_FORMAT_PCM;
+	stream_format.nChannels         = 2;
+	stream_format.nSamplesPerSec    = machine.sample_rate();
+	stream_format.nBlockAlign       = stream_format.wBitsPerSample * stream_format.nChannels / 8;
+	stream_format.nAvgBytesPerSec   = stream_format.nSamplesPerSec * stream_format.nBlockAlign;
 
 	// compute the buffer size based on the output sample rate
 	stream_buffer_size = stream_format.nSamplesPerSec * stream_format.nBlockAlign * downcast<windows_options &>(machine.options()).audio_latency() / 10;
@@ -359,7 +326,7 @@ static HRESULT dsound_create_buffers(void)
 
 	// create a buffer desc for the primary buffer
 	memset(&primary_desc, 0, sizeof(primary_desc));
-	primary_desc.dwSize	= sizeof(primary_desc);
+	primary_desc.dwSize = sizeof(primary_desc);
 	primary_desc.dwFlags = DSBCAPS_PRIMARYBUFFER | DSBCAPS_GETCURRENTPOSITION2;
 	primary_desc.lpwfxFormat = NULL;
 
@@ -394,7 +361,7 @@ static HRESULT dsound_create_buffers(void)
 	stream_desc.dwSize = sizeof(stream_desc);
 	stream_desc.dwFlags = DSBCAPS_CTRLVOLUME | DSBCAPS_GLOBALFOCUS | DSBCAPS_GETCURRENTPOSITION2;
 	stream_desc.dwBufferBytes = stream_buffer_size;
-	stream_desc.lpwfxFormat	= &stream_format;
+	stream_desc.lpwfxFormat = &stream_format;
 
 	// create the stream buffer
 	result = IDirectSound_CreateSoundBuffer(dsound, &stream_desc, &stream_buffer, NULL);

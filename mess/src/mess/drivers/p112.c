@@ -1,11 +1,37 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
         P112 Single Board Computer
 
         30/08/2010 Skeleton driver
 
+The P112 is a stand-alone 8-bit CPU board. Typically running CP/M (tm) or a
+similar operating system, it provides a Z80182 (Z-80 upgrade) CPU with up to
+1MB of memory, serial, parallel and diskette IO, and realtime clock, in a
+3.5-inch drive form factor. Powered solely from 5V, it draws 150mA (nominal:
+not including disk drives) with a 16MHz CPU clock. Clock speeds up to 24.576MHz
+are possible.
+
+http://members.iinet.net.au/~daveb/p112/p112.html
+
+Some of the parts:
+ 32kHz crystal          1       Y2              (RTC crystal)
+ 16MHz crystal          1       Y1              Parallel resonant (CPU clock)
+ 24MHz crystal          1       Y3              Parallel resonant (IO chip clock)
+ 28F256A                1       U4              (Intel Flash ROM, programmed)
+ 74HCT00                1       U5
+ 74ACT02                1       U8
+ 74ACT139               1       U11
+ 62256                  2       U2      U3      (Static RAM, 32kB)
+ DS1202                 1       U6              (Dallas RTC chip)
+ FDC37C665IR            1       U9              (SMC Super-IO chip)
+ LT1133                 2       U7      U10     (Linear Technology RS232 Tx/Rx)
+ NMF0512S               1       U12             (Newport Components Flash ROM power)
+ TL7705ACP              1       U15             (Texas Insts. Reset genr.)
+ Z8018216               1       U1              (Zilog CPU chip)
+
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z180/z180.h"
@@ -15,8 +41,13 @@ class p112_state : public driver_device
 {
 public:
 	p112_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu") { }
 
+	virtual void machine_reset();
+	virtual void video_start();
+	UINT32 screen_update_p112(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
 };
 
 
@@ -36,15 +67,15 @@ static INPUT_PORTS_START( p112 )
 INPUT_PORTS_END
 
 
-static MACHINE_RESET(p112)
+void p112_state::machine_reset()
 {
 }
 
-static VIDEO_START( p112 )
+void p112_state::video_start()
 {
 }
 
-static SCREEN_UPDATE( p112 )
+UINT32 p112_state::screen_update_p112(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	return 0;
 }
@@ -55,21 +86,18 @@ static MACHINE_CONFIG_START( p112, p112_state )
 	MCFG_CPU_PROGRAM_MAP(p112_mem)
 	MCFG_CPU_IO_MAP(p112_io)
 
-	MCFG_MACHINE_RESET(p112)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(240, 320)
 	MCFG_SCREEN_VISIBLE_AREA(0, 240-1, 0, 320-1)
-	MCFG_SCREEN_UPDATE(p112)
+	MCFG_SCREEN_UPDATE_DRIVER(p112_state, screen_update_p112)
 
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
-	MCFG_VIDEO_START(p112)
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -96,5 +124,5 @@ ROM_END
 
 /* Driver */
 
-/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY    FULLNAME       FLAGS */
-COMP( 1996, p112,    0,       0,     p112,      p112,     0,   "Dave Brooks", "P112", GAME_NOT_WORKING | GAME_NO_SOUND)
+/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY     FULLNAME       FLAGS */
+COMP( 1996, p112,   0,      0,       p112,      p112, driver_device,    0,   "Dave Brooks", "P112", GAME_NOT_WORKING | GAME_NO_SOUND)

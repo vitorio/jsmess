@@ -246,7 +246,7 @@ enum
 ***************************************************************************/
 
 enum
-{	SPR_VAB	 = 0,
+{   SPR_VAB  = 0,
 	SPR_OPS  = 1,
 	SPR_CPS  = 2,
 	SPR_CFG  = 3,
@@ -271,7 +271,7 @@ enum
 	SPR_CR   = 135,
 	SPR_FPE  = 160,
 	SPR_INTE = 161,
-	SPR_FPS	 = 162,
+	SPR_FPS  = 162,
 };
 
 
@@ -290,34 +290,34 @@ enum
 
 enum
 {
-	EXCEPTION_ILLEGAL_OPCODE			= 0,
-	EXCEPTION_UNALIGNED_ACCESS			= 1,
-	EXCEPTION_OUT_OF_RANGE				= 2,
-	EXCEPTION_COPRO_NOT_PRESENT			= 3,
-	EXCEPTION_COPRO_EXCEPTION			= 4,
-	EXCEPTION_PROTECTION_VIOLATION		= 5,
-	EXCEPTION_INST_ACCESS_VIOLATION 	= 6,
-	EXCEPTION_DATA_ACCESS_VIOLATION 	= 7,
-	EXCEPTION_USER_INST_TLB_MISS		= 8,
-	EXCEPTION_USER_DATA_TLB_MISS		= 9,
-	EXCEPTION_SUPER_INST_TLB_MISS		= 10,
-	EXCEPTION_SUPER_DATA_TLB_MISS		= 11,
-	EXCEPTION_INST_TLB_PROT_VIOLATION	= 12,
-	EXCEPTION_DATA_TLB_PROT_VIOLATION	= 13,
-	EXCEPTION_TIMER						= 14,
-	EXCEPTION_TRACE						= 15,
-	EXCEPTION_INTR0						= 16,
-	EXCEPTION_INTR1						= 17,
-	EXCEPTION_INTR2						= 18,
-	EXCEPTION_INTR3						= 19,
-	EXCEPTION_TRAP0						= 20,
-	EXCEPTION_TRAP1						= 21,
-	EXCEPTION_FLOATING_POINT_EXCEPTION	= 22,
-	EXCEPTION_MULTM						= 30,
-	EXCEPTION_MULTMU					= 31,
-	EXCEPTION_MULTIPLY					= 32,
-	EXCEPTION_DIVIDE					= 33,
-	EXCEPTION_MULTIPLU					= 44,      // TODO: FINISH ME
+	EXCEPTION_ILLEGAL_OPCODE            = 0,
+	EXCEPTION_UNALIGNED_ACCESS          = 1,
+	EXCEPTION_OUT_OF_RANGE              = 2,
+	EXCEPTION_COPRO_NOT_PRESENT         = 3,
+	EXCEPTION_COPRO_EXCEPTION           = 4,
+	EXCEPTION_PROTECTION_VIOLATION      = 5,
+	EXCEPTION_INST_ACCESS_VIOLATION     = 6,
+	EXCEPTION_DATA_ACCESS_VIOLATION     = 7,
+	EXCEPTION_USER_INST_TLB_MISS        = 8,
+	EXCEPTION_USER_DATA_TLB_MISS        = 9,
+	EXCEPTION_SUPER_INST_TLB_MISS       = 10,
+	EXCEPTION_SUPER_DATA_TLB_MISS       = 11,
+	EXCEPTION_INST_TLB_PROT_VIOLATION   = 12,
+	EXCEPTION_DATA_TLB_PROT_VIOLATION   = 13,
+	EXCEPTION_TIMER                     = 14,
+	EXCEPTION_TRACE                     = 15,
+	EXCEPTION_INTR0                     = 16,
+	EXCEPTION_INTR1                     = 17,
+	EXCEPTION_INTR2                     = 18,
+	EXCEPTION_INTR3                     = 19,
+	EXCEPTION_TRAP0                     = 20,
+	EXCEPTION_TRAP1                     = 21,
+	EXCEPTION_FLOATING_POINT_EXCEPTION  = 22,
+	EXCEPTION_MULTM                     = 30,
+	EXCEPTION_MULTMU                    = 31,
+	EXCEPTION_MULTIPLY                  = 32,
+	EXCEPTION_DIVIDE                    = 33,
+	EXCEPTION_MULTIPLU                  = 44,      // TODO: FINISH ME
 };
 
 
@@ -325,96 +325,96 @@ enum
     SPECIAL PURPOSE REGISTER FIELDS
 ***************************************************************************/
 
-#define PRL_AM29000				(0 << 3)
-#define PRL_AM29050				(1 << 3)
-#define PRL_REV_A				(0)
-#define PRL_REV_B				(1)
-#define PRL_REV_C				(2)
-#define PRL_REV_D				(3)
+#define PRL_AM29000             (0 << 3)
+#define PRL_AM29050             (1 << 3)
+#define PRL_REV_A               (0)
+#define PRL_REV_B               (1)
+#define PRL_REV_C               (2)
+#define PRL_REV_D               (3)
 
-#define PROCESSOR_REL_FIELD		(PRL_AM29000 | PRL_REV_D)
+#define PROCESSOR_REL_FIELD     (PRL_AM29000 | PRL_REV_D)
 
-#define VAB_SHIFT				(16)
-#define VAB_MASK				(0xffff)
+#define VAB_SHIFT               (16)
+#define VAB_MASK                (0xffff)
 
-#define CPS_CA					(1 << 15)
-#define CPS_IP					(1 << 14)
-#define CPS_TE					(1 << 13)
-#define CPS_TP					(1 << 12)
-#define CPS_TU					(1 << 11)
-#define CPS_FZ					(1 << 10)
-#define CPS_LK					(1 << 9)
-#define CPS_RE					(1 << 8)
-#define CPS_WM					(1 << 7)
-#define CPS_PD					(1 << 6)
-#define CPS_PI					(1 << 5)
-#define CPS_SM					(1 << 4)
-#define CPS_IM_SHIFT			(2)
-#define CPS_IM_MASK				(3)
-#define CPS_DI					(1 << 1)
-#define CPS_DA					(1 << 0)
+#define CPS_CA                  (1 << 15)
+#define CPS_IP                  (1 << 14)
+#define CPS_TE                  (1 << 13)
+#define CPS_TP                  (1 << 12)
+#define CPS_TU                  (1 << 11)
+#define CPS_FZ                  (1 << 10)
+#define CPS_LK                  (1 << 9)
+#define CPS_RE                  (1 << 8)
+#define CPS_WM                  (1 << 7)
+#define CPS_PD                  (1 << 6)
+#define CPS_PI                  (1 << 5)
+#define CPS_SM                  (1 << 4)
+#define CPS_IM_SHIFT            (2)
+#define CPS_IM_MASK             (3)
+#define CPS_DI                  (1 << 1)
+#define CPS_DA                  (1 << 0)
 
-#define CFG_PRL_MASK			(0xff)
-#define CFG_PRL_SHIFT			(24)
-#define CFG_DW					(1 << 5)
-#define CFG_VF					(1 << 4)
-#define CFG_RV					(1 << 3)
-#define CFG_BO					(1 << 2)
-#define CFG_CP					(1 << 1)
-#define CFG_CD					(1 << 0)
+#define CFG_PRL_MASK            (0xff)
+#define CFG_PRL_SHIFT           (24)
+#define CFG_DW                  (1 << 5)
+#define CFG_VF                  (1 << 4)
+#define CFG_RV                  (1 << 3)
+#define CFG_BO                  (1 << 2)
+#define CFG_CP                  (1 << 1)
+#define CFG_CD                  (1 << 0)
 
-#define CHC_CE_CNTL_MASK		(0xff)
-#define CHC_CE_CNTL_SHIFT		(24)
-#define CHC_CR_MASK				(0xff)
-#define CHC_CR_SHIFT			(16)
-#define CHC_LS					(1 << 15)
-#define CHC_ML					(1 << 14)
-#define CHC_ST					(1 << 13)
-#define CHC_LA					(1 << 12)
-#define CHC_TF					(1 << 11)
-#define CHC_TR_MASK				(0xff)
-#define CHC_TR_SHIFT			(2)
-#define CHC_NN					(1 << 1)
-#define CHC_CV					(1 << 0)
+#define CHC_CE_CNTL_MASK        (0xff)
+#define CHC_CE_CNTL_SHIFT       (24)
+#define CHC_CR_MASK             (0xff)
+#define CHC_CR_SHIFT            (16)
+#define CHC_LS                  (1 << 15)
+#define CHC_ML                  (1 << 14)
+#define CHC_ST                  (1 << 13)
+#define CHC_LA                  (1 << 12)
+#define CHC_TF                  (1 << 11)
+#define CHC_TR_MASK             (0xff)
+#define CHC_TR_SHIFT            (2)
+#define CHC_NN                  (1 << 1)
+#define CHC_CV                  (1 << 0)
 
-#define RBP_MASK				(0xffff)
+#define RBP_MASK                (0xffff)
 
-#define TCV_MASK				(0x00ffffff)
-#define TCV_SHIFT				(0)
+#define TCV_MASK                (0x00ffffff)
+#define TCV_SHIFT               (0)
 
-#define TMR_OV					(1 << 26)
-#define TMR_IN					(1 << 25)
-#define TMR_IE					(1 << 24)
-#define TMR_TRV_MASK			(0x00ffffff)
-#define TMR_TRV_SHIFT			(0)
+#define TMR_OV                  (1 << 26)
+#define TMR_IN                  (1 << 25)
+#define TMR_IE                  (1 << 24)
+#define TMR_TRV_MASK            (0x00ffffff)
+#define TMR_TRV_SHIFT           (0)
 
-#define PC_MASK					(0xfffffffc)
+#define PC_MASK                 (0xfffffffc)
 
-#define MMU_PS_MASK				(3)
-#define MMU_PS_SHIFT			(8)
-#define MMU_PID_MASK			(0xff)
-#define MMU_PID_SHIFT			(0)
+#define MMU_PS_MASK             (3)
+#define MMU_PS_SHIFT            (8)
+#define MMU_PID_MASK            (0xff)
+#define MMU_PID_SHIFT           (0)
 
-#define LRU_MASK				(0x3f)
-#define LRU_SHIFT				(1)
+#define LRU_MASK                (0x3f)
+#define LRU_SHIFT               (1)
 
-#define ALU_DF_SHIFT			(11)
-#define ALU_DF					(1 << 11)
-#define ALU_V_SHIFT				(10)
-#define ALU_V					(1 << 10)
-#define ALU_N_SHIFT				(9)
-#define ALU_N					(1 << 9)
-#define ALU_Z_SHIFT				(8)
-#define ALU_Z					(1 << 8)
-#define ALU_C_SHIFT				(7)
-#define ALU_C					(1 << 7)
-#define ALU_BP_MASK				(3)
-#define ALU_BP_SHIFT			(5)
-#define ALU_FC_MASK				(0x1f)
-#define ALU_FC_SHIFT			(0)
+#define ALU_DF_SHIFT            (11)
+#define ALU_DF                  (1 << 11)
+#define ALU_V_SHIFT             (10)
+#define ALU_V                   (1 << 10)
+#define ALU_N_SHIFT             (9)
+#define ALU_N                   (1 << 9)
+#define ALU_Z_SHIFT             (8)
+#define ALU_Z                   (1 << 8)
+#define ALU_C_SHIFT             (7)
+#define ALU_C                   (1 << 7)
+#define ALU_BP_MASK             (3)
+#define ALU_BP_SHIFT            (5)
+#define ALU_FC_MASK             (0x1f)
+#define ALU_FC_SHIFT            (0)
 
-#define IPX_MASK				(0xff)
-#define IPX_SHIFT				(2)
+#define IPX_MASK                (0xff)
+#define IPX_SHIFT               (2)
 
 
 
@@ -423,16 +423,236 @@ enum
     INTERRUPT CONSTANTS
 ***************************************************************************/
 
-#define AM29000_INTR0		0
-#define AM29000_INTR1		1
-#define AM29000_INTR2		2
-#define AM29000_INTR3		3
+#define AM29000_INTR0       0
+#define AM29000_INTR1       1
+#define AM29000_INTR2       2
+#define AM29000_INTR3       3
 
 
-/***************************************************************************
-    PUBLIC FUNCTIONS
-***************************************************************************/
+class am29000_cpu_device :  public cpu_device
+{
+public:
+	// construction/destruction
+	am29000_cpu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
-DECLARE_LEGACY_CPU_DEVICE(AM29000, am29000);
+protected:
+	// device-level overrides
+	virtual void device_start();
+	virtual void device_reset();
+
+	// device_execute_interface overrides
+	virtual UINT32 execute_min_cycles() const { return 1; }
+	virtual UINT32 execute_max_cycles() const { return 2; }
+	virtual UINT32 execute_input_lines() const { return 1; }
+	virtual void execute_run();
+	virtual void execute_set_input(int inputnum, int state);
+
+	// device_memory_interface overrides
+	virtual const address_space_config *memory_space_config(address_spacenum spacenum = AS_0) const
+	{
+		switch (spacenum)
+		{
+			case AS_PROGRAM: return &m_program_config;
+			case AS_IO:      return &m_io_config;
+			case AS_DATA:    return &m_data_config;
+			default:         return NULL;
+		}
+	}
+
+	// device_state_interface overrides
+	void state_string_export(const device_state_entry &entry, astring &string);
+
+	// device_disasm_interface overrides
+	virtual UINT32 disasm_min_opcode_bytes() const { return 4; }
+	virtual UINT32 disasm_max_opcode_bytes() const { return 4; }
+	virtual offs_t disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options);
+
+	void signal_exception(UINT32 type);
+	void external_irq_check();
+	UINT32 read_program_word(UINT32 address);
+	UINT32 get_abs_reg(UINT8 r, UINT32 iptr);
+	void fetch_decode();
+	UINT32 read_spr(UINT32 idx);
+	void write_spr(UINT32 idx, UINT32 val);
+	void ADD();
+	void ADDS();
+	void ADDU();
+	void ADDC();
+	void ADDCS();
+	void ADDCU();
+	void SUB();
+	void SUBS();
+	void SUBU();
+	void SUBC();
+	void SUBCS();
+	void SUBCU();
+	void SUBR();
+	void SUBRS();
+	void SUBRU();
+	void SUBRC();
+	void SUBRCS();
+	void SUBRCU();
+	void MULTIPLU();
+	void MULTIPLY();
+	void MUL();
+	void MULL();
+	void MULU();
+	void DIVIDE();
+	void DIVIDU();
+	void DIV0();
+	void DIV();
+	void DIVL();
+	void DIVREM();
+	void CPEQ();
+	void CPNEQ();
+	void CPLT();
+	void CPLTU();
+	void CPLE();
+	void CPLEU();
+	void CPGT();
+	void CPGTU();
+	void CPGE();
+	void CPGEU();
+	void CPBYTE();
+	void ASEQ();
+	void ASNEQ();
+	void ASLT();
+	void ASLTU();
+	void ASLE();
+	void ASLEU();
+	void ASGT();
+	void ASGTU();
+	void ASGE();
+	void ASGEU();
+	void AND();
+	void ANDN();
+	void NAND();
+	void OR();
+	void NOR();
+	void XOR();
+	void XNOR();
+	void SLL();
+	void SRL();
+	void SRA();
+	void EXTRACT();
+	void LOAD();
+	void LOADL();
+	void LOADSET();
+	void LOADM();
+	void STORE();
+	void STOREL();
+	void STOREM();
+	void EXBYTE();
+	void EXHW();
+	void EXHWS();
+	void INBYTE();
+	void INHW();
+	void MFSR();
+	void MFTLB();
+	void MTSR();
+	void MTSRIM();
+	void MTTLB();
+	void CONST();
+	void CONSTH();
+	void CONSTN();
+	void CALL();
+	void CALLI();
+	void JMP();
+	void JMPI();
+	void JMPT();
+	void JMPTI();
+	void JMPF();
+	void JMPFI();
+	void JMPFDEC();
+	void CLZ();
+	void SETIP();
+	void EMULATE();
+	void INV();
+	void IRET();
+	void IRETINV();
+	void HALT();
+	void ILLEGAL();
+	void CONVERT();
+	void SQRT();
+	void CLASS();
+	void MULTM();
+	void MULTMU();
+
+	address_space_config m_program_config;
+	address_space_config m_io_config;
+	address_space_config m_data_config;
+
+	INT32           m_icount;
+	UINT32          m_pc;
+
+	/* General purpose */
+	UINT32          m_r[256];     // TODO: There's only 192 implemented!
+
+	/* TLB */
+	UINT32          m_tlb[128];
+
+	/* Protected SPRs */
+	UINT32          m_vab;
+	UINT32          m_ops;
+	UINT32          m_cps;
+	UINT32          m_cfg;
+	UINT32          m_cha;
+	UINT32          m_chd;
+	UINT32          m_chc;
+	UINT32          m_rbp;
+	UINT32          m_tmc;
+	UINT32          m_tmr;
+	UINT32          m_pc0;
+	UINT32          m_pc1;
+	UINT32          m_pc2;
+	UINT32          m_mmu;
+	UINT32          m_lru;
+
+	/* Unprotected SPRs */
+	UINT32          m_ipc;
+	UINT32          m_ipa;
+	UINT32          m_ipb;
+	UINT32          m_q;
+	UINT32          m_alu;
+	UINT32          m_fpe;
+	UINT32          m_inte;
+	UINT32          m_fps;
+
+	/* Pipeline state */
+	UINT32          m_exceptions;
+	UINT32          m_exception_queue[4];
+
+	UINT8           m_irq_active;
+	UINT8           m_irq_lines;
+
+	UINT32          m_exec_ir;
+	UINT32          m_next_ir;
+
+	UINT32          m_pl_flags;
+	UINT32          m_next_pl_flags;
+
+	UINT32          m_iret_pc;
+
+	UINT32          m_exec_pc;
+	UINT32          m_next_pc;
+
+	address_space *m_program;
+	direct_read_data *m_direct;
+	address_space *m_data;
+	direct_read_data *m_datadirect;
+	address_space *m_io;
+
+	typedef void ( am29000_cpu_device::*opcode_func ) ();
+	struct op_info {
+		opcode_func opcode;
+		UINT32 flags;
+	};
+
+	static const op_info op_table[256];
+};
+
+
+extern const device_type AM29000;
+
 
 #endif /* __AM29000_H__ */

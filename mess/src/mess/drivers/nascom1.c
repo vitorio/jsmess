@@ -1,5 +1,12 @@
 /************************************************************************
-Nascom Memory map
+
+    Nascom 1 and Nascom 2
+
+    license: MAME
+    copyright-holders: (Original Author?), Dirk Best
+
+
+    Memory map
 
     CPU: z80
         0000-03ff   ROM (Nascom1 Monitor)
@@ -55,7 +62,6 @@ Nascom Memory map
 /* Components */
 #include "cpu/z80/z80.h"
 #include "machine/wd17xx.h"
-#include "machine/ay31015.h"
 #include "machine/z80pio.h"
 
 /* Devices */
@@ -72,34 +78,34 @@ Nascom Memory map
  *
  *************************************/
 
-static ADDRESS_MAP_START( nascom1_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( nascom1_mem, AS_PROGRAM, 8, nascom1_state )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
-	AM_RANGE(0x0800, 0x0bff) AM_RAM AM_BASE_MEMBER(nascom1_state, m_videoram)
+	AM_RANGE(0x0800, 0x0bff) AM_RAM AM_SHARE("videoram")
 	AM_RANGE(0x0c00, 0x0fff) AM_RAM
-	AM_RANGE(0x1000, 0x13ff) AM_RAM	/* 1Kb */
-	AM_RANGE(0x1400, 0x4fff) AM_RAM	/* 16Kb */
-	AM_RANGE(0x5000, 0x8fff) AM_RAM	/* 32Kb */
-	AM_RANGE(0x9000, 0xafff) AM_RAM	/* 40Kb */
+	AM_RANGE(0x1000, 0x13ff) AM_RAM /* 1Kb */
+	AM_RANGE(0x1400, 0x4fff) AM_RAM /* 16Kb */
+	AM_RANGE(0x5000, 0x8fff) AM_RAM /* 32Kb */
+	AM_RANGE(0x9000, 0xafff) AM_RAM /* 40Kb */
 	AM_RANGE(0xb000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( nascom1_io, AS_IO, 8 )
+static ADDRESS_MAP_START( nascom1_io, AS_IO, 8, nascom1_state )
 	ADDRESS_MAP_GLOBAL_MASK(0x0F)
 	AM_RANGE(0x00, 0x00) AM_READWRITE(nascom1_port_00_r, nascom1_port_00_w)
 	AM_RANGE(0x01, 0x01) AM_READWRITE(nascom1_port_01_r, nascom1_port_01_w)
 	AM_RANGE(0x02, 0x02) AM_READ(nascom1_port_02_r)
-	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE("z80pio", z80pio_cd_ba_r, z80pio_cd_ba_w )
+	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE("z80pio", z80pio_device, read, write )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( nascom2_io, AS_IO, 8 )
+static ADDRESS_MAP_START( nascom2_io, AS_IO, 8, nascom1_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READWRITE(nascom1_port_00_r, nascom1_port_00_w)
 	AM_RANGE(0x01, 0x01) AM_READWRITE(nascom1_port_01_r, nascom1_port_01_w)
 	AM_RANGE(0x02, 0x02) AM_READ(nascom1_port_02_r)
-	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE("z80pio", z80pio_cd_ba_r, z80pio_cd_ba_w )
-	AM_RANGE(0xe0, 0xe3) AM_DEVREADWRITE("wd1793", wd17xx_r, wd17xx_w)
+	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE("z80pio", z80pio_device, read, write )
+	AM_RANGE(0xe0, 0xe3) AM_DEVREADWRITE_LEGACY("wd1793", wd17xx_r, wd17xx_w)
 	AM_RANGE(0xe4, 0xe4) AM_READWRITE(nascom2_fdc_select_r, nascom2_fdc_select_w)
 	AM_RANGE(0xe5, 0xe5) AM_READ(nascom2_fdc_status_r)
 ADDRESS_MAP_END
@@ -120,7 +126,7 @@ static const gfx_layout nascom1_charlayout =
 	{ 0 },
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8,
-	  8*8, 9*8,10*8,11*8,12*8,13*8,14*8,15*8 },
+		8*8, 9*8,10*8,11*8,12*8,13*8,14*8,15*8 },
 	8 * 16
 };
 
@@ -138,7 +144,7 @@ static const gfx_layout nascom2_charlayout =
 	{ 0 },
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	{ 0*8, 1*8, 2*8,  3*8,  4*8,  5*8,  6*8,
-	  7*8, 8*8, 9*8, 10*8, 11*8, 12*8, 13*8 },
+		7*8, 8*8, 9*8, 10*8, 11*8, 12*8, 13*8 },
 	8 * 16
 };
 
@@ -254,12 +260,11 @@ INPUT_PORTS_END
 
 static const ay31015_config nascom1_ay31015_config =
 {
-	AY_3_1015,
 	( XTAL_16MHz / 16 ) / 256,
 	( XTAL_16MHz / 16 ) / 256,
-	nascom1_hd6402_si,
-	nascom1_hd6402_so,
-	NULL
+	DEVCB_DRIVER_MEMBER(nascom1_state, nascom1_hd6402_si),
+	DEVCB_DRIVER_MEMBER(nascom1_state, nascom1_hd6402_so),
+	DEVCB_NULL
 };
 
 
@@ -281,29 +286,27 @@ static MACHINE_CONFIG_START( nascom1, nascom1_state )
 	MCFG_CPU_PROGRAM_MAP(nascom1_mem)
 	MCFG_CPU_IO_MAP(nascom1_io)
 
-	MCFG_MACHINE_RESET( nascom1 )
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(48 * 8, 16 * 16)
 	MCFG_SCREEN_VISIBLE_AREA(0, 48 * 8 - 1, 0, 16 * 16 - 1)
-	MCFG_SCREEN_UPDATE(nascom1)
+	MCFG_SCREEN_UPDATE_DRIVER(nascom1_state, screen_update_nascom1)
 
 	MCFG_GFXDECODE(nascom1)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
 	MCFG_AY31015_ADD( "hd6402", nascom1_ay31015_config )
 
 	MCFG_Z80PIO_ADD( "z80pio", XTAL_16MHz/8, nascom1_z80pio_intf )
 
 	/* devices */
-	MCFG_SNAPSHOT_ADD("snapshot", nascom1, "nas", 0.5)
+	MCFG_SNAPSHOT_ADD("snapshot", nascom1_state, nascom1, "nas", 0.5)
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, default_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", default_cassette_interface )
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -311,20 +314,20 @@ static MACHINE_CONFIG_START( nascom1, nascom1_state )
 	MCFG_RAM_EXTRA_OPTIONS("1K,16K,32K")
 MACHINE_CONFIG_END
 
-static FLOPPY_OPTIONS_START(nascom2)
-	FLOPPY_OPTION(nascom2_ss, "dsk", "Nascom 2 SS disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
+static LEGACY_FLOPPY_OPTIONS_START(nascom2)
+	LEGACY_FLOPPY_OPTION(nascom2_ss, "dsk", "Nascom 2 SS disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
 		HEADS([1])
 		TRACKS([80])
 		SECTORS([16])
 		SECTOR_LENGTH([256])
 		FIRST_SECTOR_ID([1]))
-	FLOPPY_OPTION(nascom2_ds, "dsk", "Nascom 2 DS disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
+	LEGACY_FLOPPY_OPTION(nascom2_ds, "dsk", "Nascom 2 DS disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
 		HEADS([2])
 		TRACKS([80])
 		SECTORS([16])
 		SECTOR_LENGTH([256])
 		FIRST_SECTOR_ID([1]))
-FLOPPY_OPTIONS_END
+LEGACY_FLOPPY_OPTIONS_END
 
 static const floppy_interface nascom2_floppy_interface =
 {
@@ -334,7 +337,7 @@ static const floppy_interface nascom2_floppy_interface =
 	DEVCB_NULL,
 	DEVCB_NULL,
 	FLOPPY_STANDARD_5_25_DSHD,
-	FLOPPY_OPTIONS_NAME(nascom2),
+	LEGACY_FLOPPY_OPTIONS_NAME(nascom2),
 	NULL,
 	NULL
 };
@@ -347,13 +350,13 @@ static MACHINE_CONFIG_DERIVED( nascom2, nascom1 )
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_SIZE(48 * 8, 16 * 14)
 	MCFG_SCREEN_VISIBLE_AREA(0, 48 * 8 - 1, 0, 16 * 14 - 1)
-	MCFG_SCREEN_UPDATE(nascom2)
+	MCFG_SCREEN_UPDATE_DRIVER(nascom1_state, screen_update_nascom2)
 
 	MCFG_GFXDECODE(nascom2)
 
 	MCFG_FD1793_ADD("wd1793", nascom2_wd17xx_interface )
 
-	MCFG_FLOPPY_4_DRIVES_ADD(nascom2_floppy_interface)
+	MCFG_LEGACY_FLOPPY_4_DRIVES_ADD(nascom2_floppy_interface)
 MACHINE_CONFIG_END
 
 
@@ -391,35 +394,6 @@ ROM_START(nascom2)
 ROM_END
 
 
-
-/*************************************
- *
- *  System configs
- *
- *************************************/
-
-//static void nascom1_cassette_getinfo(const mess_device_class *devclass, UINT32 state, union devinfo *info)
-//{
-//  /* cassette */
-//  switch(state)
-//  {
-//      /* --- the following bits of info are returned as 64-bit signed integers --- */
-//      case MESS_DEVINFO_INT_TYPE:                         info->i = IO_CASSETTE; break;
-//      case MESS_DEVINFO_INT_READABLE:                     info->i = 1; break;
-//      case MESS_DEVINFO_INT_WRITEABLE:                        info->i = 0; break;
-//      case MESS_DEVINFO_INT_CREATABLE:                        info->i = 0; break;
-//      case MESS_DEVINFO_INT_COUNT:                            info->i = 1; break;
-//
-//      /* --- the following bits of info are returned as pointers to data or functions --- */
-//      case MESS_DEVINFO_PTR_LOAD:                         info->load = DEVICE_IMAGE_LOAD_NAME(nascom1_cassette); break;
-//      case MESS_DEVINFO_PTR_UNLOAD:                       info->unload = DEVICE_IMAGE_UNLOAD_NAME(nascom1_cassette); break;
-//
-//      /* --- the following bits of info are returned as NULL-terminated strings --- */
-//      case MESS_DEVINFO_STR_FILE_EXTENSIONS:              strcpy(info->s = device_temp_str(), "cas"); break;
-//  }
-//}
-
-
 /*************************************
  *
  *  Driver definitions
@@ -427,5 +401,5 @@ ROM_END
  *************************************/
 
 /*    YEAR  NAME        PARENT      COMPAT  MACHINE     INPUT       INIT       COMPANY                     FULLNAME        FLAGS */
-COMP( 1978, nascom1,    0,          0,      nascom1,    nascom1,    nascom1,   "Nascom Microcomputers",    "Nascom 1",     GAME_NO_SOUND )
-COMP( 1979, nascom2,    nascom1,    0,      nascom2,    nascom2,    nascom1,   "Nascom Microcomputers",    "Nascom 2",     GAME_NO_SOUND )
+COMP( 1978, nascom1,    0,          0,      nascom1,    nascom1, nascom1_state,    nascom1,   "Nascom Microcomputers",    "Nascom 1",     GAME_NO_SOUND )
+COMP( 1979, nascom2,    nascom1,    0,      nascom2,    nascom2, nascom1_state,    nascom1,   "Nascom Microcomputers",    "Nascom 2",     GAME_NO_SOUND )

@@ -71,13 +71,11 @@ void amiga_aga_palette_write(running_machine &machine, int color_reg, UINT16 dat
  *
  *************************************/
 
-VIDEO_START( amiga_aga )
+VIDEO_START_MEMBER(amiga_state,amiga_aga)
 {
-	amiga_state *state = machine.driver_data<amiga_state>();
+	VIDEO_START_CALL_MEMBER( amiga );
 
-	VIDEO_START_CALL( amiga );
-
-	state->m_aga_diwhigh_written = 0;
+	m_aga_diwhigh_written = 0;
 }
 
 
@@ -195,7 +193,7 @@ static void update_sprite_dma(amiga_state *state, int scanline)
 			state->m_sprite_ctl_written &= ~bitmask;
 			state->m_sprite_comparitor_enable_mask &= ~bitmask;
 			state->m_sprite_dma_reload_mask |= 1 << num;
-			CUSTOM_REG(REG_SPR0DATA + 4 * num) = 0;		/* just a guess */
+			CUSTOM_REG(REG_SPR0DATA + 4 * num) = 0;     /* just a guess */
 			CUSTOM_REG(REG_SPR0DATB + 4 * num) = 0;
 			if (LOG_SPRITE_DMA) logerror("%3d:sprite %d comparitor disable, prepare for reload\n", scanline, num);
 		}
@@ -219,7 +217,7 @@ static void update_sprite_dma(amiga_state *state, int scanline)
 INLINE UINT32 interleave_sprite_data(UINT16 lobits, UINT16 hibits)
 {
 	return (amiga_expand_byte[lobits & 0xff] << 0) | (amiga_expand_byte[lobits >> 8] << 16) |
-		   (amiga_expand_byte[hibits & 0xff] << 1) | (amiga_expand_byte[hibits >> 8] << 17);
+			(amiga_expand_byte[hibits & 0xff] << 1) | (amiga_expand_byte[hibits >> 8] << 17);
 }
 
 
@@ -300,10 +298,10 @@ static int get_sprite_pixel(amiga_state *state, int x)
 			if (pixels & 0x0f)
 			{
 				/* final result is:
-                    topmost sprite color in bits 0-7
-                    sprite present bitmask in bits 8-9
-                    topmost sprite pair index in bits 12-13
-                */
+				    topmost sprite color in bits 0-7
+				    sprite present bitmask in bits 8-9
+				    topmost sprite pair index in bits 12-13
+				*/
 				UINT32 result = (collide << 8) | (pair << 12);
 
 				/* attached case */
@@ -444,7 +442,7 @@ INLINE int update_ham(amiga_state *state, int newpix)
  *
  *************************************/
 
-void amiga_aga_render_scanline(running_machine &machine, bitmap_t *bitmap, int scanline)
+void amiga_aga_render_scanline(running_machine &machine, bitmap_rgb32 &bitmap, int scanline)
 {
 	amiga_state *state = machine.driver_data<amiga_state>();
 	UINT16 save_color0 = CUSTOM_REG(REG_COLOR00);
@@ -478,8 +476,8 @@ void amiga_aga_render_scanline(running_machine &machine, bitmap_t *bitmap, int s
 	update_sprite_dma(state, scanline);
 
 	/* start of a new line, signal we're not done with it and fill up vars */
-	if (bitmap != NULL)
-		dst = BITMAP_ADDR32(bitmap, scanline, 0);
+	if (bitmap.valid())
+		dst = &bitmap.pix32(scanline);
 
 	/* all sprites off at the start of the line */
 	memset(state->m_sprite_remain, 0, sizeof(state->m_sprite_remain));
@@ -489,7 +487,7 @@ void amiga_aga_render_scanline(running_machine &machine, bitmap_t *bitmap, int s
 		CUSTOM_REG(REG_COLOR00) = state->m_genlock_color;
 
 	/* loop over the line */
-	next_copper_x = 2;	/* copper runs on odd timeslots */
+	next_copper_x = 2;  /* copper runs on odd timeslots */
 	for (x = 0; x < 0xe8*2; x++)
 	{
 		int sprpix;
@@ -804,7 +802,7 @@ void amiga_aga_render_scanline(running_machine &machine, bitmap_t *bitmap, int s
 	}
 
 #if 0
-	if ( machine.primary_screen->frame_number() % 16 == 0 && scanline == 250 )
+	if ( m_screen->frame_number() % 16 == 0 && scanline == 250 )
 	{
 		const char *m_lores = "LORES";
 		const char *m_hires = "HIRES";
@@ -842,7 +840,7 @@ void amiga_aga_render_scanline(running_machine &machine, bitmap_t *bitmap, int s
 	CUSTOM_REG(REG_COLOR00) = save_color0;
 
 #if GUESS_COPPER_OFFSET
-	if (machine.primary_screen->frame_number() % 64 == 0 && scanline == 0)
+	if (m_screen->frame_number() % 64 == 0 && scanline == 0)
 	{
 		if (machine.input().code_pressed(KEYCODE_Q))
 			popmessage("%d", wait_offset -= 1);
@@ -860,13 +858,13 @@ void amiga_aga_render_scanline(running_machine &machine, bitmap_t *bitmap, int s
  *
  *************************************/
 
-SCREEN_UPDATE( amiga_aga )
+UINT32 amiga_state::screen_update_amiga_aga(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
 	int y;
 
 	/* render each scanline in the visible region */
-	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
-		amiga_aga_render_scanline(screen->machine(), bitmap, y);
+	for (y = cliprect.min_y; y <= cliprect.max_y; y++)
+		amiga_aga_render_scanline(machine(), bitmap, y);
 
 	return 0;
 }

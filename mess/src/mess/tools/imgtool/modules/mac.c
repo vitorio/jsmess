@@ -94,7 +94,7 @@
 #include <stddef.h>
 
 #include "formats/imageutl.h"
-#include "imgtoolx.h"
+#include "imgtool.h"
 #include "macutil.h"
 #include "iflopimg.h"
 #include "formats/ap_dsk35.h"
@@ -114,20 +114,20 @@
 #pragma mark MISCELLANEOUS UTILITIES
 #endif
 
-typedef struct UINT16BE
+struct UINT16BE
 {
 	UINT8 bytes[2];
-} UINT16BE;
+};
 
-typedef struct UINT24BE
+struct UINT24BE
 {
 	UINT8 bytes[3];
-} UINT24BE;
+};
 
-typedef struct UINT32BE
+struct UINT32BE
 {
 	UINT8 bytes[4];
-} UINT32BE;
+};
 
 INLINE UINT16 get_UINT16BE(UINT16BE word)
 {
@@ -181,127 +181,127 @@ typedef UINT32BE mac_type;
 /*
     point record, with the y and x coordinates
 */
-typedef struct mac_point
+struct mac_point
 {
-	UINT16BE v;		/* actually signed */
-	UINT16BE h;		/* actually signed */
-} mac_point;
+	UINT16BE v;     /* actually signed */
+	UINT16BE h;     /* actually signed */
+};
 
 /*
     rect record, with the corner coordinates
 */
-typedef struct mac_rect
+struct mac_rect
 {
-	UINT16BE top;	/* actually signed */
-	UINT16BE left;	/* actually signed */
+	UINT16BE top;   /* actually signed */
+	UINT16BE left;  /* actually signed */
 	UINT16BE bottom;/* actually signed */
-	UINT16BE right;	/* actually signed */
-} mac_rect;
+	UINT16BE right; /* actually signed */
+};
 
 /*
     FInfo (Finder file info) record
 */
-typedef struct mac_FInfo
+struct mac_FInfo
 {
-	mac_type  type;			/* file type */
-	mac_type  creator;		/* file creator */
-	UINT16BE  flags;		/* Finder flags */
-	mac_point location;		/* file's location in window */
+	mac_type  type;         /* file type */
+	mac_type  creator;      /* file creator */
+	UINT16BE  flags;        /* Finder flags */
+	mac_point location;     /* file's location in window */
 								/* If set to {0, 0}, and the inited flag is
-                                clear, the Finder will place the item
-                                automatically */
-	UINT16BE  fldr;			/* MFS: window that contains file */
+								clear, the Finder will place the item
+								automatically */
+	UINT16BE  fldr;         /* MFS: window that contains file */
 								/* -3: trash */
 								/* -2: desktop */
 								/* -1: new folder template?????? */
 								/* 0: disk window ("root") */
 								/* > 0: specific folder, index of FOBJ resource??? */
 								/* The FOBJ resource contains some folder info;
-                                the name of the resource is the folder name. */
+								the name of the resource is the folder name. */
 							/* HFS & HFS+:
-                                System 7: The window in which the file???s icon appears
-                                System 8: reserved (set to 0) */
-} mac_FInfo;
+							    System 7: The window in which the file???s icon appears
+							    System 8: reserved (set to 0) */
+};
 
 /*
     FXInfo (Finder extended file info) record -- not found in MFS
 */
-typedef struct mac_FXInfo
+struct mac_FXInfo
 {
-	UINT16BE iconID;		/* System 7: An ID number for the file???s icon; the
+	UINT16BE iconID;        /* System 7: An ID number for the file???s icon; the
                                 numbers that identify icons are assigned by the
                                 Finder */
 							/* System 8: Reserved (set to 0) */
-	UINT16BE reserved[3];	/* Reserved (set to 0) */
-	UINT8    script;		/* System 7: if high-bit is set, the script code
+	UINT16BE reserved[3];   /* Reserved (set to 0) */
+	UINT8    script;        /* System 7: if high-bit is set, the script code
                                 for displaying the file name; ignored otherwise */
 							/* System 8: Extended flags MSB(?) */
-	UINT8    XFlags;		/* Extended flags */
-	UINT16BE comment;		/* System 7: Comment ID if high-bit is clear */
+	UINT8    XFlags;        /* Extended flags */
+	UINT16BE comment;       /* System 7: Comment ID if high-bit is clear */
 							/* System 8: Reserved (set to 0) */
-	UINT32BE putAway;		/* Put away folder ID (i.e. if the user moves the
+	UINT32BE putAway;       /* Put away folder ID (i.e. if the user moves the
                                 file onto the desktop, the directory ID of the
                                 folder from which the user moves the file is
                                 saved here) */
-} mac_FXInfo;
+};
 
 /*
     DInfo (Finder folder info) record -- not found in MFS
 */
-typedef struct mac_DInfo
+struct mac_DInfo
 {
-	mac_rect rect;			/* Folder's window bounds */
-	UINT16BE flags;			/* Finder flags, e.g. kIsInvisible, kNameLocked, etc */
-	mac_point location;		/* Location of the folder in parent window */
+	mac_rect rect;          /* Folder's window bounds */
+	UINT16BE flags;         /* Finder flags, e.g. kIsInvisible, kNameLocked, etc */
+	mac_point location;     /* Location of the folder in parent window */
 								/* If set to {0, 0}, and the initied flag is
-                                clear, the Finder will place the item
-                                automatically */
-	UINT16BE view;			/* System 7: The manner in which folders are
+								clear, the Finder will place the item
+								automatically */
+	UINT16BE view;          /* System 7: The manner in which folders are
                                 displayed */
 							/* System 8: reserved (set to 0) */
-} mac_DInfo;
+};
 
 /*
     DXInfo (Finder extended folder info) record -- not found in MFS
 */
-typedef struct mac_DXInfo
+struct mac_DXInfo
 {
-	mac_point scroll;		/* Scroll position */
-	UINT32BE openChain;		/* System 7: chain of directory IDs for open folders */
+	mac_point scroll;       /* Scroll position */
+	UINT32BE openChain;     /* System 7: chain of directory IDs for open folders */
 							/* System 8: reserved (set to 0) */
-	UINT8    script;		/* System 7: if high-bit is set, the script code
+	UINT8    script;        /* System 7: if high-bit is set, the script code
                                 for displaying the folder name; ignored otherwise */
 							/* System 8: Extended flags MSB(?) */
-	UINT8    XFlags;		/* Extended flags */
-	UINT16BE comment;		/* System 7: Comment ID if high-bit is clear */
+	UINT8    XFlags;        /* Extended flags */
+	UINT16BE comment;       /* System 7: Comment ID if high-bit is clear */
 							/* System 8: Reserved (set to 0) */
-	UINT32BE putAway;		/* Put away folder ID (i.e. if the user moves the
+	UINT32BE putAway;       /* Put away folder ID (i.e. if the user moves the
                                 folder onto the desktop, the directory ID of
                                 the folder from which the user moves it is
                                 saved here) */
-} mac_DXInfo;
+};
 
 /*
     defines for FInfo & DInfo flags fields
 */
 enum
 {
-	fif_isOnDesk			= 0x0001,	/* System 6: set if item is located on desktop (files and folders) */
+	fif_isOnDesk            = 0x0001,   /* System 6: set if item is located on desktop (files and folders) */
 										/* System 7: Unused (set to 0) */
-	fif_color				= 0x000E,	/* color coding (files and folders) */
-	fif_colorReserved		= 0x0010,	/* System 6: reserved??? */
+	fif_color               = 0x000E,   /* color coding (files and folders) */
+	fif_colorReserved       = 0x0010,   /* System 6: reserved??? */
 										/* System 7: Unused (set to 0) */
-	fif_requiresSwitchLaunch= 0x0020,	/* System 6: ??? */
+	fif_requiresSwitchLaunch= 0x0020,   /* System 6: ??? */
 										/* System 7: Unused (set to 0) */
-	fif_isShared			= 0x0040,	/* Applications files: if set, the */
+	fif_isShared            = 0x0040,   /* Applications files: if set, the */
 											/* application can be executed by */
 											/* multiple users simultaneously. */
 										/* Otherwise, set to 0. */
-	fif_hasNoINITs			= 0x0080,	/* Extensions/Control Panels: if set(?), */
+	fif_hasNoINITs          = 0x0080,   /* Extensions/Control Panels: if set(?), */
 											/* this file contains no INIT */
 											/* resource */
 										/* Otherwise, set to 0. */
-	fif_hasBeenInited		= 0x0100,	/* System 6: The Finder has recorded information from
+	fif_hasBeenInited       = 0x0100,   /* System 6: The Finder has recorded information from
                                             the file???s bundle resource into the desktop
                                             database and given the file or folder a
                                             position on the desktop. */
@@ -311,15 +311,15 @@ enum
 											/* Reserved for folders - make sure this bit is cleared for folders */
 
 	/* bit 0x0200 was at a point (AOCE for system 7.x?) the letter bit for
-    AOCE, but was reserved before and it is reserved again in recent MacOS
-    releases. */
+	AOCE, but was reserved before and it is reserved again in recent MacOS
+	releases. */
 
-	fif_hasCustomIcon		= 0x0400,	/* (files and folders) */
-	fif_isStationery		= 0x0800,	/* System 7: (files only) */
-	fif_nameLocked			= 0x1000,	/* (files and folders) */
-	fif_hasBundle			= 0x2000,	/* Files only */
-	fif_isInvisible			= 0x4000,	/* (files and folders) */
-	fif_isAlias				= 0x8000	/* System 7: (files only) */
+	fif_hasCustomIcon       = 0x0400,   /* (files and folders) */
+	fif_isStationery        = 0x0800,   /* System 7: (files only) */
+	fif_nameLocked          = 0x1000,   /* (files and folders) */
+	fif_hasBundle           = 0x2000,   /* Files only */
+	fif_isInvisible         = 0x4000,   /* (files and folders) */
+	fif_isAlias             = 0x8000    /* System 7: (files only) */
 };
 
 /*
@@ -434,11 +434,11 @@ exit:
 #ifdef UNUSED_FUNCTION
 static int mac_strcmp(const UINT8 *s1, const UINT8 *s2)
 {
-    size_t common_len;
+	size_t common_len;
 
-    common_len = (s1[0] <= s2[0]) ? s1[0] : s2[0];
+	common_len = (s1[0] <= s2[0]) ? s1[0] : s2[0];
 
-    return memcmp(s1+1, s2+1, common_len) || ((int)s1[0] - s2[0]);
+	return memcmp(s1+1, s2+1, common_len) || ((int)s1[0] - s2[0]);
 }
 #endif
 
@@ -486,69 +486,69 @@ static int mac_stricmp(const UINT8 *s1, const UINT8 *s2)
 	static const unsigned char mac_char_sort_table[256] =
 	{
 	/*  \x00    \x01    \x02    \x03    \x04    \x05    \x06    \x07 */
-		0x00,	0x01,	0x02,	0x03,	0x04,	0x05,	0x06,	0x07,
+		0x00,   0x01,   0x02,   0x03,   0x04,   0x05,   0x06,   0x07,
 	/*  \x08    \x09    \x0a    \x0b    \x0c    \x0d    \x0e    \x0f */
-		0x08,	0x09,	0x0a,	0x0b,	0x0c,	0x0d,	0x0e,	0x0f,
+		0x08,   0x09,   0x0a,   0x0b,   0x0c,   0x0d,   0x0e,   0x0f,
 	/*  \x10    \x11    \x12    \x13    \x14    \x15    \x16    \x17 */
-		0x10,	0x11,	0x12,	0x13,	0x14,	0x15,	0x16,	0x17,
+		0x10,   0x11,   0x12,   0x13,   0x14,   0x15,   0x16,   0x17,
 	/*  \x18    \x19    \x1a    \x1b    \x1c    \x1d    \x1e    \x1f */
-		0x18,	0x19,	0x1a,	0x1b,	0x1c,	0x1d,	0x1e,	0x1f,
+		0x18,   0x19,   0x1a,   0x1b,   0x1c,   0x1d,   0x1e,   0x1f,
 	/*  \x20    \x21    \x22    \x23    \x24    \x25    \x26    \x27 */
-		0x20,	0x21,	0x22,	0x27,	0x28,	0x29,	0x2a,	0x2b,
+		0x20,   0x21,   0x22,   0x27,   0x28,   0x29,   0x2a,   0x2b,
 	/*  \x28    \x29    \x2a    \x2b    \x2c    \x2d    \x2e    \x2f */
-		0x2e,	0x2f,	0x30,	0x31,	0x32,	0x33,	0x34,	0x35,
+		0x2e,   0x2f,   0x30,   0x31,   0x32,   0x33,   0x34,   0x35,
 	/*  \x30    \x31    \x32    \x33    \x34    \x35    \x36    \x37 */
-		0x36,	0x37,	0x38,	0x39,	0x3a,	0x3b,	0x3c,	0x3d,
+		0x36,   0x37,   0x38,   0x39,   0x3a,   0x3b,   0x3c,   0x3d,
 	/*  \x38    \x39    \x3a    \x3b    \x3c    \x3d    \x3e    \x3f */
-		0x3e,	0x3f,	0x40,	0x41,	0x42,	0x43,	0x44,	0x45,
+		0x3e,   0x3f,   0x40,   0x41,   0x42,   0x43,   0x44,   0x45,
 	/*  \x40    \x41    \x42    \x43    \x44    \x45    \x46    \x47 */
-		0x46,	0x47,	0x51,	0x52,	0x54,	0x55,	0x5a,	0x5b,
+		0x46,   0x47,   0x51,   0x52,   0x54,   0x55,   0x5a,   0x5b,
 	/*  \x48    \x49    \x4a    \x4b    \x4c    \x4d    \x4e    \x4f */
-		0x5c,	0x5d,	0x62,	0x63,	0x64,	0x65,	0x66,	0x68,
+		0x5c,   0x5d,   0x62,   0x63,   0x64,   0x65,   0x66,   0x68,
 	/*  \x50    \x51    \x52    \x53    \x54    \x55    \x56    \x57 */
-		0x71,	0x72,	0x73,	0x74,	0x76,	0x77,	0x7c,	0x7d,
+		0x71,   0x72,   0x73,   0x74,   0x76,   0x77,   0x7c,   0x7d,
 	/*  \x58    \x59    \x5a    \x5b    \x5c    \x5d    \x5e    \x5f */
-		0x7e,	0x7f,	0x81,	0x82,	0x83,	0x84,	0x85,	0x86,
+		0x7e,   0x7f,   0x81,   0x82,   0x83,   0x84,   0x85,   0x86,
 	/*  \x60    \x61    \x62    \x63    \x64    \x65    \x66    \x67 */
-		0x4d,	0x47,	0x51,	0x52,	0x54,	0x55,	0x5a,	0x5b,
+		0x4d,   0x47,   0x51,   0x52,   0x54,   0x55,   0x5a,   0x5b,
 	/*  \x68    \x69    \x6a    \x6b    \x6c    \x6d    \x6e    \x6f */
-		0x5c,	0x5d,	0x62,	0x63,	0x64,	0x65,	0x66,	0x68,
+		0x5c,   0x5d,   0x62,   0x63,   0x64,   0x65,   0x66,   0x68,
 	/*  \x70    \x71    \x72    \x73    \x74    \x75    \x76    \x77 */
-		0x71,	0x72,	0x73,	0x74,	0x76,	0x77,	0x7c,	0x7d,
+		0x71,   0x72,   0x73,   0x74,   0x76,   0x77,   0x7c,   0x7d,
 	/*  \x78    \x79    \x7a    \x7b    \x7c    \x7d    \x7e    \x7f */
-		0x7e,	0x7f,	0x81,	0x87,	0x88,	0x89,	0x8a,	0x8b,
+		0x7e,   0x7f,   0x81,   0x87,   0x88,   0x89,   0x8a,   0x8b,
 	/*  \x80    \x81    \x82    \x83    \x84    \x85    \x86    \x87 */
-		0x49,	0x4b,	0x53,	0x56,	0x67,	0x69,	0x78,	0x4e,
+		0x49,   0x4b,   0x53,   0x56,   0x67,   0x69,   0x78,   0x4e,
 	/*  \x88    \x89    \x8a    \x8b    \x8c    \x8d    \x8e    \x8f */
-		0x48,	0x4f,	0x49,	0x4a,	0x4b,	0x53,	0x56,	0x57,
+		0x48,   0x4f,   0x49,   0x4a,   0x4b,   0x53,   0x56,   0x57,
 	/*  \x90    \x91    \x92    \x93    \x94    \x95    \x96    \x97 */
-		0x58,	0x59,	0x5e,	0x5f,	0x60,	0x61,	0x67,	0x6d,
+		0x58,   0x59,   0x5e,   0x5f,   0x60,   0x61,   0x67,   0x6d,
 	/*  \x98    \x99    \x9a    \x9b    \x9c    \x9d    \x9e    \x9f */
-		0x6e,	0x6f,	0x69,	0x6a,	0x79,	0x7a,	0x7b,	0x78,
+		0x6e,   0x6f,   0x69,   0x6a,   0x79,   0x7a,   0x7b,   0x78,
 	/*  \xa0    \xa1    \xa2    \xa3    \xa4    \xa5    \xa6    \xa7 */
-		0x8c,	0x8d,	0x8e,	0x8f,	0x90,	0x91,	0x92,	0x75,
+		0x8c,   0x8d,   0x8e,   0x8f,   0x90,   0x91,   0x92,   0x75,
 	/*  \xa8    \xa9    \xaa    \xab    \xac    \xad    \xae    \xaf */
-		0x93,	0x94,	0x95,	0x96,	0x97,	0x98,	0x4c,	0x6b,
+		0x93,   0x94,   0x95,   0x96,   0x97,   0x98,   0x4c,   0x6b,
 	/*  \xb0    \xb1    \xb2    \xb3    \xb4    \xb5    \xb6    \xb7 */
-		0x99,	0x9a,	0x9b,	0x9c,	0x9d,	0x9e,	0x9f,	0xa0,
+		0x99,   0x9a,   0x9b,   0x9c,   0x9d,   0x9e,   0x9f,   0xa0,
 	/*  \xb8    \xb9    \xba    \xbb    \xbc    \xbd    \xbe    \xbf */
-		0xa1,	0xa2,	0xa3,	0x50,	0x70,	0xa4,	0x4c,	0x6b,
+		0xa1,   0xa2,   0xa3,   0x50,   0x70,   0xa4,   0x4c,   0x6b,
 	/*  \xc0    \xc1    \xc2    \xc3    \xc4    \xc5    \xc6    \xc7 */
-		0xa5,	0xa6,	0xa7,	0xa8,	0xa9,	0xaa,	0xab,	0x25,
+		0xa5,   0xa6,   0xa7,   0xa8,   0xa9,   0xaa,   0xab,   0x25,
 	/*  \xc8    \xc9    \xca    \xcb    \xcc    \xcd    \xce    \xcf */
-		0x26,	0xac,	0x20,	0x48,	0x4a,	0x6a,	0x6c,	0x6c,
+		0x26,   0xac,   0x20,   0x48,   0x4a,   0x6a,   0x6c,   0x6c,
 	/*  \xd0    \xd1    \xd2    \xd3    \xd4    \xd5    \xd6    \xd7 */
-		0xad,	0xae,	0x23,	0x24,	0x2c,	0x2d,	0xaf,	0xb0,
+		0xad,   0xae,   0x23,   0x24,   0x2c,   0x2d,   0xaf,   0xb0,
 	/*  \xd8    \xd9    \xda    \xdb    \xdc    \xdd    \xde    \xdf */
-		0x80,	0xb1,	0xb2,	0xb3,	0xb4,	0xb5,	0xb6,	0xb7,
+		0x80,   0xb1,   0xb2,   0xb3,   0xb4,   0xb5,   0xb6,   0xb7,
 	/*  \xe0    \xe1    \xe2    \xe3    \xe4    \xe5    \xe6    \xe7 */
-		0xb8,	0xb9,	0xba,	0xbb,	0xbc,	0xbd,	0xbe,	0xbf,
+		0xb8,   0xb9,   0xba,   0xbb,   0xbc,   0xbd,   0xbe,   0xbf,
 	/*  \xe8    \xe9    \xea    \xeb    \xec    \xed    \xee    \xef */
-		0xc0,	0xc1,	0xc2,	0xc3,	0xc4,	0xc5,	0xc6,	0xc7,
+		0xc0,   0xc1,   0xc2,   0xc3,   0xc4,   0xc5,   0xc6,   0xc7,
 	/*  \xf0    \xf1    \xf2    \xf3    \xf4    \xf5    \xf6    \xf7 */
-		0xc8,	0xc9,	0xca,	0xcb,	0xcc,	0xcd,	0xce,	0xcf,
+		0xc8,   0xc9,   0xca,   0xcb,   0xcc,   0xcd,   0xce,   0xcf,
 	/*  \xf8    \xf9    \xfa    \xfb    \xfc    \xfd    \xfe    \xff */
-		0xd0,	0xd1,	0xd2,	0xd3,	0xd4,	0xd5,	0xd6,	0xd7
+		0xd0,   0xd1,   0xd2,   0xd3,   0xd4,   0xd5,   0xd6,   0xd7
 	};
 
 	size_t common_len;
@@ -609,11 +609,11 @@ static void mac_strncpy(UINT8 *dest, int n, const UINT8 *src)
 /*
     disk image reference
 */
-typedef struct mac_l1_imgref
+struct mac_l1_imgref
 {
 	imgtool_image *image;
 	UINT32 heads;
-} mac_l1_imgref;
+};
 
 
 
@@ -684,7 +684,7 @@ static imgtoolerr_t image_write_block(mac_l1_imgref *image, UINT32 block, const 
 	if (err)
 		return err;
 
-	ferr = floppy_write_sector(imgtool_floppy(image->image), head, track, sector, 0, src, 512, 0);	/* TODO: pass ddam argument from imgtool */
+	ferr = floppy_write_sector(imgtool_floppy(image->image), head, track, sector, 0, src, 512, 0);  /* TODO: pass ddam argument from imgtool */
 	if (ferr)
 		return imgtool_floppy_error(ferr);
 
@@ -744,20 +744,18 @@ static imgtoolerr_t image_write_tag(mac_l1_imgref *image, UINT32 block, const vo
 #pragma mark MFS/HFS WRAPPERS
 #endif
 
-typedef enum
+enum mac_format
 {
 	L2I_MFS,
 	L2I_HFS
-} mac_format;
+};
 
-typedef enum { data_fork = 0x00, rsrc_fork = 0xff } mac_forkID;
-
-typedef struct mac_l2_imgref mac_l2_imgref;
+enum mac_forkID { data_fork = 0x00, rsrc_fork = 0xff };
 
 /*
     MFS image ref
 */
-typedef struct mfs_l2_imgref
+struct mfs_l2_imgref
 {
 	UINT16 dir_num_files;
 	UINT16 dir_start;
@@ -767,18 +765,18 @@ typedef struct mfs_l2_imgref
 
 	mac_str27 volname;
 
-	unsigned char ABlink_dirty[13];	/* dirty flag for each disk block in the ABlink array */
+	unsigned char ABlink_dirty[13]; /* dirty flag for each disk block in the ABlink array */
 	UINT8 ABlink[6141];
-} mfs_l2_imgref;
+};
 
 /*
     HFS extent descriptor
 */
-typedef struct hfs_extent
+struct hfs_extent
 {
-	UINT16BE stABN;			/* first allocation block */
-	UINT16BE numABlks;		/* number of allocation blocks */
-} hfs_extent;
+	UINT16BE stABN;         /* first allocation block */
+	UINT16BE numABlks;      /* number of allocation blocks */
+};
 
 /*
     HFS likes to group extents by 3 (it is 8 with HFS+), so we create a
@@ -789,82 +787,84 @@ typedef hfs_extent hfs_extent_3[3];
 /*
     MFS open file ref
 */
-typedef struct mfs_fileref
+struct mfs_fileref
 {
-	UINT16 stBlk;					/* first allocation block of file */
-} mfs_fileref;
+	UINT16 stBlk;                   /* first allocation block of file */
+};
 
 /*
     HFS open file ref
 */
-typedef struct hfs_fileref
+struct hfs_fileref
 {
-	hfs_extent_3 extents;			/* first 3 file extents */
+	hfs_extent_3 extents;           /* first 3 file extents */
 
-	UINT32 parID;					/* CNID of parent directory (undefined for extent & catalog files) */
-	mac_str31 filename;				/* file name (undefined for extent & catalog files) */
-} hfs_fileref;
+	UINT32 parID;                   /* CNID of parent directory (undefined for extent & catalog files) */
+	mac_str31 filename;             /* file name (undefined for extent & catalog files) */
+};
+
+struct mac_l2_imgref;
 
 /*
     MFS/HFS open file ref
 */
-typedef struct mac_fileref
+struct mac_fileref
 {
-	mac_l2_imgref *l2_img;			/* image pointer */
+	struct mac_l2_imgref *l2_img;   /* image pointer */
 
-	UINT32 fileID;					/* file ID (a.k.a. CNID in HFS/HFS+) */
+	UINT32 fileID;                  /* file ID (a.k.a. CNID in HFS/HFS+) */
 
-	mac_forkID forkType;			/* 0x00 for data, 0xff for resource */
+	mac_forkID forkType;            /* 0x00 for data, 0xff for resource */
 
-	UINT32 eof;						/* logical end-of-file */
-	UINT32 pLen;					/* physical end-of-file */
+	UINT32 eof;                     /* logical end-of-file */
+	UINT32 pLen;                    /* physical end-of-file */
 
-	UINT32 crPs;					/* current position in file */
+	UINT32 crPs;                    /* current position in file */
 
 	UINT8 reload_buf;
-	UINT8 block_buffer[512];		/* buffer with current file block */
+	UINT8 block_buffer[512];        /* buffer with current file block */
 
 	union
 	{
 		mfs_fileref mfs;
 		hfs_fileref hfs;
-	} u;
-} mac_fileref;
+	};
+};
 
 /*
     open BT ref
 */
-typedef struct mac_BTref
+struct mac_BTref
 {
-	mac_fileref fileref;	/* open B-tree file ref */
+	struct mac_fileref fileref; /* open B-tree file ref */
 
-	UINT16 nodeSize;		/* size of a node, in bytes */
-	UINT32 rootNode;		/* node number of root node */
-	UINT32 firstLeafNode;	/* node number of first leaf node */
-	UINT32 attributes;		/* persistent attributes about the tree */
-	UINT16 treeDepth;		/* maximum height (usually leaf nodes) */
-	UINT16 maxKeyLength;	/* maximum key length */
+	UINT16 nodeSize;        /* size of a node, in bytes */
+	UINT32 rootNode;        /* node number of root node */
+	UINT32 firstLeafNode;   /* node number of first leaf node */
+	UINT32 attributes;      /* persistent attributes about the tree */
+	UINT16 treeDepth;       /* maximum height (usually leaf nodes) */
+	UINT16 maxKeyLength;    /* maximum key length */
 
 	/* function to compare keys during tree searches */
 	int (*key_compare_func)(const void *key1, const void *key2);
 
-	void *node_buf;			/* current node buffer */
-} mac_BTref;
+	void *node_buf;         /* current node buffer */
+};
 
 /*
     Constants for BTHeaderRec attributes field
 */
 enum
 {
-	btha_badCloseMask			= 0x00000001,	/* reserved */
-	btha_bigKeysMask			= 0x00000002,	/* key length field is 16 bits */
-	btha_variableIndexKeysMask	= 0x00000004	/* keys in index nodes are variable length */
+	btha_badCloseMask           = 0x00000001,   /* reserved */
+	btha_bigKeysMask            = 0x00000002,   /* key length field is 16 bits */
+	btha_variableIndexKeysMask  = 0x00000004    /* keys in index nodes are variable length */
 };
 
 /*
     HFS image ref
 */
-typedef struct hfs_l2_imgref
+struct hfs_l2_imgref
 {
 	UINT16 VBM_start;
 
@@ -876,7 +876,7 @@ typedef struct hfs_l2_imgref
 	mac_BTref cat_BT;
 
 	UINT8 VBM[8192];
-} hfs_l2_imgref;
+};
 
 /*
     MFS/HFS image ref
@@ -890,7 +890,7 @@ struct mac_l2_imgref
 
 	UINT16 freeABs;
 
-	UINT32 nxtCNID;		/* nxtFNum in MFS, nxtCNID in HFS */
+	UINT32 nxtCNID;     /* nxtFNum in MFS, nxtCNID in HFS */
 
 	mac_format format;
 	union
@@ -903,27 +903,27 @@ struct mac_l2_imgref
 /*
     MFS Master Directory Block
 */
-typedef struct mfs_mdb_t
+struct mfs_mdb
 {
-	UINT8    sigWord[2];	/* volume signature - always $D2D7 */
-	UINT32BE crDate;		/* date and time of volume creation */
+	UINT8    sigWord[2];    /* volume signature - always $D2D7 */
+	UINT32BE crDate;        /* date and time of volume creation */
 	UINT32BE lsMod/*lsBkUp???*/;/* date and time of last modification (backup???) */
-	UINT16BE atrb;			/* volume attributes (0x0000) */
+	UINT16BE atrb;          /* volume attributes (0x0000) */
 								/* bit 15 is set if volume is locked by software */
-	UINT16BE nmFls;			/* number of files in directory */
-	UINT16BE dirSt;			/* first block of directory */
+	UINT16BE nmFls;         /* number of files in directory */
+	UINT16BE dirSt;         /* first block of directory */
 
-	UINT16BE blLn;			/* length of directory in blocks (0x000C) */
-	UINT16BE nmAlBlks;		/* number of allocation blocks in volume (0x0187) */
-	UINT32BE alBlkSiz;		/* size (in bytes) of allocation blocks (0x00000400) */
-	UINT32BE clpSiz;		/* default clump size - number of bytes to allocate
+	UINT16BE blLn;          /* length of directory in blocks (0x000C) */
+	UINT16BE nmAlBlks;      /* number of allocation blocks in volume (0x0187) */
+	UINT32BE alBlkSiz;      /* size (in bytes) of allocation blocks (0x00000400) */
+	UINT32BE clpSiz;        /* default clump size - number of bytes to allocate
                                 when a file grows (0x00002000) */
-	UINT16BE alBlSt;		/* first allocation block in volume (0x0010) */
+	UINT16BE alBlSt;        /* first allocation block in volume (0x0010) */
 
-	UINT32BE nxtFNum;		/* next unused file number */
-	UINT16BE freeABs;		/* number of unused allocation blocks */
+	UINT32BE nxtFNum;       /* next unused file number */
+	UINT16BE freeABs;       /* number of unused allocation blocks */
 
-	mac_str27 VN;			/* volume name */
+	mac_str27 VN;           /* volume name */
 
 	UINT8    ABlink[512-64];/* Link array for file ABs.  Array of nmAlBlks
                             12-bit-long entries, indexed by AB address.  If an
@@ -938,136 +938,136 @@ typedef struct mfs_mdb_t
                             was that the disk utility could rely on the tag
                             data to rebuild the link array if it should ever
                             be corrupted. */
-} mfs_mdb_;
+};
 
 /*
     HFS Master Directory Block
 */
-typedef struct hfs_mdb_t
+struct hfs_mdb
 {
 /* First fields are similar to MFS, though several fields have a different meaning */
-	UINT8    sigWord[2];	/* volume signature - always $D2D7 */
-	UINT32BE crDate;		/* date and time of volume creation */
-	UINT32BE lsMod;			/* date and time of last modification */
-	UINT16BE atrb;			/* volume attributes (0x0000) */
+	UINT8    sigWord[2];    /* volume signature - always $D2D7 */
+	UINT32BE crDate;        /* date and time of volume creation */
+	UINT32BE lsMod;         /* date and time of last modification */
+	UINT16BE atrb;          /* volume attributes (0x0000) */
 								/* bit 15 is set if volume is locked by software */
-	UINT16BE nmFls;			/* number of files in root folder */
-	UINT16BE VBMSt;			/* first block of volume bitmap */
-	UINT16BE allocPtr;		/* start of next allocation search */
+	UINT16BE nmFls;         /* number of files in root folder */
+	UINT16BE VBMSt;         /* first block of volume bitmap */
+	UINT16BE allocPtr;      /* start of next allocation search */
 
-	UINT16BE nmAlBlks;		/* number of allocation blocks in volume */
-	UINT32BE alBlkSiz;		/* size (in bytes) of allocation blocks */
-	UINT32BE clpSiz;		/* default clump size - number of bytes to allocate
+	UINT16BE nmAlBlks;      /* number of allocation blocks in volume */
+	UINT32BE alBlkSiz;      /* size (in bytes) of allocation blocks */
+	UINT32BE clpSiz;        /* default clump size - number of bytes to allocate
                                 when a file grows */
-	UINT16BE alBlSt;		/* first allocation block in volume (0x0010) */
-	UINT32BE nxtCNID;		/* next unused catalog node ID */
-	UINT16BE freeABs;		/* number of unused allocation blocks */
-	mac_str27 VN;			/* volume name */
+	UINT16BE alBlSt;        /* first allocation block in volume (0x0010) */
+	UINT32BE nxtCNID;       /* next unused catalog node ID */
+	UINT16BE freeABs;       /* number of unused allocation blocks */
+	mac_str27 VN;           /* volume name */
 
 /* next fields are HFS-specific */
 
-	UINT32BE volBkUp;		/* date and time of last backup */
-	UINT16BE vSeqNum;		/* volume backup sequence number */
-	UINT32BE wrCnt;			/* volume write count */
-	UINT32BE xtClpSiz;		/* clump size for extents overflow file */
-	UINT32BE ctClpSiz;		/* clump size for catalog file */
-	UINT16BE nmRtDirs;		/* number of directories in root folder */
-	UINT32BE filCnt;		/* number of files in volume */
-	UINT32BE dirCnt;		/* number of directories in volume */
-	UINT8    fndrInfo[32];	/* information used by the Finder */
+	UINT32BE volBkUp;       /* date and time of last backup */
+	UINT16BE vSeqNum;       /* volume backup sequence number */
+	UINT32BE wrCnt;         /* volume write count */
+	UINT32BE xtClpSiz;      /* clump size for extents overflow file */
+	UINT32BE ctClpSiz;      /* clump size for catalog file */
+	UINT16BE nmRtDirs;      /* number of directories in root folder */
+	UINT32BE filCnt;        /* number of files in volume */
+	UINT32BE dirCnt;        /* number of directories in volume */
+	UINT8    fndrInfo[32];  /* information used by the Finder */
 
 	union
 	{
 		struct
 		{
-			UINT16BE VCSize;		/* size (in blocks) of volume cache */
-			UINT16BE VBMCSize;		/* size (in blocks) of volume bitmap cache */
-			UINT16BE ctlCSize;		/* size (in blocks) of common volume cache */
-		} v1;
+			UINT16BE VCSize;        /* size (in blocks) of volume cache */
+			UINT16BE VBMCSize;      /* size (in blocks) of volume bitmap cache */
+			UINT16BE ctlCSize;      /* size (in blocks) of common volume cache */
+		};
 		struct
 		{
-			UINT16BE embedSigWord;	/* embedded volume signature */
-			hfs_extent embedExtent;	/* embedded volume location and size */
+			UINT16BE embedSigWord;  /* embedded volume signature */
+			hfs_extent embedExtent; /* embedded volume location and size */
 		} v2;
 	} u;
 
-	UINT32BE xtFlSize;		/* size (in bytes) of extents overflow file */
-	hfs_extent_3 xtExtRec;	/* extent record for extents overflow file */
-	UINT32BE ctFlSize;		/* size (in bytes) of catalog file */
-	hfs_extent_3 ctExtRec;	/* extent record for catalog file */
-} hfs_mdb_t;
+	UINT32BE xtFlSize;      /* size (in bytes) of extents overflow file */
+	hfs_extent_3 xtExtRec;  /* extent record for extents overflow file */
+	UINT32BE ctFlSize;      /* size (in bytes) of catalog file */
+	hfs_extent_3 ctExtRec;  /* extent record for catalog file */
+};
 
 /* to save a little stack space, we use the same buffer for MDB and next blocks */
-typedef union img_open_buf
+union img_open_buf
 {
-	mfs_mdb_t mfs_mdb;
-	hfs_mdb_t hfs_mdb;
+	struct mfs_mdb mfs_mdb;
+	struct hfs_mdb hfs_mdb;
 	UINT8 raw[512];
-} img_open_buf;
+};
 
 /*
     Information extracted from catalog/directory
 */
-typedef struct mac_dirent
+struct mac_dirent
 {
-	UINT16 dataRecType;			/* type of data record */
+	UINT16 dataRecType;         /* type of data record */
 
-	mac_FInfo flFinderInfo;		/* information used by the Finder */
-	mac_FXInfo flXFinderInfo;	/* information used by the Finder */
+	mac_FInfo flFinderInfo;     /* information used by the Finder */
+	mac_FXInfo flXFinderInfo;   /* information used by the Finder */
 
-	UINT8  flags;				/* bit 0=1 if file locked */
+	UINT8  flags;               /* bit 0=1 if file locked */
 
-	UINT32 fileID;				/* file ID in directory/catalog */
+	UINT32 fileID;              /* file ID in directory/catalog */
 
-	UINT32 dataLogicalSize;		/* logical EOF of data fork */
-	UINT32 dataPhysicalSize;	/* physical EOF of data fork */
-	UINT32 rsrcLogicalSize;		/* logical EOF of resource fork */
-	UINT32 rsrcPhysicalSize;	/* physical EOF of resource fork */
+	UINT32 dataLogicalSize;     /* logical EOF of data fork */
+	UINT32 dataPhysicalSize;    /* physical EOF of data fork */
+	UINT32 rsrcLogicalSize;     /* logical EOF of resource fork */
+	UINT32 rsrcPhysicalSize;    /* physical EOF of resource fork */
 
-	UINT32 createDate;			/* date and time of creation */
-	UINT32 modifyDate;			/* date and time of last modification */
-} mac_dirent;
+	UINT32 createDate;          /* date and time of creation */
+	UINT32 modifyDate;          /* date and time of last modification */
+};
 
 /*
     Tag record for GCR floppies (12 bytes)
 
     And, no, I don't know the format of the 20-byte tag record of the HD20
 */
-typedef struct floppy_tag_record
+struct floppy_tag_record
 {
-	UINT32BE fileID;			/* a.k.a. CNID */
+	UINT32BE fileID;            /* a.k.a. CNID */
 								/* a value of 1 seems to be the default for non-AB blocks, but this is not consistent */
-	UINT8 ftype;				/* bit 1 = 1 if resource fork */
+	UINT8 ftype;                /* bit 1 = 1 if resource fork */
 								/* bit 0 = 1 if block is allocated to user file (i.e. it is not
-                                    in HFS extent & catalog, and not in non-AB blocks such
-                                    as MDB and MFS directory)??? */
+								    in HFS extent & catalog, and not in non-AB blocks such
+								    as MDB and MFS directory)??? */
 								/* bit 7 seems to be used, but I don't know what it means */
 								/* a value of $FF seems to be the default for non-AB blocks, but this is not consistent */
-	UINT8 fattr;				/* bit 0 = 1 if locked(?) */
+	UINT8 fattr;                /* bit 0 = 1 if locked(?) */
 								/* a value of $FF seems to be the default for non-AB blocks, but this is not consistent */
-	UINT16BE fblock;			/* relative file block number (enough for any volume up to 32 MBytes in size) */
-	UINT32BE wrCnt;				/* MFS: date and time of last write */
+	UINT16BE fblock;            /* relative file block number (enough for any volume up to 32 MBytes in size) */
+	UINT32BE wrCnt;             /* MFS: date and time of last write */
 								/* HFS: seems related to the wrCnt field in the mdb, i.e.
-                                    each time a volume is written to, the current value of
-                                    wrCnt is written in the tag field, then it is incremented */
+								    each time a volume is written to, the current value of
+								    wrCnt is written in the tag field, then it is incremented */
 								/* (DV17 says "disk block number", but it cannot be true) */
-} floppy_tag_record;
+};
 
 #ifdef UNUSED_FUNCTION
-static void hfs_image_close(mac_l2_imgref *l2_img);
+static void hfs_image_close(struct mac_l2_imgref *l2_img);
 #endif
-static imgtoolerr_t mfs_file_get_nth_block_address(mac_fileref *fileref, UINT32 block_num, UINT32 *block_address);
-static imgtoolerr_t hfs_file_get_nth_block_address(mac_fileref *fileref, UINT32 block_num, UINT32 *block_address);
-static imgtoolerr_t mfs_lookup_path(mac_l2_imgref *l2_img, const char *fpath, mac_str255 filename, mac_dirent *cat_info, int create_it);
-static imgtoolerr_t hfs_lookup_path(mac_l2_imgref *l2_img, const char *fpath, UINT32 *parID, mac_str255 filename, mac_dirent *cat_info);
-static imgtoolerr_t mfs_file_open(mac_l2_imgref *l2_img, const mac_str255 filename, mac_forkID fork, mac_fileref *fileref);
-static imgtoolerr_t hfs_file_open(mac_l2_imgref *l2_img, UINT32 parID, const mac_str255 filename, mac_forkID fork, mac_fileref *fileref);
-static imgtoolerr_t mfs_file_setABeof(mac_fileref *fileref, UINT32 newABeof);
-static imgtoolerr_t mfs_dir_update(mac_fileref *fileref);
+static imgtoolerr_t mfs_file_get_nth_block_address(struct mac_fileref *fileref, UINT32 block_num, UINT32 *block_address);
+static imgtoolerr_t hfs_file_get_nth_block_address(struct mac_fileref *fileref, UINT32 block_num, UINT32 *block_address);
+static imgtoolerr_t mfs_lookup_path(struct mac_l2_imgref *l2_img, const char *fpath, mac_str255 filename, mac_dirent *cat_info, int create_it);
+static imgtoolerr_t hfs_lookup_path(struct mac_l2_imgref *l2_img, const char *fpath, UINT32 *parID, mac_str255 filename, mac_dirent *cat_info);
+static imgtoolerr_t mfs_file_open(struct mac_l2_imgref *l2_img, const mac_str255 filename, mac_forkID fork, struct mac_fileref *fileref);
+static imgtoolerr_t hfs_file_open(struct mac_l2_imgref *l2_img, UINT32 parID, const mac_str255 filename, mac_forkID fork, struct mac_fileref *fileref);
+static imgtoolerr_t mfs_file_setABeof(struct mac_fileref *fileref, UINT32 newABeof);
+static imgtoolerr_t mfs_dir_update(struct mac_fileref *fileref);
 
-static mac_l2_imgref *get_imgref(imgtool_image *img)
+static struct mac_l2_imgref *get_imgref(imgtool_image *img)
 {
-	return (mac_l2_imgref *) imgtool_floppy_extrabytes(img);
+	return (struct mac_l2_imgref *) imgtool_floppy_extrabytes(img);
 }
 
 
@@ -1079,7 +1079,7 @@ static mac_l2_imgref *get_imgref(imgtool_image *img)
 
     l2_img (I/O): level-2 image reference
 */
-static void mac_image_close(mac_l2_imgref *l2_img)
+static void mac_image_close(struct mac_l2_imgref *l2_img)
 {
 	switch (l2_img->format)
 	{
@@ -1113,7 +1113,7 @@ static void mac_image_close(mac_l2_imgref *l2_img)
 
     Return imgtool error code
 */
-static imgtoolerr_t mac_lookup_path(mac_l2_imgref *l2_img, const char *fpath, UINT32 *parID, mac_str255 filename, mac_dirent *cat_info, int create_it)
+static imgtoolerr_t mac_lookup_path(struct mac_l2_imgref *l2_img, const char *fpath, UINT32 *parID, mac_str255 filename, mac_dirent *cat_info, int create_it)
 {
 	imgtoolerr_t err = IMGTOOLERR_UNEXPECTED;
 
@@ -1145,7 +1145,7 @@ static imgtoolerr_t mac_lookup_path(mac_l2_imgref *l2_img, const char *fpath, UI
 
     Return imgtool error code
 */
-static imgtoolerr_t mac_file_open(mac_l2_imgref *l2_img, UINT32 parID, const mac_str255 filename, mac_forkID fork, mac_fileref *fileref)
+static imgtoolerr_t mac_file_open(struct mac_l2_imgref *l2_img, UINT32 parID, const mac_str255 filename, mac_forkID fork, struct mac_fileref *fileref)
 {
 	switch (l2_img->format)
 	{
@@ -1170,7 +1170,7 @@ static imgtoolerr_t mac_file_open(mac_l2_imgref *l2_img, UINT32 parID, const mac
 
     Return imgtool error code
 */
-static imgtoolerr_t mac_file_read(mac_fileref *fileref, UINT32 len, void *dest)
+static imgtoolerr_t mac_file_read(struct mac_fileref *fileref, UINT32 len, void *dest)
 {
 	UINT32 block = 0;
 	floppy_tag_record tag;
@@ -1246,7 +1246,7 @@ static imgtoolerr_t mac_file_read(mac_fileref *fileref, UINT32 len, void *dest)
 
     Return imgtool error code
 */
-static imgtoolerr_t mac_file_write(mac_fileref *fileref, UINT32 len, const void *src)
+static imgtoolerr_t mac_file_write(struct mac_fileref *fileref, UINT32 len, const void *src)
 {
 	UINT32 block = 0;
 	floppy_tag_record tag;
@@ -1322,7 +1322,7 @@ static imgtoolerr_t mac_file_write(mac_fileref *fileref, UINT32 len, const void 
 				break;
 
 			case L2I_HFS:
-				/*set_UINT32BE(&tag.wrCnt, ++fileref->l2_img.u.hfs.wrCnt);*/	/* ***TODO*** */
+				/*set_UINT32BE(&tag.wrCnt, ++fileref->l2_img.u.hfs.wrCnt);*/    /* ***TODO*** */
 				break;
 			}
 
@@ -1351,7 +1351,7 @@ static imgtoolerr_t mac_file_write(mac_fileref *fileref, UINT32 len, const void 
 
     Return imgtool error code
 */
-static imgtoolerr_t mac_file_tell(mac_fileref *fileref, UINT32 *filePos)
+static imgtoolerr_t mac_file_tell(struct mac_fileref *fileref, UINT32 *filePos)
 {
 	*filePos = fileref->crPs;
 
@@ -1369,7 +1369,7 @@ static imgtoolerr_t mac_file_tell(mac_fileref *fileref, UINT32 *filePos)
 
     Return imgtool error code
 */
-static imgtoolerr_t mac_file_seek(mac_fileref *fileref, UINT32 filePos)
+static imgtoolerr_t mac_file_seek(struct mac_fileref *fileref, UINT32 filePos)
 {
 	if ((fileref->crPs / 512) != (filePos / 512))
 		fileref->reload_buf = TRUE;
@@ -1389,7 +1389,7 @@ static imgtoolerr_t mac_file_seek(mac_fileref *fileref, UINT32 filePos)
 
     Return imgtool error code
 */
-static imgtoolerr_t mac_file_seteof(mac_fileref *fileref, UINT32 newEof)
+static imgtoolerr_t mac_file_seteof(struct mac_fileref *fileref, UINT32 newEof)
 {
 	UINT32 newABEof;
 	imgtoolerr_t err = IMGTOOLERR_SUCCESS;
@@ -1452,33 +1452,33 @@ static imgtoolerr_t mac_file_seteof(mac_fileref *fileref, UINT32 newEof)
     files appear does not match file names, and it does not always match file
     IDs.
 */
-typedef struct mfs_dir_entry
+struct mfs_dir_entry
 {
-	UINT8    flags;				/* bit 7=1 if entry used, bit 0=1 if file locked */
+	UINT8    flags;             /* bit 7=1 if entry used, bit 0=1 if file locked */
 								/* 0x00 means end of block: if we are not done
-                                with reading the directory, the remnants will
-                                be read from next block */
-	UINT8    flVersNum;			/* version number (usually 0x00, but I don't
+								with reading the directory, the remnants will
+								be read from next block */
+	UINT8    flVersNum;         /* version number (usually 0x00, but I don't
                                     have the IM volume that describes it) */
-	mac_FInfo flFinderInfo;		/* information used by the Finder */
+	mac_FInfo flFinderInfo;     /* information used by the Finder */
 
-	UINT32BE fileID;			/* file ID */
+	UINT32BE fileID;            /* file ID */
 
-	UINT16BE dataStartBlock;	/* first allocation block of data fork */
-	UINT32BE dataLogicalSize;	/* logical EOF of data fork */
-	UINT32BE dataPhysicalSize;	/* physical EOF of data fork */
-	UINT16BE rsrcStartBlock;	/* first allocation block of resource fork */
-	UINT32BE rsrcLogicalSize;	/* logical EOF of resource fork */
-	UINT32BE rsrcPhysicalSize;	/* physical EOF of resource fork */
+	UINT16BE dataStartBlock;    /* first allocation block of data fork */
+	UINT32BE dataLogicalSize;   /* logical EOF of data fork */
+	UINT32BE dataPhysicalSize;  /* physical EOF of data fork */
+	UINT16BE rsrcStartBlock;    /* first allocation block of resource fork */
+	UINT32BE rsrcLogicalSize;   /* logical EOF of resource fork */
+	UINT32BE rsrcPhysicalSize;  /* physical EOF of resource fork */
 
-	UINT32BE createDate;		/* date and time of creation */
-	UINT32BE modifyDate;		/* date and time of last modification */
+	UINT32BE createDate;        /* date and time of creation */
+	UINT32BE modifyDate;        /* date and time of last modification */
 
-	UINT8    name[1];			/* first char is length of file name */
+	UINT8    name[1];           /* first char is length of file name */
 								/* next chars are file name - 255 chars at most */
 								/* IIRC, Finder 7 only supports 31 chars,
-                                wheareas earlier versions support 63 chars */
-} mfs_dir_entry;
+								wheareas earlier versions support 63 chars */
+};
 
 /*
     FOBJ desktop resource: describes a folder, or the location of the volume
@@ -1487,54 +1487,54 @@ typedef struct mfs_dir_entry
     In typical Apple manner, this resource is not documented.  However, I have
     managed to reverse engineer some parts of it.
 */
-typedef struct mfs_FOBJ
+struct mfs_FOBJ
 {
-	UINT8 unknown0[2];		/* $00: $0004 for disk, $0008 for folder??? */
-	mac_point location;		/* $02: location in parent window */
-	UINT8 unknown1[4];		/* $06: ??? */
-	UINT8 view;				/* $0A: manner in which folders are displayed??? */
-	UINT8 unknown2;			/* $0B: ??? */
-	UINT16BE par_fldr;		/* $0C: parent folder ID */
-	UINT8 unknown3[10];		/* $0E: ??? */
-	UINT16BE unknown4;		/* $18: ??? */
-	UINT32BE createDate;	/* $1A: date and time of creation */
-	UINT32BE modifyDate;	/* $1E: date and time of last modification */
-	UINT16BE unknown5;		/* $22: put-away folder ID?????? */
-	UINT8 unknown6[8];		/* $24: ??? */
-	mac_rect bounds;		/* $2C: window bounds */
-	mac_point scroll;		/* $34: current scroll offset??? */
+	UINT8 unknown0[2];      /* $00: $0004 for disk, $0008 for folder??? */
+	mac_point location;     /* $02: location in parent window */
+	UINT8 unknown1[4];      /* $06: ??? */
+	UINT8 view;             /* $0A: manner in which folders are displayed??? */
+	UINT8 unknown2;         /* $0B: ??? */
+	UINT16BE par_fldr;      /* $0C: parent folder ID */
+	UINT8 unknown3[10];     /* $0E: ??? */
+	UINT16BE unknown4;      /* $18: ??? */
+	UINT32BE createDate;    /* $1A: date and time of creation */
+	UINT32BE modifyDate;    /* $1E: date and time of last modification */
+	UINT16BE unknown5;      /* $22: put-away folder ID?????? */
+	UINT8 unknown6[8];      /* $24: ??? */
+	mac_rect bounds;        /* $2C: window bounds */
+	mac_point scroll;       /* $34: current scroll offset??? */
 	union
-	{	/* I think there are two versions of the structure */
+	{   /* I think there are two versions of the structure */
 		struct
 		{
-			UINT16BE item_count;	/* number of items (folders and files) in
+			UINT16BE item_count;    /* number of items (folders and files) in
                                         this folder */
-			UINT32BE item_descs[1];	/* this variable-length array has
+			UINT32BE item_descs[1]; /* this variable-length array has
                                         item_count entries - meaning of entry is unknown */
 		} v1;
 		struct
 		{
-			UINT16BE zerofill;		/* always 0? */
-			UINT16BE unknown0;		/* always 0??? */
-			UINT16BE item_count;	/* number of items (folders and files) in
+			UINT16BE zerofill;      /* always 0? */
+			UINT16BE unknown0;      /* always 0??? */
+			UINT16BE item_count;    /* number of items (folders and files) in
                                         this folder */
-			UINT8 unknown1[20];		/* ??? */
-			UINT8 name[1];			/* variable-length macintosh string */
+			UINT8 unknown1[20];     /* ??? */
+			UINT8 name[1];          /* variable-length macintosh string */
 		} v2;
 	} u;
-} mfs_FOBJ;
+};
 
 /*
     MFS open dir ref
 */
-typedef struct mfs_dirref
+struct mfs_dirref
 {
-	mac_l2_imgref *l2_img;			/* image pointer */
-	UINT16 index;					/* current file index in the disk directory */
-	UINT16 cur_block;				/* current block offset in directory file */
-	UINT16 cur_offset;				/* current byte offset in current block of directory file */
-	UINT8 block_buffer[512];		/* buffer with current directory block */
-} mfs_dirref;
+	struct mac_l2_imgref *l2_img;   /* image pointer */
+	UINT16 index;                   /* current file index in the disk directory */
+	UINT16 cur_block;               /* current block offset in directory file */
+	UINT16 cur_offset;              /* current byte offset in current block of directory file */
+	UINT8 block_buffer[512];        /* buffer with current directory block */
+};
 
 
 
@@ -1566,20 +1566,20 @@ static imgtoolerr_t mfs_image_create(imgtool_image *image, imgtool_stream *strea
 
 	/* write master directory block */
 	memset(buffer, 0, sizeof(buffer));
-	place_integer_be(buffer,  0, 2, 0xd2d7);					/* signature */
-	place_integer_be(buffer,  2, 4, mac_time_now());			/* creation date */
-	place_integer_be(buffer,  6, 4, mac_time_now());			/* last modified date */
-	place_integer_be(buffer, 10, 2, 0);							/* volume attributes */
-	place_integer_be(buffer, 12, 2, 0);							/* number of files in directory */
-	place_integer_be(buffer, 14, 2, 4);							/* first block of directory */
-	place_integer_be(buffer, 16, 2, 12);						/* length of directory in blocks */
-	place_integer_be(buffer, 18, 2, total_allocation_blocks);	/* allocation blocks on volume count */
-	place_integer_be(buffer, 20, 4, allocation_block_size);		/* allocation block size */
-	place_integer_be(buffer, 24, 4, 8192);						/* default clumping size */
-	place_integer_be(buffer, 28, 2, 16);						/* first allocation block on volume */
-	place_integer_be(buffer, 30, 4, 2);							/* next unused catalog node */
-	place_integer_be(buffer, 34, 2, free_allocation_blocks);	/* free allocation block count */
-	pascal_from_c_string(&buffer[36], 28, "Untitled");			/* volume title */
+	place_integer_be(buffer,  0, 2, 0xd2d7);                    /* signature */
+	place_integer_be(buffer,  2, 4, mac_time_now());            /* creation date */
+	place_integer_be(buffer,  6, 4, mac_time_now());            /* last modified date */
+	place_integer_be(buffer, 10, 2, 0);                         /* volume attributes */
+	place_integer_be(buffer, 12, 2, 0);                         /* number of files in directory */
+	place_integer_be(buffer, 14, 2, 4);                         /* first block of directory */
+	place_integer_be(buffer, 16, 2, 12);                        /* length of directory in blocks */
+	place_integer_be(buffer, 18, 2, total_allocation_blocks);   /* allocation blocks on volume count */
+	place_integer_be(buffer, 20, 4, allocation_block_size);     /* allocation block size */
+	place_integer_be(buffer, 24, 4, 8192);                      /* default clumping size */
+	place_integer_be(buffer, 28, 2, 16);                        /* first allocation block on volume */
+	place_integer_be(buffer, 30, 4, 2);                         /* next unused catalog node */
+	place_integer_be(buffer, 34, 2, free_allocation_blocks);    /* free allocation block count */
+	pascal_from_c_string(&buffer[36], 28, "Untitled");          /* volume title */
 
 	err = image_write_block(&get_imgref(image)->l1_img, 2, buffer);
 	if (err)
@@ -1605,7 +1605,7 @@ static imgtoolerr_t mfs_image_create(imgtool_image *image, imgtool_stream *strea
 static imgtoolerr_t mfs_image_open(imgtool_image *image, imgtool_stream *stream)
 {
 	imgtoolerr_t err;
-	mac_l2_imgref *l2_img;
+	struct mac_l2_imgref *l2_img;
 	img_open_buf buf_local;
 	img_open_buf *buf;
 
@@ -1694,12 +1694,12 @@ static imgtoolerr_t mfs_image_open(imgtool_image *image, imgtool_stream *stream)
 
     Return imgtool error code
 */
-static imgtoolerr_t mfs_update_mdb(mac_l2_imgref *l2_img)
+static imgtoolerr_t mfs_update_mdb(struct mac_l2_imgref *l2_img)
 {
 	imgtoolerr_t err;
 	union
 	{
-		mfs_mdb_t mfs_mdb;
+		struct mfs_mdb mfs_mdb;
 		UINT8 raw[512];
 	} buf;
 
@@ -1711,7 +1711,7 @@ static imgtoolerr_t mfs_update_mdb(mac_l2_imgref *l2_img)
 		return err;
 
 	set_UINT16BE(&buf.mfs_mdb.nmFls, l2_img->u.mfs.dir_num_files);
-#if 0	/* these fields are never changed */
+#if 0   /* these fields are never changed */
 	set_UINT16BE(&buf.mfs_mdb.dirSt, l2_img->u.mfs.dir_start);
 	set_UINT16BE(&buf.mfs_mdb.blLn, l2_img->u.mfs.dir_blk_len);
 
@@ -1724,7 +1724,7 @@ static imgtoolerr_t mfs_update_mdb(mac_l2_imgref *l2_img)
 
 	set_UINT16BE(&buf.mfs_mdb.freeABs, l2_img->freeABs);
 
-#if 0	/* these fields are never changed */
+#if 0   /* these fields are never changed */
 	mac_strcpy(buf.mfs_mdb.VN, l2_img->u.mfs.volname);
 #endif
 
@@ -1790,7 +1790,7 @@ static imgtoolerr_t mfs_update_mdb(mac_l2_imgref *l2_img)
 
     Return imgtool error code
 */
-static imgtoolerr_t mfs_dir_open(mac_l2_imgref *l2_img, const char *path, mfs_dirref *dirref)
+static imgtoolerr_t mfs_dir_open(struct mac_l2_imgref *l2_img, const char *path, mfs_dirref *dirref)
 {
 	imgtoolerr_t err;
 
@@ -1884,7 +1884,7 @@ static imgtoolerr_t mfs_dir_read(mfs_dirref *dirref, mfs_dir_entry **dir_entry)
 
     Return imgtool error code
 */
-static imgtoolerr_t mfs_dir_insert(mac_l2_imgref *l2_img, mfs_dirref *dirref, const UINT8 *new_fname, mfs_dir_entry **dir_entry)
+static imgtoolerr_t mfs_dir_insert(struct mac_l2_imgref *l2_img, mfs_dirref *dirref, const UINT8 *new_fname, mfs_dir_entry **dir_entry)
 {
 	size_t new_dir_entry_len;
 	mfs_dir_entry *cur_dir_entry;
@@ -1908,7 +1908,7 @@ static imgtoolerr_t mfs_dir_insert(mac_l2_imgref *l2_img, mfs_dirref *dirref, co
 		dirref->cur_offset = 0;
 		cur_dir_entry = (mfs_dir_entry *) (dirref->block_buffer + dirref->cur_offset);
 		while ((dirref->cur_offset < 512) && (cur_dir_entry->flags & 0x80))
-		{	/* skip cur_dir_entry */
+		{   /* skip cur_dir_entry */
 			cur_dir_entry_len = offsetof(mfs_dir_entry, name) + cur_dir_entry->name[0] + 1;
 			/* update offset in block */
 			dirref->cur_offset += cur_dir_entry_len;
@@ -1975,7 +1975,7 @@ static imgtoolerr_t mfs_dir_insert(mac_l2_imgref *l2_img, mfs_dirref *dirref, co
 
     Return imgtool error code
 */
-static imgtoolerr_t mfs_dir_update(mac_fileref *fileref)
+static imgtoolerr_t mfs_dir_update(struct mac_fileref *fileref)
 {
 	UINT16 cur_block;
 	UINT16 cur_offset;
@@ -1997,17 +1997,17 @@ static imgtoolerr_t mfs_dir_update(mac_fileref *fileref)
 		while ((cur_offset < 512) && (cur_dir_entry->flags & 0x80))
 		{
 			if (get_UINT32BE(cur_dir_entry->fileID) == fileref->fileID)
-			{	/* found it: update directory entry */
+			{   /* found it: update directory entry */
 				switch (fileref->forkType)
 				{
 				case data_fork:
-					set_UINT16BE(&cur_dir_entry->dataStartBlock, fileref->u.mfs.stBlk);
+					set_UINT16BE(&cur_dir_entry->dataStartBlock, fileref->mfs.stBlk);
 					set_UINT32BE(&cur_dir_entry->dataLogicalSize, fileref->eof);
 					set_UINT32BE(&cur_dir_entry->dataPhysicalSize, fileref->pLen);
 					break;
 
 				case rsrc_fork:
-					set_UINT16BE(&cur_dir_entry->rsrcStartBlock, fileref->u.mfs.stBlk);
+					set_UINT16BE(&cur_dir_entry->rsrcStartBlock, fileref->mfs.stBlk);
 					set_UINT32BE(&cur_dir_entry->rsrcLogicalSize, fileref->eof);
 					set_UINT32BE(&cur_dir_entry->rsrcPhysicalSize, fileref->pLen);
 					break;
@@ -2063,7 +2063,7 @@ static imgtoolerr_t mfs_find_dir_entry(mfs_dirref *dirref, const mac_str255 file
 			/* EOF */
 			break;
 		if ((! mac_stricmp(filename, cur_dir_entry->name)) && (cur_dir_entry->flVersNum == 0))
-		{	/* file found */
+		{   /* file found */
 
 			if (dir_entry)
 				*dir_entry = cur_dir_entry;
@@ -2094,7 +2094,7 @@ static imgtoolerr_t mfs_find_dir_entry(mfs_dirref *dirref, const mac_str255 file
 
     Return imgtool error code
 */
-static imgtoolerr_t mfs_lookup_path(mac_l2_imgref *l2_img, const char *fpath, mac_str255 filename, mac_dirent *cat_info, int create_it)
+static imgtoolerr_t mfs_lookup_path(struct mac_l2_imgref *l2_img, const char *fpath, mac_str255 filename, mac_dirent *cat_info, int create_it)
 {
 	mfs_dirref dirref;
 	mfs_dir_entry *dir_entry;
@@ -2163,7 +2163,7 @@ static imgtoolerr_t mfs_lookup_path(mac_l2_imgref *l2_img, const char *fpath, ma
 
     Return imgtool error code
 */
-static imgtoolerr_t mfs_file_open_internal(mac_l2_imgref *l2_img, const mfs_dir_entry *dir_entry, mac_forkID fork, mac_fileref *fileref)
+static imgtoolerr_t mfs_file_open_internal(struct mac_l2_imgref *l2_img, const mfs_dir_entry *dir_entry, mac_forkID fork, struct mac_fileref *fileref)
 {
 	assert(l2_img->format == L2I_MFS);
 
@@ -2175,13 +2175,13 @@ static imgtoolerr_t mfs_file_open_internal(mac_l2_imgref *l2_img, const mfs_dir_
 	switch (fork)
 	{
 	case data_fork:
-		fileref->u.mfs.stBlk = get_UINT16BE(dir_entry->dataStartBlock);
+		fileref->mfs.stBlk = get_UINT16BE(dir_entry->dataStartBlock);
 		fileref->eof = get_UINT32BE(dir_entry->dataLogicalSize);
 		fileref->pLen = get_UINT32BE(dir_entry->dataPhysicalSize);
 		break;
 
 	case rsrc_fork:
-		fileref->u.mfs.stBlk = get_UINT16BE(dir_entry->rsrcStartBlock);
+		fileref->mfs.stBlk = get_UINT16BE(dir_entry->rsrcStartBlock);
 		fileref->eof = get_UINT32BE(dir_entry->rsrcLogicalSize);
 		fileref->pLen = get_UINT32BE(dir_entry->rsrcPhysicalSize);
 		break;
@@ -2207,7 +2207,7 @@ static imgtoolerr_t mfs_file_open_internal(mac_l2_imgref *l2_img, const mfs_dir_
 
     Return imgtool error code
 */
-static imgtoolerr_t mfs_file_open(mac_l2_imgref *l2_img, const mac_str255 filename, mac_forkID fork, mac_fileref *fileref)
+static imgtoolerr_t mfs_file_open(struct mac_l2_imgref *l2_img, const mac_str255 filename, mac_forkID fork, struct mac_fileref *fileref)
 {
 	mfs_dirref dirref;
 	mfs_dir_entry *dir_entry;
@@ -2235,7 +2235,7 @@ static imgtoolerr_t mfs_file_open(mac_l2_imgref *l2_img, const mac_str255 filena
 
     Returns the 12-bit value read in array.
 */
-static UINT16 mfs_get_ABlink(mac_l2_imgref *l2_img, UINT16 AB_address)
+static UINT16 mfs_get_ABlink(struct mac_l2_imgref *l2_img, UINT16 AB_address)
 {
 	UINT16 reply;
 	int base;
@@ -2261,7 +2261,7 @@ static UINT16 mfs_get_ABlink(mac_l2_imgref *l2_img, UINT16 AB_address)
     AB_address (I): index in the array, which is an AB address
     data (I): 12-bit value to write in array
 */
-static void mfs_set_ABlink(mac_l2_imgref *l2_img, UINT16 AB_address, UINT16 data)
+static void mfs_set_ABlink(struct mac_l2_imgref *l2_img, UINT16 AB_address, UINT16 data)
 {
 	int base;
 
@@ -2299,7 +2299,7 @@ static void mfs_set_ABlink(mac_l2_imgref *l2_img, UINT16 AB_address, UINT16 data
 
     Return imgtool error code
 */
-static imgtoolerr_t mfs_file_get_nth_block_address(mac_fileref *fileref, UINT32 block_num, UINT32 *block_address)
+static imgtoolerr_t mfs_file_get_nth_block_address(struct mac_fileref *fileref, UINT32 block_num, UINT32 *block_address)
 {
 	UINT32 AB_num;
 	UINT32 i;
@@ -2309,7 +2309,7 @@ static imgtoolerr_t mfs_file_get_nth_block_address(mac_fileref *fileref, UINT32 
 
 	AB_num = block_num / fileref->l2_img->blocksperAB;
 
-	AB_address = fileref->u.mfs.stBlk;
+	AB_address = fileref->mfs.stBlk;
 	if ((AB_address == 0) || (AB_address >= fileref->l2_img->numABs+2))
 		/* 0 -> ??? */
 		return IMGTOOLERR_CORRUPTIMAGE;
@@ -2322,7 +2322,7 @@ static imgtoolerr_t mfs_file_get_nth_block_address(mac_fileref *fileref, UINT32 
 		AB_address = mfs_get_ABlink(fileref->l2_img, AB_address);
 		if ((AB_address == 0) || (AB_address >= fileref->l2_img->numABs+2))
 			/* 0 -> empty block: there is no way an empty block could make it
-            into the link chain!!! */
+			into the link chain!!! */
 			return IMGTOOLERR_CORRUPTIMAGE;
 		if (AB_address == 1)
 			/* EOF */
@@ -2343,14 +2343,14 @@ static imgtoolerr_t mfs_file_get_nth_block_address(mac_fileref *fileref, UINT32 
 
     fileref (I/O): open mac file reference
     lastAB (I): AB address on disk of last file AB (only if
-        fileref->u.mfs.stBlk != 1)
+        fileref->mfs.stBlk != 1)
     allocABs (I): number of ABs to allocate in addition to the current file
         allocation
     fblock (I): first file block to allocate (used for tag data)
 
     Return imgtool error code
 */
-static imgtoolerr_t mfs_file_allocABs(mac_fileref *fileref, UINT16 lastAB, UINT32 allocABs, UINT32 fblock)
+static imgtoolerr_t mfs_file_allocABs(struct mac_fileref *fileref, UINT16 lastAB, UINT32 allocABs, UINT32 fblock)
 {
 	int numABs = fileref->l2_img->numABs;
 	int free_ABs;
@@ -2401,8 +2401,8 @@ corrupt_free_block:
 	if (free_ABs < allocABs)
 		return IMGTOOLERR_NOSPACE;
 
-	if (fileref->u.mfs.stBlk != 1)
-	{	/* try to extend last file extent */
+	if (fileref->mfs.stBlk != 1)
+	{   /* try to extend last file extent */
 		/* append free ABs after last AB */
 		for (i=lastAB+1; (mfs_get_ABlink(fileref->l2_img, i) == 0) && (allocABs > 0) && (i < numABs); i++)
 		{
@@ -2437,7 +2437,7 @@ corrupt_free_block2:
 		{
 			mfs_set_ABlink(fileref->l2_img, lastAB, 1);
 			fileref->l2_img->freeABs = free_ABs;
-			return IMGTOOLERR_SUCCESS;	/* done */
+			return IMGTOOLERR_SUCCESS;  /* done */
 		}
 	}
 
@@ -2449,7 +2449,7 @@ corrupt_free_block2:
 		for (i=0; i<numABs; i++)
 		{
 			if (mfs_get_ABlink(fileref->l2_img, i) == 0)
-			{	/* found one free block */
+			{   /* found one free block */
 				/* compute its length */
 				extentBaseAB = i;
 				extentABlen = 0;
@@ -2497,14 +2497,14 @@ corrupt_free_block3:
 		}
 
 		if (firstBestExtentABlen != INT_MAX)
-		{	/* found one contiguous block which can hold it all */
+		{   /* found one contiguous block which can hold it all */
 			extentABlen = allocABs;
 			for (i=0; i<allocABs; i++)
 			{
-				if (fileref->u.mfs.stBlk != 1)
+				if (fileref->mfs.stBlk != 1)
 					mfs_set_ABlink(fileref->l2_img, lastAB, firstBestExtentBaseAB+i+2);
 				else
-					fileref->u.mfs.stBlk = firstBestExtentBaseAB+i+2;
+					fileref->mfs.stBlk = firstBestExtentBaseAB+i+2;
 				lastAB = firstBestExtentBaseAB+i;
 				free_ABs--;
 				/* set tag to allocated */
@@ -2514,7 +2514,7 @@ corrupt_free_block3:
 					tag.ftype = 1;
 					if ((fileref->forkType) == rsrc_fork)
 						tag.ftype |= 2;
-					tag.fattr = /*fattr*/ 0;		/* ***TODO*** */
+					tag.fattr = /*fattr*/ 0;        /* ***TODO*** */
 					for (j=0; j<fileref->l2_img->blocksperAB; j++)
 					{
 						set_UINT16BE(&tag.fblock, fblock & 0xffff);
@@ -2533,16 +2533,16 @@ corrupt_free_block3:
 			allocABs = 0;
 			mfs_set_ABlink(fileref->l2_img, lastAB, 1);
 			fileref->l2_img->freeABs = free_ABs;
-			/*return IMGTOOLERR_SUCCESS;*/	/* done */
+			/*return IMGTOOLERR_SUCCESS;*/  /* done */
 		}
 		else if (secondBestExtentABlen != 0)
-		{	/* jeez, we need to fragment it.  We use the largest smaller block to limit fragmentation. */
+		{   /* jeez, we need to fragment it.  We use the largest smaller block to limit fragmentation. */
 			for (i=0; i<secondBestExtentABlen; i++)
 			{
-				if (fileref->u.mfs.stBlk != 1)
+				if (fileref->mfs.stBlk != 1)
 					mfs_set_ABlink(fileref->l2_img, lastAB, secondBestExtentBaseAB+i+2);
 				else
-					fileref->u.mfs.stBlk = secondBestExtentBaseAB+i+2;
+					fileref->mfs.stBlk = secondBestExtentBaseAB+i+2;
 				lastAB = secondBestExtentBaseAB+i;
 				free_ABs--;
 				/* set tag to allocated */
@@ -2552,7 +2552,7 @@ corrupt_free_block3:
 					tag.ftype = 1;
 					if ((fileref->forkType) == rsrc_fork)
 						tag.ftype |= 2;
-					tag.fattr = /*fattr*/ 0;		/* ***TODO*** */
+					tag.fattr = /*fattr*/ 0;        /* ***TODO*** */
 					for (j=0; j<fileref->l2_img->blocksperAB; j++)
 					{
 						set_UINT16BE(&tag.fblock, fblock & 0xffff);
@@ -2573,7 +2573,7 @@ corrupt_free_block3:
 		else
 		{
 			mfs_set_ABlink(fileref->l2_img, lastAB, 1);
-			return IMGTOOLERR_NOSPACE;	/* This should never happen, as we pre-check that there is enough free space */
+			return IMGTOOLERR_NOSPACE;  /* This should never happen, as we pre-check that there is enough free space */
 		}
 	}
 
@@ -2590,7 +2590,7 @@ corrupt_free_block3:
 
     Return imgtool error code
 */
-static imgtoolerr_t mfs_file_setABeof(mac_fileref *fileref, UINT32 newABeof)
+static imgtoolerr_t mfs_file_setABeof(struct mac_fileref *fileref, UINT32 newABeof)
 {
 	UINT16 AB_address = 0;
 	UINT16 AB_link;
@@ -2603,7 +2603,7 @@ static imgtoolerr_t mfs_file_setABeof(mac_fileref *fileref, UINT32 newABeof)
 	assert(fileref->l2_img->format == L2I_MFS);
 
 	/* run through link chain until we reach the old or the new EOF */
-	AB_link = fileref->u.mfs.stBlk;
+	AB_link = fileref->mfs.stBlk;
 	if ((AB_link == 0) || (AB_link >= fileref->l2_img->numABs+2))
 		/* 0 -> ??? */
 		return IMGTOOLERR_CORRUPTIMAGE;
@@ -2613,7 +2613,7 @@ static imgtoolerr_t mfs_file_setABeof(mac_fileref *fileref, UINT32 newABeof)
 		AB_link = mfs_get_ABlink(fileref->l2_img, AB_address);
 		if ((AB_link == 0) || (AB_link >= fileref->l2_img->numABs+2))
 			/* 0 -> empty block: there is no way an empty block could make it
-            into the link chain!!! */
+			into the link chain!!! */
 			return IMGTOOLERR_CORRUPTIMAGE;
 
 		if (TAG_CHECKS)
@@ -2639,10 +2639,10 @@ static imgtoolerr_t mfs_file_setABeof(mac_fileref *fileref, UINT32 newABeof)
 	}
 
 	if (i == newABeof)
-	{	/* new EOF is shorter than old one */
+	{   /* new EOF is shorter than old one */
 		/* mark new eof */
 		if (i==0)
-			fileref->u.mfs.stBlk = 1;
+			fileref->mfs.stBlk = 1;
 		else
 		{
 			mfs_set_ABlink(fileref->l2_img, AB_address, 1);
@@ -2655,10 +2655,10 @@ static imgtoolerr_t mfs_file_setABeof(mac_fileref *fileref, UINT32 newABeof)
 			AB_address = AB_link - 2;
 			AB_link = mfs_get_ABlink(fileref->l2_img, AB_address);
 			if ((AB_link == 0) || (AB_link >= fileref->l2_img->numABs+2))
-			{	/* 0 -> empty block: there is no way an empty block could make
+			{   /* 0 -> empty block: there is no way an empty block could make
                 it into the link chain!!! */
 				if (MDB_dirty)
-				{	/* update MDB (freeABs field) and ABLink array */
+				{   /* update MDB (freeABs field) and ABLink array */
 					err = mfs_update_mdb(fileref->l2_img);
 					if (err)
 						return err;
@@ -2705,7 +2705,7 @@ static imgtoolerr_t mfs_file_setABeof(mac_fileref *fileref, UINT32 newABeof)
 		}
 	}
 	else
-	{	/* new EOF is larger than old one */
+	{   /* new EOF is larger than old one */
 		err = mfs_file_allocABs(fileref, AB_address, newABeof - i, i * fileref->l2_img->blocksperAB);
 		if (err)
 			return err;
@@ -2713,7 +2713,7 @@ static imgtoolerr_t mfs_file_setABeof(mac_fileref *fileref, UINT32 newABeof)
 	}
 
 	if (MDB_dirty)
-	{	/* update MDB (freeABs field) and ABLink array */
+	{   /* update MDB (freeABs field) and ABLink array */
 		err = mfs_update_mdb(fileref->l2_img);
 		if (err)
 			return err;
@@ -2770,13 +2770,13 @@ static int mfs_hashString(const mac_str255 string)
 /*
     HFS extents B-tree key
 */
-typedef struct hfs_extentKey
+struct hfs_extentKey
 {
-	UINT8    keyLength;		/* length of key, excluding this field */
-	UINT8    forkType;		/* 0 = data fork, FF = resource fork */
-	UINT32BE fileID;		/* file ID */
-	UINT16BE startBlock;	/* first file allocation block number in this extent */
-} hfs_extentKey;
+	UINT8    keyLength;     /* length of key, excluding this field */
+	UINT8    forkType;      /* 0 = data fork, FF = resource fork */
+	UINT32BE fileID;        /* file ID */
+	UINT16BE startBlock;    /* first file allocation block number in this extent */
+};
 enum
 {
 	keyLength_hfs_extentKey = sizeof(hfs_extentKey) - sizeof(UINT8)
@@ -2785,58 +2785,58 @@ enum
 /*
     HFS catalog B-tree key
 */
-typedef struct hfs_catKey
+struct hfs_catKey
 {
-	UINT8    keyLen;		/* key length */
-	UINT8    resrv1;		/* reserved */
-	UINT32BE parID;			/* parent directory ID */
-	mac_str31 cName;		/* catalog node name */
+	UINT8    keyLen;        /* key length */
+	UINT8    resrv1;        /* reserved */
+	UINT32BE parID;         /* parent directory ID */
+	mac_str31 cName;        /* catalog node name */
 							/* note that in index nodes, it is a mac_str31, but
-                                in leaf keys it's a variable-length string */
-} hfs_catKey;
+							    in leaf keys it's a variable-length string */
+};
 
 /*
     HFS catalog data record for a folder - 70 bytes
 */
-typedef struct hfs_catFolderData
+struct hfs_catFolderData
 {
-	UINT16BE recordType;		/* record type */
-	UINT16BE flags;				/* folder flags */
-	UINT16BE valence;			/* folder valence */
-	UINT32BE folderID;			/* folder ID */
-	UINT32BE createDate;		/* date and time of creation */
-	UINT32BE modifyDate;		/* date and time of last modification */
-	UINT32BE backupDate;		/* date and time of last backup */
-	mac_DInfo userInfo;			/* Finder information */
-	mac_DXInfo finderInfo;		/* additional Finder information */
-	UINT32BE reserved[4];		/* reserved - set to zero */
-} hfs_catFolderData;
+	UINT16BE recordType;        /* record type */
+	UINT16BE flags;             /* folder flags */
+	UINT16BE valence;           /* folder valence */
+	UINT32BE folderID;          /* folder ID */
+	UINT32BE createDate;        /* date and time of creation */
+	UINT32BE modifyDate;        /* date and time of last modification */
+	UINT32BE backupDate;        /* date and time of last backup */
+	mac_DInfo userInfo;         /* Finder information */
+	mac_DXInfo finderInfo;      /* additional Finder information */
+	UINT32BE reserved[4];       /* reserved - set to zero */
+};
 
 /*
     HFS catalog data record for a file - 102 bytes
 */
-typedef struct hfs_catFileData
+struct hfs_catFileData
 {
-	UINT16BE recordType;		/* record type */
-	UINT8    flags;				/* file flags */
-	UINT8    fileType;			/* file type (reserved, always 0?) */
-	mac_FInfo userInfo;			/* Finder information */
-	UINT32BE fileID;			/* file ID */
-	UINT16BE dataStartBlock;	/* not used - set to zero */
-	UINT32BE dataLogicalSize;	/* logical EOF of data fork */
-	UINT32BE dataPhysicalSize;	/* physical EOF of data fork */
-	UINT16BE rsrcStartBlock;	/* not used - set to zero */
-	UINT32BE rsrcLogicalSize;	/* logical EOF of resource fork */
-	UINT32BE rsrcPhysicalSize;	/* physical EOF of resource fork */
-	UINT32BE createDate;		/* date and time of creation */
-	UINT32BE modifyDate;		/* date and time of last modification */
-	UINT32BE backupDate;		/* date and time of last backup */
-	mac_FXInfo finderInfo;		/* additional Finder information */
-	UINT16BE clumpSize;			/* file clump size (not used) */
-	hfs_extent_3 dataExtents;	/* first data fork extent record */
-	hfs_extent_3 rsrcExtents;	/* first resource fork extent record */
-	UINT32BE reserved;			/* reserved - set to zero */
-} hfs_catFileData;
+	UINT16BE recordType;        /* record type */
+	UINT8    flags;             /* file flags */
+	UINT8    fileType;          /* file type (reserved, always 0?) */
+	mac_FInfo userInfo;         /* Finder information */
+	UINT32BE fileID;            /* file ID */
+	UINT16BE dataStartBlock;    /* not used - set to zero */
+	UINT32BE dataLogicalSize;   /* logical EOF of data fork */
+	UINT32BE dataPhysicalSize;  /* physical EOF of data fork */
+	UINT16BE rsrcStartBlock;    /* not used - set to zero */
+	UINT32BE rsrcLogicalSize;   /* logical EOF of resource fork */
+	UINT32BE rsrcPhysicalSize;  /* physical EOF of resource fork */
+	UINT32BE createDate;        /* date and time of creation */
+	UINT32BE modifyDate;        /* date and time of last modification */
+	UINT32BE backupDate;        /* date and time of last backup */
+	mac_FXInfo finderInfo;      /* additional Finder information */
+	UINT16BE clumpSize;         /* file clump size (not used) */
+	hfs_extent_3 dataExtents;   /* first data fork extent record */
+	hfs_extent_3 rsrcExtents;   /* first resource fork extent record */
+	UINT32BE reserved;          /* reserved - set to zero */
+};
 
 /*
     HFS catalog data record for a thread - 46 bytes
@@ -2844,34 +2844,34 @@ typedef struct hfs_catFileData
     The key for a thread record features the CNID of the item and an empty
     name, instead of the CNID of the parent and the item name.
 */
-typedef struct hfs_catThreadData
+struct hfs_catThreadData
 {
-	UINT16BE recordType;		/* record type */
-	UINT32BE reserved[2];		/* reserved - set to zero */
-	UINT32BE parID;				/* parent ID for this catalog node */
-	mac_str31 nodeName;			/* name of this catalog node */
-} hfs_catThreadData;
+	UINT16BE recordType;        /* record type */
+	UINT32BE reserved[2];       /* reserved - set to zero */
+	UINT32BE parID;             /* parent ID for this catalog node */
+	mac_str31 nodeName;         /* name of this catalog node */
+};
 
 /*
     union for all types at once
 */
-typedef union hfs_catData
+union hfs_catData
 {
 	UINT16BE dataType;
 	hfs_catFolderData folder;
 	hfs_catFileData file;
 	hfs_catThreadData thread;
-} hfs_catData;
+};
 
 /*
     HFS catalog record types
 */
 enum
 {
-	hcrt_Folder			= 0x0100,	/* Folder record */
-	hcrt_File			= 0x0200,	/* File record */
-	hcrt_FolderThread	= 0x0300,	/* Folder thread record */
-	hcrt_FileThread		= 0x0400	/* File thread record */
+	hcrt_Folder         = 0x0100,   /* Folder record */
+	hcrt_File           = 0x0200,   /* File record */
+	hcrt_FolderThread   = 0x0300,   /* Folder thread record */
+	hcrt_FileThread     = 0x0400    /* File thread record */
 };
 
 /*
@@ -2883,19 +2883,19 @@ enum
 */
 enum
 {
-	cfrf_fileLocked		= 0x01,		/* file is locked and cannot be written to */
-	cfrf_threadExists	= 0x02		/* a file thread record exists for this file */
+	cfrf_fileLocked     = 0x01,     /* file is locked and cannot be written to */
+	cfrf_threadExists   = 0x02      /* a file thread record exists for this file */
 };
 
 /*
     BT functions used by HFS functions
 */
-typedef struct BT_leaf_rec_enumerator
+struct BT_leaf_rec_enumerator
 {
 	mac_BTref *BTref;
 	UINT32 cur_node;
 	int cur_rec;
-} BT_leaf_rec_enumerator;
+};
 
 static imgtoolerr_t BT_open(mac_BTref *BTref, int (*key_compare_func)(const void *key1, const void *key2), int is_extent);
 static void BT_close(mac_BTref *BTref);
@@ -2907,12 +2907,12 @@ static imgtoolerr_t BT_get_keyed_record_data(mac_BTref *BTref, void *rec_ptr, in
 static imgtoolerr_t BT_leaf_rec_enumerator_open(mac_BTref *BTref, BT_leaf_rec_enumerator *enumerator);
 static imgtoolerr_t BT_leaf_rec_enumerator_read(BT_leaf_rec_enumerator *enumerator, void **record_ptr, int *rec_len);
 
-typedef struct hfs_cat_enumerator
+struct hfs_cat_enumerator
 {
-	mac_l2_imgref *l2_img;
+	struct mac_l2_imgref *l2_img;
 	BT_leaf_rec_enumerator BT_enumerator;
 	UINT32 parID;
-} hfs_cat_enumerator;
+};
 
 /*
     hfs_open_extents_file
@@ -2925,7 +2925,7 @@ typedef struct hfs_cat_enumerator
 
     Return imgtool error code
 */
-static imgtoolerr_t hfs_open_extents_file(mac_l2_imgref *l2_img, const hfs_mdb_t *mdb, mac_fileref *fileref)
+static imgtoolerr_t hfs_open_extents_file(struct mac_l2_imgref *l2_img, const struct hfs_mdb *mdb, struct mac_fileref *fileref)
 {
 	assert(l2_img->format == L2I_HFS);
 
@@ -2935,7 +2935,7 @@ static imgtoolerr_t hfs_open_extents_file(mac_l2_imgref *l2_img, const hfs_mdb_t
 	fileref->forkType = (mac_forkID)0x00;
 
 	fileref->eof = fileref->pLen = get_UINT32BE(mdb->xtFlSize);
-	memcpy(fileref->u.hfs.extents, mdb->xtExtRec, sizeof(hfs_extent_3));
+	memcpy(fileref->hfs.extents, mdb->xtExtRec, sizeof(hfs_extent_3));
 
 	fileref->crPs = 0;
 
@@ -2955,7 +2955,7 @@ static imgtoolerr_t hfs_open_extents_file(mac_l2_imgref *l2_img, const hfs_mdb_t
 
     Return imgtool error code
 */
-static imgtoolerr_t hfs_open_cat_file(mac_l2_imgref *l2_img, const hfs_mdb_t *mdb, mac_fileref *fileref)
+static imgtoolerr_t hfs_open_cat_file(struct mac_l2_imgref *l2_img, const struct hfs_mdb *mdb, struct mac_fileref *fileref)
 {
 	assert(l2_img->format == L2I_HFS);
 
@@ -2965,7 +2965,7 @@ static imgtoolerr_t hfs_open_cat_file(mac_l2_imgref *l2_img, const hfs_mdb_t *md
 	fileref->forkType = (mac_forkID)0x00;
 
 	fileref->eof = fileref->pLen = get_UINT32BE(mdb->ctFlSize);
-	memcpy(fileref->u.hfs.extents, mdb->ctExtRec, sizeof(hfs_extent_3));
+	memcpy(fileref->hfs.extents, mdb->ctExtRec, sizeof(hfs_extent_3));
 
 	fileref->crPs = 0;
 
@@ -3032,7 +3032,7 @@ static int hfs_catKey_compare(const void *p1, const void *p2)
 static imgtoolerr_t hfs_image_open(imgtool_image *image, imgtool_stream *stream)
 {
 	imgtoolerr_t err;
-	mac_l2_imgref *l2_img;
+	struct mac_l2_imgref *l2_img;
 	img_open_buf buf_local;
 	img_open_buf *buf;
 
@@ -3076,10 +3076,10 @@ static imgtoolerr_t hfs_image_open(imgtool_image *image, imgtool_stream *stream)
 	if ((l2_img->u.hfs.extents_BT.attributes & btha_bigKeysMask)
 			/*|| (l2_img->u.hfs.extents_BT.attributes & kBTVariableIndexKeysMask)*/
 			|| (l2_img->u.hfs.extents_BT.maxKeyLength != 7))
-	{	/* This is not supported by the HFS format */
+	{   /* This is not supported by the HFS format */
 		/* Variable Index keys are not supported either, but hopefully it will
-        not break this imgtool module if it set (though it would probably break
-        a real macintosh) */
+		not break this imgtool module if it set (though it would probably break
+		a real macintosh) */
 		BT_close(&l2_img->u.hfs.extents_BT);
 		return IMGTOOLERR_CORRUPTIMAGE;
 	}
@@ -3097,10 +3097,10 @@ static imgtoolerr_t hfs_image_open(imgtool_image *image, imgtool_stream *stream)
 	if ((l2_img->u.hfs.cat_BT.attributes & btha_bigKeysMask)
 			/*|| (l2_img->u.hfs.cat_BT.attributes & kBTVariableIndexKeysMask)*/
 			|| (l2_img->u.hfs.cat_BT.maxKeyLength != 37))
-	{	/* This is not supported by the HFS format */
+	{   /* This is not supported by the HFS format */
 		/* Variable Index keys are not supported either, but hopefully it will
-        not break this imgtool module if it set (though it would probably break
-        a real macintosh) */
+		not break this imgtool module if it set (though it would probably break
+		a real macintosh) */
 		BT_close(&l2_img->u.hfs.extents_BT);
 		BT_close(&l2_img->u.hfs.cat_BT);
 		return IMGTOOLERR_CORRUPTIMAGE;
@@ -3137,7 +3137,7 @@ static imgtoolerr_t hfs_image_open(imgtool_image *image, imgtool_stream *stream)
 
     l2_img (I/O): level-2 image reference
 */
-static void hfs_image_close(mac_l2_imgref *l2_img)
+static void hfs_image_close(struct mac_l2_imgref *l2_img)
 {
 	assert(l2_img->format == L2I_HFS);
 
@@ -3161,7 +3161,7 @@ static void hfs_image_close(mac_l2_imgref *l2_img)
 
     Return imgtool error code
 */
-static imgtoolerr_t hfs_get_cat_record_data(mac_l2_imgref *l2_img, void *rec_raw, int rec_len, hfs_catKey **rec_key, hfs_catData **rec_data)
+static imgtoolerr_t hfs_get_cat_record_data(struct mac_l2_imgref *l2_img, void *rec_raw, int rec_len, hfs_catKey **rec_key, hfs_catData **rec_data)
 {
 	hfs_catKey *lrec_key;
 	void *rec_data_raw;
@@ -3231,7 +3231,7 @@ static imgtoolerr_t hfs_get_cat_record_data(mac_l2_imgref *l2_img, void *rec_raw
 
     Return imgtool error code
 */
-static imgtoolerr_t hfs_cat_open(mac_l2_imgref *l2_img, const char *path, hfs_cat_enumerator *enumerator)
+static imgtoolerr_t hfs_cat_open(struct mac_l2_imgref *l2_img, const char *path, hfs_cat_enumerator *enumerator)
 {
 	imgtoolerr_t err;
 	UINT32 parID;
@@ -3304,7 +3304,7 @@ static imgtoolerr_t hfs_cat_read(hfs_cat_enumerator *enumerator, hfs_catKey **re
 
     Return imgtool error code
 */
-static imgtoolerr_t hfs_cat_search(mac_l2_imgref *l2_img, UINT32 parID, const mac_str31 cName, hfs_catKey **rec_key, hfs_catData **rec_data)
+static imgtoolerr_t hfs_cat_search(struct mac_l2_imgref *l2_img, UINT32 parID, const mac_str31 cName, hfs_catKey **rec_key, hfs_catData **rec_data)
 {
 	hfs_catKey search_key;
 	void *rec;
@@ -3317,7 +3317,7 @@ static imgtoolerr_t hfs_cat_search(mac_l2_imgref *l2_img, UINT32 parID, const ma
 		return IMGTOOLERR_UNEXPECTED;
 
 	/* generate search key */
-	search_key.keyLen = search_key.resrv1 = 0;	/* these fields do not matter
+	search_key.keyLen = search_key.resrv1 = 0;  /* these fields do not matter
                                                 to the compare function, so we
                                                 don't fill them */
 	set_UINT32BE(&search_key.parID, parID);
@@ -3352,7 +3352,7 @@ static imgtoolerr_t hfs_cat_search(mac_l2_imgref *l2_img, UINT32 parID, const ma
 
     Return imgtool error code
 */
-static imgtoolerr_t hfs_lookup_path(mac_l2_imgref *l2_img, const char *fpath, UINT32 *parID, mac_str255 filename, mac_dirent *cat_info)
+static imgtoolerr_t hfs_lookup_path(struct mac_l2_imgref *l2_img, const char *fpath, UINT32 *parID, mac_str255 filename, mac_dirent *cat_info)
 {
 	const char *element_start;
 	int element_len;
@@ -3366,7 +3366,7 @@ static imgtoolerr_t hfs_lookup_path(mac_l2_imgref *l2_img, const char *fpath, UI
 	/* iterate each path element */
 	element_start = fpath;
 	//level = 0;
-	*parID = 2;	/* root parID is 2 */
+	*parID = 2; /* root parID is 2 */
 
 	while(*element_start)
 	{
@@ -3436,7 +3436,7 @@ static imgtoolerr_t hfs_lookup_path(mac_l2_imgref *l2_img, const char *fpath, UI
 
     Return imgtool error code
 */
-static imgtoolerr_t hfs_file_open_internal(mac_l2_imgref *l2_img, const hfs_catFileData *file_rec, mac_forkID fork, mac_fileref *fileref)
+static imgtoolerr_t hfs_file_open_internal(struct mac_l2_imgref *l2_img, const hfs_catFileData *file_rec, mac_forkID fork, struct mac_fileref *fileref)
 {
 	assert(l2_img->format == L2I_HFS);
 
@@ -3450,13 +3450,13 @@ static imgtoolerr_t hfs_file_open_internal(mac_l2_imgref *l2_img, const hfs_catF
 	case data_fork:
 		fileref->eof = get_UINT32BE(file_rec->dataLogicalSize);
 		fileref->pLen = get_UINT32BE(file_rec->dataPhysicalSize);
-		memcpy(fileref->u.hfs.extents, file_rec->dataExtents, sizeof(hfs_extent_3));
+		memcpy(fileref->hfs.extents, file_rec->dataExtents, sizeof(hfs_extent_3));
 		break;
 
 	case rsrc_fork:
 		fileref->eof = get_UINT32BE(file_rec->rsrcLogicalSize);
 		fileref->pLen = get_UINT32BE(file_rec->rsrcPhysicalSize);
-		memcpy(fileref->u.hfs.extents, file_rec->rsrcExtents, sizeof(hfs_extent_3));
+		memcpy(fileref->hfs.extents, file_rec->rsrcExtents, sizeof(hfs_extent_3));
 		break;
 	}
 
@@ -3481,7 +3481,7 @@ static imgtoolerr_t hfs_file_open_internal(mac_l2_imgref *l2_img, const hfs_catF
 
     Return imgtool error code
 */
-static imgtoolerr_t hfs_file_open(mac_l2_imgref *l2_img, UINT32 parID, const mac_str255 filename, mac_forkID fork, mac_fileref *fileref)
+static imgtoolerr_t hfs_file_open(struct mac_l2_imgref *l2_img, UINT32 parID, const mac_str255 filename, mac_forkID fork, struct mac_fileref *fileref)
 {
 	hfs_catKey *catrec_key;
 	hfs_catData *catrec_data;
@@ -3499,8 +3499,8 @@ static imgtoolerr_t hfs_file_open(mac_l2_imgref *l2_img, UINT32 parID, const mac
 	if (dataRecType != hcrt_File)
 		return IMGTOOLERR_BADFILENAME;
 
-	fileref->u.hfs.parID = get_UINT32BE(catrec_key->parID);
-	mac_strcpy(fileref->u.hfs.filename, catrec_key->cName);
+	fileref->hfs.parID = get_UINT32BE(catrec_key->parID);
+	mac_strcpy(fileref->hfs.filename, catrec_key->cName);
 
 	/* open it */
 	return hfs_file_open_internal(l2_img, &catrec_data->file, fork, fileref);
@@ -3518,7 +3518,7 @@ static imgtoolerr_t hfs_file_open(mac_l2_imgref *l2_img, UINT32 parID, const mac
 
     Return imgtool error code
 */
-static imgtoolerr_t hfs_file_get_nth_block_address(mac_fileref *fileref, UINT32 block_num, UINT32 *block_address)
+static imgtoolerr_t hfs_file_get_nth_block_address(struct mac_fileref *fileref, UINT32 block_num, UINT32 *block_address)
 {
 	UINT32 AB_num;
 	UINT32 cur_AB;
@@ -3535,7 +3535,7 @@ static imgtoolerr_t hfs_file_get_nth_block_address(mac_fileref *fileref, UINT32 
 
 	AB_num = block_num / fileref->l2_img->blocksperAB;
 	cur_AB = 0;
-	cur_extents = fileref->u.hfs.extents;
+	cur_extents = fileref->hfs.extents;
 
 	/* first look in catalog tree extents */
 	for (i=0; i<3; i++)
@@ -3556,8 +3556,8 @@ static imgtoolerr_t hfs_file_get_nth_block_address(mac_fileref *fileref, UINT32 
 		set_UINT16BE(&search_key.startBlock, AB_num);
 
 		/* search for the record with the largest key lower than or equal to
-        search_key.  The keys are constructed in such a way that, if a record
-        includes AB_num, it is that one. */
+		search_key.  The keys are constructed in such a way that, if a record
+		includes AB_num, it is that one. */
 		err = BT_search_leaf_rec(&fileref->l2_img->u.hfs.extents_BT, &search_key,
 										NULL, NULL, &extents_BT_rec, &extents_BT_rec_len,
 										FALSE, NULL);
@@ -3640,31 +3640,31 @@ static imgtoolerr_t hfs_file_get_nth_block_address(mac_fileref *fileref, UINT32 
 
     Header of a node record
 */
-typedef struct BTNodeHeader
+struct BTNodeHeader
 {
-	UINT32BE fLink;			/* (index of) next node at this level */
-	UINT32BE bLink;			/* (index of) previous node at this level */
-	UINT8    kind;			/* kind of node (leaf, index, header, map) */
-	UINT8    height;		/* zero for header, map; 1 for leaf, 2 through
+	UINT32BE fLink;         /* (index of) next node at this level */
+	UINT32BE bLink;         /* (index of) previous node at this level */
+	UINT8    kind;          /* kind of node (leaf, index, header, map) */
+	UINT8    height;        /* zero for header, map; 1 for leaf, 2 through
                                 treeDepth for index (child is one LESS than
                                 parent, whatever IM says) */
-	UINT16BE numRecords;	/* number of records in this node */
-	UINT16BE reserved;		/* reserved; set to zero */
-} BTNodeHeader;
+	UINT16BE numRecords;    /* number of records in this node */
+	UINT16BE reserved;      /* reserved; set to zero */
+};
 
 /*
     Constants for BTNodeHeader kind field
 */
 enum
 {
-	btnk_leafNode	= 0xff,	/* leaf nodes hold the actual user data records
+	btnk_leafNode   = 0xff, /* leaf nodes hold the actual user data records
                                 with keys and data */
-	btnk_indexNode	= 0,	/* root and branch node that enable to efficiently
+	btnk_indexNode  = 0,    /* root and branch node that enable to efficiently
                                 search the leaf nodes for a specific key value */
-	btnk_headerNode	= 1,	/* unique node with b-tree information, pointer to
+	btnk_headerNode = 1,    /* unique node with b-tree information, pointer to
                                 root node and start of the node allocation
                                 bitmap */
-	btnk_mapNode	= 2		/* map nodes are created when the node allocation
+	btnk_mapNode    = 2     /* map nodes are created when the node allocation
                                 bitmap outgrows the header node */
 };
 
@@ -3672,28 +3672,28 @@ enum
     BTHeaderRecord: first record of a B-tree header node (second record is
     unused, and third is node allocation bitmap).
 */
-typedef struct BTHeaderRecord
+struct BTHeaderRecord
 {
-	UINT16BE treeDepth;		/* maximum height (usually leaf nodes) */
-	UINT32BE rootNode;		/* node number of root node */
-	UINT32BE leafRecords;	/* number of leaf records in all leaf nodes */
-	UINT32BE firstLeafNode;	/* node number of first leaf node */
-	UINT32BE lastLeafNode;	/* node number of last leaf node */
-	UINT16BE nodeSize;		/* size of a node, in bytes */
-	UINT16BE maxKeyLength;	/* maximum length of data (index + leaf) record keys;
+	UINT16BE treeDepth;     /* maximum height (usually leaf nodes) */
+	UINT32BE rootNode;      /* node number of root node */
+	UINT32BE leafRecords;   /* number of leaf records in all leaf nodes */
+	UINT32BE firstLeafNode; /* node number of first leaf node */
+	UINT32BE lastLeafNode;  /* node number of last leaf node */
+	UINT16BE nodeSize;      /* size of a node, in bytes */
+	UINT16BE maxKeyLength;  /* maximum length of data (index + leaf) record keys;
                                 length of all index record keys if
                                 btha_variableIndexKeysMask attribute flag is not set */
-	UINT32BE totalNodes;	/* total number of nodes in tree */
-	UINT32BE freeNodes;		/* number of unused (free) nodes in tree */
+	UINT32BE totalNodes;    /* total number of nodes in tree */
+	UINT32BE freeNodes;     /* number of unused (free) nodes in tree */
 
-	UINT16BE reserved1;		/* unused */
-	UINT32BE clumpSize;		/* used in some HFS implementations? (reserved in
+	UINT16BE reserved1;     /* unused */
+	UINT32BE clumpSize;     /* used in some HFS implementations? (reserved in
                                 early HFS implementations, and in HFS Plus) */
-	UINT8    btreeType;		/* reserved - set to 0 */
-	UINT8    reserved2;		/* reserved */
-	UINT32BE attributes;	/* persistent attributes about the tree */
-	UINT32BE reserved3[16];	/* reserved */
-} BTHeaderRecord;
+	UINT8    btreeType;     /* reserved - set to 0 */
+	UINT8    reserved2;     /* reserved */
+	UINT32BE attributes;    /* persistent attributes about the tree */
+	UINT32BE reserved3[16]; /* reserved */
+};
 
 static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent);
 
@@ -3732,12 +3732,12 @@ static imgtoolerr_t BT_open(mac_BTref *BTref, int (*key_compare_func)(const void
 
 	if ((node_header.kind != btnk_headerNode) || (get_UINT16BE(node_header.numRecords) < 3)
 			|| (node_header.height != 0))
-		return IMGTOOLERR_CORRUPTIMAGE;	/* right??? */
+		return IMGTOOLERR_CORRUPTIMAGE; /* right??? */
 
 	/* CHEESY HACK: we assume that the header record immediately follows the
-    node header.  This is because we need to know the node length to know where
-    the record pointers are located, but we need to read the header record to
-    know the node length. */
+	node header.  This is because we need to know the node length to know where
+	the record pointers are located, but we need to read the header record to
+	know the node length. */
 	err = mac_file_read(&BTref->fileref, sizeof(header_rec), &header_rec);
 	if (err)
 		return err;
@@ -3955,13 +3955,13 @@ static imgtoolerr_t BT_get_keyed_record_data(mac_BTref *BTref, void *rec_ptr, in
 
     Return imgtool error code
 */
-typedef struct data_nodes_t
+struct data_nodes_t
 {
 	void *buf;
 	UINT32 node_num;
 	UINT32 cur_rec;
 	UINT32 num_recs;
-} data_nodes_t;
+};
 static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 {
 	UINT16 node_numRecords;
@@ -3983,7 +3983,7 @@ static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 	UINT32 run_bit_len;
 	UINT32 actualFreeNodes;
 	imgtoolerr_t err;
-	UINT32 maxExtentAB = 0, maxExtentNode = 0, extentEOL = 0;	/* if is_extent is TRUE */
+	UINT32 maxExtentAB = 0, maxExtentNode = 0, extentEOL = 0;   /* if is_extent is TRUE */
 
 	if (is_extent)
 	{
@@ -3996,7 +3996,7 @@ static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 		case L2I_HFS:
 			maxExtentAB = 0;
 			for (j=0; j<3; j++)
-				maxExtentAB += get_UINT16BE(BTref->fileref.u.hfs.extents[j].numABlks);
+				maxExtentAB += get_UINT16BE(BTref->fileref.hfs.extents[j].numABlks);
 			maxExtentNode = (UINT64)maxExtentAB * 512 * BTref->fileref.l2_img->blocksperAB
 										/ BTref->nodeSize;
 			extentEOL = FALSE;
@@ -4070,7 +4070,7 @@ static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 			goto bail;
 		}
 		for (i=0; i<BTref->treeDepth; i++)
-			data_nodes[i].buf = NULL;	/* required for function postlog to work should next loop fail */
+			data_nodes[i].buf = NULL;   /* required for function postlog to work should next loop fail */
 		for (i=0; i<BTref->treeDepth; i++)
 		{
 			data_nodes[i].buf = malloc(BTref->nodeSize);
@@ -4093,14 +4093,14 @@ static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 			}
 			/* check that node has not been used for another purpose */
 			/* this check is unecessary because the current consistency checks
-            that forward and back linking match and that node height is correct
-            are enough to detect such errors */
+			that forward and back linking match and that node height is correct
+			are enough to detect such errors */
 #if 0
 			if (bitmap[cur_node >> 3] & (0x80 >> (cur_node & 7)))
-            {
-                err = IMGTOOLERR_CORRUPTIMAGE;
-                goto bail;
-            }
+			{
+				err = IMGTOOLERR_CORRUPTIMAGE;
+				goto bail;
+			}
 #endif
 			/* add node in bitmap */
 			bitmap[cur_node >> 3] |= (0x80 >> (cur_node & 7));
@@ -4152,7 +4152,7 @@ static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 		}
 
 		/* check that a) the root node has no successor, and b) that we have really
-        read the first leaf node */
+		read the first leaf node */
 		if (get_UINT32BE(((BTNodeHeader *) data_nodes[BTref->treeDepth-1].buf)->fLink)
 				|| (cur_node != BTref->firstLeafNode))
 		{
@@ -4210,7 +4210,7 @@ static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 						goto bail;
 					}
 					/* next test is not necessary because we have checked that
-                    the root node has no successor */
+					the root node has no successor */
 #if 0
 					if (i < BTref->treeDepth-1)
 					{
@@ -4231,7 +4231,7 @@ static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 			if (is_extent && !extentEOL)
 			{
 				/* extract current leaf record and update maxExtentAB and
-                maxExtentNode */
+				maxExtentNode */
 				hfs_extentKey *extentKey;
 				hfs_extent *extentData;
 
@@ -4244,11 +4244,11 @@ static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 				if ((extentKey->keyLength < 7) || (extentKey->forkType != 0) || (get_UINT32BE(extentKey->fileID) != 3)
 						|| (get_UINT16BE(extentKey->startBlock) != maxExtentAB))
 					/* the key is corrupt or does not concern the extent
-                    B-tree: set the extentEOL flag so that we stop looking for
-                    further extent records for the extent B-tree */
+					B-tree: set the extentEOL flag so that we stop looking for
+					further extent records for the extent B-tree */
 					extentEOL = TRUE;
 				else
-				{	/* this key concerns the extent B-tree: update maxExtentAB
+				{   /* this key concerns the extent B-tree: update maxExtentAB
                     and maxExtentNode */
 					/* extract record data ptr */
 					err = BT_get_keyed_record_data(BTref, rec1, rec1_len, &rec1_data, &rec1_data_len);
@@ -4256,8 +4256,8 @@ static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 						goto bail;
 					if (rec1_data_len < sizeof(hfs_extent)*3)
 						/* the record is corrupt: set the extentEOL flag so
-                        that we stop looking for further extent records for the
-                        extent B-tree */
+						that we stop looking for further extent records for the
+						extent B-tree */
 						extentEOL = TRUE;
 					else
 					{
@@ -4273,7 +4273,7 @@ static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 				{
 					/* check that the extent B-Tree has been defined entirely */
 					if (maxExtentNode < totalNodes)
-					{	/* no good */
+					{   /* no good */
 						err = IMGTOOLERR_CORRUPTIMAGE;
 						goto bail;
 					}
@@ -4306,7 +4306,7 @@ static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 			{
 				i--;
 				if (i>0)
-				{	/* extract first record of root if it is an index node */
+				{   /* extract first record of root if it is an index node */
 					err = BT_node_get_keyed_record(BTref, data_nodes[i].buf, TRUE, data_nodes[i].cur_rec, &rec1, &rec1_len);
 					if (err)
 						goto bail;
@@ -4341,7 +4341,7 @@ static imgtoolerr_t BT_check(mac_BTref *BTref, int is_extent)
 				cur_node = get_UINT32BE(* (UINT32BE *)rec1_data);
 
 				/* compare node index with data of current record of upper
-                level */
+				level */
 				if (cur_node != data_nodes[i].node_num)
 				{
 					err = IMGTOOLERR_CORRUPTIMAGE;
@@ -4378,7 +4378,7 @@ end_of_list:
 	}
 
 	/* check map node chain */
-	cur_node = 0;	/* node 0 is the header node... */
+	cur_node = 0;   /* node 0 is the header node... */
 	bitmap[0] |= 0x80;
 	/* check back linking */
 	if (get_UINT32BE(((BTNodeHeader *) BTref->node_buf)->bLink))
@@ -4394,14 +4394,14 @@ end_of_list:
 		prev_node = cur_node;
 		/* check that node has not been used for another purpose */
 		/* this check is unecessary because the current consistency checks that
-        forward and back linking match and that node height is correct are
-        enough to detect such errors */
+		forward and back linking match and that node height is correct are
+		enough to detect such errors */
 #if 0
 		if (bitmap[cur_node >> 3] & (0x80 >> (cur_node & 7)))
-        {
-            err = IMGTOOLERR_CORRUPTIMAGE;
-            goto bail;
-        }
+		{
+			err = IMGTOOLERR_CORRUPTIMAGE;
+			goto bail;
+		}
 #endif
 		/* add node in bitmap */
 		bitmap[cur_node >> 3] |= (0x80 >> (cur_node & 7));
@@ -4574,7 +4574,7 @@ static imgtoolerr_t BT_search_leaf_rec(mac_BTref *BTref, const void *search_key,
 		}
 
 		if (! last_rec)
-		{	/* all keys are greater than the search key: the search key is
+		{   /* all keys are greater than the search key: the search key is
             nowhere in the tree */
 			if (search_exact_match)
 				return IMGTOOLERR_FILENOTFOUND;
@@ -4704,7 +4704,7 @@ static imgtoolerr_t BT_leaf_rec_enumerator_read(BT_leaf_rec_enumerator *enumerat
 	/* iterate to next record */
 	enumerator->cur_rec++;
 	if (enumerator->cur_rec >= node_numRecords)
-	{	/* iterate to next node if last record (not required, but will improve
+	{   /* iterate to next node if last record (not required, but will improve
         performance on next iteration) */
 		enumerator->cur_node = get_UINT32BE(((BTNodeHeader *) enumerator->BTref->node_buf)->fLink);
 		enumerator->cur_rec = 0;
@@ -4842,13 +4842,13 @@ static imgtoolerr_t BT_leaf_rec_enumerator_read(BT_leaf_rec_enumerator *enumerat
 /*
     Resource header
 */
-typedef struct rsrc_header
+struct rsrc_header
 {
-	UINT32BE data_offs;		/* Offset from beginning of resource fork to resource data */
-	UINT32BE map_offs;		/* Offset from beginning of resource fork to resource map */
-	UINT32BE data_len;		/* Length of resource data */
-	UINT32BE map_len;		/* Length of resource map */
-} rsrc_header;
+	UINT32BE data_offs;     /* Offset from beginning of resource fork to resource data */
+	UINT32BE map_offs;      /* Offset from beginning of resource fork to resource map */
+	UINT32BE data_len;      /* Length of resource data */
+	UINT32BE map_len;       /* Length of resource map */
+};
 
 /*
     Resource data: each data entry is preceded by its len (UINT32BE)
@@ -4858,60 +4858,60 @@ typedef struct rsrc_header
 /*
     Resource map:
 */
-typedef struct rsrc_map_header
+struct rsrc_map_header
 {
-	rsrc_header reserved0;	/* Reserved for copy of resource header */
-	UINT32BE reserved1;		/* Reserved for handle to next resource map */
-	UINT16BE reserved2;		/* Reserved for file reference number */
+	rsrc_header reserved0;  /* Reserved for copy of resource header */
+	UINT32BE reserved1;     /* Reserved for handle to next resource map */
+	UINT16BE reserved2;     /* Reserved for file reference number */
 
-	UINT16BE attr;			/* Resource fork attributes */
-	UINT16BE typelist_offs;	/* Offset from beginning of map to resource type list */
-	UINT16BE namelist_offs;	/* Offset from beginning of map to resource name list */
-	UINT16BE type_count;	/* Number of types in the map minus 1 */
+	UINT16BE attr;          /* Resource fork attributes */
+	UINT16BE typelist_offs; /* Offset from beginning of map to resource type list */
+	UINT16BE namelist_offs; /* Offset from beginning of map to resource name list */
+	UINT16BE type_count;    /* Number of types in the map minus 1 */
 							/* This is actually part of the type list, which matters for offsets */
-} rsrc_map_header;
+};
 
 /*
     Resource type list entry
 */
-typedef struct rsrc_type_entry
+struct rsrc_type_entry
 {
-	UINT32BE type;			/* Resource type */
-	UINT16BE ref_count;		/* Number of resources of this type in map minus 1 */
-	UINT16BE ref_offs;		/* Offset from beginning of resource type list to reference list for this type */
-} rsrc_type_entry;
+	UINT32BE type;          /* Resource type */
+	UINT16BE ref_count;     /* Number of resources of this type in map minus 1 */
+	UINT16BE ref_offs;      /* Offset from beginning of resource type list to reference list for this type */
+};
 
 /*
     Resource reference list entry
 */
-typedef struct rsrc_ref_entry
+struct rsrc_ref_entry
 {
-	UINT16BE id;			/* Resource ID */
-	UINT16BE name_offs;		/* Offset from beginning of resource name list to resource name */
+	UINT16BE id;            /* Resource ID */
+	UINT16BE name_offs;     /* Offset from beginning of resource name list to resource name */
 							/* (-1 if none) */
-	UINT8 attr;				/* Resource attributes */
-	UINT24BE data_offs;		/* Offset from beginning of resource data to data for this resource */
-	UINT32BE reserved;		/* Reserved for handle to resource */
-} rsrc_ref_entry;
+	UINT8 attr;             /* Resource attributes */
+	UINT24BE data_offs;     /* Offset from beginning of resource data to data for this resource */
+	UINT32BE reserved;      /* Reserved for handle to resource */
+};
 
 /*
     Resource name list entry: this is just a standard macintosh string
 */
 
-typedef struct mac_resfileref
+struct mac_resfileref
 {
-	mac_fileref fileref;	/* open resource fork ref (you may open resources
+	mac_fileref fileref;    /* open resource fork ref (you may open resources
                                 files in data fork, too, if you ever need to,
                                 but Classic MacOS never does such a thing
                                 (MacOS X often does so, though)) */
-	UINT32 data_offs;		/* Offset from beginning of resource file to resource data */
-	UINT32 map_offs;		/* Offset from beginning of resource file to resource data */
+	UINT32 data_offs;       /* Offset from beginning of resource file to resource data */
+	UINT32 map_offs;        /* Offset from beginning of resource file to resource data */
 
-	UINT16 typelist_offs;	/* Offset from beginning of map to resource type list */
-	UINT16 namelist_offs;	/* Offset from beginning of map to resource name list */
-	UINT16 type_count;		/* Number of types in the map minus 1 */
+	UINT16 typelist_offs;   /* Offset from beginning of map to resource type list */
+	UINT16 namelist_offs;   /* Offset from beginning of map to resource name list */
+	UINT16 type_count;      /* Number of types in the map minus 1 */
 							/* This is actually part of the type list, which matters for offsets */
-} mac_resfileref;
+};
 
 #ifdef UNUSED_FUNCTION
 /*
@@ -5144,7 +5144,7 @@ static imgtoolerr_t resfile_get_resdata(mac_resfileref *resfileref, const rsrc_r
 		return IMGTOOLERR_UNEXPECTED;
 
 	if (offset)
-	{	/* seek to resource data offset in resource data section */
+	{   /* seek to resource data offset in resource data section */
 		err = mac_file_seek(&resfileref->fileref, resfileref->data_offs+data_offs+4+offset);
 		if (err)
 			return err;
@@ -5212,7 +5212,7 @@ static imgtoolerr_t resfile_get_resdata(mac_resfileref *resfileref, const rsrc_r
 
     Return imgtool error code
 */
-static imgtoolerr_t get_comment(mac_l2_imgref *l2_img, UINT16 id, mac_str255 comment)
+static imgtoolerr_t get_comment(struct mac_l2_imgref *l2_img, UINT16 id, mac_str255 comment)
 {
 	static const UINT8 desktop_fname[] = {'\7','D','e','s','k','t','o','p'};
 	#define restype_FCMT (('F' << 24) | ('C' << 16) | ('M' << 8) | 'T')
@@ -5246,8 +5246,8 @@ static imgtoolerr_t get_comment(mac_l2_imgref *l2_img, UINT16 id, mac_str255 com
 		/* hurk */
 		/*return IMGTOOLERR_CORRUPTIMAGE;*/
 		/* people willing to extend the MFM comment field (you know, the kind
-        of masochists that try to support 20-year-old OSes) might append extra
-        fields, so we just truncate the resource */
+		of masochists that try to support 20-year-old OSes) might append extra
+		fields, so we just truncate the resource */
 		reslen = 256;
 
 	/* extract comment data */
@@ -5281,7 +5281,7 @@ static imgtoolerr_t mac_image_writefile(imgtool_partition *partition, const char
 */
 static void mac_image_exit(imgtool_image *img)
 {
-	mac_l2_imgref *image = get_imgref(img);
+	struct mac_l2_imgref *image = get_imgref(img);
 
 	mac_image_close(image);
 }
@@ -5294,7 +5294,7 @@ static void mac_image_exit(imgtool_image *img)
 */
 static void mac_image_info(imgtool_image *img, char *string, size_t len)
 {
-	mac_l2_imgref *image = get_imgref(img);
+	struct mac_l2_imgref *image = get_imgref(img);
 
 	switch (image->format)
 	{
@@ -5311,29 +5311,29 @@ static void mac_image_info(imgtool_image *img, char *string, size_t len)
 /*
     MFS/HFS catalog iterator, used when imgtool reads the catalog
 */
-typedef struct mac_iterator
+struct mac_iterator
 {
 	mac_format format;
-	mac_l2_imgref *l2_img;
+	struct mac_l2_imgref *l2_img;
 	union
 	{
 		struct
 		{
-			mfs_dirref dirref;				/* open directory reference */
+			mfs_dirref dirref;              /* open directory reference */
 		} mfs;
 		struct
 		{
-			hfs_cat_enumerator catref;		/* catalog file enumerator */
+			hfs_cat_enumerator catref;      /* catalog file enumerator */
 		} hfs;
 	} u;
-} mac_iterator;
+};
 
 /*
     Open the disk catalog for enumeration
 */
 static imgtoolerr_t mac_image_beginenum(imgtool_directory *enumeration, const char *path)
 {
-	mac_l2_imgref *image = get_imgref(imgtool_directory_image(enumeration));
+	struct mac_l2_imgref *image = get_imgref(imgtool_directory_image(enumeration));
 	mac_iterator *iter = (mac_iterator *) imgtool_directory_extrabytes(enumeration);
 	imgtoolerr_t err = IMGTOOLERR_UNEXPECTED;
 
@@ -5407,7 +5407,7 @@ static imgtoolerr_t mfs_image_nextenum(mac_iterator *iter, imgtool_dirent *ent)
 static void concat_fname(char *dest, int *dest_cur_pos, int dest_max_len, const char *src)
 {
 	static const char ellipsis[] = { '.', '.', '.' };
-	int src_len = strlen(src);	/* number of chars from src to insert */
+	int src_len = strlen(src);  /* number of chars from src to insert */
 
 	if (src_len <= *dest_cur_pos)
 	{
@@ -5435,7 +5435,7 @@ static imgtoolerr_t hfs_image_nextenum(mac_iterator *iter, imgtool_dirent *ent)
 	UINT16 dataRecType;
 	imgtoolerr_t err;
 	/* currently, the mac->C conversion transcodes one mac char with at most 3
-    C chars */
+	C chars */
 	int cur_name_head;
 
 	assert(iter->format == L2I_HFS);
@@ -5494,7 +5494,7 @@ static imgtoolerr_t hfs_image_nextenum(mac_iterator *iter, imgtool_dirent *ent)
 	parID = get_UINT32BE(catrec_key->parID);
 
 	/* looping while (parID != 1) will display the volume name; looping while
-    (parID != 2) won't */
+	(parID != 2) won't */
 	while (parID != /*1*/2)
 	{
 		/* search catalog for folder thread */
@@ -5524,7 +5524,7 @@ static imgtoolerr_t hfs_image_nextenum(mac_iterator *iter, imgtool_dirent *ent)
 		}
 
 		/* got folder thread record: insert the folder name at the start of
-        file path, then iterate */
+		file path, then iterate */
 		mac_to_c_strncpy(buf, sizeof(buf), catrec_data->thread.nodeName);
 		concat_fname(ent->filename, &cur_name_head, ARRAY_LENGTH(ent->filename) - 1, ":");
 		concat_fname(ent->filename, &cur_name_head, ARRAY_LENGTH(ent->filename) - 1, buf);
@@ -5574,7 +5574,7 @@ static imgtoolerr_t mac_image_freespace(imgtool_partition *partition, UINT64 *si
 }
 
 #ifdef UNUSED_FUNCTION
-static imgtoolerr_t mac_get_comment(mac_l2_imgref *image, mac_str255 filename, const mac_dirent *cat_info, mac_str255 comment)
+static imgtoolerr_t mac_get_comment(struct mac_l2_imgref *image, mac_str255 filename, const mac_dirent *cat_info, mac_str255 comment)
 {
 	imgtoolerr_t err = IMGTOOLERR_SUCCESS;
 	UINT16 commentID;
@@ -5591,7 +5591,7 @@ static imgtoolerr_t mac_get_comment(mac_l2_imgref *image, mac_str255 filename, c
 
 		case L2I_HFS:
 			/* This is the way to get Finder comments in system <= 7.  Attached
-            comments use another method, and Finder 8 uses yet another one. */
+			comments use another method, and Finder 8 uses yet another one. */
 			commentID = get_UINT16BE(cat_info->flXFinderInfo.comment);
 			if (commentID)
 				err = get_comment(image, commentID, comment);
@@ -5609,7 +5609,7 @@ static imgtoolerr_t mac_image_readfile(imgtool_partition *partition, const char 
 {
 	imgtoolerr_t err;
 	imgtool_image *img = imgtool_partition_image(partition);
-	mac_l2_imgref *image = get_imgref(img);
+	struct mac_l2_imgref *image = get_imgref(img);
 	UINT32 parID;
 	mac_str255 filename;
 	mac_dirent cat_info;
@@ -5659,7 +5659,7 @@ static imgtoolerr_t mac_image_readfile(imgtool_partition *partition, const char 
 static imgtoolerr_t mac_image_writefile(imgtool_partition *partition, const char *fpath, const char *fork, imgtool_stream *sourcef, option_resolution *writeoptions)
 {
 	imgtool_image *img = imgtool_partition_image(partition);
-	mac_l2_imgref *image = get_imgref(img);
+	struct mac_l2_imgref *image = get_imgref(img);
 	UINT32 parID;
 	mac_str255 filename;
 	mac_dirent cat_info;
@@ -5690,10 +5690,10 @@ static imgtoolerr_t mac_image_writefile(imgtool_partition *partition, const char
 	set_UINT32BE(&cat_info.flFinderInfo.type, 0x3F3F3F3F);
 	set_UINT32BE(&cat_info.flFinderInfo.creator, 0x3F3F3F3F);
 	fork_len = stream_size(sourcef);
-	/*comment[0] = get_UINT16BE(header.comment_len);*/	/* comment length */
+	/*comment[0] = get_UINT16BE(header.comment_len);*/  /* comment length */
 	/* Next two fields are set to 0 with MFS volumes.  IIRC, 0 normally
-    means system script: I don't think MFS stores the file name script code
-    anywhere on disk, so it should be a reasonable approximation. */
+	means system script: I don't think MFS stores the file name script code
+	anywhere on disk, so it should be a reasonable approximation. */
 
 	/* create file */
 	/* clear inited flag and file location in window */
@@ -5741,7 +5741,7 @@ static imgtoolerr_t mac_image_listforks(imgtool_partition *partition, const char
 	mac_dirent cat_info;
 	int fork_num = 0;
 	imgtool_image *img = imgtool_partition_image(partition);
-	mac_l2_imgref *image = get_imgref(img);
+	struct mac_l2_imgref *image = get_imgref(img);
 
 	/* resolve path and fetch file info from directory/catalog */
 	err = mac_lookup_path(image, path, &parID, filename, &cat_info, FALSE);
@@ -5778,7 +5778,7 @@ static imgtoolerr_t mac_image_getattrs(imgtool_partition *partition, const char 
 	UINT32 parID;
 	mac_str255 filename;
 	mac_dirent cat_info;
-	mac_l2_imgref *image = get_imgref(img);
+	struct mac_l2_imgref *image = get_imgref(img);
 	int i;
 
 	/* resolve path and fetch file info from directory/catalog */
@@ -5846,7 +5846,7 @@ static imgtoolerr_t mac_image_setattrs(imgtool_partition *partition, const char 
 	mac_str255 filename;
 	mac_dirent cat_info;
 	imgtool_image *img = imgtool_partition_image(partition);
-	mac_l2_imgref *image = get_imgref(img);
+	struct mac_l2_imgref *image = get_imgref(img);
 	int i;
 
 	/* resolve path and fetch file info from directory/catalog */
@@ -6196,7 +6196,7 @@ static imgtoolerr_t mac_image_geticoninfo(imgtool_partition *partition, const ch
 	finder_flags = (UINT32) attr_values[2].i;
 
 	/* check the bundle bit; if clear (and the type is not 'APPL'), use the
-     * desktop file */
+	 * desktop file */
 	if (!(finder_flags & 0x2000) && (type_code != /* APPL */ 0x4150504C))
 		path = "Desktop\0";
 
@@ -6319,7 +6319,7 @@ static imgtoolerr_t mac_image_suggesttransfer(imgtool_partition *partition, cons
 	mac_str255 filename;
 	mac_dirent cat_info;
 	imgtool_image *img = imgtool_partition_image(partition);
-	mac_l2_imgref *image = get_imgref(img);
+	struct mac_l2_imgref *image = get_imgref(img);
 	mac_filecategory_t file_category = MAC_FILECATEGORY_DATA;
 
 	if (path)
@@ -6351,29 +6351,29 @@ static void generic_mac_get_info(const imgtool_class *imgclass, UINT32 state, un
 	switch(state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case IMGTOOLINFO_INT_OPEN_IS_STRICT:				info->i = 1; break;
-		case IMGTOOLINFO_INT_IMAGE_EXTRA_BYTES:				info->i = sizeof(struct mac_l2_imgref); break;
-		case IMGTOOLINFO_INT_DIRECTORY_EXTRA_BYTES:				info->i = sizeof(struct mac_iterator); break;
-		case IMGTOOLINFO_INT_PATH_SEPARATOR:				info->i = ':'; break;
+		case IMGTOOLINFO_INT_OPEN_IS_STRICT:                info->i = 1; break;
+		case IMGTOOLINFO_INT_IMAGE_EXTRA_BYTES:             info->i = sizeof(struct mac_l2_imgref); break;
+		case IMGTOOLINFO_INT_DIRECTORY_EXTRA_BYTES:             info->i = sizeof(struct mac_iterator); break;
+		case IMGTOOLINFO_INT_PATH_SEPARATOR:                info->i = ':'; break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case IMGTOOLINFO_STR_FILE:							strcpy(info->s = imgtool_temp_str(), __FILE__); break;
-		case IMGTOOLINFO_STR_EOLN:							strcpy(info->s = imgtool_temp_str(), "\r"); break;
+		case IMGTOOLINFO_STR_FILE:                          strcpy(info->s = imgtool_temp_str(), __FILE__); break;
+		case IMGTOOLINFO_STR_EOLN:                          strcpy(info->s = imgtool_temp_str(), "\r"); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case IMGTOOLINFO_PTR_MAKE_CLASS:					info->make_class = imgtool_floppy_make_class; break;
-		case IMGTOOLINFO_PTR_CLOSE:							/* info->close = mac_image_exit */; break;
-		case IMGTOOLINFO_PTR_INFO:							info->info = mac_image_info; break;
-		case IMGTOOLINFO_PTR_BEGIN_ENUM:					info->begin_enum = mac_image_beginenum; break;
-		case IMGTOOLINFO_PTR_NEXT_ENUM:						info->next_enum = mac_image_nextenum; break;
-		case IMGTOOLINFO_PTR_FREE_SPACE:					info->free_space = mac_image_freespace; break;
-		case IMGTOOLINFO_PTR_READ_FILE:						info->read_file = mac_image_readfile; break;
-		case IMGTOOLINFO_PTR_LIST_FORKS:					info->list_forks = mac_image_listforks; break;
-		case IMGTOOLINFO_PTR_GET_ATTRS:						info->get_attrs = mac_image_getattrs; break;
-		case IMGTOOLINFO_PTR_SET_ATTRS:						info->set_attrs = mac_image_setattrs; break;
-		case IMGTOOLINFO_PTR_GET_ICON_INFO:					info->get_iconinfo = mac_image_geticoninfo; break;
-		case IMGTOOLINFO_PTR_SUGGEST_TRANSFER:				info->suggest_transfer = mac_image_suggesttransfer; break;
-		case IMGTOOLINFO_PTR_FLOPPY_FORMAT:					info->p = (void *) floppyoptions_apple35_mac; break;
+		case IMGTOOLINFO_PTR_MAKE_CLASS:                    info->make_class = imgtool_floppy_make_class; break;
+		case IMGTOOLINFO_PTR_CLOSE:                         /* info->close = mac_image_exit */; break;
+		case IMGTOOLINFO_PTR_INFO:                          info->info = mac_image_info; break;
+		case IMGTOOLINFO_PTR_BEGIN_ENUM:                    info->begin_enum = mac_image_beginenum; break;
+		case IMGTOOLINFO_PTR_NEXT_ENUM:                     info->next_enum = mac_image_nextenum; break;
+		case IMGTOOLINFO_PTR_FREE_SPACE:                    info->free_space = mac_image_freespace; break;
+		case IMGTOOLINFO_PTR_READ_FILE:                     info->read_file = mac_image_readfile; break;
+		case IMGTOOLINFO_PTR_LIST_FORKS:                    info->list_forks = mac_image_listforks; break;
+		case IMGTOOLINFO_PTR_GET_ATTRS:                     info->get_attrs = mac_image_getattrs; break;
+		case IMGTOOLINFO_PTR_SET_ATTRS:                     info->set_attrs = mac_image_setattrs; break;
+		case IMGTOOLINFO_PTR_GET_ICON_INFO:                 info->get_iconinfo = mac_image_geticoninfo; break;
+		case IMGTOOLINFO_PTR_SUGGEST_TRANSFER:              info->suggest_transfer = mac_image_suggesttransfer; break;
+		case IMGTOOLINFO_PTR_FLOPPY_FORMAT:                 info->p = (void *) floppyoptions_apple35_mac; break;
 	}
 }
 
@@ -6384,13 +6384,13 @@ void mac_mfs_get_info(const imgtool_class *imgclass, UINT32 state, union imgtool
 	switch(state)
 	{
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case IMGTOOLINFO_STR_NAME:							strcpy(info->s = imgtool_temp_str(), "mac_mfs"); break;
-		case IMGTOOLINFO_STR_DESCRIPTION:					strcpy(info->s = imgtool_temp_str(), "Mac MFS Floppy"); break;
+		case IMGTOOLINFO_STR_NAME:                          strcpy(info->s = imgtool_temp_str(), "mac_mfs"); break;
+		case IMGTOOLINFO_STR_DESCRIPTION:                   strcpy(info->s = imgtool_temp_str(), "Mac MFS Floppy"); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case IMGTOOLINFO_PTR_FLOPPY_CREATE:					info->create = mfs_image_create; break;
-		case IMGTOOLINFO_PTR_FLOPPY_OPEN:					info->open = mfs_image_open; break;
-		case IMGTOOLINFO_PTR_WRITE_FILE:					info->write_file = mac_image_writefile; break;
+		case IMGTOOLINFO_PTR_FLOPPY_CREATE:                 info->create = mfs_image_create; break;
+		case IMGTOOLINFO_PTR_FLOPPY_OPEN:                   info->open = mfs_image_open; break;
+		case IMGTOOLINFO_PTR_WRITE_FILE:                    info->write_file = mac_image_writefile; break;
 
 		default: generic_mac_get_info(imgclass, state, info); break;
 	}
@@ -6403,11 +6403,11 @@ void mac_hfs_get_info(const imgtool_class *imgclass, UINT32 state, union imgtool
 	switch(state)
 	{
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case IMGTOOLINFO_STR_NAME:							strcpy(info->s = imgtool_temp_str(), "mac_hfs"); break;
-		case IMGTOOLINFO_STR_DESCRIPTION:					strcpy(info->s = imgtool_temp_str(), "Mac HFS Floppy"); break;
+		case IMGTOOLINFO_STR_NAME:                          strcpy(info->s = imgtool_temp_str(), "mac_hfs"); break;
+		case IMGTOOLINFO_STR_DESCRIPTION:                   strcpy(info->s = imgtool_temp_str(), "Mac HFS Floppy"); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case IMGTOOLINFO_PTR_FLOPPY_OPEN:					info->open = hfs_image_open; break;
+		case IMGTOOLINFO_PTR_FLOPPY_OPEN:                   info->open = hfs_image_open; break;
 
 		default: generic_mac_get_info(imgclass, state, info); break;
 	}

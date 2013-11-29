@@ -7,7 +7,6 @@
     http://www.robotrontechnik.de/index.htm?/html/computer/a7150.htm
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i86/i86.h"
@@ -17,8 +16,13 @@ class a7150_state : public driver_device
 {
 public:
 	a7150_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu") { }
 
+	virtual void machine_reset();
+	virtual void video_start();
+	UINT32 screen_update_a7150(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
 };
 
 
@@ -33,15 +37,15 @@ static INPUT_PORTS_START( a7150 )
 INPUT_PORTS_END
 
 
-static MACHINE_RESET(a7150)
+void a7150_state::machine_reset()
 {
 }
 
-static VIDEO_START( a7150 )
+void a7150_state::video_start()
 {
 }
 
-static SCREEN_UPDATE( a7150 )
+UINT32 a7150_state::screen_update_a7150(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	return 0;
 }
@@ -51,21 +55,18 @@ static MACHINE_CONFIG_START( a7150, a7150_state )
 	MCFG_CPU_ADD("maincpu", I8086, 4915000)
 	MCFG_CPU_PROGRAM_MAP(a7150_mem)
 
-	MCFG_MACHINE_RESET(a7150)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
-	MCFG_SCREEN_UPDATE(a7150)
+	MCFG_SCREEN_UPDATE_DRIVER(a7150_state, screen_update_a7150)
 
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
-	MCFG_VIDEO_START(a7150)
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -77,4 +78,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY           FULLNAME       FLAGS */
-COMP( 1986, a7150,  0,      0,       a7150,     a7150,    0,     "VEB Robotron",   "A7150", GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 1986, a7150,  0,      0,       a7150,     a7150, driver_device,    0,     "VEB Robotron",   "A7150", GAME_NOT_WORKING | GAME_NO_SOUND)

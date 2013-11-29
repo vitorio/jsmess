@@ -7,30 +7,27 @@
 
 **********************************************************************/
 
-#include "emu.h"
-#include "cpu/z80/z80.h"
 #include "includes/p2000t.h"
-#include "sound/speaker.h"
 
-#define P2000M_101F_CASDAT	0x01
-#define P2000M_101F_CASCMD	0x02
-#define P2000M_101F_CASREW	0x04
-#define P2000M_101F_CASFOR	0x08
-#define P2000M_101F_KEYINT	0x40
-#define P2000M_101F_PRNOUT	0x80
+#define P2000M_101F_CASDAT  0x01
+#define P2000M_101F_CASCMD  0x02
+#define P2000M_101F_CASREW  0x04
+#define P2000M_101F_CASFOR  0x08
+#define P2000M_101F_KEYINT  0x40
+#define P2000M_101F_PRNOUT  0x80
 
-#define	P2000M_202F_PINPUT	0x01
-#define P2000M_202F_PREADY	0x02
-#define	P2000M_202F_STRAPN	0x04
-#define P2000M_202F_CASENB	0x08
-#define P2000M_202F_CASPOS	0x10
-#define P2000M_202F_CASEND	0x20
-#define P2000M_202F_CASCLK	0x40
-#define P2000M_202F_CASDAT	0x80
+#define P2000M_202F_PINPUT  0x01
+#define P2000M_202F_PREADY  0x02
+#define P2000M_202F_STRAPN  0x04
+#define P2000M_202F_CASENB  0x08
+#define P2000M_202F_CASPOS  0x10
+#define P2000M_202F_CASEND  0x20
+#define P2000M_202F_CASCLK  0x40
+#define P2000M_202F_CASDAT  0x80
 
-#define P2000M_303F_VIDEO	0x01
+#define P2000M_303F_VIDEO   0x01
 
-#define P2000M_707F_DISA	0x01
+#define P2000M_707F_DISA    0x01
 
 /*
     Keyboard port 0x0x
@@ -42,27 +39,29 @@
     If the keyboard interrupt is disabled, reading one of these ports
     will read the corresponding keyboard matrix row
 */
-READ8_HANDLER (	p2000t_port_000f_r )
+READ8_MEMBER( p2000t_state::p2000t_port_000f_r )
 {
-	p2000t_state *state = space->machine().driver_data<p2000t_state>();
 	static const char *const keynames[] = {
 		"KEY0", "KEY1", "KEY2", "KEY3", "KEY4",
 		"KEY5", "KEY6", "KEY7", "KEY8", "KEY9"
 	};
 
-	if (state->m_port_101f & P2000M_101F_KEYINT)
+	if (m_port_101f & P2000M_101F_KEYINT)
 	{
-		return (input_port_read(space->machine(), "KEY0") & input_port_read(space->machine(), "KEY1") &
-		input_port_read(space->machine(), "KEY2") & input_port_read(space->machine(), "KEY3") &
-		input_port_read(space->machine(), "KEY4") & input_port_read(space->machine(), "KEY5") &
-		input_port_read(space->machine(), "KEY6") & input_port_read(space->machine(), "KEY7") &
-		input_port_read(space->machine(), "KEY8") & input_port_read(space->machine(), "KEY9"));
+		return (
+		ioport("KEY0")->read() & ioport("KEY1")->read() &
+		ioport("KEY2")->read() & ioport("KEY3")->read() &
+		ioport("KEY4")->read() & ioport("KEY5")->read() &
+		ioport("KEY6")->read() & ioport("KEY7")->read() &
+		ioport("KEY8")->read() & ioport("KEY9")->read());
 	}
-	else if (offset < 10)
+	else
+	if (offset < 10)
 	{
-		return (input_port_read(space->machine(), keynames[offset]));
+		return (ioport(keynames[offset])->read());
 	}
-	return (0xff);
+	else
+		return 0xff;
 }
 
 
@@ -78,7 +77,7 @@ READ8_HANDLER (	p2000t_port_000f_r )
     bit 6 - Cassette read clock
     bit 7 - Cassette read data
 */
-READ8_HANDLER (	p2000t_port_202f_r )
+READ8_MEMBER( p2000t_state::p2000t_port_202f_r )
 {
 	return (0xff);
 }
@@ -96,10 +95,9 @@ READ8_HANDLER (	p2000t_port_202f_r )
     bit 6 - Keyboard interrupt enable
     bit 7 - Printer output
 */
-WRITE8_HANDLER ( p2000t_port_101f_w )
+WRITE8_MEMBER( p2000t_state::p2000t_port_101f_w )
 {
-	p2000t_state *state = space->machine().driver_data<p2000t_state>();
-	state->m_port_101f = data;
+	m_port_101f = data;
 }
 
 /*
@@ -114,10 +112,9 @@ WRITE8_HANDLER ( p2000t_port_101f_w )
     bit 6 - \
     bit 7 - Video disable (0 = enabled)
 */
-WRITE8_HANDLER ( p2000t_port_303f_w )
+WRITE8_MEMBER( p2000t_state::p2000t_port_303f_w )
 {
-	p2000t_state *state = space->machine().driver_data<p2000t_state>();
-	state->m_port_303f = data;
+	m_port_303f = data;
 }
 
 /*
@@ -132,10 +129,9 @@ WRITE8_HANDLER ( p2000t_port_303f_w )
     bit 6 - Unused
     bit 7 - Unused
 */
-WRITE8_HANDLER ( p2000t_port_505f_w )
+WRITE8_MEMBER( p2000t_state::p2000t_port_505f_w )
 {
-	device_t *speaker = space->machine().device(SPEAKER_TAG);
-	speaker_level_w(speaker, BIT(data,0));
+	m_speaker->level_w(BIT(data, 0));
 }
 
 /*
@@ -154,13 +150,11 @@ WRITE8_HANDLER ( p2000t_port_505f_w )
     video refresh is disabled when the CPU accesses video memory
 
 */
-WRITE8_HANDLER ( p2000t_port_707f_w )
+WRITE8_MEMBER( p2000t_state::p2000t_port_707f_w )
 {
-	p2000t_state *state = space->machine().driver_data<p2000t_state>();
-	state->m_port_707f = data;
+	m_port_707f = data;
 }
 
-WRITE8_HANDLER ( p2000t_port_888b_w ) {}
-WRITE8_HANDLER ( p2000t_port_8c90_w ) {}
-WRITE8_HANDLER ( p2000t_port_9494_w ) {}
-
+WRITE8_MEMBER( p2000t_state::p2000t_port_888b_w ) {}
+WRITE8_MEMBER( p2000t_state::p2000t_port_8c90_w ) {}
+WRITE8_MEMBER( p2000t_state::p2000t_port_9494_w ) {}

@@ -4,11 +4,19 @@ PowerVu D9234 STB (c) 1997 Scientific Atlanta
 
 20-mar-2010 skeleton driver
 
-This, it seems, is a satellite TV receiver. It converts the satellite
-signal (often encrypted) into standard signals to plug into a TV set.
+http://www.vetrun.net/forums/showthread.php?t=395
+http://colibri.net63.net/powervu.htm
+http://www.growl.de/d9234/
+
+Google 'powervu 9234' for plenty more info.
+
+Meant for payTV providers to decrypt signals from the satellite and pump
+them out on a local cable network. The powervu encryption is very secure.
+
+There is a menu system, and with the right equipment, many secrets can
+be found!
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/arm7/arm7.h"
@@ -18,22 +26,86 @@ class pv9234_state : public driver_device
 {
 public:
 	pv9234_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_p_ram(*this, "p_ram"),
+		m_maincpu(*this, "maincpu") { }
 
 	DECLARE_WRITE32_MEMBER(debug_w);
-	UINT32 *m_p_ram;
+	DECLARE_WRITE32_MEMBER(debug1_w);
+	DECLARE_WRITE32_MEMBER(debug2_w);
+	required_shared_ptr<UINT32> m_p_ram;
+	virtual void machine_reset();
+	virtual void video_start();
+	UINT32 screen_update_pv9234(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
 };
 
 
+/*
+This is the serial output to a terminal, used for debugging.
+The boot process goes something like this:
 
+Start
+
+Config: 0x00001080 (Max Config: 00003C80)
+MV 00000004.00000003
+DL Avail
+IOP Com. O.K. 00000004
+Check CRC ...
+CRC O.K.
+Launch App
+**************
+* Ver 2.05 *
+**************
+Compiled by: FURLANO
+Date & time: Nov 3 1997, 15:34:29
+All printing enabled. Press space bar to toggle on/off.
+Time stamping enabled. Press 't' to turn on/off.
+Press 'o' to toggle printing of MPEG Xport error messages.
+*/
 WRITE32_MEMBER( pv9234_state::debug_w )
 {
-	printf("%02x %c\n",data,data); // this prints 'Start' to the console.
+	if (data)
+	{
+		printf("%02x %c\n",data,data); // this prints 'Start' to the console.
+		logerror("debug=%02x %c\n",data,data);
+	}
+}
+
+WRITE32_MEMBER( pv9234_state::debug1_w )
+{
+	UINT8 i,j;
+	if (data)
+	{
+		for (i = 0; i < 4; i++)
+		{
+			j = (data & 0xff000000) >> 24;
+			data <<= 8;
+//          printf("%c",j); // this prints 'OFF' to the console.
+			logerror("debug1=%02x %c\n",j,j);
+		}
+//      printf("\n");
+	}
+}
+
+WRITE32_MEMBER( pv9234_state::debug2_w )
+{
+	if (data)
+		logerror("debug2=%02x\n",data); // ignore the huge amount of zeroes here
 }
 
 static ADDRESS_MAP_START(pv9234_map, AS_PROGRAM, 32, pv9234_state)
+	// AM_RANGE(0x00000000, 0x00000033) AM_WRITE something
+	// AM_RANGE(0x00000044, 0x00000047) AM_WRITE something
+	// AM_RANGE(0x00000060, 0x0000006b) AM_WRITE something
+	// AM_RANGE(0x00007000, 0x00007003) AM_WRITE something
+	// AM_RANGE(0x00008000, 0x00008003) AM_WRITE something
+	AM_RANGE(0x00008014, 0x00008017) AM_WRITE(debug1_w)
+	// AM_RANGE(0x00008020, 0x00008027) AM_WRITE something
+	AM_RANGE(0x000080c0, 0x000080c3) AM_WRITE(debug2_w)
 	AM_RANGE(0x000080cc, 0x000080cf) AM_WRITE(debug_w)
-	AM_RANGE(0x0003e000, 0x0003efff) AM_RAM AM_BASE(m_p_ram)
+	// AM_RANGE(0x000080d0, 0x000080d3) AM_WRITE something
+	AM_RANGE(0x0003e000, 0x0003efff) AM_RAM AM_SHARE("p_ram")
 	AM_RANGE(0x00000000, 0x0007ffff) AM_ROM AM_REGION("maincpu",0) //FLASH ROM!
 	AM_RANGE(0x00080000, 0x00087fff) AM_MIRROR(0x78000) AM_RAM AM_SHARE("share1")//mirror is a guess, writes a prg at 0xc0200 then it jumps at b0200 (!)
 	AM_RANGE(0xe0000000, 0xe0007fff) AM_MIRROR(0x0fff8000) AM_RAM AM_SHARE("share1")
@@ -45,20 +117,19 @@ static INPUT_PORTS_START( pv9234 )
 INPUT_PORTS_END
 
 
-static MACHINE_RESET(pv9234)
+void pv9234_state::machine_reset()
 {
-	pv9234_state *state = machine.driver_data<pv9234_state>();
 	int i;
 
 	for(i=0;i<0x1000/4;i++)
-		state->m_p_ram[i] = 0;
+		m_p_ram[i] = 0;
 }
 
-static VIDEO_START( pv9234 )
+void pv9234_state::video_start()
 {
 }
 
-static SCREEN_UPDATE( pv9234 )
+UINT32 pv9234_state::screen_update_pv9234(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	return 0;
 }
@@ -68,21 +139,18 @@ static MACHINE_CONFIG_START( pv9234, pv9234_state )
 	MCFG_CPU_ADD("maincpu", ARM7, 4915000) //probably a more powerful clone.
 	MCFG_CPU_PROGRAM_MAP(pv9234_map)
 
-	MCFG_MACHINE_RESET(pv9234)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
-	MCFG_SCREEN_UPDATE(pv9234)
+	MCFG_SCREEN_UPDATE_DRIVER(pv9234_state, screen_update_pv9234)
 
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
-	MCFG_VIDEO_START(pv9234)
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -97,4 +165,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-SYST( 1997, pv9234,  0,       0,     pv9234,    pv9234,   0,  "Scientific Atlanta", "PowerVu D9234", GAME_NOT_WORKING | GAME_NO_SOUND)
+SYST( 1997, pv9234,  0,       0,     pv9234,    pv9234, driver_device,   0,  "Scientific Atlanta", "PowerVu D9234", GAME_NOT_WORKING | GAME_NO_SOUND)

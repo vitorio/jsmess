@@ -99,7 +99,8 @@
 #include <stdio.h>
 #include <assert.h>
 
-#include "formats/ap_dsk35.h"
+#include "emu.h"
+#include "ap_dsk35.h"
 
 struct apple35_tag
 {
@@ -122,8 +123,8 @@ static const UINT8 apple35_tracklen_800kb[80] =
 	12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
 	11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
 	10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-	 9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,
-	 8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8
+		9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,
+		8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8
 };
 
 /* blocks of data used to nibblize tracks */
@@ -179,14 +180,14 @@ static const INT16 rev_diskbytes[] =
 static const UINT8 blk1[] =
 {
 	/*0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xD5, 0xAA, 0x96*/
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xD5, 0xAA, 0x96*/
 	0xFF,
 	0xFF, 0x3F, 0xCF, 0xF3, 0xFC, 0xFF,
 	0xFF, 0x3F, 0xCF, 0xF3, 0xFC, 0xFF,
@@ -208,7 +209,7 @@ static const UINT8 blk3[] =
 
 
 
-static struct apple35_tag *get_apple35_tag(floppy_image *floppy)
+static struct apple35_tag *get_apple35_tag(floppy_image_legacy *floppy)
 {
 	struct apple35_tag *tag;
 	tag = (struct apple35_tag *) floppy_tag(floppy);
@@ -217,7 +218,7 @@ static struct apple35_tag *get_apple35_tag(floppy_image *floppy)
 
 
 
-int apple35_sectors_per_track(floppy_image *image, int track)
+int apple35_sectors_per_track(floppy_image_legacy *image, int track)
 {
 	int sectors;
 
@@ -242,15 +243,15 @@ int apple35_sectors_per_track(floppy_image *image, int track)
 */
 static void sony_nibblize35(const UINT8 *in, UINT8 *nib_ptr, UINT8 *csum)
 {
-	int	i, j;
+	int i, j;
 	UINT32 c1, c2, c3, c4;
 	UINT8 val;
 	UINT8 w1, w2, w3, w4;
 	UINT8 b1[175], b2[175], b3[175];
 
 	/* Copy from the user's buffer to our buffer, while computing
-     * the three-byte data checksum
-     */
+	 * the three-byte data checksum
+	 */
 
 	i = 0;
 	j = 0;
@@ -326,7 +327,7 @@ static void sony_nibblize35(const UINT8 *in, UINT8 *nib_ptr, UINT8 *csum)
 */
 static void sony_denibblize35(UINT8 *out, const UINT8 *nib_ptr, UINT8 *checksum)
 {
-	int	i, j;
+	int i, j;
 	UINT32 c1,c2,c3,c4;
 	UINT8 val;
 	UINT8 w1,w2,w3=0,w4;
@@ -347,8 +348,8 @@ static void sony_denibblize35(UINT8 *out, const UINT8 *nib_ptr, UINT8 *checksum)
 	}
 
 	/* Copy from the user's buffer to our buffer, while computing
-     * the three-byte data checksum
-     */
+	 * the three-byte data checksum
+	 */
 
 	i = 0;
 	j = 0;
@@ -428,19 +429,22 @@ UINT8 sony_fetchtrack(const UINT8 *buffer, size_t buffer_len, size_t *pos)
 	while ((data & 0x80) == 0)
 	{
 		/* this code looks weird because it isn't simply rotating the new bit
-         * in, but for some reason it won't work if I rotate the bit in; I
-         * have to match the algorithm used by the old code */
+		 * in, but for some reason it won't work if I rotate the bit in; I
+		 * have to match the algorithm used by the old code */
 		data <<= 1;
 		data |= (buffer[*pos / 8] >> (8 - ((*pos % 8) + 1)));
 		(*pos)++;
 		*pos %= (buffer_len * 8);
 	}
+
+//    printf("sony_fetchtrack: pos %ld = %02x\n", *pos/8, data);
+
 	return data;
 }
 
 
 
-static UINT32 apple35_get_offset(floppy_image *floppy, int head, int track, int sector, UINT32 *tag_offset)
+static UINT32 apple35_get_offset(floppy_image_legacy *floppy, int head, int track, int sector, UINT32 *tag_offset)
 {
 	int i;
 	UINT32 sector_index = 0;
@@ -464,29 +468,31 @@ static UINT32 apple35_get_offset(floppy_image *floppy, int head, int track, int 
 
 	if (tag_offset)
 	{
-		*tag_offset = sector_index * 12 + tag->tag_offset;
+		*tag_offset = sector_index * 12;
 		if (*tag_offset >= tag->tag_size)
 			*tag_offset = ~0;
+		*tag_offset += tag->tag_offset;
 	}
 	return sector_index * 0x200 + tag->data_offset;
 }
 
 
 
-static floperr_t apple35_read_sector(floppy_image *floppy, int head, int track, int sector, void *buffer, size_t buflen)
+static floperr_t apple35_read_sector(floppy_image_legacy *floppy, int head, int track, int sector, void *buffer, size_t buflen)
 {
 	UINT32 data_offset;
-//  printf("Read sector: T %d S %d H %d\n", track, sector, head);
 	data_offset = apple35_get_offset(floppy, head, track, sector, NULL);
 	if (data_offset == ~0)
+	{
 		return FLOPPY_ERROR_SEEKERROR;
+	}
 	floppy_image_read(floppy, buffer, data_offset, buflen);
 	return FLOPPY_ERROR_SUCCESS;
 }
 
 
 
-static floperr_t apple35_write_sector(floppy_image *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
+static floperr_t apple35_write_sector(floppy_image_legacy *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
 {
 	UINT32 data_offset;
 
@@ -499,32 +505,34 @@ static floperr_t apple35_write_sector(floppy_image *floppy, int head, int track,
 
 
 
-static floperr_t apple35_read_sector_td(floppy_image *floppy, int head, int track, int sector, void *buffer, size_t buflen)
+static floperr_t apple35_read_sector_td(floppy_image_legacy *floppy, int head, int track, int sector, void *buffer, size_t buflen)
 {
 	floperr_t err;
 	UINT32 tag_offset = 0;
 
 	assert(buflen == 524);
 
-//  printf("Read sector TD: T %d S %d H %d\n", track, sector, head);
-
 	/* first read the sector */
 	err = apple35_read_sector(floppy, head, track, sector, ((UINT8 *) buffer) + 12, 512);
 	if (err)
+	{
 		return err;
+	}
 
 	/* read the tag data, if possible */
 	memset(buffer, '\0', 12);
 	apple35_get_offset(floppy, head, track, sector, &tag_offset);
 	if (tag_offset != ~0)
+	{
 		floppy_image_read(floppy, buffer, tag_offset, 12);
+	}
 
 	return FLOPPY_ERROR_SUCCESS;
 }
 
 
 
-static floperr_t apple35_write_sector_td(floppy_image *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
+static floperr_t apple35_write_sector_td(floppy_image_legacy *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
 {
 	floperr_t err;
 	UINT32 tag_offset = 0;
@@ -546,7 +554,7 @@ static floperr_t apple35_write_sector_td(floppy_image *floppy, int head, int tra
 
 
 
-static floperr_t apple35_get_sector_length(floppy_image *floppy, int head, int track, int sector, UINT32 *sector_length)
+static floperr_t apple35_get_sector_length(floppy_image_legacy *floppy, int head, int track, int sector, UINT32 *sector_length)
 {
 	*sector_length = 512;
 	return FLOPPY_ERROR_SUCCESS;
@@ -554,21 +562,21 @@ static floperr_t apple35_get_sector_length(floppy_image *floppy, int head, int t
 
 
 
-static int apple35_get_heads_per_disk(floppy_image *floppy)
+static int apple35_get_heads_per_disk(floppy_image_legacy *floppy)
 {
 	return get_apple35_tag(floppy)->sides;
 }
 
 
 
-static int apple35_get_tracks_per_disk(floppy_image *floppy)
+static int apple35_get_tracks_per_disk(floppy_image_legacy *floppy)
 {
 	return 80;
 }
 
 
 
-static UINT32 apple35_get_track_size(floppy_image *floppy, int head, int track)
+static UINT32 apple35_get_track_size(floppy_image_legacy *floppy, int head, int track)
 {
 	if ((track < 0) || (track >= 80))
 		return 0;
@@ -588,7 +596,7 @@ static UINT8 calculate_side(int head, int track)
 
 
 
-static floperr_t apple35_read_track(floppy_image *floppy, int head, int track, UINT64 offset, void *buffer, size_t buflen)
+static floperr_t apple35_read_track(floppy_image_legacy *floppy, int head, int track, UINT64 offset, void *buffer, size_t buflen)
 {
 	floperr_t err;
 	size_t pos = 0;
@@ -615,7 +623,10 @@ static floperr_t apple35_read_track(floppy_image *floppy, int head, int track, U
 		/* read the sector */
 		err = apple35_read_sector_td(floppy, head, track, sector, sector_data, ARRAY_LENGTH(sector_data));
 		if (err)
+		{
 			return err;
+		}
+
 		sony_nibblize35(sector_data, nibble_data, checksum);
 
 		for (i = 0; i < ARRAY_LENGTH(blk1); i++)
@@ -643,12 +654,13 @@ static floperr_t apple35_read_track(floppy_image *floppy, int head, int track, U
 		for (i = 0; i < ARRAY_LENGTH(blk3); i++)
 			sony_filltrack((UINT8*)buffer, buflen, &pos, blk3[i]);
 	}
+
 	return FLOPPY_ERROR_SUCCESS;
 }
 
 
 
-static floperr_t apple35_write_track(floppy_image *floppy, int head, int track, UINT64 offset, const void *buffer, size_t buflen)
+static floperr_t apple35_write_track(floppy_image_legacy *floppy, int head, int track, UINT64 offset, const void *buffer, size_t buflen)
 {
 	floperr_t err;
 	size_t pos = 0;
@@ -721,7 +733,7 @@ static floperr_t apple35_write_track(floppy_image *floppy, int head, int track, 
 		while((val = sony_fetchtrack((UINT8*)buffer, buflen, &pos)) == 0xFF)
 			j++;
 		if (val != 0xD5)
-			continue;	/* lost bit slip mark! */
+			continue;   /* lost bit slip mark! */
 		j++;
 
 		if (sony_fetchtrack((UINT8*)buffer, buflen, &pos) != 0xAA)
@@ -749,9 +761,9 @@ static floperr_t apple35_write_track(floppy_image *floppy, int head, int track, 
 			sony_fetchtrack((UINT8*)buffer, buflen, &pos);
 		}
 
-		sony_fetchtrack((UINT8*)buffer, buflen, &pos);	/* should get 0xDE */
-		sony_fetchtrack((UINT8*)buffer, buflen, &pos);	/* should get 0xAA */
-		sony_fetchtrack((UINT8*)buffer, buflen, &pos);	/* should get 0xFF */
+		sony_fetchtrack((UINT8*)buffer, buflen, &pos);  /* should get 0xDE */
+		sony_fetchtrack((UINT8*)buffer, buflen, &pos);  /* should get 0xAA */
+		sony_fetchtrack((UINT8*)buffer, buflen, &pos);  /* should get 0xFF */
 
 		/* did we already write this sector? */
 		if ((found_sectors & (1 << sector)) == 0)
@@ -771,7 +783,7 @@ static floperr_t apple35_write_track(floppy_image *floppy, int head, int track, 
 
 
 
-static floperr_t apple35_construct(floppy_image *floppy, UINT32 data_offset, UINT32 data_size,
+static floperr_t apple35_construct(floppy_image_legacy *floppy, UINT32 data_offset, UINT32 data_size,
 	UINT32 tag_offset, UINT32 tag_size, INT16 format_byte, UINT8 sides, int is_1440k)
 {
 	struct apple35_tag *tag;
@@ -874,22 +886,22 @@ static FLOPPY_CONSTRUCT(apple35_raw_construct)
 
 struct header_diskcopy
 {
-	UINT8 disk_name[64];	/* name of the disk */
-	UINT32 data_size;		/* total size of data for all sectors (512*number_of_sectors) */
-	UINT32 tag_size;		/* total size of tag data for all sectors (12*number_of_sectors for GCR 3.5" floppies, 20*number_of_sectors for HD20, 0 otherwise) */
-	UINT32 data_checksum;	/* CRC32 checksum of all sector data */
-	UINT32 tag_checksum;	/* CRC32 checksum of all tag data */
-	UINT8 disk_format;		/* 0 = 400K, 1 = 800K, 2 = 720K, 3 = 1440K  (other values reserved) */
-	UINT8 format_byte;		/* should be $00 Apple II, $01 Lisa, $02 Mac MFS ??? */
+	UINT8 disk_name[64];    /* name of the disk */
+	UINT32 data_size;       /* total size of data for all sectors (512*number_of_sectors) */
+	UINT32 tag_size;        /* total size of tag data for all sectors (12*number_of_sectors for GCR 3.5" floppies, 20*number_of_sectors for HD20, 0 otherwise) */
+	UINT32 data_checksum;   /* CRC32 checksum of all sector data */
+	UINT32 tag_checksum;    /* CRC32 checksum of all tag data */
+	UINT8 disk_format;      /* 0 = 400K, 1 = 800K, 2 = 720K, 3 = 1440K  (other values reserved) */
+	UINT8 format_byte;      /* should be $00 Apple II, $01 Lisa, $02 Mac MFS ??? */
 							/* $12 = 400K, $22 = >400K Macintosh (DiskCopy uses this value for
-                               all Apple II disks not 800K in size, and even for some of those),
-                               $24 = 800K Apple II disk */
-	UINT16 magic;			/* always $0100 (otherwise, the file may be in a different format. */
+							   all Apple II disks not 800K in size, and even for some of those),
+							   $24 = 800K Apple II disk */
+	UINT16 magic;           /* always $0100 (otherwise, the file may be in a different format. */
 };
 
 
 
-static floperr_t apple35_diskcopy_headerdecode(floppy_image *floppy, UINT32 *data_offset,
+static floperr_t apple35_diskcopy_headerdecode(floppy_image_legacy *floppy, UINT32 *data_offset,
 	UINT32 *data_size, UINT32 *tag_offset, UINT32 *tag_size, UINT8 *format_byte, UINT8 *sides)
 {
 	UINT64 size;
@@ -1009,8 +1021,8 @@ static FLOPPY_CONSTRUCT(apple35_diskcopy_construct)
 
 struct header_2img
 {
-	char magic[4];			/* '2IMG' */
-	char creator[4];		/* signature; 'MESS' for MESS */
+	char magic[4];          /* '2IMG' */
+	char creator[4];        /* signature; 'MESS' for MESS */
 	UINT16 header_length;
 	UINT16 version;
 	UINT32 image_format;
@@ -1025,14 +1037,14 @@ struct header_2img
 	UINT32 padding[4];
 };
 
-#define IMAGE_FORMAT_DO		0
-#define IMAGE_FORMAT_PO		1
-#define IMAGE_FORMAT_NIB	2
-#define IMAGE_FLAGS_LOCKED	0x80000000
+#define IMAGE_FORMAT_DO     0
+#define IMAGE_FORMAT_PO     1
+#define IMAGE_FORMAT_NIB    2
+#define IMAGE_FLAGS_LOCKED  0x80000000
 
 
 
-static floperr_t apple35_2img_decode(floppy_image *floppy, UINT32 *image_format,
+static floperr_t apple35_2img_decode(floppy_image_legacy *floppy, UINT32 *image_format,
 	UINT32 *data_offset, UINT32 *data_length)
 {
 	struct header_2img header;
@@ -1058,17 +1070,17 @@ static floperr_t apple35_2img_decode(floppy_image *floppy, UINT32 *image_format,
 		return FLOPPY_ERROR_INVALIDIMAGE;
 	}
 
-	header.header_length	= LITTLE_ENDIANIZE_INT16(header.header_length);
-	header.version			= LITTLE_ENDIANIZE_INT16(header.version);
-	header.image_format		= LITTLE_ENDIANIZE_INT32(header.image_format);
-	header.flags			= LITTLE_ENDIANIZE_INT32(header.flags);
-	header.block_count		= LITTLE_ENDIANIZE_INT32(header.block_count);
-	header.data_offset		= LITTLE_ENDIANIZE_INT32(header.data_offset);
-	header.data_length		= LITTLE_ENDIANIZE_INT32(header.data_length);
-	header.comment_offset	= LITTLE_ENDIANIZE_INT32(header.comment_offset);
-	header.comment_length	= LITTLE_ENDIANIZE_INT32(header.comment_length);
-	header.creator_offset	= LITTLE_ENDIANIZE_INT32(header.creator_offset);
-	header.creator_length	= LITTLE_ENDIANIZE_INT32(header.creator_length);
+	header.header_length    = LITTLE_ENDIANIZE_INT16(header.header_length);
+	header.version          = LITTLE_ENDIANIZE_INT16(header.version);
+	header.image_format     = LITTLE_ENDIANIZE_INT32(header.image_format);
+	header.flags            = LITTLE_ENDIANIZE_INT32(header.flags);
+	header.block_count      = LITTLE_ENDIANIZE_INT32(header.block_count);
+	header.data_offset      = LITTLE_ENDIANIZE_INT32(header.data_offset);
+	header.data_length      = LITTLE_ENDIANIZE_INT32(header.data_length);
+	header.comment_offset   = LITTLE_ENDIANIZE_INT32(header.comment_offset);
+	header.comment_length   = LITTLE_ENDIANIZE_INT32(header.comment_length);
+	header.creator_offset   = LITTLE_ENDIANIZE_INT32(header.creator_offset);
+	header.creator_length   = LITTLE_ENDIANIZE_INT32(header.creator_length);
 
 	// at least some images "in the wild" (e.g. TOSEC Minor Set 1) have big-endian data sizes
 	// even though that's against the .2mg spec
@@ -1126,10 +1138,10 @@ static FLOPPY_CONSTRUCT(apple35_2img_construct)
 		data_size = 80*sides*10*512;
 
 		memset(&header, 0, sizeof(header));
-		header.header_length	= LITTLE_ENDIANIZE_INT16(sizeof(header));
-		header.block_count		= LITTLE_ENDIANIZE_INT32(80*sides*10);
-		header.data_offset		= LITTLE_ENDIANIZE_INT32(data_offset);
-		header.data_length		= LITTLE_ENDIANIZE_INT32(data_size);
+		header.header_length    = LITTLE_ENDIANIZE_INT16(sizeof(header));
+		header.block_count      = LITTLE_ENDIANIZE_INT32(80*sides*10);
+		header.data_offset      = LITTLE_ENDIANIZE_INT32(data_offset);
+		header.data_length      = LITTLE_ENDIANIZE_INT32(data_size);
 
 		floppy_image_write(floppy, &header, 0, sizeof(header));
 		floppy_image_write_filler(floppy, 0, sizeof(header), data_size);
@@ -1142,11 +1154,11 @@ static FLOPPY_CONSTRUCT(apple35_2img_construct)
 			return err;
 
 		if (data_size == 80*1*10*512)
-			sides = 1;	/* single sided */
+			sides = 1;  /* single sided */
 		else if (data_size == 80*2*10*512)
-			sides = 2;	/* double sided */
+			sides = 2;  /* double sided */
 		else
-			sides = 2;	/* unknown... what to do... */
+			sides = 2;  /* unknown... what to do... */
 	}
 
 	return apple35_construct(floppy, data_offset, data_size,
@@ -1155,33 +1167,329 @@ static FLOPPY_CONSTRUCT(apple35_2img_construct)
 
 
 
-FLOPPY_OPTIONS_START( apple35_mac )
-	FLOPPY_OPTION( apple35_raw, "dsk,img,image",	"Apple raw 3.5\" disk image",	apple35_raw_identify,		apple35_raw_construct, NULL,
+LEGACY_FLOPPY_OPTIONS_START( apple35_mac )
+	LEGACY_FLOPPY_OPTION( apple35_raw, "dsk,img,image", "Apple raw 3.5\" disk image",   apple35_raw_identify,       apple35_raw_construct, NULL,
 		HEADS([1]-2)
 		TRACKS([80])
 		SECTOR_LENGTH([512])
 		FIRST_SECTOR_ID([0]))
-	FLOPPY_OPTION( apple35_dc, "dc,dsk,img,image",	"Apple DiskCopy disk image",	apple35_diskcopy_identify,	apple35_diskcopy_construct, NULL,
+	LEGACY_FLOPPY_OPTION( apple35_dc, "dc,dc42,dsk,img,image",  "Apple DiskCopy disk image",    apple35_diskcopy_identify,  apple35_diskcopy_construct, NULL,
 		HEADS([1]-2)
 		TRACKS([80])
 		SECTOR_LENGTH([512])
 		FIRST_SECTOR_ID([0]))
-FLOPPY_OPTIONS_END
+LEGACY_FLOPPY_OPTIONS_END
 
-FLOPPY_OPTIONS_START( apple35_iigs )
-	FLOPPY_OPTION( apple35_raw, "dsk,img,image",	"Apple raw 3.5\" disk image",	apple35_raw_identify,		apple35_raw_construct, NULL,
+LEGACY_FLOPPY_OPTIONS_START( apple35_iigs )
+	LEGACY_FLOPPY_OPTION( apple35_raw, "dsk,img,image", "Apple raw 3.5\" disk image",   apple35_raw_identify,       apple35_raw_construct, NULL,
 		HEADS([1]-2)
 		TRACKS([80])
 		SECTOR_LENGTH([512])
 		FIRST_SECTOR_ID([0]))
-	FLOPPY_OPTION( apple35_dc, "dc,dsk,img,image",	"Apple DiskCopy disk image",	apple35_diskcopy_identify,	apple35_diskcopy_construct, NULL,
+	LEGACY_FLOPPY_OPTION( apple35_dc, "dc,dsk,img,image",   "Apple DiskCopy disk image",    apple35_diskcopy_identify,  apple35_diskcopy_construct, NULL,
 		HEADS([1]-2)
 		TRACKS([80])
 		SECTOR_LENGTH([512])
 		FIRST_SECTOR_ID([0]))
-	FLOPPY_OPTION( apple35_2img, "2img,2mg",		"Apple ][gs 2IMG disk image",	apple35_2img_identify,		apple35_2img_construct, NULL,
+	LEGACY_FLOPPY_OPTION( apple35_2img, "2img,2mg",     "Apple ][gs 2IMG disk image",   apple35_2img_identify,      apple35_2img_construct, NULL,
 		HEADS([1]-2)
 		TRACKS([80])
 		SECTOR_LENGTH([512])
 		FIRST_SECTOR_ID([0]))
-FLOPPY_OPTIONS_END
+LEGACY_FLOPPY_OPTIONS_END
+
+
+// license:BSD-3-Clause
+// copyright-holders:Olivier Galibert
+dc42_format::dc42_format() : floppy_image_format_t()
+{
+}
+
+const char *dc42_format::name() const
+{
+	return "dc42";
+}
+
+const char *dc42_format::description() const
+{
+	return "DiskCopy 4.2 image";
+}
+
+const char *dc42_format::extensions() const
+{
+	return "dc42";
+}
+
+bool dc42_format::supports_save() const
+{
+	return true;
+}
+
+int dc42_format::identify(io_generic *io, UINT32 form_factor)
+{
+	UINT8 h[0x54];
+	UINT64 size = io_generic_size(io);
+	if(size < 0x54)
+		return 0;
+
+	io_generic_read(io, h, 0, 0x54);
+	UINT32 dsize = (h[0x40] << 24) | (h[0x41] << 16) | (h[0x42] << 8) | h[0x43];
+	UINT32 tsize = (h[0x44] << 24) | (h[0x45] << 16) | (h[0x46] << 8) | h[0x47];
+
+	return size == 0x54+tsize+dsize && h[0] < 64 && h[0x52] == 1 && h[0x53] == 0 ? 100 : 0;
+}
+
+const floppy_image_format_t::desc_e dc42_format::mac_gcr[] = {
+	{ SECTOR_LOOP_START, 0, -1 },
+	{   RAWBITS, 0xff3fcf, 24 }, { RAWBITS, 0xf3fcff, 24 },
+	{   RAWBITS, 0xff3fcf, 24 }, { RAWBITS, 0xf3fcff, 24 },
+	{   RAWBITS, 0xff3fcf, 24 }, { RAWBITS, 0xf3fcff, 24 },
+	{   RAWBITS, 0xff3fcf, 24 }, { RAWBITS, 0xf3fcff, 24 },
+	{   RAWBITS, 0xff3fcf, 24 }, { RAWBITS, 0xf3fcff, 24 },
+	{   RAWBITS, 0xff3fcf, 24 }, { RAWBITS, 0xf3fcff, 24 },
+	{   RAWBITS, 0xff3fcf, 24 }, { RAWBITS, 0xf3fcff, 24 },
+	{   RAWBITS, 0xff3fcf, 24 }, { RAWBITS, 0xf3fcff, 24 },
+	{   RAWBITS, 0xd5aa96, 24 },
+	{   CRC_MACHEAD_START, 0 },
+	{     TRACK_ID_GCR6 },
+	{     SECTOR_ID_GCR6 },
+	{     TRACK_HEAD_ID_GCR6 },
+	{     SECTOR_INFO_GCR6 },
+	{   CRC_END, 0 },
+	{   CRC, 0 },
+	{   RAWBITS, 0xdeaaff, 24 },
+	{   RAWBITS, 0xff3fcf, 24 }, { RAWBITS, 0xf3fcff, 24 },
+	{   RAWBITS, 0xd5aaad, 24 },
+	{   SECTOR_ID_GCR6 },
+	{   SECTOR_DATA_MAC, -1 },
+	{   RAWBITS, 0xdeaaff, 24 },
+	{   RAWBITS, 0xff, 8 },
+	{ SECTOR_LOOP_END },
+	{ END },
+};
+
+
+bool dc42_format::load(io_generic *io, UINT32 form_factor, floppy_image *image)
+{
+	UINT8 h[0x54];
+	io_generic_read(io, h, 0, 0x54);
+	int dsize = (h[0x40] << 24) | (h[0x41] << 16) | (h[0x42] << 8) | h[0x43];
+	int tsize = (h[0x44] << 24) | (h[0x45] << 16) | (h[0x46] << 8) | h[0x47];
+
+	UINT8 encoding = h[0x50];
+	UINT8 format = h[0x51];
+
+	if((encoding != 0x00 || format != 0x02) && (encoding != 0x01 || format != 0x22)) {
+		logerror("dc42: Unsupported encoding/format combination %02x/%02x\n", encoding, format);
+		return false;
+	}
+
+	UINT8 sector_data[(512+12)*12];
+	memset(sector_data, 0, sizeof(sector_data));
+
+	desc_s sectors[12];
+
+	int pos_data = 0x54;
+	int pos_tag = 0x54+dsize;
+
+	int head_count = encoding == 1 ? 2 : 1;
+
+	for(int track=0; track < 80; track++) {
+		for(int head=0; head < head_count; head++) {
+			int ns = 12 - (track/16);
+			int si = 0;
+			for(int i=0; i<ns; i++) {
+				UINT8 *data = sector_data + (512+12)*i;
+				sectors[si].data = data;
+				sectors[si].size = 512+12;
+				sectors[si].sector_id = i;
+				sectors[si].sector_info = format;
+				if(tsize) {
+					io_generic_read(io, data, pos_tag, 12);
+					pos_tag += 12;
+				}
+				io_generic_read(io, data+12, pos_data, 512);
+				pos_data += 512;
+				si = (si + 2) % ns;
+				if(si == 0)
+					si++;
+			}
+			generate_track(mac_gcr, track, head, sectors, ns, 6208*ns, image);
+		}
+	}
+	return true;
+}
+
+UINT8 dc42_format::gb(const UINT8 *buf, int ts, int &pos, int &wrap)
+{
+	UINT8 v = 0;
+	int w1 = wrap;
+	while(wrap != w1+2 && !(v & 0x80)) {
+		v = v << 1 | ((buf[pos >> 3] >> (7-(pos & 7))) & 1);
+		pos++;
+		if(pos == ts) {
+			pos = 0;
+			wrap++;
+		}
+	}
+	return v;
+}
+
+void dc42_format::update_chk(const UINT8 *data, int size, UINT32 &chk)
+{
+	for(int i=0; i<size; i+=2) {
+		chk += (data[i] << 8) | data[i+1];
+		chk = (chk >> 1) | (chk << 31);
+	}
+}
+
+bool dc42_format::save(io_generic *io, floppy_image *image)
+{
+	int g_tracks, g_heads;
+	image->get_actual_geometry(g_tracks, g_heads);
+
+	if(g_heads == 0)
+		g_heads = 1;
+
+	UINT8 h[0x54];
+	memset(h, 0, 0x54);
+	strcpy((char *)h+1, "Unnamed");
+	h[0] = 7;
+	int nsect = 16*(12+11+10+9+8)*g_heads;
+	UINT32 dsize = nsect*512;
+	UINT32 tsize = nsect*12;
+	h[0x40] = dsize >> 24;
+	h[0x41] = dsize >> 16;
+	h[0x42] = dsize >> 8;
+	h[0x43] = dsize;
+	h[0x44] = tsize >> 24;
+	h[0x45] = tsize >> 16;
+	h[0x46] = tsize >> 8;
+	h[0x47] = tsize;
+	h[0x50] = g_heads == 2 ? 0x01 : 0x00;
+	h[0x51] = g_heads == 2 ? 0x22 : 0x02;
+	h[0x52] = 0x01;
+	h[0x53] = 0x00;
+
+	UINT32 dchk = 0;
+	UINT32 tchk = 0;
+
+	int pos_data = 0x54;
+	int pos_tag = 0x54+dsize;
+
+	for(int track=0; track < 80; track++) {
+		for(int head=0; head < g_heads; head++) {
+			UINT8 sectdata[(512+12)*12];
+			memset(sectdata, 0, sizeof(sectdata));
+			int nsect = 12-(track/16);
+			UINT8 buf[13000];
+			int ts;
+			generate_bitstream_from_track(track, head, 200000000/(6208*nsect), buf, ts, image);
+			int pos = 0;
+			int wrap = 0;
+			int hb = 0;
+			for(;;) {
+				UINT8 v = gb(buf, ts, pos, wrap);
+				if(v == 0xff)
+					hb = 1;
+				else if(hb == 1 && v == 0xd5)
+					hb = 2;
+				else if(hb == 2 && v == 0xaa)
+					hb = 3;
+				else if(hb == 3 && v == 0x96)
+					hb = 4;
+				else
+					hb = 0;
+
+				if(hb == 4) {
+					UINT8 h[7];
+					for(int i=0; i<7; i++)
+						h[i] = gb(buf, ts, pos, wrap);
+					UINT8 v2 = gcr6bw_tb[h[2]];
+					UINT8 v3 = gcr6bw_tb[h[3]];
+					UINT8 tr = gcr6bw_tb[h[0]] | (v2 & 1 ? 0x40 : 0x00);
+					UINT8 se = gcr6bw_tb[h[1]];
+					UINT8 si = v2 & 0x20 ? 1 : 0;
+					//                  UINT8 ds = v3 & 0x20 ? 1 : 0;
+					//                  UINT8 fmt = v3 & 0x1f;
+					UINT8 c1 = (tr^se^v2^v3) & 0x3f;
+					UINT8 chk = gcr6bw_tb[h[4]];
+					if(chk == c1 && tr == track && si == head && se < nsect) {
+						int opos = pos;
+						int owrap = wrap;
+						hb = 0;
+						for(int i=0; i<20 && hb != 4; i++) {
+							v = gb(buf, ts, pos, wrap);
+							if(v == 0xff)
+								hb = 1;
+							else if(hb == 1 && v == 0xd5)
+								hb = 2;
+							else if(hb == 2 && v == 0xaa)
+								hb = 3;
+							else if(hb == 3 && v == 0xad)
+								hb = 4;
+							else
+								hb = 0;
+						}
+						if(hb == 4) {
+							UINT8 *dest = sectdata+(512+12)*se;
+							gb(buf, ts, pos, wrap); // Ignore the sector byte
+							UINT8 ca = 0, cb = 0, cc = 0;
+							for(int i=0; i<522/3+1; i++) {
+								UINT8 e0 = gb(buf, ts, pos, wrap);
+								UINT8 e1 = gb(buf, ts, pos, wrap);
+								UINT8 e2 = gb(buf, ts, pos, wrap);
+								UINT8 e3 = i == 522/3 ? 0x96 : gb(buf, ts, pos, wrap);
+								UINT8 va, vb, vc;
+								gcr6_decode(e0, e1, e2, e3, va, vb, vc);
+								cc = (cc << 1) | (cc >> 7);
+								va = va ^ cc;
+								int suma = ca + va + (cc & 1);
+								ca = suma;
+								vb = vb ^ ca;
+								int sumb = cb + vb + (suma >> 8);
+								cb = sumb;
+								vc = vc ^ cb;
+								cc = cc + vc + (sumb >> 8);
+								*dest++ = va;
+								*dest++ = vb;
+								if(i != 522/3)
+									*dest++ = vc;
+							}
+						} else {
+							pos = opos;
+							wrap = owrap;
+						}
+					}
+					hb = 0;
+				}
+				if(wrap)
+					break;
+			}
+			for(int i=0; i<nsect; i++) {
+				UINT8 *data = sectdata + (512+12)*i;
+				io_generic_write(io, data, pos_tag, 12);
+				io_generic_write(io, data+12, pos_data, 512);
+				pos_tag += 12;
+				pos_data += 512;
+				if(track || head || i)
+					update_chk(data, 12, tchk);
+				update_chk(data+12, 512, dchk);
+			}
+		}
+	}
+
+	h[0x48] = dchk >> 24;
+	h[0x49] = dchk >> 16;
+	h[0x4a] = dchk >> 8;
+	h[0x4b] = dchk;
+	h[0x4c] = tchk >> 24;
+	h[0x4d] = tchk >> 16;
+	h[0x4e] = tchk >> 8;
+	h[0x4f] = tchk;
+
+	io_generic_write(io, h, 0, 0x54);
+	return true;
+}
+
+const floppy_format_type FLOPPY_DC42_FORMAT = &floppy_image_format_creator<dc42_format>;

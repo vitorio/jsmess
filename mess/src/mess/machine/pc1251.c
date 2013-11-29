@@ -8,126 +8,121 @@
 
 
 
-void pc1251_outa(device_t *device, int data)
+WRITE8_MEMBER(pc1251_state::pc1251_outa)
 {
-	pc1251_state *state = device->machine().driver_data<pc1251_state>();
-	state->m_outa = data;
+	m_outa = data;
 }
 
-void pc1251_outb(device_t *device, int data)
+WRITE8_MEMBER(pc1251_state::pc1251_outb)
 {
-	pc1251_state *state = device->machine().driver_data<pc1251_state>();
-	state->m_outb = data;
+	m_outb = data;
 }
 
-void pc1251_outc(device_t *device, int data)
+WRITE8_MEMBER(pc1251_state::pc1251_outc)
 {
 }
 
-int pc1251_ina(device_t *device)
+READ8_MEMBER(pc1251_state::pc1251_ina)
 {
-	pc1251_state *state = device->machine().driver_data<pc1251_state>();
-	int data = state->m_outa;
-	running_machine &machine = device->machine();
+	int data = m_outa;
 
-	if (state->m_outb & 0x01)
+	if (m_outb & 0x01)
 	{
-		data |= input_port_read(machine, "KEY0");
+		data |= ioport("KEY0")->read();
 
 		/* At Power Up we fake a 'CL' pressure */
-		if (state->m_power)
-			data |= 0x02;		// problem with the deg lcd
+		if (m_power)
+			data |= 0x02;       // problem with the deg lcd
 	}
 
-	if (state->m_outb & 0x02)
-		data |= input_port_read(machine, "KEY1");
+	if (m_outb & 0x02)
+		data |= ioport("KEY1")->read();
 
-	if (state->m_outb & 0x04)
-		data |= input_port_read(machine, "KEY2");
+	if (m_outb & 0x04)
+		data |= ioport("KEY2")->read();
 
-	if (state->m_outa & 0x01)
-		data |= input_port_read(machine, "KEY3");
+	if (m_outa & 0x01)
+		data |= ioport("KEY3")->read();
 
-	if (state->m_outa & 0x02)
-		data |= input_port_read(machine, "KEY4");
+	if (m_outa & 0x02)
+		data |= ioport("KEY4")->read();
 
-	if (state->m_outa & 0x04)
-		data |= input_port_read(machine, "KEY5");
+	if (m_outa & 0x04)
+		data |= ioport("KEY5")->read();
 
-	if (state->m_outa & 0x08)
-		data |= input_port_read(machine, "KEY6");
+	if (m_outa & 0x08)
+		data |= ioport("KEY6")->read();
 
-	if (state->m_outa & 0x10)
-		data |= input_port_read(machine, "KEY7");
+	if (m_outa & 0x10)
+		data |= ioport("KEY7")->read();
 
-	if (state->m_outa & 0x20)
-		data |= input_port_read(machine, "KEY8");
+	if (m_outa & 0x20)
+		data |= ioport("KEY8")->read();
 
-	if (state->m_outa & 0x40)
-		data |= input_port_read(machine, "KEY9");
-
-	return data;
-}
-
-int pc1251_inb(device_t *device)
-{
-	pc1251_state *state = device->machine().driver_data<pc1251_state>();
-	int data = state->m_outb;
-
-	if (state->m_outb & 0x08)
-		data |= (input_port_read(device->machine(), "MODE") & 0x07);
+	if (m_outa & 0x40)
+		data |= ioport("KEY9")->read();
 
 	return data;
 }
 
-int pc1251_brk(device_t *device)
+READ8_MEMBER(pc1251_state::pc1251_inb)
 {
-	return (input_port_read(device->machine(), "EXTRA") & 0x01);
+	int data = m_outb;
+
+	if (m_outb & 0x08)
+		data |= (ioport("MODE")->read() & 0x07);
+
+	return data;
 }
 
-int pc1251_reset(device_t *device)
+READ_LINE_MEMBER(pc1251_state::pc1251_brk)
 {
-	return (input_port_read(device->machine(), "EXTRA") & 0x02);
+	return (ioport("EXTRA")->read() & 0x01);
 }
 
-/* currently enough to save the external ram */
-NVRAM_HANDLER( pc1251 )
+READ_LINE_MEMBER(pc1251_state::pc1251_reset)
 {
-	device_t *main_cpu = machine.device("maincpu");
-	UINT8 *ram = machine.region("maincpu")->base() + 0x8000;
+	return (ioport("EXTRA")->read() & 0x02);
+}
+
+void pc1251_state::machine_start()
+{
+	device_t *main_cpu = m_maincpu;
+	UINT8 *ram = memregion("maincpu")->base() + 0x8000;
 	UINT8 *cpu = sc61860_internal_ram(main_cpu);
 
-	if (read_or_write)
+	machine().device<nvram_device>("cpu_nvram")->set_base(cpu, 96);
+	machine().device<nvram_device>("ram_nvram")->set_base(ram, 0x4800);
+}
+
+MACHINE_START_MEMBER(pc1251_state,pc1260 )
+{
+	device_t *main_cpu = m_maincpu;
+	UINT8 *ram = memregion("maincpu")->base() + 0x4000;
+	UINT8 *cpu = sc61860_internal_ram(main_cpu);
+
+	machine().device<nvram_device>("cpu_nvram")->set_base(cpu, 96);
+	machine().device<nvram_device>("ram_nvram")->set_base(ram, 0x2800);
+}
+
+void pc1251_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+{
+	switch (id)
 	{
-		file->write(cpu, 96);
-		file->write(ram, 0x4800);
-	}
-	else if (file)
-	{
-		file->read(cpu, 96);
-		file->read(ram, 0x4800);
-	}
-	else
-	{
-		memset(cpu, 0, 96);
-		memset(ram, 0, 0x4800);
+	case TIMER_POWER_UP:
+		m_power = 0;
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in pc1251_state::device_timer");
 	}
 }
 
-static TIMER_CALLBACK(pc1251_power_up)
+DRIVER_INIT_MEMBER(pc1251_state,pc1251)
 {
-	pc1251_state *state = machine.driver_data<pc1251_state>();
-	state->m_power = 0;
-}
-
-DRIVER_INIT( pc1251 )
-{
-	pc1251_state *state = machine.driver_data<pc1251_state>();
 	int i;
-	UINT8 *gfx = machine.region("gfx1")->base();
+	UINT8 *gfx = memregion("gfx1")->base();
 	for (i=0; i<128; i++) gfx[i]=i;
 
-	state->m_power = 1;
-	machine.scheduler().timer_set(attotime::from_seconds(1), FUNC(pc1251_power_up));
+	m_power = 1;
+	timer_set(attotime::from_seconds(1), TIMER_POWER_UP);
 }
-

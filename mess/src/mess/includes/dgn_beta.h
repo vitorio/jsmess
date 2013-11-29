@@ -10,6 +10,7 @@
 #include "video/mc6845.h"
 #include "machine/wd17xx.h"
 #include "machine/6821pia.h"
+#include "machine/ram.h"
 
 /* Tags */
 
@@ -21,64 +22,64 @@
 #define FDC_TAG     "wd2797"
 
 
-#define DGNBETA_CPU_SPEED_HZ		2000000	/* 2MHz */
-#define DGNBETA_FRAMES_PER_SECOND	50
+#define DGNBETA_CPU_SPEED_HZ        2000000 /* 2MHz */
+#define DGNBETA_FRAMES_PER_SECOND   50
 
-#define RamSize				256	        /* 256K by default */
-#define RamPageSize			4096	    /* ram pages are 4096 bytes */
+#define RamSize             256         /* 256K by default */
+#define RamPageSize         4096        /* ram pages are 4096 bytes */
 
-#define MaxTasks			16	        /* Tasks 0..15 */
-#define MaxPage				16	        /* 16 4K pages */
-#define NoPagingTask		MaxTasks	/* Task registers to use when paging disabled 16 */
+#define MaxTasks            16          /* Tasks 0..15 */
+#define MaxPage             16          /* 16 4K pages */
+#define NoPagingTask        MaxTasks    /* Task registers to use when paging disabled 16 */
 
-#define RAMPage				0		    /* Page with RAM in at power on */
-#define VideoPage			6		    /* Page where video ram mapped */
-#define IOPage				MaxPage-1	/* Page for I/O */
-#define ROMPage				MaxPage-2	/* Page for ROM */
+#define RAMPage             0           /* Page with RAM in at power on */
+#define VideoPage           6           /* Page where video ram mapped */
+#define IOPage              MaxPage-1   /* Page for I/O */
+#define ROMPage             MaxPage-2   /* Page for ROM */
 #define LastPage            MaxPage-1
 
-#define RAMPageValue		0x00		/* page with RAM at power on */
-#define VideoPageValue		0x1F		/* Default page for video ram */
-#define NoMemPageValue		0xC0		/* Page garanteed not to have memory in */
-#define ROMPageValue		0xFE		/* Page with boot ROM */
-#define IOPageValue			0xFF		/* Page with I/O & Boot ROM */
+#define RAMPageValue        0x00        /* page with RAM at power on */
+#define VideoPageValue      0x1F        /* Default page for video ram */
+#define NoMemPageValue      0xC0        /* Page guaranteed not to have memory in */
+#define ROMPageValue        0xFE        /* Page with boot ROM */
+#define IOPageValue         0xFF        /* Page with I/O & Boot ROM */
 
-#define TextVidBasePage		0x18		/* Base page of text video ram */
+#define TextVidBasePage     0x18        /* Base page of text video ram */
 
 /***** Keyboard stuff *****/
-#define	NoKeyrows			0x0a		/* Number of rows in keyboard */
+#define NoKeyrows           0x0a        /* Number of rows in keyboard */
 
 /* From Dragon Beta OS9 keyboard driver */
-#define KAny				0x04		/* Any key pressed mask PB2 */
-#define KOutClk				0x08		/* Ouput shift register clock */
-#define KInClk				0x10		/* Input shift register clock */
-#define KOutDat				KInClk		/* Also used for data into output shifter */
-#define KInDat				0x20		/* Keyboard data in from keyboard (serial stream) */
+#define KAny                0x04        /* Any key pressed mask PB2 */
+#define KOutClk             0x08        /* Ouput shift register clock */
+#define KInClk              0x10        /* Input shift register clock */
+#define KOutDat             KInClk      /* Also used for data into output shifter */
+#define KInDat              0x20        /* Keyboard data in from keyboard (serial stream) */
 
 /***** WD2797 pins *****/
 
-#define DSMask				0x03		/* PA0 & PA1 are binary encoded drive */
-#define ENPCtrl				0x20		/* PA5 on PIA */
-#define DDenCtrl			0x40		/* PA6 on PIA */
+#define DSMask              0x03        /* PA0 & PA1 are binary encoded drive */
+#define ENPCtrl             0x20        /* PA5 on PIA */
+#define DDenCtrl            0x40        /* PA6 on PIA */
 
 /***** Video Modes *****/
 
-typedef enum
+enum BETA_VID_MODES
 {
-	TEXT_40x25,				/* Text mode 40x25 */
-	TEXT_80x25,				/* Text mode 80x25 */
-	GRAPH_320x256x4,		/* Graphics 320x256x4 */
-	GRAPH_320x256x16,		/* Graphics 320x256x16 */
-	GRAPH_640x512x2			/* Graphics 640X512X2 */
-} BETA_VID_MODES;
+	TEXT_40x25,             /* Text mode 40x25 */
+	TEXT_80x25,             /* Text mode 80x25 */
+	GRAPH_320x256x4,        /* Graphics 320x256x4 */
+	GRAPH_320x256x16,       /* Graphics 320x256x16 */
+	GRAPH_640x512x2         /* Graphics 640X512X2 */
+};
 
-#define iosize	(0xfEFF-0xfc00)
+#define iosize  (0xfEFF-0xfc00)
 
-typedef struct
+struct PageReg
 {
-	int	    value;			/* Value of the page register */
-	UINT8	*memory;		/* The memory it actually points to */
-} PageReg;
+	int     value;          /* Value of the page register */
+	UINT8   *memory;        /* The memory it actually points to */
+};
 
 
 class dgn_beta_state : public driver_device
@@ -86,10 +87,14 @@ class dgn_beta_state : public driver_device
 public:
 	dgn_beta_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_mc6845(*this, "crtc")
-		{ }
+			m_mc6845(*this, "crtc"),
+		m_videoram(*this, "videoram"),
+		m_maincpu(*this, "maincpu"),
+		m_ram(*this, RAM_TAG) { }
 
-	UINT8 *m_videoram;
+	required_device<mc6845_device> m_mc6845;
+	required_shared_ptr<UINT8> m_videoram;
+
 	UINT8 *m_system_rom;
 	int m_LogDatWrites;
 	int m_Keyboard[NoKeyrows];
@@ -123,7 +128,7 @@ public:
 	int m_VSyncMin;
 	int m_DEPos;
 	int m_NoScreen;
-	bitmap_t *m_bit;
+	bitmap_ind16 *m_bit;
 	int m_MinAddr;
 	int m_MaxAddr;
 	int m_MinX;
@@ -140,8 +145,71 @@ public:
 	int m_ColourRAM[4];
 	int m_Field;
 	int m_DrawInterlace;
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void palette_init();
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_b0_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_b1_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_b2_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_b3_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_b4_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_b5_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_b6_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_b7_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_b8_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_b9_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_bA_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_bB_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_bC_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_bD_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_bE_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_bF_w);
+	DECLARE_WRITE8_MEMBER(dgnbeta_ram_bG_w);
+	DECLARE_READ8_MEMBER(d_pia0_pa_r);
+	DECLARE_WRITE8_MEMBER(d_pia0_pa_w);
+	DECLARE_READ8_MEMBER(d_pia0_pb_r);
+	DECLARE_WRITE8_MEMBER(d_pia0_pb_w);
+	DECLARE_WRITE8_MEMBER(d_pia0_cb2_w);
+	DECLARE_WRITE_LINE_MEMBER(d_pia0_irq_a);
+	DECLARE_WRITE_LINE_MEMBER(d_pia0_irq_b);
+	DECLARE_READ8_MEMBER(d_pia1_pa_r);
+	DECLARE_WRITE8_MEMBER(d_pia1_pa_w);
+	DECLARE_READ8_MEMBER(d_pia1_pb_r);
+	DECLARE_WRITE8_MEMBER(d_pia1_pb_w);
+	DECLARE_WRITE_LINE_MEMBER(d_pia1_irq_a);
+	DECLARE_WRITE_LINE_MEMBER(d_pia1_irq_b);
+	DECLARE_READ8_MEMBER(d_pia2_pa_r);
+	DECLARE_WRITE8_MEMBER(d_pia2_pa_w);
+	DECLARE_READ8_MEMBER(d_pia2_pb_r);
+	DECLARE_WRITE8_MEMBER(d_pia2_pb_w);
+	DECLARE_WRITE_LINE_MEMBER(d_pia2_irq_a);
+	DECLARE_WRITE_LINE_MEMBER(d_pia2_irq_b);
+	DECLARE_WRITE_LINE_MEMBER(dgnbeta_fdc_intrq_w);
+	DECLARE_WRITE_LINE_MEMBER(dgnbeta_fdc_drq_w);
+	DECLARE_WRITE_LINE_MEMBER(dgnbeta_vsync_changed);
+	/* 74HC670 4x4bit colour ram */
+	DECLARE_WRITE8_MEMBER(dgnbeta_colour_ram_w);
+	// Page IO at FE00
+	DECLARE_READ8_MEMBER(dgn_beta_page_r);
+	DECLARE_WRITE8_MEMBER(dgn_beta_page_w);
 
-	required_device<mc6845_device> m_mc6845;
+	/*  WD2797 FDC */
+	DECLARE_READ8_MEMBER(dgnbeta_wd2797_r);
+	DECLARE_WRITE8_MEMBER(dgnbeta_wd2797_w);
+	required_device<cpu_device> m_maincpu;
+	void dgnbeta_vid_set_gctrl(int data);
+	void UpdateBanks(int first, int last);
+	void SetDefaultTask();
+	void dgn_beta_bank_memory(int offset, int data, int bank);
+	int SelectedKeyrow(dgn_beta_state *state, int Rows);
+	int GetKeyRow(dgn_beta_state *state, int RowNo);
+	void cpu0_recalc_irq(int state);
+	void cpu0_recalc_firq(int state);
+	void cpu1_recalc_firq(int state);
+	void ScanInKeyboard(void);
+	void dgn_beta_frame_interrupt (int data);
+	void dgn_beta_line_interrupt (int data);
+	required_device<ram_device> m_ram;
 };
 
 
@@ -150,28 +218,8 @@ public:
 extern const wd17xx_interface dgnbeta_wd17xx_interface;
 extern const pia6821_interface dgnbeta_pia_intf[];
 
-MACHINE_START( dgnbeta );
-MACHINE_RESET( dgnbeta );
-
-// Page IO at FE00
-READ8_HANDLER( dgn_beta_page_r );
-WRITE8_HANDLER( dgn_beta_page_w );
-
-/*  WD2797 FDC */
-READ8_HANDLER(dgnbeta_wd2797_r);
-WRITE8_HANDLER(dgnbeta_wd2797_w);
-
-void dgn_beta_frame_interrupt (running_machine &machine, int data);
-
 
 /*----------- defined in video/dgn_beta.c -----------*/
-
-/* mc6845 video display generator */
-extern SCREEN_UPDATE( dgnbeta );
-void dgnbeta_vid_set_gctrl(running_machine &machine, int data);
-
-/* 74HC670 4x4bit colour ram */
-WRITE8_HANDLER(dgnbeta_colour_ram_w);
 
 extern const mc6845_interface dgnbeta_crtc6845_interface;
 

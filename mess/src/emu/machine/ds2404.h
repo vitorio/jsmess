@@ -6,6 +6,8 @@
 
 **********************************************************************/
 
+#pragma once
+
 #ifndef __DS2404_H__
 #define __DS2404_H__
 
@@ -41,11 +43,11 @@
 // ======================> ds2404_device
 
 class ds2404_device :  public device_t,
-					   public device_nvram_interface
+						public device_nvram_interface
 {
 public:
-    // construction/destruction
-    ds2404_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	// construction/destruction
+	ds2404_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
 	// inline configuration helpers
 	static void static_set_ref_year(device_t &device, UINT32 m_ref_year);
@@ -53,30 +55,28 @@ public:
 	static void static_set_ref_day(device_t &device, UINT8 m_ref_day);
 
 	/* 1-wire interface reset  */
-	void ds2404_1w_reset_w(UINT32 offset, UINT8 data);
+	DECLARE_WRITE8_MEMBER(ds2404_1w_reset_w);
 
 	/* 3-wire interface reset  */
-	void ds2404_3w_reset_w(UINT32 offset, UINT8 data);
+	DECLARE_WRITE8_MEMBER(ds2404_3w_reset_w);
 
-	UINT8 ds2404_data_r(UINT32 offset);
-	void ds2404_data_w(UINT32 offset, UINT8 data);
-	void ds2404_clk_w(UINT32 offset, UINT8 data);
-
-	void ds2404_tick();
+	DECLARE_READ8_MEMBER(ds2404_data_r);
+	DECLARE_WRITE8_MEMBER(ds2404_data_w);
+	DECLARE_WRITE8_MEMBER(ds2404_clk_w);
 
 protected:
-    // device-level overrides
-    virtual void device_start();
-    virtual void device_reset() { }
-    virtual void device_post_load() { }
-    virtual void device_clock_changed() { }
+	// device-level overrides
+	virtual void device_start();
+	virtual void device_reset() { }
+	virtual void device_post_load() { }
+	virtual void device_clock_changed() { }
 
 	// device_nvram_interface overrides
 	virtual void nvram_default();
 	virtual void nvram_read(emu_file &file);
 	virtual void nvram_write(emu_file &file);
 
-	static TIMER_CALLBACK( ds2404_tick_callback );
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 
 private:
 
@@ -88,31 +88,33 @@ private:
 
 	enum DS2404_STATE
 	{
-		DS2404_STATE_IDLE = 1,				/* waiting for ROM command, in 1-wire mode */
-		DS2404_STATE_COMMAND,				/* waiting for memory command */
-		DS2404_STATE_ADDRESS1,				/* waiting for address bits 0-7 */
-		DS2404_STATE_ADDRESS2,				/* waiting for address bits 8-15 */
-		DS2404_STATE_OFFSET,				/* waiting for ending offset */
+		DS2404_STATE_IDLE = 1,              /* waiting for ROM command, in 1-wire mode */
+		DS2404_STATE_COMMAND,               /* waiting for memory command */
+		DS2404_STATE_ADDRESS1,              /* waiting for address bits 0-7 */
+		DS2404_STATE_ADDRESS2,              /* waiting for address bits 8-15 */
+		DS2404_STATE_OFFSET,                /* waiting for ending offset */
 		DS2404_STATE_INIT_COMMAND,
-		DS2404_STATE_READ_MEMORY,			/* Read Memory command active */
-		DS2404_STATE_WRITE_SCRATCHPAD,		/* Write Scratchpad command active */
-		DS2404_STATE_READ_SCRATCHPAD,		/* Read Scratchpad command active */
-		DS2404_STATE_COPY_SCRATCHPAD		/* Copy Scratchpad command active */
+		DS2404_STATE_READ_MEMORY,           /* Read Memory command active */
+		DS2404_STATE_WRITE_SCRATCHPAD,      /* Write Scratchpad command active */
+		DS2404_STATE_READ_SCRATCHPAD,       /* Read Scratchpad command active */
+		DS2404_STATE_COPY_SCRATCHPAD        /* Copy Scratchpad command active */
 	};
 
-    // configuration state
-	UINT32	m_ref_year;
-	UINT8	m_ref_month;
-	UINT8	m_ref_day;
+	emu_timer *m_tick_timer;
+
+	// configuration state
+	UINT32  m_ref_year;
+	UINT8   m_ref_month;
+	UINT8   m_ref_day;
 
 	UINT16 m_address;
 	UINT16 m_offset;
 	UINT16 m_end_offset;
 	UINT8 m_a1;
 	UINT8 m_a2;
-	UINT8 m_sram[512];	/* 4096 bits */
-	UINT8 m_ram[32];	/* scratchpad ram, 256 bits */
-	UINT8 m_rtc[5];		/* 40-bit RTC counter */
+	UINT8 m_sram[512];  /* 4096 bits */
+	UINT8 m_ram[32];    /* scratchpad ram, 256 bits */
+	UINT8 m_rtc[5];     /* 40-bit RTC counter */
 	DS2404_STATE m_state[8];
 	int m_state_ptr;
 };
@@ -122,19 +124,4 @@ private:
 extern const device_type DS2404;
 
 
-
-/***************************************************************************
-    PROTOTYPES
-***************************************************************************/
-
-/* 1-wire interface reset */
-WRITE8_DEVICE_HANDLER( ds2404_1w_reset_w );
-
-/* 3-wire interface reset  */
-WRITE8_DEVICE_HANDLER( ds2404_3w_reset_w );
-
-READ8_DEVICE_HANDLER( ds2404_data_r );
-WRITE8_DEVICE_HANDLER( ds2404_data_w );
-WRITE8_DEVICE_HANDLER( ds2404_clk_w );
-
-#endif
+#endif /* __DS2404_H__ */

@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     drcfe.c
 
     Generic dynamic recompiler frontend structures and utilities.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ****************************************************************************
 
@@ -63,8 +34,8 @@ const UINT32 MAX_STACK_DEPTH = 100;
 // an entry that maps branches for our code walking
 struct pc_stack_entry
 {
-	offs_t				targetpc;
-	offs_t				srcpc;
+	offs_t              targetpc;
+	offs_t              srcpc;
 };
 
 
@@ -79,14 +50,14 @@ struct pc_stack_entry
 
 drc_frontend::drc_frontend(device_t &cpu, UINT32 window_start, UINT32 window_end, UINT32 max_sequence)
 	: m_window_start(window_start),
-	  m_window_end(window_end),
-	  m_max_sequence(max_sequence),
-	  m_cpudevice(downcast<cpu_device &>(cpu)),
-	  m_program(m_cpudevice.space(AS_PROGRAM)),
-	  m_pageshift(m_cpudevice.space_config(AS_PROGRAM)->m_page_shift),
-	  m_desc_live_list(cpu.machine().respool()),
-	  m_desc_allocator(cpu.machine().respool()),
-	  m_desc_array(auto_alloc_array_clear(cpu.machine(), opcode_desc *, window_end + window_start + 2))
+		m_window_end(window_end),
+		m_max_sequence(max_sequence),
+		m_cpudevice(downcast<cpu_device &>(cpu)),
+		m_program(m_cpudevice.space(AS_PROGRAM)),
+		m_pageshift(m_cpudevice.space_config(AS_PROGRAM)->m_page_shift),
+		m_desc_live_list(cpu.machine().respool()),
+		m_desc_allocator(cpu.machine().respool()),
+		m_desc_array(auto_alloc_array_clear(cpu.machine(), opcode_desc *, window_end + window_start + 2))
 {
 }
 

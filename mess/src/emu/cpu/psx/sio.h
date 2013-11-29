@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:smf
 /*
  * PlayStation Serial I/O emulator
  *
@@ -11,19 +13,13 @@
 #define __PSXSIO_H__
 
 #include "emu.h"
+#include "siodev.h"
 
-extern const device_type PSX_SIO;
+extern const device_type PSX_SIO0;
+extern const device_type PSX_SIO1;
 
-typedef void ( *psx_sio_handler )( running_machine &, int );
-
-#define PSX_SIO_OUT_DATA ( 1 )	/* COMMAND */
-#define PSX_SIO_OUT_DTR ( 2 )	/* ATT */
-#define PSX_SIO_OUT_RTS ( 4 )
-#define PSX_SIO_OUT_CLOCK ( 8 )	/* CLOCK */
-#define PSX_SIO_IN_DATA ( 1 )	/* DATA */
-#define PSX_SIO_IN_DSR ( 2 )	/* ACK */
-#define PSX_SIO_IN_CTS ( 4 )
-
+#define MCFG_PSX_SIO_IRQ_HANDLER(_devcb) \
+	devcb = &psxsio_device::set_irq_handler(*device, DEVCB2_##_devcb);
 #define SIO_BUF_SIZE ( 8 )
 
 #define SIO_STATUS_TX_RDY ( 1 << 0 )
@@ -41,54 +37,66 @@ typedef void ( *psx_sio_handler )( running_machine &, int );
 #define SIO_CONTROL_DSR_IENA ( 1 << 12 )
 #define SIO_CONTROL_DTR ( 1 << 13 )
 
-typedef struct _psx_sio psx_sio;
-struct _psx_sio
-{
-	UINT32 n_status;
-	UINT32 n_mode;
-	UINT32 n_control;
-	UINT32 n_baud;
-	UINT32 n_tx;
-	UINT32 n_rx;
-	UINT32 n_tx_prev;
-	UINT32 n_rx_prev;
-	UINT32 n_tx_data;
-	UINT32 n_rx_data;
-	UINT32 n_tx_shift;
-	UINT32 n_rx_shift;
-	UINT32 n_tx_bits;
-	UINT32 n_rx_bits;
-
-	emu_timer *timer;
-	psx_sio_handler fn_handler;
-};
-
 class psxsio_device : public device_t
 {
 public:
-	psxsio_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	psxsio_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source);
 
-	void install_handler( int n_port, psx_sio_handler p_f_sio_handler );
+	// static configuration helpers
+	template<class _Object> static devcb2_base &set_irq_handler(device_t &device, _Object object) { return downcast<psxsio_device &>(device).m_irq_handler.set_callback(object); }
 
-	WRITE32_MEMBER( write );
-	READ32_MEMBER( read );
+	DECLARE_WRITE32_MEMBER( write );
+	DECLARE_READ32_MEMBER( read );
 
-	void input( int n_port, int n_mask, int n_data );
+	void input_update();
 
 protected:
+	// device-level overrides
 	virtual void device_start();
-	virtual void device_reset();
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 	virtual void device_post_load();
 
 private:
-	void sio_interrupt( int n_port );
-	void sio_timer_adjust( int n_port );
-	void sio_clock(void *ptr, int param);
+	void output( int data, int mask );
+	void sio_interrupt();
+	void sio_timer_adjust();
 
-	psx_sio port[2];
+	UINT32 m_status;
+	UINT32 m_mode;
+	UINT32 m_control;
+	UINT32 m_baud;
+	UINT32 m_tx;
+	UINT32 m_rx;
+	UINT32 m_tx_prev;
+	UINT32 m_rx_prev;
+	UINT32 m_tx_data;
+	UINT32 m_rx_data;
+	UINT32 m_tx_shift;
+	UINT32 m_rx_shift;
+	UINT32 m_tx_bits;
+	UINT32 m_rx_bits;
+
+	emu_timer *m_timer;
+
+	devcb2_write_line m_irq_handler;
+
+	psxsiodev_device *devices[ 10 ];
+	int deviceCount;
+
+	int m_outputdata;
+	//int m_inputdata;
 };
 
-WRITE32_HANDLER( psx_sio_w );
-READ32_HANDLER( psx_sio_r );
+class psxsio0_device : public psxsio_device
+{
+public:
+	psxsio0_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+};
+
+class psxsio1_device : public psxsio_device
+{
+public:
+	psxsio1_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+};
 
 #endif

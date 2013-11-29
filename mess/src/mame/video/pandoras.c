@@ -21,21 +21,22 @@
 
 ***************************************************************************/
 
-PALETTE_INIT( pandoras )
+void pandoras_state::palette_init()
 {
+	const UINT8 *color_prom = memregion("proms")->base();
 	static const int resistances_rg[3] = { 1000, 470, 220 };
 	static const int resistances_b [2] = { 470, 220 };
 	double rweights[3], gweights[3], bweights[2];
 	int i;
 
 	/* compute the color output resistor weights */
-	compute_resistor_weights(0,	255, -1.0,
+	compute_resistor_weights(0, 255, -1.0,
 			3, &resistances_rg[0], rweights, 1000, 0,
 			3, &resistances_rg[0], gweights, 1000, 0,
 			2, &resistances_b[0],  bweights, 1000, 0);
 
 	/* allocate the colortable */
-	machine.colortable = colortable_alloc(machine, 0x20);
+	machine().colortable = colortable_alloc(machine(), 0x20);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x20; i++)
@@ -60,7 +61,7 @@ PALETTE_INIT( pandoras )
 		bit1 = (color_prom[i] >> 7) & 0x01;
 		b = combine_2_weights(bweights, bit0, bit1);
 
-		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine().colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -70,14 +71,14 @@ PALETTE_INIT( pandoras )
 	for (i = 0; i < 0x100; i++)
 	{
 		UINT8 ctabentry = color_prom[i] & 0x0f;
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine().colortable, i, ctabentry);
 	}
 
 	/* characters */
 	for (i = 0x100; i < 0x200; i++)
 	{
 		UINT8 ctabentry = (color_prom[i] & 0x0f) | 0x10;
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine().colortable, i, ctabentry);
 	}
 }
 
@@ -87,16 +88,15 @@ PALETTE_INIT( pandoras )
 
 ***************************************************************************/
 
-static TILE_GET_INFO( get_tile_info0 )
+TILE_GET_INFO_MEMBER(pandoras_state::get_tile_info0)
 {
-	pandoras_state *state = machine.driver_data<pandoras_state>();
-	UINT8 attr = state->m_colorram[tile_index];
-	SET_TILE_INFO(
+	UINT8 attr = m_colorram[tile_index];
+	SET_TILE_INFO_MEMBER(
 			1,
-			state->m_videoram[tile_index] + ((attr & 0x10) << 4),
+			m_videoram[tile_index] + ((attr & 0x10) << 4),
 			attr & 0x0f,
 			TILE_FLIPYX((attr & 0xc0) >> 6));
-	tileinfo->category = (attr & 0x20) >> 5;
+	tileinfo.category = (attr & 0x20) >> 5;
 }
 
 /***************************************************************************
@@ -105,12 +105,11 @@ static TILE_GET_INFO( get_tile_info0 )
 
 ***************************************************************************/
 
-VIDEO_START( pandoras )
+void pandoras_state::video_start()
 {
-	pandoras_state *state = machine.driver_data<pandoras_state>();
-	state->m_layer0 = tilemap_create(machine, get_tile_info0, tilemap_scan_rows, 8, 8, 32, 32);
+	m_layer0 = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(pandoras_state::get_tile_info0),this), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
 
-	state->save_item(NAME(state->m_flipscreen));
+	save_item(NAME(m_flipscreen));
 }
 
 /***************************************************************************
@@ -119,35 +118,27 @@ VIDEO_START( pandoras )
 
 ***************************************************************************/
 
-WRITE8_HANDLER( pandoras_vram_w )
+WRITE8_MEMBER(pandoras_state::pandoras_vram_w)
 {
-	pandoras_state *state = space->machine().driver_data<pandoras_state>();
-
-	tilemap_mark_tile_dirty(state->m_layer0, offset);
-	state->m_videoram[offset] = data;
+	m_layer0->mark_tile_dirty(offset);
+	m_videoram[offset] = data;
 }
 
-WRITE8_HANDLER( pandoras_cram_w )
+WRITE8_MEMBER(pandoras_state::pandoras_cram_w)
 {
-	pandoras_state *state = space->machine().driver_data<pandoras_state>();
-
-	tilemap_mark_tile_dirty(state->m_layer0, offset);
-	state->m_colorram[offset] = data;
+	m_layer0->mark_tile_dirty(offset);
+	m_colorram[offset] = data;
 }
 
-WRITE8_HANDLER( pandoras_scrolly_w )
+WRITE8_MEMBER(pandoras_state::pandoras_scrolly_w)
 {
-	pandoras_state *state = space->machine().driver_data<pandoras_state>();
-
-	tilemap_set_scrolly(state->m_layer0, 0, data);
+	m_layer0->set_scrolly(0, data);
 }
 
-WRITE8_HANDLER( pandoras_flipscreen_w )
+WRITE8_MEMBER(pandoras_state::pandoras_flipscreen_w)
 {
-	pandoras_state *state = space->machine().driver_data<pandoras_state>();
-
-	state->m_flipscreen = data;
-	tilemap_set_flip_all(space->machine(), state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	m_flipscreen = data;
+	machine().tilemap().set_flip_all(m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
 }
 
 /***************************************************************************
@@ -156,7 +147,7 @@ WRITE8_HANDLER( pandoras_flipscreen_w )
 
 ***************************************************************************/
 
-static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, UINT8* sr )
+void pandoras_state::draw_sprites( bitmap_ind16 &bitmap, const rectangle &cliprect, UINT8* sr )
 {
 	int offs;
 
@@ -168,20 +159,19 @@ static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rect
 		int nflipx = sr[offs + 3] & 0x40;
 		int nflipy = sr[offs + 3] & 0x80;
 
-		drawgfx_transmask(bitmap,cliprect,machine.gfx[0],
+		drawgfx_transmask(bitmap,cliprect,machine().gfx[0],
 			sr[offs + 2],
 			color,
 			!nflipx,!nflipy,
 			sx,sy,
-			colortable_get_transpen_mask(machine.colortable, machine.gfx[0], color, 0));
+			colortable_get_transpen_mask(machine().colortable, machine().gfx[0], color, 0));
 	}
 }
 
-SCREEN_UPDATE( pandoras )
+UINT32 pandoras_state::screen_update_pandoras(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	pandoras_state *state = screen->machine().driver_data<pandoras_state>();
-	tilemap_draw(bitmap,cliprect, state->m_layer0, 1 ,0);
-	draw_sprites(screen->machine(), bitmap, cliprect, &state->m_spriteram[0x800] );
-	tilemap_draw(bitmap,cliprect, state->m_layer0, 0 ,0);
+	m_layer0->draw(screen, bitmap, cliprect, 1 ,0);
+	draw_sprites(bitmap, cliprect, &m_spriteram[0x800] );
+	m_layer0->draw(screen, bitmap, cliprect, 0 ,0);
 	return 0;
 }

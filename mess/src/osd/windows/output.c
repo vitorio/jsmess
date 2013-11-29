@@ -1,41 +1,8 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 //============================================================
 //
 //  output.c - Win32 implementation of MAME output routines
-//
-//============================================================
-//
-//  Copyright Aaron Giles
-//  All rights reserved.
-//
-//  Redistribution and use in source and binary forms, with or
-//  without modification, are permitted provided that the
-//  following conditions are met:
-//
-//    * Redistributions of source code must retain the above
-//      copyright notice, this list of conditions and the
-//      following disclaimer.
-//    * Redistributions in binary form must reproduce the
-//      above copyright notice, this list of conditions and
-//      the following disclaimer in the documentation and/or
-//      other materials provided with the distribution.
-//    * Neither the name 'MAME' nor the names of its
-//      contributors may be used to endorse or promote
-//      products derived from this software without specific
-//      prior written permission.
-//
-//  THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND
-//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-//  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
-//  FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
-//  EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-//  DAMAGE (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-//  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-//  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-//  ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-//  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-//  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-//  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //============================================================
 
@@ -44,8 +11,8 @@
 #include <windows.h>
 
 // MAME headers
-#include "osdepend.h"
 #include "emu.h"
+#include "osdepend.h"
 
 // MAMEOS headers
 #include "output.h"
@@ -57,8 +24,8 @@
 //============================================================
 
 // window styles
-#define WINDOW_STYLE		WS_OVERLAPPEDWINDOW
-#define WINDOW_STYLE_EX		0
+#define WINDOW_STYLE        WS_OVERLAPPEDWINDOW
+#define WINDOW_STYLE_EX     0
 
 
 
@@ -66,12 +33,11 @@
 //  TYPEDEFS
 //============================================================
 
-typedef struct _registered_client registered_client;
-struct _registered_client
+struct registered_client
 {
-	registered_client *	next;		// next client in the list
-	LPARAM				id;			// client-specified ID
-	HWND				hwnd;		// client HWND
+	registered_client * next;       // next client in the list
+	LPARAM              id;         // client-specified ID
+	HWND                hwnd;       // client HWND
 };
 
 
@@ -81,18 +47,18 @@ struct _registered_client
 //============================================================
 
 // our HWND
-static HWND					output_hwnd;
+static HWND                 output_hwnd;
 
 // client list
-static registered_client *	clientlist;
+static registered_client *  clientlist;
 
 // message IDs
-static UINT					om_mame_start;
-static UINT					om_mame_stop;
-static UINT					om_mame_update_state;
-static UINT					om_mame_register_client;
-static UINT					om_mame_unregister_client;
-static UINT					om_mame_get_id_string;
+static UINT                 om_mame_start;
+static UINT                 om_mame_stop;
+static UINT                 om_mame_update_state;
+static UINT                 om_mame_register_client;
+static UINT                 om_mame_unregister_client;
+static UINT                 om_mame_get_id_string;
 
 
 
@@ -127,6 +93,7 @@ void winoutput_init(running_machine &machine)
 	// create our window class
 	result = create_window_class();
 	assert(result == 0);
+	(void)result; // to silence gcc 4.6
 
 	// create a window
 	output_hwnd = CreateWindowEx(
@@ -201,9 +168,9 @@ static int create_window_class(void)
 		WNDCLASS wc = { 0 };
 
 		// initialize the description of the window class
-		wc.lpszClassName	= OUTPUT_WINDOW_CLASS;
-		wc.hInstance		= GetModuleHandle(NULL);
-		wc.lpfnWndProc		= output_window_proc;
+		wc.lpszClassName    = OUTPUT_WINDOW_CLASS;
+		wc.hInstance        = GetModuleHandle(NULL);
+		wc.lpfnWndProc      = output_window_proc;
 
 		// register the class; fail if we can't
 		if (!RegisterClass(&wc))

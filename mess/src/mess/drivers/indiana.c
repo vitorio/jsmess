@@ -4,19 +4,26 @@
 
         08/12/2009 Skeleton driver.
 
+        If 6001F7 is held at 40, then '>' will appear on screen.
+        System often reads/writes 6003D4/5, might be a cut-down 6845,
+        as it only uses registers C,D,E,F.
+
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
+#include "video/pc_vga.h"
 
 
 class indiana_state : public driver_device
 {
 public:
 	indiana_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu") { }
+	DECLARE_DRIVER_INIT(indiana);
+	virtual void machine_reset();
+	required_device<cpu_device> m_maincpu;
 };
 
 
@@ -28,7 +35,11 @@ static ADDRESS_MAP_START(indiana_mem, AS_PROGRAM, 32, indiana_state)
 	AM_RANGE(0x00400000, 0x004fffff) AM_MIRROR(0x7f800000) AM_RAM // 16 bit PC IO
 	AM_RANGE(0x00500000, 0x005fffff) AM_MIRROR(0x7f800000) AM_RAM // 16 bit PC MEM
 	AM_RANGE(0x00600000, 0x006fffff) AM_MIRROR(0x7f800000) AM_RAM // 8 bit PC IO
-	AM_RANGE(0x00700000, 0x007fffff) AM_MIRROR(0x7f800000) AM_RAM // 8 bit PC MEM // 7f7b8000 location of VGA RAM
+	AM_RANGE(0x00700000, 0x007fffff) AM_MIRROR(0x7f800000) AM_RAM // 8 bit PC MEM
+	AM_RANGE(0x7f6003b0, 0x7f6003bf) AM_DEVREADWRITE8("vga", vga_device, port_03b0_r, port_03b0_w, 0xffffffff)
+	AM_RANGE(0x7f6003c0, 0x7f6003cf) AM_DEVREADWRITE8("vga", vga_device, port_03c0_r, port_03c0_w, 0xffffffff)
+	AM_RANGE(0x7f6003d0, 0x7f6003df) AM_DEVREADWRITE8("vga", vga_device, port_03d0_r, port_03d0_w, 0xffffffff)
+	AM_RANGE(0x7f7a0000, 0x7f7bffff) AM_DEVREADWRITE8("vga", vga_device, mem_r, mem_w, 0xffffffff)
 	AM_RANGE(0x80000000, 0x803fffff) AM_MIRROR(0x7fc00000) AM_RAM // 4 MB RAM
 ADDRESS_MAP_END
 
@@ -38,40 +49,42 @@ static INPUT_PORTS_START( indiana )
 INPUT_PORTS_END
 
 
-static MACHINE_RESET(indiana)
+void indiana_state::machine_reset()
 {
 }
 
-static VIDEO_START( indiana )
+/* F4 Character Displayer */
+static const gfx_layout indiana_charlayout =
 {
-}
+	8, 16,                  /* 8 x 16 characters */
+	128,                    /* 128 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
+	/* x offsets */
+	{ 0, 1, 2, 3, 4, 5, 6, 7 },
+	/* y offsets */
+	{ 3*8, 2*8, 1*8, 0*8, 7*8, 6*8, 5*8, 4*8, 11*8, 10*8, 9*8, 8*8, 15*8, 14*8, 13*8, 12*8 },
+	8*16                    /* every char takes 16 bytes */
+};
 
-static SCREEN_UPDATE( indiana )
-{
-	return 0;
-}
+static GFXDECODE_START( indiana )
+	GFXDECODE_ENTRY( "user1", 0x6710, indiana_charlayout, 0, 4 ) // offset is for -bios 0
+GFXDECODE_END
 
 static MACHINE_CONFIG_START( indiana, indiana_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu",M68030, XTAL_16MHz)
 	MCFG_CPU_PROGRAM_MAP(indiana_mem)
 
-	MCFG_MACHINE_RESET(indiana)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(50)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MCFG_SCREEN_SIZE(640, 480)
-	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
-	MCFG_SCREEN_UPDATE(indiana)
-
-	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
-
-	MCFG_VIDEO_START(indiana)
+	MCFG_GFXDECODE(indiana)
+	MCFG_FRAGMENT_ADD( pcvideo_vga )
 MACHINE_CONFIG_END
+
+DRIVER_INIT_MEMBER(indiana_state,indiana)
+{
+}
 
 /* ROM definition */
 ROM_START( indiana )
@@ -87,4 +100,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY                  FULLNAME                               FLAGS */
-COMP( 1993, indiana,  0,       0,    indiana,   indiana,  0,  "Indiana University", "Indiana University 68030 board", GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 1993, indiana,  0,       0,    indiana,   indiana, indiana_state,  indiana,  "Indiana University", "Indiana University 68030 board", GAME_NOT_WORKING | GAME_NO_SOUND)

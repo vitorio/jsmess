@@ -1,8 +1,31 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /***************************************************************************
 
     LC-80
 
     12/05/2009 Skeleton driver.
+
+    When first started, the screen is blank. Wait about 8 seconds for
+    it to introduce itself, then you may use it or paste to it.
+    The decimal points indicate which side of the display you will
+    be updating.
+
+    Pasting:
+        0-F : as is
+        + (inc) : ^
+        - (dec) : V
+        ADR : -
+        DAT : =
+        GO : X
+
+    Test Paste: (lc80_2 only)
+        -2000=11^22^33^44^55^66^77^88^99^-2000
+        Now press up-arrow to confirm the data has been entered.
+
+
+    ToDo:
+    - Most characters are lost when pasting (lc80, sc80).
 
 ****************************************************************************/
 
@@ -41,59 +64,59 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( lc80_io, AS_IO, 8, lc80_state )
 	ADDRESS_MAP_GLOBAL_MASK(0x1f)
-	AM_RANGE(0xf4, 0xf7) AM_DEVREADWRITE_LEGACY(Z80PIO1_TAG, z80pio_cd_ba_r, z80pio_cd_ba_w)
-	AM_RANGE(0xf8, 0xfb) AM_DEVREADWRITE_LEGACY(Z80PIO2_TAG, z80pio_cd_ba_r, z80pio_cd_ba_w)
-	AM_RANGE(0xec, 0xef) AM_DEVREADWRITE_LEGACY(Z80CTC_TAG, z80ctc_r, z80ctc_w)
+	AM_RANGE(0xf4, 0xf7) AM_DEVREADWRITE(Z80PIO1_TAG, z80pio_device, read, write)
+	AM_RANGE(0xf8, 0xfb) AM_DEVREADWRITE(Z80PIO2_TAG, z80pio_device, read, write)
+	AM_RANGE(0xec, 0xef) AM_DEVREADWRITE(Z80CTC_TAG, z80ctc_device, read, write)
 ADDRESS_MAP_END
 
 /* Input Ports */
 
-static INPUT_CHANGED( trigger_reset )
+INPUT_CHANGED_MEMBER( lc80_state::trigger_reset )
 {
-	cputag_set_input_line(field.machine(), Z80_TAG, INPUT_LINE_RESET, newval ? CLEAR_LINE : ASSERT_LINE);
+	m_maincpu->set_input_line(INPUT_LINE_RESET, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
-static INPUT_CHANGED( trigger_nmi )
+INPUT_CHANGED_MEMBER( lc80_state::trigger_nmi )
 {
-	cputag_set_input_line(field.machine(), Z80_TAG, INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
+	m_maincpu->set_input_line(INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static INPUT_PORTS_START( lc80 )
-	PORT_START("ROW0")
+	PORT_START("Y0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_3) PORT_CHAR('3')
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_7) PORT_CHAR('7')
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_B) PORT_CHAR('B')
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_F) PORT_CHAR('F')
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("-") PORT_CODE(KEYCODE_DOWN)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_3) PORT_CHAR('3')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_7) PORT_CHAR('7')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_B) PORT_CHAR('B')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F) PORT_CHAR('F')
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("-") PORT_CODE(KEYCODE_DOWN) PORT_CHAR('V')
 
-	PORT_START("ROW1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("LD") PORT_CODE(KEYCODE_L)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_2) PORT_CHAR('2')
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("+") PORT_CODE(KEYCODE_UP)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_E) PORT_CHAR('E')
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_A) PORT_CHAR('A')
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_6) PORT_CHAR('6')
+	PORT_START("Y1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LD") PORT_CODE(KEYCODE_L)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_2) PORT_CHAR('2')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("+") PORT_CODE(KEYCODE_UP) PORT_CHAR('^')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_E) PORT_CHAR('E')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_A) PORT_CHAR('A')
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_6) PORT_CHAR('6')
 
-	PORT_START("ROW2")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("ST") PORT_CODE(KEYCODE_S)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_1) PORT_CHAR('1')
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_5) PORT_CHAR('5')
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_9) PORT_CHAR('9')
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_D) PORT_CHAR('D')
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("DAT") PORT_CODE(KEYCODE_T)
+	PORT_START("Y2")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("ST") PORT_CODE(KEYCODE_S)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_1) PORT_CHAR('1')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_5) PORT_CHAR('5')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_9) PORT_CHAR('9')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_D) PORT_CHAR('D')
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("DAT") PORT_CODE(KEYCODE_EQUALS) PORT_CHAR('=')
 
-	PORT_START("ROW3")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("EX") PORT_CODE(KEYCODE_X)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_0) PORT_CHAR('0')
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_4) PORT_CHAR('4')
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_8) PORT_CHAR('8')
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_CODE(KEYCODE_C) PORT_CHAR('C')
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("ADR") PORT_CODE(KEYCODE_R)
+	PORT_START("Y3")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("EX") PORT_CODE(KEYCODE_X) PORT_CHAR('X')
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_0) PORT_CHAR('0')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_4) PORT_CHAR('4')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_8) PORT_CHAR('8')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_C) PORT_CHAR('C')
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("ADR") PORT_CODE(KEYCODE_MINUS) PORT_CHAR('-')
 
 	PORT_START("SPECIAL")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("RES") PORT_CODE(KEYCODE_F10) PORT_CHANGED(trigger_reset, 0)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("NMI") PORT_CODE(KEYCODE_ESC) PORT_CHANGED(trigger_nmi, 0)
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("RES") PORT_CODE(KEYCODE_F10) PORT_CHANGED_MEMBER(DEVICE_SELF, lc80_state, trigger_reset, 0)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("NMI") PORT_CODE(KEYCODE_ESC) PORT_CHANGED_MEMBER(DEVICE_SELF, lc80_state, trigger_nmi, 0)
 INPUT_PORTS_END
 
 /* Z80-CTC Interface */
@@ -112,11 +135,10 @@ WRITE_LINE_MEMBER( lc80_state::ctc_z2_w )
 
 static Z80CTC_INTERFACE( ctc_intf )
 {
-	0,              	/* timer disables */
-	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0),	/* interrupt handler */
-	DEVCB_DRIVER_LINE_MEMBER(lc80_state, ctc_z0_w),			/* ZC/TO0 callback */
-	DEVCB_DRIVER_LINE_MEMBER(lc80_state, ctc_z1_w),			/* ZC/TO1 callback */
-	DEVCB_DRIVER_LINE_MEMBER(lc80_state, ctc_z2_w)  		/* ZC/TO2 callback */
+	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0), /* interrupt handler */
+	DEVCB_DRIVER_LINE_MEMBER(lc80_state, ctc_z0_w),         /* ZC/TO0 callback */
+	DEVCB_DRIVER_LINE_MEMBER(lc80_state, ctc_z1_w),         /* ZC/TO1 callback */
+	DEVCB_DRIVER_LINE_MEMBER(lc80_state, ctc_z2_w)          /* ZC/TO2 callback */
 };
 
 /* Z80-PIO Interface */
@@ -135,18 +157,18 @@ WRITE8_MEMBER( lc80_state::pio1_pa_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     VQE23 segment B
-        PA1     VQE23 segment F
-        PA2     VQE23 segment A
-        PA3     VQE23 segment G
-        PA4     VQE23 segment DP
-        PA5     VQE23 segment C
-        PA6     VQE23 segment E
-        PA7     VQE23 segment D
+	    PA0     VQE23 segment B
+	    PA1     VQE23 segment F
+	    PA2     VQE23 segment A
+	    PA3     VQE23 segment G
+	    PA4     VQE23 segment DP
+	    PA5     VQE23 segment C
+	    PA6     VQE23 segment E
+	    PA7     VQE23 segment D
 
-    */
+	*/
 
 	m_segment = BITSWAP8(~data, 4, 3, 1, 6, 7, 5, 0, 2);
 
@@ -157,44 +179,44 @@ READ8_MEMBER( lc80_state::pio1_pb_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0     tape input
-        PB1     tape output
-        PB2     digit 0
-        PB3     digit 1
-        PB4     digit 2
-        PB5     digit 3
-        PB6     digit 4
-        PB7     digit 5
+	    PB0     tape input
+	    PB1     tape output
+	    PB2     digit 0
+	    PB3     digit 1
+	    PB4     digit 2
+	    PB5     digit 3
+	    PB6     digit 4
+	    PB7     digit 5
 
-    */
+	*/
 
-	return ((m_cassette)->input() < +0.0);
+	return (m_cassette->input() < +0.0);
 }
 
 WRITE8_MEMBER( lc80_state::pio1_pb_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0     tape input
-        PB1     tape output, speaker output, OUT led
-        PB2     digit 0
-        PB3     digit 1
-        PB4     digit 2
-        PB5     digit 3
-        PB6     digit 4
-        PB7     digit 5
+	    PB0     tape input
+	    PB1     tape output, speaker output, OUT led
+	    PB2     digit 0
+	    PB3     digit 1
+	    PB4     digit 2
+	    PB5     digit 3
+	    PB6     digit 4
+	    PB7     digit 5
 
-    */
+	*/
 
 	/* tape output */
 	m_cassette->output( BIT(data, 1) ? +1.0 : -1.0);
 
 	/* speaker */
-	speaker_level_w(m_speaker, !BIT(data, 1));
+	m_speaker->level_w(!BIT(data, 1));
 
 	/* OUT led */
 	output_set_led_value(0, !BIT(data, 1));
@@ -208,31 +230,31 @@ WRITE8_MEMBER( lc80_state::pio1_pb_w )
 
 static Z80PIO_INTERFACE( pio1_intf )
 {
-	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0),	/* callback when change interrupt status */
-	DEVCB_NULL,						/* port A read callback */
-	DEVCB_DRIVER_MEMBER(lc80_state, pio1_pa_w),	/* port A write callback */
-	DEVCB_NULL,						/* portA ready active callback */
-	DEVCB_DRIVER_MEMBER(lc80_state, pio1_pb_r),	/* port B read callback */
-	DEVCB_DRIVER_MEMBER(lc80_state, pio1_pb_w),	/* port B write callback */
-	DEVCB_NULL						/* portB ready active callback */
+	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0), /* callback when change interrupt status */
+	DEVCB_NULL,                     /* port A read callback */
+	DEVCB_DRIVER_MEMBER(lc80_state, pio1_pa_w), /* port A write callback */
+	DEVCB_NULL,                     /* portA ready active callback */
+	DEVCB_DRIVER_MEMBER(lc80_state, pio1_pb_r), /* port B read callback */
+	DEVCB_DRIVER_MEMBER(lc80_state, pio1_pb_w), /* port B write callback */
+	DEVCB_NULL                      /* portB ready active callback */
 };
 
 READ8_MEMBER( lc80_state::pio2_pb_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0
-        PB1
-        PB2
-        PB3
-        PB4     key row 0
-        PB5     key row 1
-        PB6     key row 2
-        PB7     key row 3
+	    PB0
+	    PB1
+	    PB2
+	    PB3
+	    PB4     key row 0
+	    PB5     key row 1
+	    PB6     key row 2
+	    PB7     key row 3
 
-    */
+	*/
 
 	UINT8 data = 0xf0;
 	int i;
@@ -241,10 +263,10 @@ READ8_MEMBER( lc80_state::pio2_pb_r )
 	{
 		if (!BIT(m_digit, i))
 		{
-			if (!BIT(input_port_read(machine(), "ROW0"), i)) data &= ~0x10;
-			if (!BIT(input_port_read(machine(), "ROW1"), i)) data &= ~0x20;
-			if (!BIT(input_port_read(machine(), "ROW2"), i)) data &= ~0x40;
-			if (!BIT(input_port_read(machine(), "ROW3"), i)) data &= ~0x80;
+			if (!BIT(m_y0->read(), i)) data &= ~0x10;
+			if (!BIT(m_y1->read(), i)) data &= ~0x20;
+			if (!BIT(m_y2->read(), i)) data &= ~0x40;
+			if (!BIT(m_y3->read(), i)) data &= ~0x80;
 		}
 	}
 
@@ -253,13 +275,13 @@ READ8_MEMBER( lc80_state::pio2_pb_r )
 
 static Z80PIO_INTERFACE( pio2_intf )
 {
-	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0),	/* callback when change interrupt status */
-	DEVCB_NULL,						/* port A read callback */
-	DEVCB_NULL,						/* port A write callback */
-	DEVCB_NULL,						/* portA ready active callback */
-	DEVCB_DRIVER_MEMBER(lc80_state, pio2_pb_r),	/* port B read callback */
-	DEVCB_NULL,						/* port B write callback */
-	DEVCB_NULL						/* portB ready active callback */
+	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0), /* callback when change interrupt status */
+	DEVCB_NULL,                     /* port A read callback */
+	DEVCB_NULL,                     /* port A write callback */
+	DEVCB_NULL,                     /* portA ready active callback */
+	DEVCB_DRIVER_MEMBER(lc80_state, pio2_pb_r), /* port B read callback */
+	DEVCB_NULL,                     /* port B write callback */
+	DEVCB_NULL                      /* portB ready active callback */
 };
 
 /* Z80 Daisy Chain */
@@ -276,47 +298,47 @@ static const z80_daisy_config lc80_daisy_chain[] =
 
 void lc80_state::machine_start()
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
+	address_space &program = m_maincpu->space(AS_PROGRAM);
 
 	/* setup memory banking */
-	memory_configure_bank(machine(), "bank1", 0, 1, machine().region(Z80_TAG)->base(), 0); // TODO
-	memory_configure_bank(machine(), "bank1", 1, 1, machine().region(Z80_TAG)->base(), 0);
-	memory_set_bank(machine(), "bank1", 1);
+	membank("bank1")->configure_entry(0, m_rom->base()); // TODO
+	membank("bank1")->configure_entry(1, m_rom->base());
+	membank("bank1")->set_entry(1);
 
-	memory_configure_bank(machine(), "bank2", 0, 1, machine().region(Z80_TAG)->base() + 0x800, 0); // TODO
-	memory_configure_bank(machine(), "bank2", 1, 1, machine().region(Z80_TAG)->base() + 0x800, 0);
-	memory_set_bank(machine(), "bank2", 1);
+	membank("bank2")->configure_entry(0, m_rom->base() + 0x800); // TODO
+	membank("bank2")->configure_entry(1, m_rom->base() + 0x800);
+	membank("bank2")->set_entry(1);
 
-	memory_configure_bank(machine(), "bank3", 0, 1, machine().region(Z80_TAG)->base() + 0x1000, 0); // TODO
-	memory_configure_bank(machine(), "bank3", 1, 1, machine().region(Z80_TAG)->base() + 0x1000, 0);
-	memory_set_bank(machine(), "bank3", 1);
+	membank("bank3")->configure_entry(0, m_rom->base() + 0x1000); // TODO
+	membank("bank3")->configure_entry(1, m_rom->base() + 0x1000);
+	membank("bank3")->set_entry(1);
 
-	memory_configure_bank(machine(), "bank4", 0, 1, machine().region(Z80_TAG)->base() + 0x2000, 0);
-	memory_set_bank(machine(), "bank4", 0);
+	membank("bank4")->configure_entry(0, m_rom->base() + 0x2000);
+	membank("bank4")->set_entry(0);
 
-	program->install_readwrite_bank(0x0000, 0x07ff, "bank1");
-	program->install_readwrite_bank(0x0800, 0x0fff, "bank2");
-	program->install_readwrite_bank(0x1000, 0x17ff, "bank3");
+	program.install_readwrite_bank(0x0000, 0x07ff, "bank1");
+	program.install_readwrite_bank(0x0800, 0x0fff, "bank2");
+	program.install_readwrite_bank(0x1000, 0x17ff, "bank3");
 
-	switch (ram_get_size(m_ram))
+	switch (m_ram->size())
 	{
 	case 1*1024:
-		program->install_readwrite_bank(0x2000, 0x23ff, "bank4");
-		program->unmap_readwrite(0x2400, 0x2fff);
+		program.install_readwrite_bank(0x2000, 0x23ff, "bank4");
+		program.unmap_readwrite(0x2400, 0x2fff);
 		break;
 
 	case 2*1024:
-		program->install_readwrite_bank(0x2000, 0x27ff, "bank4");
-		program->unmap_readwrite(0x2800, 0x2fff);
+		program.install_readwrite_bank(0x2000, 0x27ff, "bank4");
+		program.unmap_readwrite(0x2800, 0x2fff);
 		break;
 
 	case 3*1024:
-		program->install_readwrite_bank(0x2000, 0x2bff, "bank4");
-		program->unmap_readwrite(0x2c00, 0x2fff);
+		program.install_readwrite_bank(0x2000, 0x2bff, "bank4");
+		program.unmap_readwrite(0x2c00, 0x2fff);
 		break;
 
 	case 4*1024:
-		program->install_readwrite_bank(0x2000, 0x2fff, "bank4");
+		program.install_readwrite_bank(0x2000, 0x2fff, "bank4");
 		break;
 	}
 
@@ -338,16 +360,16 @@ static const cassette_interface lc80_cassette_interface =
 
 static MACHINE_CONFIG_START( lc80, lc80_state )
 	/* basic machine hardware */
-    MCFG_CPU_ADD(Z80_TAG, Z80, 900000) /* UD880D */
-    MCFG_CPU_PROGRAM_MAP(lc80_mem)
-    MCFG_CPU_IO_MAP(lc80_io)
+	MCFG_CPU_ADD(Z80_TAG, Z80, 900000) /* UD880D */
+	MCFG_CPU_PROGRAM_MAP(lc80_mem)
+	MCFG_CPU_IO_MAP(lc80_io)
 
 	/* video hardware */
 	MCFG_DEFAULT_LAYOUT( layout_lc80 )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	/* devices */
@@ -355,7 +377,7 @@ static MACHINE_CONFIG_START( lc80, lc80_state )
 	MCFG_Z80PIO_ADD(Z80PIO1_TAG, 900000, pio1_intf)
 	MCFG_Z80PIO_ADD(Z80PIO2_TAG, 900000, pio2_intf)
 
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, lc80_cassette_interface)
+	MCFG_CASSETTE_ADD("cassette", lc80_cassette_interface)
 
 	MCFG_RAM_ADD(RAM_TAG)
 	MCFG_RAM_DEFAULT_SIZE("1K")
@@ -364,16 +386,16 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( lc80_2, lc80_state )
 	/* basic machine hardware */
-    MCFG_CPU_ADD(Z80_TAG, Z80, 1800000) /* UD880D */
-    MCFG_CPU_PROGRAM_MAP(lc80_mem)
-    MCFG_CPU_IO_MAP(lc80_io)
+	MCFG_CPU_ADD(Z80_TAG, Z80, 1800000) /* UD880D */
+	MCFG_CPU_PROGRAM_MAP(lc80_mem)
+	MCFG_CPU_IO_MAP(lc80_io)
 
 	/* video hardware */
 	MCFG_DEFAULT_LAYOUT( layout_lc80 )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	/* devices */
@@ -381,7 +403,7 @@ static MACHINE_CONFIG_START( lc80_2, lc80_state )
 	MCFG_Z80PIO_ADD(Z80PIO1_TAG, 900000, pio1_intf)
 	MCFG_Z80PIO_ADD(Z80PIO2_TAG, 900000, pio2_intf)
 
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, lc80_cassette_interface)
+	MCFG_CASSETTE_ADD("cassette", lc80_cassette_interface)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -392,8 +414,8 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_DERIVED( sc80, lc80_2 )
 
 	/* basic machine hardware */
-    MCFG_CPU_MODIFY(Z80_TAG)
-    MCFG_CPU_PROGRAM_MAP(sc80_mem)
+	MCFG_CPU_MODIFY(Z80_TAG)
+	MCFG_CPU_PROGRAM_MAP(sc80_mem)
 MACHINE_CONFIG_END
 #endif
 
@@ -423,6 +445,6 @@ ROM_END
 /* System Drivers */
 
 /*    YEAR  NAME    PARENT  COMPAT  MACHINE INPUT   INIT    COMPANY                 FULLNAME                FLAGS */
-COMP( 1984, lc80,	0,		0,		lc80,	lc80,	0,		"VEB Mikroelektronik",	"Lerncomputer LC 80",	GAME_SUPPORTS_SAVE )
-COMP( 1984, lc80_2,	lc80,	0,		lc80_2,	lc80,	0,		"VEB Mikroelektronik",	"Lerncomputer LC 80.2",	GAME_SUPPORTS_SAVE )
-COMP( 1984, sc80,	lc80,	0,		lc80_2,	lc80,	0,		"VEB Mikroelektronik",	"Schachcomputer SC-80",	GAME_SUPPORTS_SAVE )
+COMP( 1984, lc80,   0,      0,      lc80,   lc80, driver_device,   0, "VEB Mikroelektronik", "Lerncomputer LC 80", GAME_SUPPORTS_SAVE )
+COMP( 1984, lc80_2, lc80,   0,      lc80_2, lc80, driver_device,   0, "VEB Mikroelektronik", "Lerncomputer LC 80.2", GAME_SUPPORTS_SAVE )
+COMP( 1984, sc80,   lc80,   0,      lc80_2, lc80, driver_device,   0, "VEB Mikroelektronik", "Schachcomputer SC-80", GAME_SUPPORTS_SAVE )

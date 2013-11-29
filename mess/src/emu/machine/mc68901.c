@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     Motorola MC68901 Multi Function Peripheral emulation
@@ -19,17 +21,21 @@
         However the fact that they indeed happen in the ST is quite interesting.
 
         The MFP will generate a spurious interrupt if interrupts are disabled (by changing the IERA/IERB registers)
-        at the ???precise point???. The precise point would be after the system (but not necessarily the CPU, see below)
+        at the 'precise point'. The precise point would be after the system (but not necessarily the CPU, see below)
         triggered an MFP interrupt, and before the CPU drives the interrupt acknowledge cycle.
 
-        If the MFP was connected directly to the CPU, spurious interrupts probably couldn???t happen. However in the
+        If the MFP was connected directly to the CPU, spurious interrupts probably couldn't happen. However in the
         ST, GLUE seats in the middle and handles all the interrupt timing. It is possible that GLUE introduces a
         delay between detecting a change in the MFP interrupt request signal and actually propagating the change to
         the CPU IPL signals (it is even possible that GLUE make some kind of latching). This would create a window
-        long enough for the ???precise point??? described above.
+        long enough for the 'precise point' described above.
 
         "yes, the spurious interrupt occurs when i mask a timer. i did not notice an occurance of the SPI when changing data and control registers.
         if i kill interrupts with the status reg before masking the timer interrupt, then the SPI occurs as soon as the status register is set to re-enable interrupts."
+
+        Well, more experiments show that it's somewhat incorrect, and
+        the GLUE is essentially invisible w.r.t IPL.  The CPU and the
+        MFP manage to add the delays all by themselves.
 
     - divide serial clock by 16
     - synchronous mode
@@ -43,7 +49,6 @@
 #include "emu.h"
 #include "mc68901.h"
 #include "cpu/m68000/m68000.h"
-#include "machine/devhelpr.h"
 
 
 // device type definition
@@ -57,207 +62,118 @@ const device_type MC68901 = &device_creator<mc68901_device>;
 #define LOG 0
 
 
-enum
-{
-	REGISTER_GPIP = 0,
-	REGISTER_AER,
-	REGISTER_DDR,
-	REGISTER_IERA,
-	REGISTER_IERB,
-	REGISTER_IPRA,
-	REGISTER_IPRB,
-	REGISTER_ISRA,
-	REGISTER_ISRB,
-	REGISTER_IMRA,
-	REGISTER_IMRB,
-	REGISTER_VR,
-	REGISTER_TACR,
-	REGISTER_TBCR,
-	REGISTER_TCDCR,
-	REGISTER_TADR,
-	REGISTER_TBDR,
-	REGISTER_TCDR,
-	REGISTER_TDDR,
-	REGISTER_SCR,
-	REGISTER_UCR,
-	REGISTER_RSR,
-	REGISTER_TSR,
-	REGISTER_UDR
-};
+
+#define AER_GPIP_0              0x01
+#define AER_GPIP_1              0x02
+#define AER_GPIP_2              0x04
+#define AER_GPIP_3              0x08
+#define AER_GPIP_4              0x10
+#define AER_GPIP_5              0x20
+#define AER_GPIP_6              0x40
+#define AER_GPIP_7              0x80
 
 
-enum
-{
-	INT_GPI0 = 0,
-	INT_GPI1,
-	INT_GPI2,
-	INT_GPI3,
-	INT_TIMER_D,
-	INT_TIMER_C,
-	INT_GPI4,
-	INT_GPI5,
-	INT_TIMER_B,
-	INT_XMIT_ERROR,
-	INT_XMIT_BUFFER_EMPTY,
-	INT_RCV_ERROR,
-	INT_RCV_BUFFER_FULL,
-	INT_TIMER_A,
-	INT_GPI6,
-	INT_GPI7
-};
+#define VR_S                    0x08
 
 
-enum
-{
-	GPIP_0 = 0,
-	GPIP_1,
-	GPIP_2,
-	GPIP_3,
-	GPIP_4,
-	GPIP_5,
-	GPIP_6,
-	GPIP_7
-};
+#define IR_GPIP_0               0x0001
+#define IR_GPIP_1               0x0002
+#define IR_GPIP_2               0x0004
+#define IR_GPIP_3               0x0008
+#define IR_TIMER_D              0x0010
+#define IR_TIMER_C              0x0020
+#define IR_GPIP_4               0x0040
+#define IR_GPIP_5               0x0080
+#define IR_TIMER_B              0x0100
+#define IR_XMIT_ERROR           0x0200
+#define IR_XMIT_BUFFER_EMPTY    0x0400
+#define IR_RCV_ERROR            0x0800
+#define IR_RCV_BUFFER_FULL      0x1000
+#define IR_TIMER_A              0x2000
+#define IR_GPIP_6               0x4000
+#define IR_GPIP_7               0x8000
 
 
-enum
-{
-	TIMER_A = 0,
-	TIMER_B,
-	TIMER_C,
-	TIMER_D,
-	MAX_TIMERS
-};
+#define TCR_TIMER_STOPPED       0x00
+#define TCR_TIMER_DELAY_4       0x01
+#define TCR_TIMER_DELAY_10      0x02
+#define TCR_TIMER_DELAY_16      0x03
+#define TCR_TIMER_DELAY_50      0x04
+#define TCR_TIMER_DELAY_64      0x05
+#define TCR_TIMER_DELAY_100     0x06
+#define TCR_TIMER_DELAY_200     0x07
+#define TCR_TIMER_EVENT         0x08
+#define TCR_TIMER_PULSE_4       0x09
+#define TCR_TIMER_PULSE_10      0x0a
+#define TCR_TIMER_PULSE_16      0x0b
+#define TCR_TIMER_PULSE_50      0x0c
+#define TCR_TIMER_PULSE_64      0x0d
+#define TCR_TIMER_PULSE_100     0x0e
+#define TCR_TIMER_PULSE_200     0x0f
+#define TCR_TIMER_RESET         0x10
 
 
-enum
-{
-	SERIAL_START = 0,
-	SERIAL_DATA,
-	SERIAL_PARITY,
-	SERIAL_STOP
-};
+#define UCR_PARITY_ENABLED      0x04
+#define UCR_PARITY_EVEN         0x02
+#define UCR_PARITY_ODD          0x00
+#define UCR_WORD_LENGTH_8       0x00
+#define UCR_WORD_LENGTH_7       0x20
+#define UCR_WORD_LENGTH_6       0x40
+#define UCR_WORD_LENGTH_5       0x60
+#define UCR_START_STOP_0_0      0x00
+#define UCR_START_STOP_1_1      0x08
+#define UCR_START_STOP_1_15     0x10
+#define UCR_START_STOP_1_2      0x18
+#define UCR_CLOCK_DIVIDE_16     0x80
+#define UCR_CLOCK_DIVIDE_1      0x00
 
 
-enum
-{
-	XMIT_OFF = 0,
-	XMIT_STARTING,
-	XMIT_ON,
-	XMIT_BREAK,
-	XMIT_STOPPING
-};
+#define RSR_RCV_ENABLE          0x01
+#define RSR_SYNC_STRIP_ENABLE   0x02
+#define RSR_MATCH               0x04
+#define RSR_CHAR_IN_PROGRESS    0x04
+#define RSR_FOUND_SEARCH        0x08
+#define RSR_BREAK               0x08
+#define RSR_FRAME_ERROR         0x10
+#define RSR_PARITY_ERROR        0x20
+#define RSR_OVERRUN_ERROR       0x40
+#define RSR_BUFFER_FULL         0x80
+
+#define TSR_XMIT_ENABLE         0x01
+#define TSR_OUTPUT_HI_Z         0x00
+#define TSR_OUTPUT_LOW          0x02
+#define TSR_OUTPUT_HIGH         0x04
+#define TSR_OUTPUT_LOOP         0x06
+#define TSR_OUTPUT_MASK         0x06
+#define TSR_BREAK               0x08
+#define TSR_END_OF_XMIT         0x10
+#define TSR_AUTO_TURNAROUND     0x20
+#define TSR_UNDERRUN_ERROR      0x40
+#define TSR_BUFFER_EMPTY        0x80
+
+#define DIVISOR PRESCALER[data & 0x07]
 
 
-#define AER_GPIP_0				0x01
-#define AER_GPIP_1				0x02
-#define AER_GPIP_2				0x04
-#define AER_GPIP_3				0x08
-#define AER_GPIP_4				0x10
-#define AER_GPIP_5				0x20
-#define AER_GPIP_6				0x40
-#define AER_GPIP_7				0x80
-
-
-#define VR_S					0x08
-
-
-#define IR_GPIP_0				0x0001
-#define IR_GPIP_1				0x0002
-#define IR_GPIP_2				0x0004
-#define IR_GPIP_3				0x0008
-#define IR_TIMER_D				0x0010
-#define IR_TIMER_C				0x0020
-#define IR_GPIP_4				0x0040
-#define IR_GPIP_5				0x0080
-#define IR_TIMER_B				0x0100
-#define IR_XMIT_ERROR			0x0200
-#define IR_XMIT_BUFFER_EMPTY	0x0400
-#define IR_RCV_ERROR			0x0800
-#define IR_RCV_BUFFER_FULL		0x1000
-#define IR_TIMER_A				0x2000
-#define IR_GPIP_6				0x4000
-#define IR_GPIP_7				0x8000
-
-
-#define TCR_TIMER_STOPPED		0x00
-#define TCR_TIMER_DELAY_4		0x01
-#define TCR_TIMER_DELAY_10		0x02
-#define TCR_TIMER_DELAY_16		0x03
-#define TCR_TIMER_DELAY_50		0x04
-#define TCR_TIMER_DELAY_64		0x05
-#define TCR_TIMER_DELAY_100		0x06
-#define TCR_TIMER_DELAY_200		0x07
-#define TCR_TIMER_EVENT			0x08
-#define TCR_TIMER_PULSE_4		0x09
-#define TCR_TIMER_PULSE_10		0x0a
-#define TCR_TIMER_PULSE_16		0x0b
-#define TCR_TIMER_PULSE_50		0x0c
-#define TCR_TIMER_PULSE_64		0x0d
-#define TCR_TIMER_PULSE_100		0x0e
-#define TCR_TIMER_PULSE_200		0x0f
-#define TCR_TIMER_RESET			0x10
-
-
-#define UCR_PARITY_ENABLED		0x04
-#define UCR_PARITY_EVEN			0x02
-#define UCR_PARITY_ODD			0x00
-#define UCR_WORD_LENGTH_8		0x00
-#define UCR_WORD_LENGTH_7		0x20
-#define UCR_WORD_LENGTH_6		0x40
-#define UCR_WORD_LENGTH_5		0x60
-#define UCR_START_STOP_0_0		0x00
-#define UCR_START_STOP_1_1		0x08
-#define UCR_START_STOP_1_15		0x10
-#define UCR_START_STOP_1_2		0x18
-#define UCR_CLOCK_DIVIDE_16		0x80
-#define UCR_CLOCK_DIVIDE_1		0x00
-
-
-#define RSR_RCV_ENABLE			0x01
-#define RSR_SYNC_STRIP_ENABLE	0x02
-#define RSR_MATCH				0x04
-#define RSR_CHAR_IN_PROGRESS	0x04
-#define RSR_FOUND_SEARCH		0x08
-#define RSR_BREAK				0x08
-#define RSR_FRAME_ERROR			0x10
-#define RSR_PARITY_ERROR		0x20
-#define RSR_OVERRUN_ERROR		0x40
-#define RSR_BUFFER_FULL			0x80
-
-#define TSR_XMIT_ENABLE			0x01
-#define TSR_OUTPUT_HI_Z			0x00
-#define TSR_OUTPUT_LOW			0x02
-#define TSR_OUTPUT_HIGH			0x04
-#define TSR_OUTPUT_LOOP			0x06
-#define TSR_OUTPUT_MASK			0x06
-#define TSR_BREAK				0x08
-#define TSR_END_OF_XMIT			0x10
-#define TSR_AUTO_TURNAROUND		0x20
-#define TSR_UNDERRUN_ERROR		0x40
-#define TSR_BUFFER_EMPTY		0x80
-
-
-static const int INT_MASK_GPIO[] =
+const int mc68901_device::INT_MASK_GPIO[] =
 {
 	IR_GPIP_0, IR_GPIP_1, IR_GPIP_2, IR_GPIP_3,
 	IR_GPIP_4, IR_GPIP_5, IR_GPIP_6, IR_GPIP_7
 };
 
 
-static const int INT_MASK_TIMER[] =
+const int mc68901_device::INT_MASK_TIMER[] =
 {
 	IR_TIMER_A, IR_TIMER_B, IR_TIMER_C, IR_TIMER_D
 };
 
 
-static const int GPIO_TIMER[] =
+const int mc68901_device::GPIO_TIMER[] =
 {
 	GPIP_4, GPIP_3
 };
 
 
-static const int PRESCALER[] = { 0, 4, 10, 16, 50, 64, 100, 200 };
+const int mc68901_device::PRESCALER[] = { 0, 4, 10, 16, 50, 64, 100, 200 };
 
 
 #define TXD(_data) m_out_so_func(_data);
@@ -628,10 +544,10 @@ inline void mc68901_device::serial_transmit()
 {
 	switch (m_xmit_state)
 	{
-	case XMIT_OFF:		tx_disabled();	break;
-	case XMIT_STARTING:	tx_starting();	break;
-	case XMIT_BREAK:	tx_break();		break;
-	case XMIT_ON:		tx_enabled();	break;
+	case XMIT_OFF:      tx_disabled();  break;
+	case XMIT_STARTING: tx_starting();  break;
+	case XMIT_BREAK:    tx_break();     break;
+	case XMIT_ON:       tx_enabled();   break;
 	}
 }
 
@@ -645,10 +561,10 @@ inline void mc68901_device::timer_count(int index)
 
 		switch (index)
 		{
-		case TIMER_A:	m_out_tao_func(m_to[index]);	break;
-		case TIMER_B:	m_out_tbo_func(m_to[index]);	break;
-		case TIMER_C:	m_out_tco_func(m_to[index]);	break;
-		case TIMER_D:	m_out_tdo_func(m_to[index]);	break;
+		case TIMER_A:   m_out_tao_func(m_to[index]);    break;
+		case TIMER_B:   m_out_tbo_func(m_to[index]);    break;
+		case TIMER_C:   m_out_tco_func(m_to[index]);    break;
+		case TIMER_D:   m_out_tdo_func(m_to[index]);    break;
 		}
 
 		if (m_ier & INT_MASK_TIMER[index])
@@ -737,9 +653,10 @@ inline void mc68901_device::gpio_input(int bit, int state)
 //-------------------------------------------------
 
 mc68901_device::mc68901_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, MC68901, "Motorola MC68901", tag, owner, clock),
-	  m_gpip(0),
-	  m_tsr(TSR_BUFFER_EMPTY)
+	: device_t(mconfig, MC68901, "Motorola MC68901", tag, owner, clock, "mc68901", __FILE__),
+		device_serial_interface(mconfig, *this),
+		m_gpip(0),
+		m_tsr(TSR_BUFFER_EMPTY)
 {
 }
 
@@ -790,14 +707,12 @@ void mc68901_device::device_start()
 
 	if (m_rx_clock > 0)
 	{
-		m_rx_timer = timer_alloc(TIMER_RX);
-		m_rx_timer->adjust(attotime::zero, 0, attotime::from_hz(m_rx_clock));
+		set_rcv_rate(m_rx_clock);
 	}
 
 	if (m_tx_clock > 0)
 	{
-		m_tx_timer = timer_alloc(TIMER_TX);
-		m_tx_timer->adjust(attotime::zero, 0, attotime::from_hz(m_tx_clock));
+		set_tra_rate(m_tx_clock);
 	}
 
 	/* register for state saving */
@@ -844,6 +759,20 @@ void mc68901_device::device_start()
 
 void mc68901_device::device_reset()
 {
+	m_xmit_state = XMIT_OFF;
+	m_rx_state = SERIAL_STOP;
+	m_rx_buffer = 0;
+	m_tx_buffer = 0;
+
+	// Avoid read-before-write
+	m_ipr = m_imr = 0;
+
+	m_next_rsr = 0;
+
+	memset(m_tmc, 0, sizeof(m_tmc));
+	memset(m_ti, 0, sizeof(m_ti));
+	memset(m_to, 0, sizeof(m_to));
+
 	register_w(REGISTER_GPIP, 0);
 	register_w(REGISTER_AER, 0);
 	register_w(REGISTER_DDR, 0);
@@ -871,23 +800,67 @@ void mc68901_device::device_reset()
 
 void mc68901_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	switch (id)
-	{
-	case TIMER_RX:
-		serial_receive();
-		break;
-
-	case TIMER_TX:
-		serial_transmit();
-		break;
-
-	default:
-		timer_count(id);
-		break;
-	}
+	timer_count(id);
 }
 
 
+//-------------------------------------------------
+//  tra_callback -
+//-------------------------------------------------
+
+void mc68901_device::tra_callback()
+{
+	if (m_out_so_func.isnull())
+		transmit_register_send_bit();
+	else
+		m_out_so_func(transmit_register_get_data_bit());
+}
+
+
+//-------------------------------------------------
+//  tra_complete -
+//-------------------------------------------------
+
+void mc68901_device::tra_complete()
+{
+}
+
+
+//-------------------------------------------------
+//  rcv_callback -
+//-------------------------------------------------
+
+void mc68901_device::rcv_callback()
+{
+	if (m_in_si_func.isnull())
+		receive_register_update_bit(get_in_data_bit());
+	else
+		receive_register_update_bit(m_in_si_func());
+}
+
+
+//-------------------------------------------------
+//  rcv_complete -
+//-------------------------------------------------
+
+void mc68901_device::rcv_complete()
+{
+}
+
+
+//-------------------------------------------------
+//  input_callback -
+//-------------------------------------------------
+
+void mc68901_device::input_callback(UINT8 state)
+{
+	m_input_state = state;
+}
+
+
+//-------------------------------------------------
+//  read -
+//-------------------------------------------------
 
 READ8_MEMBER( mc68901_device::read )
 {
@@ -946,12 +919,15 @@ READ8_MEMBER( mc68901_device::read )
 
 		return m_udr;
 
-	default:					  return 0;
+	default:                      return 0;
 	}
 }
 
 
-#define DIVISOR PRESCALER[data & 0x07]
+
+//-------------------------------------------------
+//  register_w -
+//-------------------------------------------------
 
 void mc68901_device::register_w(offs_t offset, UINT8 data)
 {
@@ -1250,15 +1226,22 @@ void mc68901_device::register_w(offs_t offset, UINT8 data)
 		break;
 
 	case REGISTER_UCR:
+		{
+		int parity_code = SERIAL_PARITY_NONE;
+
 		if (data & UCR_PARITY_ENABLED)
 		{
 			if (data & UCR_PARITY_EVEN)
 			{
 				if (LOG) logerror("MC68901 '%s' Parity : Even\n", tag());
+
+				parity_code = SERIAL_PARITY_EVEN;
 			}
 			else
 			{
 				if (LOG) logerror("MC68901 '%s' Parity : Odd\n", tag());
+
+				parity_code = SERIAL_PARITY_ODD;
 			}
 		}
 		else
@@ -1291,7 +1274,7 @@ void mc68901_device::register_w(offs_t offset, UINT8 data)
 		case UCR_START_STOP_1_15:
 			m_rxtx_start = 1;
 			m_rxtx_stop = 1;
-			if (LOG) logerror("MC68901 '%s' Start Bits : 1, Stop Bits : 1??, Format : asynchronous\n", tag());
+			if (LOG) logerror("MC68901 '%s' Start Bits : 1, Stop Bits : 1.5, Format : asynchronous\n", tag());
 			break;
 		case UCR_START_STOP_1_2:
 			m_rxtx_start = 1;
@@ -1309,7 +1292,10 @@ void mc68901_device::register_w(offs_t offset, UINT8 data)
 			if (LOG) logerror("MC68901 '%s' Rx/Tx Clock Divisor : 1\n", tag());
 		}
 
+		set_data_frame(m_rxtx_word, m_rxtx_stop, parity_code);
+
 		m_ucr = data;
+		}
 		break;
 
 	case REGISTER_RSR:
@@ -1428,14 +1414,14 @@ int mc68901_device::get_vector()
 	return M68K_INT_ACK_SPURIOUS;
 }
 
-WRITE_LINE_MEMBER( mc68901_device::i0_w ) {	gpio_input(0, state); }
-WRITE_LINE_MEMBER( mc68901_device::i1_w ) {	gpio_input(1, state); }
-WRITE_LINE_MEMBER( mc68901_device::i2_w ) {	gpio_input(2, state); }
-WRITE_LINE_MEMBER( mc68901_device::i3_w ) {	gpio_input(3, state); }
-WRITE_LINE_MEMBER( mc68901_device::i4_w ) {	gpio_input(4, state); }
-WRITE_LINE_MEMBER( mc68901_device::i5_w ) {	gpio_input(5, state); }
-WRITE_LINE_MEMBER( mc68901_device::i6_w ) {	gpio_input(6, state); }
-WRITE_LINE_MEMBER( mc68901_device::i7_w ) {	gpio_input(7, state); }
+WRITE_LINE_MEMBER( mc68901_device::i0_w ) { gpio_input(0, state); }
+WRITE_LINE_MEMBER( mc68901_device::i1_w ) { gpio_input(1, state); }
+WRITE_LINE_MEMBER( mc68901_device::i2_w ) { gpio_input(2, state); }
+WRITE_LINE_MEMBER( mc68901_device::i3_w ) { gpio_input(3, state); }
+WRITE_LINE_MEMBER( mc68901_device::i4_w ) { gpio_input(4, state); }
+WRITE_LINE_MEMBER( mc68901_device::i5_w ) { gpio_input(5, state); }
+WRITE_LINE_MEMBER( mc68901_device::i6_w ) { gpio_input(6, state); }
+WRITE_LINE_MEMBER( mc68901_device::i7_w ) { gpio_input(7, state); }
 
 
 WRITE_LINE_MEMBER( mc68901_device::tai_w )
@@ -1454,7 +1440,7 @@ WRITE_LINE_MEMBER( mc68901_device::rc_w )
 {
 	if (state)
 	{
-		serial_receive();
+		rcv_clock();
 	}
 }
 
@@ -1463,6 +1449,6 @@ WRITE_LINE_MEMBER( mc68901_device::tc_w )
 {
 	if (state)
 	{
-		serial_transmit();
+		tra_clock();
 	}
 }

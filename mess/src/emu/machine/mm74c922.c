@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     MM74C922/MM74C923 16/20-Key Encoder emulation
@@ -8,7 +10,6 @@
 **********************************************************************/
 
 #include "mm74c922.h"
-#include "machine/devhelpr.h"
 
 
 
@@ -116,10 +117,12 @@ inline void mm74c922_device::detect_keypress()
 //-------------------------------------------------
 
 mm74c922_device::mm74c922_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, MM74C922, "MM74C922", tag, owner, clock),
-	  m_x(0),
-	  m_y(0),
-	  m_next_da(0)
+	: device_t(mconfig, MM74C922, "MM74C922", tag, owner, clock, "mm74c922", __FILE__),
+		m_inhibit(0),
+		m_x(0),
+		m_y(0),
+		m_da(0),
+		m_next_da(0)
 {
 }
 

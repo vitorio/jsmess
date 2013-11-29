@@ -27,7 +27,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #ifndef __USE_BSD
-#define __USE_BSD	// to get DT_xxx on Linux
+#define __USE_BSD   // to get DT_xxx on Linux
 #endif
 #undef _POSIX_C_SOURCE  // to get DT_xxx on OS X
 #include <dirent.h>
@@ -43,7 +43,7 @@
 #define INVPATHSEPCH '\\'
 #endif
 
-#if defined(SDLMAME_DARWIN) || defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_BSD) || defined(SDLMAME_OS2) || defined(SDLMAME_EMSCRIPTEN)
+#if defined(SDLMAME_DARWIN) || defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_BSD) || defined(SDLMAME_OS2) || defined(SDLMAME_HAIKU) || defined(SDLMAME_EMSCRIPTEN)
 typedef struct dirent sdl_dirent;
 typedef struct stat sdl_stat;
 #define sdl_readdir readdir
@@ -55,10 +55,9 @@ typedef struct stat64 sdl_stat;
 #define sdl_stat_fn stat64
 #endif
 
-// #define HAS_DT_XXX defined(SDLMAME_LINUX) || defined(SDLMAME_BSD) || defined(SDLMAME_DARWIN)
-#define HAS_DT_XXX 0
+#define HAS_DT_XXX defined(SDLMAME_LINUX) || defined(SDLMAME_BSD) || defined(SDLMAME_DARWIN)
 
-struct _osd_directory
+struct osd_directory
 {
 	osd_directory_entry ent;
 	sdl_dirent *data;
@@ -80,12 +79,29 @@ static char *build_full_path(const char *path, const char *file)
 
 
 #if HAS_DT_XXX
-static osd_dir_entry_type get_attributes_enttype(int attributes)
+static osd_dir_entry_type get_attributes_enttype(int attributes, char *path)
 {
-	if (attributes == DT_DIR)
-		return ENTTYPE_DIR;
-	else
-		return ENTTYPE_FILE;
+	switch ( attributes )
+	{
+		case DT_DIR:
+			return ENTTYPE_DIR;
+
+		case DT_REG:
+			return ENTTYPE_FILE;
+
+		case DT_LNK:
+		{
+			struct stat s;
+
+			if ( stat(path, &s) != 0 )
+				return ENTTYPE_OTHER;
+			else
+				return S_ISDIR(s.st_mode) ? ENTTYPE_DIR : ENTTYPE_FILE;
+		}
+
+		default:
+			return ENTTYPE_OTHER;
+	}
 }
 #else
 
@@ -193,7 +209,7 @@ const osd_directory_entry *osd_readdir(osd_directory *dir)
 	dir->ent.name = dir->data->d_name;
 	temp = build_full_path(dir->path, dir->data->d_name);
 	#if HAS_DT_XXX
-	dir->ent.type = get_attributes_enttype(dir->data->d_type);
+	dir->ent.type = get_attributes_enttype(dir->data->d_type, temp);
 	#else
 	dir->ent.type = get_attributes_stat(temp);
 	#endif
@@ -214,4 +230,3 @@ void osd_closedir(osd_directory *dir)
 	osd_free(dir->path);
 	osd_free(dir);
 }
-

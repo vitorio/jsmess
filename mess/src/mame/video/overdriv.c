@@ -1,5 +1,4 @@
 #include "emu.h"
-#include "video/konicdev.h"
 #include "includes/overdriv.h"
 
 /***************************************************************************
@@ -11,7 +10,7 @@
 void overdriv_sprite_callback( running_machine &machine, int *code, int *color, int *priority_mask )
 {
 	overdriv_state *state = machine.driver_data<overdriv_state>();
-	int pri = (*color & 0xffe0) >> 5;	/* ??????? */
+	int pri = (*color & 0xffe0) >> 5;   /* ??????? */
 	if (pri)
 		*priority_mask = 0x02;
 	else
@@ -50,21 +49,19 @@ void overdriv_zoom_callback_1( running_machine &machine, int *code, int *color, 
 
 ***************************************************************************/
 
-SCREEN_UPDATE( overdriv )
+UINT32 overdriv_state::screen_update_overdriv(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	overdriv_state *state = screen->machine().driver_data<overdriv_state>();
+	m_sprite_colorbase  = m_k053251->get_palette_index(K053251_CI0);
+	m_road_colorbase[1] = m_k053251->get_palette_index(K053251_CI1);
+	m_road_colorbase[0] = m_k053251->get_palette_index(K053251_CI2);
+	m_zoom_colorbase[1] = m_k053251->get_palette_index(K053251_CI3);
+	m_zoom_colorbase[0] = m_k053251->get_palette_index(K053251_CI4);
 
-	state->m_sprite_colorbase  = k053251_get_palette_index(state->m_k053251, K053251_CI0);
-	state->m_road_colorbase[1] = k053251_get_palette_index(state->m_k053251, K053251_CI1);
-	state->m_road_colorbase[0] = k053251_get_palette_index(state->m_k053251, K053251_CI2);
-	state->m_zoom_colorbase[1] = k053251_get_palette_index(state->m_k053251, K053251_CI3);
-	state->m_zoom_colorbase[0] = k053251_get_palette_index(state->m_k053251, K053251_CI4);
+	screen.priority().fill(0, cliprect);
 
-	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
+	m_k051316_1->zoom_draw(screen, bitmap, cliprect, 0, 0);
+	m_k051316_2->zoom_draw(screen, bitmap, cliprect, 0, 1);
 
-	k051316_zoom_draw(state->m_k051316_1, bitmap, cliprect, 0, 0);
-	k051316_zoom_draw(state->m_k051316_2, bitmap, cliprect, 0, 1);
-
-	k053247_sprites_draw(state->m_k053246, bitmap,cliprect);
+	m_k053246->k053247_sprites_draw( bitmap,cliprect);
 	return 0;
 }

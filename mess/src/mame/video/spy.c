@@ -1,5 +1,5 @@
 #include "emu.h"
-#include "video/konicdev.h"
+
 #include "includes/spy.h"
 
 
@@ -44,14 +44,12 @@ void spy_sprite_callback( running_machine &machine, int *code, int *color, int *
 
 ***************************************************************************/
 
-VIDEO_START( spy )
+void spy_state::video_start()
 {
-	spy_state *state = machine.driver_data<spy_state>();
-
-	state->m_layer_colorbase[0] = 48;
-	state->m_layer_colorbase[1] = 0;
-	state->m_layer_colorbase[2] = 16;
-	state->m_sprite_colorbase = 32;
+	m_layer_colorbase[0] = 48;
+	m_layer_colorbase[1] = 0;
+	m_layer_colorbase[2] = 16;
+	m_sprite_colorbase = 32;
 }
 
 
@@ -62,22 +60,20 @@ VIDEO_START( spy )
 
 ***************************************************************************/
 
-SCREEN_UPDATE( spy )
+UINT32 spy_state::screen_update_spy(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	spy_state *state = screen->machine().driver_data<spy_state>();
+	m_k052109->tilemap_update();
 
-	k052109_tilemap_update(state->m_k052109);
+	screen.priority().fill(0, cliprect);
 
-	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
-
-	if (!state->m_video_enable)
-		bitmap_fill(bitmap, cliprect, 16 * state->m_layer_colorbase[0]);
+	if (!m_video_enable)
+		bitmap.fill(16 * m_layer_colorbase[0], cliprect);
 	else
 	{
-		k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 1, TILEMAP_DRAW_OPAQUE, 1);
-		k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 2, 0, 2);
-		k051960_sprites_draw(state->m_k051960, bitmap, cliprect, -1, -1);
-		k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 0, 0, 0);
+		m_k052109->tilemap_draw(screen, bitmap, cliprect, 1, TILEMAP_DRAW_OPAQUE, 1);
+		m_k052109->tilemap_draw(screen, bitmap, cliprect, 2, 0, 2);
+		m_k051960->k051960_sprites_draw(bitmap, cliprect, screen.priority(), -1, -1);
+		m_k052109->tilemap_draw(screen, bitmap, cliprect, 0, 0, 0);
 	}
 
 	return 0;

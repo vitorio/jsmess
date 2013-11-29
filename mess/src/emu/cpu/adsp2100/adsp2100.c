@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     ADSP2100.c
 
     ADSP-21xx series emulator.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ****************************************************************************
 
@@ -148,42 +119,42 @@ const device_type ADSP2181 = &device_creator<adsp2181_device>;
 //  adsp21xx_device - constructor
 //-------------------------------------------------
 
-adsp21xx_device::adsp21xx_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, UINT32 chiptype)
-	: cpu_device(mconfig, type, name, tag, owner, clock),
-	  m_program_config("program", ENDIANNESS_LITTLE, 32, 14, -2),
-	  m_data_config("data", ENDIANNESS_LITTLE, 16, 14, -1),
-	  m_chip_type(chiptype),
-	  m_pc(0),
-	  m_ppc(0),
-	  m_loop(0),
-	  m_loop_condition(0),
-	  m_cntr(0),
-	  m_astat(0),
-	  m_sstat(0),
-	  m_mstat(0),
-	  m_mstat_prev(0),
-	  m_astat_clear(0),
-	  m_idle(0),
-	  m_px(0),
-	  m_pc_sp(0),
-	  m_cntr_sp(0),
-	  m_stat_sp(0),
-	  m_loop_sp(0),
-	  m_flagout(0),
-	  m_flagin(0),
-	  m_fl0(0),
-	  m_fl1(0),
-	  m_fl2(0),
-	  m_idma_addr(0),
-	  m_idma_cache(0),
-	  m_idma_offs(0),
-	  m_imask(0),
-	  m_icntl(0),
-	  m_ifc(0),
-	  m_icount(0),
-	  m_mstat_mask((m_chip_type >= CHIP_TYPE_ADSP2101) ? 0x7f : 0x0f),
-	  m_imask_mask((m_chip_type >= CHIP_TYPE_ADSP2181) ? 0x3ff :
-				   (m_chip_type >= CHIP_TYPE_ADSP2101) ? 0x3f : 0x0f)
+adsp21xx_device::adsp21xx_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, UINT32 chiptype, const char *shortname, const char *source)
+	: cpu_device(mconfig, type, name, tag, owner, clock, shortname, source),
+		m_program_config("program", ENDIANNESS_LITTLE, 32, 14, -2),
+		m_data_config("data", ENDIANNESS_LITTLE, 16, 14, -1),
+		m_chip_type(chiptype),
+		m_pc(0),
+		m_ppc(0),
+		m_loop(0),
+		m_loop_condition(0),
+		m_cntr(0),
+		m_astat(0),
+		m_sstat(0),
+		m_mstat(0),
+		m_mstat_prev(0),
+		m_astat_clear(0),
+		m_idle(0),
+		m_px(0),
+		m_pc_sp(0),
+		m_cntr_sp(0),
+		m_stat_sp(0),
+		m_loop_sp(0),
+		m_flagout(0),
+		m_flagin(0),
+		m_fl0(0),
+		m_fl1(0),
+		m_fl2(0),
+		m_idma_addr(0),
+		m_idma_cache(0),
+		m_idma_offs(0),
+		m_imask(0),
+		m_icntl(0),
+		m_ifc(0),
+		m_icount(0),
+		m_mstat_mask((m_chip_type >= CHIP_TYPE_ADSP2101) ? 0x7f : 0x0f),
+		m_imask_mask((m_chip_type >= CHIP_TYPE_ADSP2181) ? 0x3ff :
+					(m_chip_type >= CHIP_TYPE_ADSP2101) ? 0x3f : 0x0f)
 {
 	// initialize remaining state
 	memset(&m_core, 0, sizeof(m_core));
@@ -278,26 +249,26 @@ adsp21xx_device::adsp21xx_device(const machine_config &mconfig, device_type type
 }
 
 adsp2100_device::adsp2100_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: adsp21xx_device(mconfig, ADSP2100, "ADSP-2100", tag, owner, clock, CHIP_TYPE_ADSP2100) { }
+	: adsp21xx_device(mconfig, ADSP2100, "ADSP-2100", tag, owner, clock, CHIP_TYPE_ADSP2100, "adsp2100", __FILE__) { }
 
 adsp2101_device::adsp2101_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: adsp21xx_device(mconfig, ADSP2101, "ADSP-2101", tag, owner, clock, CHIP_TYPE_ADSP2101) { }
+	: adsp21xx_device(mconfig, ADSP2101, "ADSP-2101", tag, owner, clock, CHIP_TYPE_ADSP2101, "adsp2101", __FILE__) { }
 
-adsp2101_device::adsp2101_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, UINT32 chiptype)
-	: adsp21xx_device(mconfig, type, name, tag, owner, clock, chiptype) { }
+adsp2101_device::adsp2101_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, UINT32 chiptype, const char *shortname, const char *source)
+	: adsp21xx_device(mconfig, type, name, tag, owner, clock, chiptype, shortname, source) { }
 
 adsp2104_device::adsp2104_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: adsp2101_device(mconfig, ADSP2104, "ADSP-2104", tag, owner, clock, CHIP_TYPE_ADSP2104) { }
+	: adsp2101_device(mconfig, ADSP2104, "ADSP-2104", tag, owner, clock, CHIP_TYPE_ADSP2104, "adsp2104", __FILE__) { }
 
 adsp2105_device::adsp2105_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: adsp2101_device(mconfig, ADSP2105, "ADSP-2105", tag, owner, clock, CHIP_TYPE_ADSP2105) { }
+	: adsp2101_device(mconfig, ADSP2105, "ADSP-2105", tag, owner, clock, CHIP_TYPE_ADSP2105, "adsp2105", __FILE__) { }
 
 adsp2115_device::adsp2115_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: adsp2101_device(mconfig, ADSP2115, "ADSP-2115", tag, owner, clock, CHIP_TYPE_ADSP2115) { }
+	: adsp2101_device(mconfig, ADSP2115, "ADSP-2115", tag, owner, clock, CHIP_TYPE_ADSP2115, "adsp2115", __FILE__) { }
 
 adsp2181_device::adsp2181_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: adsp21xx_device(mconfig, ADSP2181, "ADSP-2181", tag, owner, clock, CHIP_TYPE_ADSP2181),
-	  m_io_config("I/O", ENDIANNESS_LITTLE, 16, 11, -1) { }
+	: adsp21xx_device(mconfig, ADSP2181, "ADSP-2181", tag, owner, clock, CHIP_TYPE_ADSP2181, "adsp2181", __FILE__),
+		m_io_config("I/O", ENDIANNESS_LITTLE, 16, 11, -1) { }
 
 
 //-------------------------------------------------
@@ -445,10 +416,10 @@ UINT16 adsp2181_device::idma_data_r()
 void adsp21xx_device::device_start()
 {
 	// get our address spaces
-	m_program = space(AS_PROGRAM);
+	m_program = &space(AS_PROGRAM);
 	m_direct = &m_program->direct();
-	m_data = space(AS_DATA);
-	m_io = space(AS_IO);
+	m_data = &space(AS_DATA);
+	m_io = has_space(AS_IO) ? &space(AS_IO) : NULL;
 
 	// "core"
 	save_item(NAME(m_core.ax0.u));
@@ -632,14 +603,14 @@ void adsp21xx_device::device_reset()
 	m_core.zero.u = m_alt.zero.u = 0;
 
 	// recompute the memory registers with their current values
-	write_reg1(0x08, m_l[0]);	write_reg1(0x00, m_i[0]);
-	write_reg1(0x09, m_l[1]);	write_reg1(0x01, m_i[1]);
-	write_reg1(0x0a, m_l[2]);	write_reg1(0x02, m_i[2]);
-	write_reg1(0x0b, m_l[3]);	write_reg1(0x03, m_i[3]);
-	write_reg2(0x08, m_l[4]);	write_reg2(0x00, m_i[4]);
-	write_reg2(0x09, m_l[5]);	write_reg2(0x01, m_i[5]);
-	write_reg2(0x0a, m_l[6]);	write_reg2(0x02, m_i[6]);
-	write_reg2(0x0b, m_l[7]);	write_reg2(0x03, m_i[7]);
+	write_reg1(0x08, m_l[0]);   write_reg1(0x00, m_i[0]);
+	write_reg1(0x09, m_l[1]);   write_reg1(0x01, m_i[1]);
+	write_reg1(0x0a, m_l[2]);   write_reg1(0x02, m_i[2]);
+	write_reg1(0x0b, m_l[3]);   write_reg1(0x03, m_i[3]);
+	write_reg2(0x08, m_l[4]);   write_reg2(0x00, m_i[4]);
+	write_reg2(0x09, m_l[5]);   write_reg2(0x01, m_i[5]);
+	write_reg2(0x0a, m_l[6]);   write_reg2(0x02, m_i[6]);
+	write_reg2(0x0b, m_l[7]);   write_reg2(0x03, m_i[7]);
 
 	// reset PC and loops
 	m_pc = (m_chip_type >= CHIP_TYPE_ADSP2101) ? 0 : 4;
@@ -682,21 +653,21 @@ void adsp21xx_device::device_reset()
 
 const address_space_config *adsp2100_device::memory_space_config(address_spacenum spacenum) const
 {
-	return	(spacenum == AS_PROGRAM) ? &m_program_config :
+	return  (spacenum == AS_PROGRAM) ? &m_program_config :
 			(spacenum == AS_DATA) ? &m_data_config :
 			NULL;
 }
 
 const address_space_config *adsp2101_device::memory_space_config(address_spacenum spacenum) const
 {
-	return	(spacenum == AS_PROGRAM) ? &m_program_config :
+	return  (spacenum == AS_PROGRAM) ? &m_program_config :
 			(spacenum == AS_DATA) ? &m_data_config :
 			NULL;
 }
 
 const address_space_config *adsp2181_device::memory_space_config(address_spacenum spacenum) const
 {
-	return	(spacenum == AS_PROGRAM) ? &m_program_config :
+	return  (spacenum == AS_PROGRAM) ? &m_program_config :
 			(spacenum == AS_DATA) ? &m_data_config :
 			(spacenum == AS_IO) ? &m_io_config :
 			NULL;
@@ -808,7 +779,7 @@ UINT32 adsp21xx_device::disasm_max_opcode_bytes() const
 offs_t adsp21xx_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options)
 {
 	extern CPU_DISASSEMBLE( adsp21xx );
-	return CPU_DISASSEMBLE_NAME(adsp21xx)(NULL, buffer, pc, oprom, opram, 0);
+	return CPU_DISASSEMBLE_NAME(adsp21xx)(this, buffer, pc, oprom, opram, options);
 }
 
 
@@ -1089,7 +1060,7 @@ void adsp21xx_device::create_tables()
 	// initialize the mask table
 	for (int i = 0; i < 0x4000; i++)
 	{
-		     if (i > 0x2000) m_mask_table[i] = 0x0000;
+				if (i > 0x2000) m_mask_table[i] = 0x0000;
 		else if (i > 0x1000) m_mask_table[i] = 0x2000;
 		else if (i > 0x0800) m_mask_table[i] = 0x3000;
 		else if (i > 0x0400) m_mask_table[i] = 0x3800;
@@ -1187,10 +1158,10 @@ void adsp21xx_device::execute_set_input(int inputnum, int state)
 {
 	// update the latched state
 	if (state != CLEAR_LINE && m_irq_state[inputnum] == CLEAR_LINE)
-    	m_irq_latch[inputnum] = 1;
+		m_irq_latch[inputnum] = 1;
 
-    // update the absolute state
-    m_irq_state[inputnum] = state;
+	// update the absolute state
+	m_irq_state[inputnum] = state;
 }
 
 
@@ -1203,7 +1174,7 @@ void adsp21xx_device::execute_run()
 	do
 	{
 		// debugging
-		m_ppc = m_pc;	// copy PC to previous PC
+		m_ppc = m_pc;   // copy PC to previous PC
 		if (check_debugger)
 			debugger_instruction_hook(this, m_pc);
 
@@ -1402,22 +1373,22 @@ void adsp21xx_device::execute_run()
 				// 00001101 0000xxxx xxxxxxxx  internal data move
 				switch ((op >> 8) & 15)
 				{
-					case 0x00:	write_reg0((op >> 4) & 15, read_reg0(op & 15));	break;
-					case 0x01:	write_reg0((op >> 4) & 15, read_reg1(op & 15));	break;
-					case 0x02:	write_reg0((op >> 4) & 15, read_reg2(op & 15));	break;
-					case 0x03:	write_reg0((op >> 4) & 15, read_reg3(op & 15));	break;
-					case 0x04:	write_reg1((op >> 4) & 15, read_reg0(op & 15));	break;
-					case 0x05:	write_reg1((op >> 4) & 15, read_reg1(op & 15));	break;
-					case 0x06:	write_reg1((op >> 4) & 15, read_reg2(op & 15));	break;
-					case 0x07:	write_reg1((op >> 4) & 15, read_reg3(op & 15));	break;
-					case 0x08:	write_reg2((op >> 4) & 15, read_reg0(op & 15));	break;
-					case 0x09:	write_reg2((op >> 4) & 15, read_reg1(op & 15));	break;
-					case 0x0a:	write_reg2((op >> 4) & 15, read_reg2(op & 15));	break;
-					case 0x0b:	write_reg2((op >> 4) & 15, read_reg3(op & 15));	break;
-					case 0x0c:	write_reg3((op >> 4) & 15, read_reg0(op & 15));	break;
-					case 0x0d:	write_reg3((op >> 4) & 15, read_reg1(op & 15));	break;
-					case 0x0e:	write_reg3((op >> 4) & 15, read_reg2(op & 15));	break;
-					case 0x0f:	write_reg3((op >> 4) & 15, read_reg3(op & 15));	break;
+					case 0x00:  write_reg0((op >> 4) & 15, read_reg0(op & 15)); break;
+					case 0x01:  write_reg0((op >> 4) & 15, read_reg1(op & 15)); break;
+					case 0x02:  write_reg0((op >> 4) & 15, read_reg2(op & 15)); break;
+					case 0x03:  write_reg0((op >> 4) & 15, read_reg3(op & 15)); break;
+					case 0x04:  write_reg1((op >> 4) & 15, read_reg0(op & 15)); break;
+					case 0x05:  write_reg1((op >> 4) & 15, read_reg1(op & 15)); break;
+					case 0x06:  write_reg1((op >> 4) & 15, read_reg2(op & 15)); break;
+					case 0x07:  write_reg1((op >> 4) & 15, read_reg3(op & 15)); break;
+					case 0x08:  write_reg2((op >> 4) & 15, read_reg0(op & 15)); break;
+					case 0x09:  write_reg2((op >> 4) & 15, read_reg1(op & 15)); break;
+					case 0x0a:  write_reg2((op >> 4) & 15, read_reg2(op & 15)); break;
+					case 0x0b:  write_reg2((op >> 4) & 15, read_reg3(op & 15)); break;
+					case 0x0c:  write_reg3((op >> 4) & 15, read_reg0(op & 15)); break;
+					case 0x0d:  write_reg3((op >> 4) & 15, read_reg1(op & 15)); break;
+					case 0x0e:  write_reg3((op >> 4) & 15, read_reg2(op & 15)); break;
+					case 0x0f:  write_reg3((op >> 4) & 15, read_reg3(op & 15)); break;
 				}
 				break;
 			case 0x0e:

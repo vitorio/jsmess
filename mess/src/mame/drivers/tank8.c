@@ -11,92 +11,88 @@ Atari Tank 8 driver
 
 
 
-void tank8_set_collision(running_machine &machine, int index)
+void tank8_state::tank8_set_collision(int index)
 {
-	tank8_state *state = machine.driver_data<tank8_state>();
-	cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
+	m_maincpu->set_input_line(0, ASSERT_LINE);
 
-	state->m_collision_index = index;
+	m_collision_index = index;
 }
 
 
-static MACHINE_RESET( tank8 )
+void tank8_state::machine_reset()
 {
-	tank8_state *state = machine.driver_data<tank8_state>();
-	state->m_collision_index = 0;
+	m_collision_index = 0;
 }
 
 
-static READ8_HANDLER( tank8_collision_r )
+READ8_MEMBER(tank8_state::tank8_collision_r)
 {
-	tank8_state *state = space->machine().driver_data<tank8_state>();
-	return state->m_collision_index;
+	return m_collision_index;
 }
 
-static WRITE8_HANDLER( tank8_lockout_w )
+WRITE8_MEMBER(tank8_state::tank8_lockout_w)
 {
-	coin_lockout_w(space->machine(), offset, ~data & 1);
+	coin_lockout_w(machine(), offset, ~data & 1);
 }
 
 
-static WRITE8_HANDLER( tank8_int_reset_w )
+WRITE8_MEMBER(tank8_state::tank8_int_reset_w)
 {
-	tank8_state *state = space->machine().driver_data<tank8_state>();
-	state->m_collision_index &= ~0x3f;
+	m_collision_index &= ~0x3f;
 
-	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+	m_maincpu->set_input_line(0, CLEAR_LINE);
 }
 
-static WRITE8_DEVICE_HANDLER( tank8_crash_w )
+WRITE8_MEMBER(tank8_state::tank8_crash_w)
 {
-	discrete_sound_w(device, TANK8_CRASH_EN, data);
+	discrete_sound_w(m_discrete, space, TANK8_CRASH_EN, data);
 }
 
-static WRITE8_DEVICE_HANDLER( tank8_explosion_w )
+WRITE8_MEMBER(tank8_state::tank8_explosion_w)
 {
-	discrete_sound_w(device, TANK8_EXPLOSION_EN, data);
+	discrete_sound_w(m_discrete, space, TANK8_EXPLOSION_EN, data);
 }
 
-static WRITE8_DEVICE_HANDLER( tank8_bugle_w )
+WRITE8_MEMBER(tank8_state::tank8_bugle_w)
 {
-	discrete_sound_w(device, TANK8_BUGLE_EN, data);
+	discrete_sound_w(m_discrete, space, TANK8_BUGLE_EN, data);
 }
 
-static WRITE8_DEVICE_HANDLER( tank8_bug_w )
+WRITE8_MEMBER(tank8_state::tank8_bug_w)
 {
 	/* D0 and D1 determine the on/off time off the square wave */
 	switch(data & 3) {
 		case 0:
-			discrete_sound_w(device, TANK8_BUGLE_DATA1,8.0);
-			discrete_sound_w(device, TANK8_BUGLE_DATA2,4.0);
+			discrete_sound_w(m_discrete, space, TANK8_BUGLE_DATA1,8.0);
+			discrete_sound_w(m_discrete, space, TANK8_BUGLE_DATA2,4.0);
 			break;
 		case 1:
-			discrete_sound_w(device, TANK8_BUGLE_DATA1,8.0);
-			discrete_sound_w(device, TANK8_BUGLE_DATA2,7.0);
+			discrete_sound_w(m_discrete, space, TANK8_BUGLE_DATA1,8.0);
+			discrete_sound_w(m_discrete, space, TANK8_BUGLE_DATA2,7.0);
 			break;
 		case 2:
-			discrete_sound_w(device, TANK8_BUGLE_DATA1,8.0);
-			discrete_sound_w(device, TANK8_BUGLE_DATA2,2.0);
+			discrete_sound_w(m_discrete, space, TANK8_BUGLE_DATA1,8.0);
+			discrete_sound_w(m_discrete, space, TANK8_BUGLE_DATA2,2.0);
 			break;
 		case 3:
-			discrete_sound_w(device, TANK8_BUGLE_DATA1,16.0);
-			discrete_sound_w(device, TANK8_BUGLE_DATA2,4.0);
+			discrete_sound_w(m_discrete, space, TANK8_BUGLE_DATA1,16.0);
+			discrete_sound_w(m_discrete, space, TANK8_BUGLE_DATA2,4.0);
 			break;
 	}
 
 }
 
-static WRITE8_DEVICE_HANDLER( tank8_attract_w )
+WRITE8_MEMBER(tank8_state::tank8_attract_w)
 {
-	discrete_sound_w(device, TANK8_ATTRACT_EN, data);
+	discrete_sound_w(m_discrete, space, TANK8_ATTRACT_EN, data);
 }
 
-static WRITE8_DEVICE_HANDLER( tank8_motor_w )
+WRITE8_MEMBER(tank8_state::tank8_motor_w)
 {
-	discrete_sound_w(device, NODE_RELATIVE(TANK8_MOTOR1_EN, offset), data);
+	discrete_sound_w(m_discrete, space, NODE_RELATIVE(TANK8_MOTOR1_EN, offset), data);
 }
 
-static ADDRESS_MAP_START( tank8_cpu_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( tank8_cpu_map, AS_PROGRAM, 8, tank8_state )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM
 	AM_RANGE(0x0400, 0x17ff) AM_ROM
 	AM_RANGE(0xf800, 0xffff) AM_ROM
@@ -116,20 +112,20 @@ static ADDRESS_MAP_START( tank8_cpu_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x1c0b, 0x1c0b) AM_READ_PORT("RC")
 	AM_RANGE(0x1c0f, 0x1c0f) AM_READ_PORT("VBLANK")
 
-	AM_RANGE(0x1800, 0x1bff) AM_WRITE(tank8_video_ram_w) AM_BASE_MEMBER(tank8_state, m_video_ram)
-	AM_RANGE(0x1c00, 0x1c0f) AM_WRITEONLY AM_BASE_MEMBER(tank8_state, m_pos_h_ram)
-	AM_RANGE(0x1c10, 0x1c1f) AM_WRITEONLY AM_BASE_MEMBER(tank8_state, m_pos_v_ram)
-	AM_RANGE(0x1c20, 0x1c2f) AM_WRITEONLY AM_BASE_MEMBER(tank8_state, m_pos_d_ram)
+	AM_RANGE(0x1800, 0x1bff) AM_WRITE(tank8_video_ram_w) AM_SHARE("video_ram")
+	AM_RANGE(0x1c00, 0x1c0f) AM_WRITEONLY AM_SHARE("pos_h_ram")
+	AM_RANGE(0x1c10, 0x1c1f) AM_WRITEONLY AM_SHARE("pos_v_ram")
+	AM_RANGE(0x1c20, 0x1c2f) AM_WRITEONLY AM_SHARE("pos_d_ram")
 
 	AM_RANGE(0x1c30, 0x1c37) AM_WRITE(tank8_lockout_w)
 	AM_RANGE(0x1d00, 0x1d00) AM_WRITE(tank8_int_reset_w)
-	AM_RANGE(0x1d01, 0x1d01) AM_DEVWRITE("discrete", tank8_crash_w)
-	AM_RANGE(0x1d02, 0x1d02) AM_DEVWRITE("discrete", tank8_explosion_w)
-	AM_RANGE(0x1d03, 0x1d03) AM_DEVWRITE("discrete", tank8_bugle_w)
-	AM_RANGE(0x1d04, 0x1d04) AM_DEVWRITE("discrete", tank8_bug_w)
-	AM_RANGE(0x1d05, 0x1d05) AM_WRITEONLY AM_BASE_MEMBER(tank8_state, m_team)
-	AM_RANGE(0x1d06, 0x1d06) AM_DEVWRITE("discrete", tank8_attract_w)
-	AM_RANGE(0x1e00, 0x1e07) AM_DEVWRITE("discrete", tank8_motor_w)
+	AM_RANGE(0x1d01, 0x1d01) AM_WRITE(tank8_crash_w)
+	AM_RANGE(0x1d02, 0x1d02) AM_WRITE(tank8_explosion_w)
+	AM_RANGE(0x1d03, 0x1d03) AM_WRITE(tank8_bugle_w)
+	AM_RANGE(0x1d04, 0x1d04) AM_WRITE(tank8_bug_w)
+	AM_RANGE(0x1d05, 0x1d05) AM_WRITEONLY AM_SHARE("team")
+	AM_RANGE(0x1d06, 0x1d06) AM_WRITE(tank8_attract_w)
+	AM_RANGE(0x1e00, 0x1e07) AM_WRITE(tank8_motor_w)
 
 ADDRESS_MAP_END
 
@@ -215,25 +211,25 @@ static INPUT_PORTS_START( tank8 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(8)
 
-	/* play time is 4351 + N * 640 frames */
+	/* play time setting according to documents */
 	PORT_START("DSW1")
 	PORT_DIPNAME( 0x0f, 0x08, "Play Time" )
-	PORT_DIPSETTING(    0x0f, "73 seconds" )
-	PORT_DIPSETTING(    0x0e, "83 seconds" )
-	PORT_DIPSETTING(    0x0d, "94 seconds" )
-	PORT_DIPSETTING(    0x0c, "105 seconds" )
-	PORT_DIPSETTING(    0x0b, "115 seconds" )
-	PORT_DIPSETTING(    0x0a, "126 seconds" )
-	PORT_DIPSETTING(    0x09, "137 seconds" )
-	PORT_DIPSETTING(    0x08, "147 seconds" )
-	PORT_DIPSETTING(    0x07, "158 seconds" )
-	PORT_DIPSETTING(    0x06, "169 seconds" )
-	PORT_DIPSETTING(    0x05, "179 seconds" )
+	PORT_DIPSETTING(    0x0f, "60 seconds" )
+	PORT_DIPSETTING(    0x07, "70 seconds" )
+	PORT_DIPSETTING(    0x0b, "80 seconds" )
+	PORT_DIPSETTING(    0x03, "90 seconds" )
+	PORT_DIPSETTING(    0x0d, "100 seconds" )
+	PORT_DIPSETTING(    0x05, "110 seconds" )
+	PORT_DIPSETTING(    0x09, "120 seconds" )
+	PORT_DIPSETTING(    0x01, "130 seconds" )
+	PORT_DIPSETTING(    0x0e, "140 seconds" )
+	PORT_DIPSETTING(    0x06, "150 seconds" )
+	PORT_DIPSETTING(    0x0a, "160 seconds" )
+	PORT_DIPSETTING(    0x02, "170 seconds" )
+	PORT_DIPSETTING(    0x0c, "180 seconds" )
 	PORT_DIPSETTING(    0x04, "190 seconds" )
-	PORT_DIPSETTING(    0x03, "201 seconds" )
-	PORT_DIPSETTING(    0x02, "211 seconds" )
-	PORT_DIPSETTING(    0x01, "222 seconds" )
-	PORT_DIPSETTING(    0x00, "233 seconds" )
+	PORT_DIPSETTING(    0x08, "200 seconds" )
+	PORT_DIPSETTING(    0x00, "210 seconds" )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("DSW2")
@@ -259,7 +255,7 @@ static INPUT_PORTS_START( tank8 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME( "RC 8" )
 
 	PORT_START("VBLANK")
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_VBLANK )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_CUSTOM ) PORT_VBLANK("screen")
 
 	PORT_START("CRASH")
 	PORT_ADJUSTER( 50, "Crash, Explosion Volume" )
@@ -333,7 +329,6 @@ static MACHINE_CONFIG_START( tank8, tank8_state )
 	MCFG_CPU_ADD("maincpu", M6800, 11055000 / 10) /* ? */
 	MCFG_CPU_PROGRAM_MAP(tank8_cpu_map)
 
-	MCFG_MACHINE_RESET(tank8)
 
 	/* video hardware */
 	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
@@ -341,17 +336,14 @@ static MACHINE_CONFIG_START( tank8, tank8_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(30 * 1000000 / 15681))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 524)
 	MCFG_SCREEN_VISIBLE_AREA(16, 495, 0, 463)
-	MCFG_SCREEN_UPDATE(tank8)
-	MCFG_SCREEN_EOF(tank8)
+	MCFG_SCREEN_UPDATE_DRIVER(tank8_state, screen_update_tank8)
+	MCFG_SCREEN_VBLANK_DRIVER(tank8_state, screen_eof_tank8)
 
 	MCFG_GFXDECODE(tank8)
 	MCFG_PALETTE_LENGTH(20)
 
-	MCFG_PALETTE_INIT(tank8)
-	MCFG_VIDEO_START(tank8)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -465,12 +457,12 @@ ROM_START( tank8 )
 ROM_END
 
 
-static DRIVER_INIT( decode )
+DRIVER_INIT_MEMBER(tank8_state,decode)
 {
-	const UINT8* DECODE = machine.region("user1")->base();
+	const UINT8* DECODE = memregion("user1")->base();
 
-	UINT8* p1 = machine.region("maincpu")->base() + 0x00000;
-	UINT8* p2 = machine.region("maincpu")->base() + 0x10000;
+	UINT8* p1 = memregion("maincpu")->base() + 0x00000;
+	UINT8* p2 = memregion("maincpu")->base() + 0x10000;
 
 	int i;
 
@@ -485,8 +477,8 @@ static DRIVER_INIT( decode )
 }
 
 
-GAME( 1976, tank8,    0,        tank8,    tank8,    0,	      ROT0, "Atari", "Tank 8 (set 1)", 0)
-GAME( 1976, tank8a,   tank8,    tank8,    tank8,    decode,   ROT0, "Atari", "Tank 8 (set 2)",  GAME_NOT_WORKING )
-GAME( 1976, tank8b,   tank8,    tank8,    tank8,    decode,   ROT0, "Atari", "Tank 8 (set 3)",  GAME_NOT_WORKING )
-GAME( 1976, tank8c,   tank8,    tank8,    tank8,    0,        ROT0, "Atari", "Tank 8 (set 4)",  GAME_NOT_WORKING )
-GAME( 1976, tank8d,   tank8,    tank8,    tank8,    0,        ROT0, "Atari", "Tank 8 (set 5)",  GAME_NOT_WORKING )
+GAME( 1976, tank8,    0,        tank8,    tank8, driver_device,    0,         ROT0, "Atari (Kee Games)", "Tank 8 (set 1)", 0)
+GAME( 1976, tank8a,   tank8,    tank8,    tank8, tank8_state,    decode,   ROT0, "Atari (Kee Games)", "Tank 8 (set 2)",  GAME_NOT_WORKING )
+GAME( 1976, tank8b,   tank8,    tank8,    tank8, tank8_state,    decode,   ROT0, "Atari (Kee Games)", "Tank 8 (set 3)",  GAME_NOT_WORKING )
+GAME( 1976, tank8c,   tank8,    tank8,    tank8, driver_device,    0,        ROT0, "Atari (Kee Games)", "Tank 8 (set 4)",  GAME_NOT_WORKING )
+GAME( 1976, tank8d,   tank8,    tank8,    tank8, driver_device,    0,        ROT0, "Atari (Kee Games)", "Tank 8 (set 5)",  GAME_NOT_WORKING )

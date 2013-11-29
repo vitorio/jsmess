@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /*********************************************************************
 
     png.c
 
     PNG reading functions.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -43,28 +14,28 @@
 #include <zlib.h>
 #include "png.h"
 
+#include <new>
+
 
 /***************************************************************************
     TYPE DEFINITIONS
 ***************************************************************************/
 
-typedef struct _image_data_chunk image_data_chunk;
-struct _image_data_chunk
+struct image_data_chunk
 {
-	image_data_chunk *	next;
-	int					length;
-	UINT8 *				data;
+	image_data_chunk *  next;
+	int                 length;
+	UINT8 *             data;
 };
 
 
-typedef struct _png_private png_private;
-struct _png_private
+struct png_private
 {
-	png_info *			pnginfo;
-	image_data_chunk *	idata;
-	image_data_chunk **	idata_next;
-	UINT8				bpp;
-	UINT32				rowbytes;
+	png_info *          pnginfo;
+	image_data_chunk *  idata;
+	image_data_chunk ** idata_next;
+	UINT8               bpp;
+	UINT32              rowbytes;
 };
 
 
@@ -604,10 +575,10 @@ handle_error:
 
 /*-------------------------------------------------
     png_read_bitmap - load a PNG file into a
-    bitmap_t
+    bitmap
 -------------------------------------------------*/
 
-png_error png_read_bitmap(core_file *fp, bitmap_t **bitmap)
+png_error png_read_bitmap(core_file *fp, bitmap_argb32 &bitmap)
 {
 	png_error result;
 	png_info png;
@@ -631,12 +602,7 @@ png_error png_read_bitmap(core_file *fp, bitmap_t **bitmap)
 	png_expand_buffer_8bit(&png);
 
 	/* allocate a bitmap of the appropriate size and copy it */
-	*bitmap = bitmap_alloc(png.width, png.height, BITMAP_FORMAT_ARGB32);
-	if (*bitmap == NULL)
-	{
-		png_free(&png);
-		return PNGERR_OUT_OF_MEMORY;
-	}
+	bitmap.allocate(png.width, png.height);
 
 	/* handle 8bpp palettized case */
 	src = png.image;
@@ -648,7 +614,7 @@ png_error png_read_bitmap(core_file *fp, bitmap_t **bitmap)
 			{
 				/* determine alpha and expand to 32bpp */
 				UINT8 alpha = (*src < png.num_trans) ? png.trans[*src] : 0xff;
-				*BITMAP_ADDR32(*bitmap, y, x) = (alpha << 24) | (png.palette[*src * 3] << 16) | (png.palette[*src * 3 + 1] << 8) | png.palette[*src * 3 + 2];
+				bitmap.pix32(y, x) = (alpha << 24) | (png.palette[*src * 3] << 16) | (png.palette[*src * 3 + 1] << 8) | png.palette[*src * 3 + 2];
 			}
 	}
 
@@ -657,7 +623,7 @@ png_error png_read_bitmap(core_file *fp, bitmap_t **bitmap)
 	{
 		for (y = 0; y < png.height; y++)
 			for (x = 0; x < png.width; x++, src++)
-				*BITMAP_ADDR32(*bitmap, y, x) = 0xff000000 | (*src << 16) | (*src << 8) | *src;
+				bitmap.pix32(y, x) = 0xff000000 | (*src << 16) | (*src << 8) | *src;
 	}
 
 	/* handle 32bpp non-alpha case */
@@ -665,7 +631,7 @@ png_error png_read_bitmap(core_file *fp, bitmap_t **bitmap)
 	{
 		for (y = 0; y < png.height; y++)
 			for (x = 0; x < png.width; x++, src += 3)
-				*BITMAP_ADDR32(*bitmap, y, x) = 0xff000000 | (src[0] << 16) | (src[1] << 8) | src[2];
+				bitmap.pix32(y, x) = 0xff000000 | (src[0] << 16) | (src[1] << 8) | src[2];
 	}
 
 	/* handle 32bpp alpha case */
@@ -673,7 +639,7 @@ png_error png_read_bitmap(core_file *fp, bitmap_t **bitmap)
 	{
 		for (y = 0; y < png.height; y++)
 			for (x = 0; x < png.width; x++, src += 4)
-				*BITMAP_ADDR32(*bitmap, y, x) = (src[3] << 24) | (src[0] << 16) | (src[1] << 8) | src[2];
+				bitmap.pix32(y, x) = (src[3] << 24) | (src[0] << 16) | (src[1] << 8) | src[2];
 	}
 
 	/* free our temporary data and return */
@@ -820,8 +786,8 @@ static png_error write_deflated_chunk(core_file *fp, UINT8 *data, UINT32 type, U
 {
 	UINT64 lengthpos = core_ftell(fp);
 	UINT8 tempbuff[8192];
-    UINT32 zlength = 0;
-    z_stream stream;
+	UINT32 zlength = 0;
+	z_stream stream;
 	UINT32 crc;
 	int zerr;
 
@@ -838,9 +804,9 @@ static png_error write_deflated_chunk(core_file *fp, UINT8 *data, UINT32 type, U
 	memset(&stream, 0, sizeof(stream));
 	stream.next_in = data;
 	stream.avail_in = length;
-    zerr = deflateInit(&stream, Z_DEFAULT_COMPRESSION);
-    if (zerr != Z_OK)
-    	return PNGERR_COMPRESS_ERROR;
+	zerr = deflateInit(&stream, Z_DEFAULT_COMPRESSION);
+	if (zerr != Z_OK)
+		return PNGERR_COMPRESS_ERROR;
 
 	/* now loop until we run out of data */
 	for ( ; ; )
@@ -902,14 +868,14 @@ static png_error write_deflated_chunk(core_file *fp, UINT8 *data, UINT32 type, U
     bitmap to a palettized image
 -------------------------------------------------*/
 
-static png_error convert_bitmap_to_image_palette(png_info *pnginfo, const bitmap_t *bitmap, int palette_length, const rgb_t *palette)
+static png_error convert_bitmap_to_image_palette(png_info *pnginfo, const bitmap_t &bitmap, int palette_length, const rgb_t *palette)
 {
 	int rowbytes;
 	int x, y;
 
 	/* set the common info */
-	pnginfo->width = bitmap->width;
-	pnginfo->height = bitmap->height;
+	pnginfo->width = bitmap.width();
+	pnginfo->height = bitmap.height();
 	pnginfo->bit_depth = 8;
 	pnginfo->color_type = 3;
 	pnginfo->num_palette = 256;
@@ -941,7 +907,7 @@ static png_error convert_bitmap_to_image_palette(png_info *pnginfo, const bitmap
 	/* copy in the pixels, specifying a NULL filter */
 	for (y = 0; y < pnginfo->height; y++)
 	{
-		UINT16 *src = (UINT16 *)bitmap->base + y * bitmap->rowpixels;
+		UINT16 *src = reinterpret_cast<UINT16 *>(bitmap.raw_pixptr(y));
 		UINT8 *dst = pnginfo->image + y * (rowbytes + 1);
 
 		/* store the filter byte, then copy the data */
@@ -959,15 +925,15 @@ static png_error convert_bitmap_to_image_palette(png_info *pnginfo, const bitmap
     bitmap to an RGB image
 -------------------------------------------------*/
 
-static png_error convert_bitmap_to_image_rgb(png_info *pnginfo, const bitmap_t *bitmap, int palette_length, const rgb_t *palette)
+static png_error convert_bitmap_to_image_rgb(png_info *pnginfo, const bitmap_t &bitmap, int palette_length, const rgb_t *palette)
 {
-	int alpha = (bitmap->format == BITMAP_FORMAT_ARGB32);
+	int alpha = (bitmap.format() == BITMAP_FORMAT_ARGB32);
 	int rowbytes;
 	int x, y;
 
 	/* set the common info */
-	pnginfo->width = bitmap->width;
-	pnginfo->height = bitmap->height;
+	pnginfo->width = bitmap.width();
+	pnginfo->height = bitmap.height();
 	pnginfo->bit_depth = 8;
 	pnginfo->color_type = alpha ? 6 : 2;
 	rowbytes = pnginfo->width * (alpha ? 4 : 3);
@@ -980,16 +946,15 @@ static png_error convert_bitmap_to_image_rgb(png_info *pnginfo, const bitmap_t *
 	/* copy in the pixels, specifying a NULL filter */
 	for (y = 0; y < pnginfo->height; y++)
 	{
-		UINT32 *src32 = BITMAP_ADDR32(bitmap, y, 0);
-		UINT16 *src16 = BITMAP_ADDR16(bitmap, y, 0);
 		UINT8 *dst = pnginfo->image + y * (rowbytes + 1);
 
 		/* store the filter byte, then copy the data */
 		*dst++ = 0;
 
 		/* 16bpp palettized format */
-		if (bitmap->format == BITMAP_FORMAT_INDEXED16)
+		if (bitmap.format() == BITMAP_FORMAT_IND16)
 		{
+			UINT16 *src16 = reinterpret_cast<UINT16 *>(bitmap.raw_pixptr(y));
 			for (x = 0; x < pnginfo->width; x++)
 			{
 				rgb_t color = palette[*src16++];
@@ -999,21 +964,10 @@ static png_error convert_bitmap_to_image_rgb(png_info *pnginfo, const bitmap_t *
 			}
 		}
 
-		/* RGB formats */
-		else if (bitmap->format == BITMAP_FORMAT_RGB15)
-		{
-			for (x = 0; x < pnginfo->width; x++)
-			{
-				UINT16 raw = *src16++;
-				*dst++ = pal5bit(raw >> 10);
-				*dst++ = pal5bit(raw >> 5);
-				*dst++ = pal5bit(raw >> 0);
-			}
-		}
-
 		/* 32-bit RGB direct */
-		else if (bitmap->format == BITMAP_FORMAT_RGB32)
+		else if (bitmap.format() == BITMAP_FORMAT_RGB32)
 		{
+			UINT32 *src32 = reinterpret_cast<UINT32 *>(bitmap.raw_pixptr(y));
 			for (x = 0; x < pnginfo->width; x++)
 			{
 				UINT32 raw = *src32++;
@@ -1024,8 +978,9 @@ static png_error convert_bitmap_to_image_rgb(png_info *pnginfo, const bitmap_t *
 		}
 
 		/* 32-bit ARGB direct */
-		else if (bitmap->format == BITMAP_FORMAT_ARGB32)
+		else if (bitmap.format() == BITMAP_FORMAT_ARGB32)
 		{
+			UINT32 *src32 = reinterpret_cast<UINT32 *>(bitmap.raw_pixptr(y));
 			for (x = 0; x < pnginfo->width; x++)
 			{
 				UINT32 raw = *src32++;
@@ -1050,14 +1005,14 @@ static png_error convert_bitmap_to_image_rgb(png_info *pnginfo, const bitmap_t *
     chunks to the given file
 -------------------------------------------------*/
 
-static png_error write_png_stream(core_file *fp, png_info *pnginfo, const bitmap_t *bitmap, int palette_length, const rgb_t *palette)
+static png_error write_png_stream(core_file *fp, png_info *pnginfo, const bitmap_t &bitmap, int palette_length, const rgb_t *palette)
 {
 	UINT8 tempbuff[16];
 	png_text *text;
 	png_error error;
 
 	/* create an unfiltered image in either palette or RGB form */
-	if (bitmap->format == BITMAP_FORMAT_INDEXED16 && palette_length <= 256)
+	if (bitmap.format() == BITMAP_FORMAT_IND16 && palette_length <= 256)
 		error = convert_bitmap_to_image_palette(pnginfo, bitmap, palette_length, palette);
 	else
 		error = convert_bitmap_to_image_rgb(pnginfo, bitmap, palette_length, palette);
@@ -1105,8 +1060,7 @@ handle_error:
 }
 
 
-
-png_error png_write_bitmap(core_file *fp, png_info *info, bitmap_t *bitmap, int palette_length, const UINT32 *palette)
+png_error png_write_bitmap(core_file *fp, png_info *info, bitmap_t &bitmap, int palette_length, const UINT32 *palette)
 {
 	png_info pnginfo;
 	png_error error;
@@ -1141,7 +1095,7 @@ png_error png_write_bitmap(core_file *fp, png_info *info, bitmap_t *bitmap, int 
 
 ********************************************************************************/
 
-png_error mng_capture_start(core_file *fp, bitmap_t *bitmap, double rate)
+png_error mng_capture_start(core_file *fp, bitmap_t &bitmap, double rate)
 {
 	UINT8 mhdr[28];
 	png_error error;
@@ -1150,12 +1104,12 @@ png_error mng_capture_start(core_file *fp, bitmap_t *bitmap, double rate)
 		return PNGERR_FILE_ERROR;
 
 	memset(mhdr, 0, 28);
-	put_32bit(mhdr + 0, bitmap->width);
-	put_32bit(mhdr + 4, bitmap->height);
+	put_32bit(mhdr + 0, bitmap.width());
+	put_32bit(mhdr + 4, bitmap.height());
 	put_32bit(mhdr + 8, rate);
 	put_32bit(mhdr + 24, 0x0041); /* Simplicity profile */
 	/* frame count and play time unspecified because
-       we don't know at this stage */
+	   we don't know at this stage */
 	error = write_chunk(fp, mhdr, MNG_CN_MHDR, 28);
 	if (error != PNGERR_NONE)
 		return error;
@@ -1163,7 +1117,7 @@ png_error mng_capture_start(core_file *fp, bitmap_t *bitmap, double rate)
 	return PNGERR_NONE;
 }
 
-png_error mng_capture_frame(core_file *fp, png_info *info, bitmap_t *bitmap, int palette_length, const UINT32 *palette)
+png_error mng_capture_frame(core_file *fp, png_info *info, bitmap_t &bitmap, int palette_length, const UINT32 *palette)
 {
 	return write_png_stream(fp, info, bitmap, palette_length, palette);
 }

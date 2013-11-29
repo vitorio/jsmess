@@ -59,6 +59,19 @@
 #define SDLMAME_BSD 1
 #endif
 
+#if defined(__HAIKU__)
+#define SDLMAME_HAIKU 1
+#define SDLMAME_NO64BITIO 1
+#endif
+
+#if defined(EMSCRIPTEN)
+#define SDLMAME_EMSCRIPTEN 1
+#define SDLMAME_NO64BITIO 1
+#define NOASM 1
+#define SDLMAME_NOASM 1
+struct _IO_FILE {};  //_IO_FILE is an opaque type in the emscripten libc which makes clang cranky
+#endif
+
 // fix for Ubuntu 8.10
 #ifdef _FORTIFY_SOURCE
 #undef _FORTIFY_SOURCE
@@ -72,12 +85,11 @@ void *__cdecl _alloca(size_t);
 #endif
 
 #ifdef __GNUC__
-#define alloca	__builtin_alloca
+#define alloca  __builtin_alloca
 #endif
 
 //============================================================
 // misc.
 //============================================================
 
-#define PATH_SEPARATOR		"/"
-
+#define PATH_SEPARATOR      "/"

@@ -42,48 +42,45 @@
 
 /*****************************************************************************/
 
-static TILE_GET_INFO( get_pf_tile_info )
+TILE_GET_INFO_MEMBER(m107_state::get_pf_tile_info)
 {
-	m107_state *state = machine.driver_data<m107_state>();
-	pf_layer_info *layer = (pf_layer_info *)param;
+	pf_layer_info *layer = (pf_layer_info *)tilemap.user_data();
 	int tile, attrib;
 	tile_index = 2 * tile_index + layer->vram_base;
 
-	attrib = state->m_vram_data[tile_index + 1];
-	tile = state->m_vram_data[tile_index] + ((attrib & 0x1000) << 4);
+	attrib = m_vram_data[tile_index + 1];
+	tile = m_vram_data[tile_index] + ((attrib & 0x1000) << 4);
 
-	SET_TILE_INFO(
+	SET_TILE_INFO_MEMBER(
 			0,
 			tile,
 			attrib & 0x7f,
 			TILE_FLIPYX(attrib >> 10));
 
 	/* Priority 1 = tile appears above sprites */
-	tileinfo->category = (attrib >> 9) & 1;
+	tileinfo.category = (attrib >> 9) & 1;
 }
 
 /*****************************************************************************/
 
-WRITE16_HANDLER( m107_vram_w )
+WRITE16_MEMBER(m107_state::m107_vram_w)
 {
-	m107_state *state = space->machine().driver_data<m107_state>();
 	int laynum;
 
-	COMBINE_DATA(&state->m_vram_data[offset]);
+	COMBINE_DATA(&m_vram_data[offset]);
 	for (laynum = 0; laynum < 4; laynum++)
-		if ((offset & 0x6000) == state->m_pf_layer[laynum].vram_base)
-			tilemap_mark_tile_dirty(state->m_pf_layer[laynum].tmap, (offset & 0x1fff) / 2);
+		if ((offset & 0x6000) == m_pf_layer[laynum].vram_base)
+			m_pf_layer[laynum].tmap->mark_tile_dirty((offset & 0x1fff) / 2);
 }
 
 /*****************************************************************************/
 
-WRITE16_HANDLER( m107_control_w )
+WRITE16_MEMBER(m107_state::m107_control_w)
 {
-	m107_state *state = space->machine().driver_data<m107_state>();
-	UINT16 old = state->m_control[offset];
+	UINT16 old = m_control[offset];
 	pf_layer_info *layer;
 
-	COMBINE_DATA(&state->m_control[offset]);
+	COMBINE_DATA(&m_control[offset]);
 
 	switch (offset*2)
 	{
@@ -91,20 +88,20 @@ WRITE16_HANDLER( m107_control_w )
 		case 0x12: /* Playfield 2 */
 		case 0x14: /* Playfield 3 */
 		case 0x16: /* Playfield 4 (bottom layer) */
-			layer = &state->m_pf_layer[offset - 0x08];
+			layer = &m_pf_layer[offset - 0x08];
 
 			/* update VRAM base (bits 8-11) */
-			layer->vram_base = ((state->m_control[offset] >> 8) & 15) * 0x800;
+			layer->vram_base = ((m_control[offset] >> 8) & 15) * 0x800;
 
 			/* update enable (bit 7) */
-			tilemap_set_enable(layer->tmap, (~state->m_control[offset] >> 7) & 1);
+			layer->tmap->enable((~m_control[offset] >> 7) & 1);
 
 			/* mark everything dirty of the VRAM base changes */
-			if ((old ^ state->m_control[offset]) & 0x0f00)
-				tilemap_mark_all_tiles_dirty(layer->tmap);
+			if ((old ^ m_control[offset]) & 0x0f00)
+				layer->tmap->mark_all_dirty();
 
-			if(state->m_control[offset] & 0xf07c)
-				printf("%04x %02x\n",state->m_control[offset],offset*2);
+			if(m_control[offset] & 0xf07c)
+				printf("%04x %02x\n",m_control[offset],offset*2);
 
 			break;
 
@@ -114,48 +111,46 @@ WRITE16_HANDLER( m107_control_w )
 			break;
 
 		case 0x1e:
-			state->m_raster_irq_position = state->m_control[offset] - 128;
+			m_raster_irq_position = m_control[offset] - 128;
 			break;
 	}
 }
 
 /*****************************************************************************/
 
-VIDEO_START( m107 )
+void m107_state::video_start()
 {
-	m107_state *state = machine.driver_data<m107_state>();
 	int laynum;
 
 	for (laynum = 0; laynum < 4; laynum++)
 	{
-		pf_layer_info *layer = &state->m_pf_layer[laynum];
+		pf_layer_info *layer = &m_pf_layer[laynum];
 
 		/* allocate a tilemaps per layer */
-		layer->tmap = tilemap_create(machine, get_pf_tile_info, tilemap_scan_rows,  8,8, 64,64);
+		layer->tmap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(m107_state::get_pf_tile_info),this), TILEMAP_SCAN_ROWS,  8,8, 64,64);
 
 		/* set the user data to point to the layer */
-		tilemap_set_user_data(layer->tmap, &state->m_pf_layer[laynum]);
+		layer->tmap->set_user_data(&m_pf_layer[laynum]);
 
 		/* set scroll offsets */
-		tilemap_set_scrolldx(layer->tmap, -3 + 2 * laynum, -3 + 2 * laynum);
-		tilemap_set_scrolldy(layer->tmap, -128, -128);
+		layer->tmap->set_scrolldx(-3 + 2 * laynum, -3 + 2 * laynum);
+		layer->tmap->set_scrolldy(-128, -128);
 
 		/* set pen 0 to transparent for all tilemaps except #4 */
 		if (laynum != 3)
-			tilemap_set_transparent_pen(layer->tmap, 0);
+			layer->tmap->set_transparent_pen(0);
 	}
 
-	state->m_buffered_spriteram = auto_alloc_array_clear(machine, UINT16, 0x1000/2);
+	m_buffered_spriteram = auto_alloc_array_clear(machine(), UINT16, 0x1000/2);
 }
 
 /*****************************************************************************/
 
-static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
+void m107_state::draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	m107_state *state = machine.driver_data<m107_state>();
-	UINT16 *spriteram = state->m_buffered_spriteram;
+	UINT16 *spriteram = m_buffered_spriteram;
 	int offs;
-	UINT8 *rom = machine.region("user1")->base();
+	UINT8 *rom = memregion("user1")->base();
 
 	for (offs = 0;offs < 0x800;offs += 4)
 	{
@@ -180,7 +175,7 @@ static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const recta
 		fy=(spriteram[offs+2]>>8)&0x2;
 		y_multi=(spriteram[offs+0]>>11)&0x3;
 
-		if (state->m_spritesystem == 0)
+		if (m_spritesystem == 0)
 		{
 			y_multi=1 << y_multi; /* 1, 2, 4 or 8 */
 
@@ -189,20 +184,20 @@ static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const recta
 
 			for (i=0; i<y_multi; i++)
 			{
-				pdrawgfx_transpen(bitmap,cliprect,machine.gfx[1],
+				pdrawgfx_transpen(bitmap,cliprect,machine().gfx[1],
 						sprite + s_ptr,
 						colour,
 						fx,fy,
 						x,y-i*16,
-						machine.priority_bitmap,pri_mask,0);
+						screen.priority(),pri_mask,0);
 
 				/* wrap-around y */
-				pdrawgfx_transpen(bitmap,cliprect,machine.gfx[1],
+				pdrawgfx_transpen(bitmap,cliprect,machine().gfx[1],
 						sprite + s_ptr,
 						colour,
 						fx,fy,
 						x,(y-i*16) - 0x200,
-						machine.priority_bitmap,pri_mask,0);
+						screen.priority(),pri_mask,0);
 
 				if (fy) s_ptr++; else s_ptr--;
 			}
@@ -213,27 +208,27 @@ static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const recta
 
 			if (rom[rom_offs+1] || rom[rom_offs+3] || rom[rom_offs+5] || rom[rom_offs+7])
 			{
-				while (rom_offs < 0x40000)	/* safety check */
+				while (rom_offs < 0x40000)  /* safety check */
 				{
 					/*
-                    [1]
-                    x--- ---- end of block marker
-                    ---- --x- Flip Y
-                    ---- ---x Flip X
-                    [2]
-                    xxxx xxxx Y offs lo byte
-                    [3]
-                    ---- xxx- height (1/2/4/8)
-                    ---- ---x Y offs hi byte
-                    [4]
-                    xxxx xxxx sprite number lo byte
-                    [5]
-                    xxxx xxxx sprite number hi byte
-                    [6]
-                    xxxx xxxx X offs lo byte
-                    [7]
-                    ---- ---x X offs hi byte
-                    */
+					[1]
+					x--- ---- end of block marker
+					---- --x- Flip Y
+					---- ---x Flip X
+					[2]
+					xxxx xxxx Y offs lo byte
+					[3]
+					---- xxx- height (1/2/4/8)
+					---- ---x Y offs hi byte
+					[4]
+					xxxx xxxx sprite number lo byte
+					[5]
+					xxxx xxxx sprite number hi byte
+					[6]
+					xxxx xxxx X offs lo byte
+					[7]
+					---- ---x X offs hi byte
+					*/
 
 					int xdisp = rom[rom_offs+6]+256*rom[rom_offs+7];
 					int ydisp = rom[rom_offs+2]+256*rom[rom_offs+3];
@@ -246,23 +241,23 @@ static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const recta
 					if (!ffy) sprite+=y_multi-1;
 					for (i=0; i<y_multi; i++)
 					{
-						pdrawgfx_transpen(bitmap,cliprect,machine.gfx[1],
+						pdrawgfx_transpen(bitmap,cliprect,machine().gfx[1],
 								sprite+(ffy?i:-i),
 								colour,
 								ffx,ffy,
 								(x+xdisp)&0x1ff,(y-ydisp-16*i)&0x1ff,
-								machine.priority_bitmap,pri_mask,0);
+								screen.priority(),pri_mask,0);
 
 						/* wrap-around y */
-						pdrawgfx_transpen(bitmap,cliprect,machine.gfx[1],
+						pdrawgfx_transpen(bitmap,cliprect,machine().gfx[1],
 								sprite+(ffy?i:-i),
 								colour,
 								ffx,ffy,
 								(x+xdisp)&0x1ff,((y-ydisp-16*i)&0x1ff)-0x200,
-								machine.priority_bitmap,pri_mask,0);
+								screen.priority(),pri_mask,0);
 					}
 
-					if (rom[rom_offs+1]&0x80) break;	/* end of block */
+					if (rom[rom_offs+1]&0x80) break;    /* end of block */
 
 					rom_offs += 8;
 				}
@@ -273,125 +268,117 @@ static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const recta
 
 /*****************************************************************************/
 
-static void m107_update_scroll_positions(running_machine &machine)
+void m107_state::m107_update_scroll_positions()
 {
-	m107_state *state = machine.driver_data<m107_state>();
 	int laynum;
 	int i;
 
 	/*
-        rowscroll is at 0xde000 - 0xde7ff, every layer has dedicated 0x200 bytes inside this area, enabled with bit 0 of the layer video register
-        rowselect is at 0xde800 - 0xdefff, every layer has dedicated 0x200 bytes inside this area, enabled with bit 1 of the layer video register
-        Perhaps 0xdf000 - 0xdffff and bit 2-3 are respectively colscroll and colselect?
-    */
+	    rowscroll is at 0xde000 - 0xde7ff, every layer has dedicated 0x200 bytes inside this area, enabled with bit 0 of the layer video register
+	    rowselect is at 0xde800 - 0xdefff, every layer has dedicated 0x200 bytes inside this area, enabled with bit 1 of the layer video register
+	    Perhaps 0xdf000 - 0xdffff and bit 2-3 are respectively colscroll and colselect?
+	*/
 
 	for (laynum = 0; laynum < 4; laynum++)
 	{
-		pf_layer_info *layer = &state->m_pf_layer[laynum];
+		pf_layer_info *layer = &m_pf_layer[laynum];
 
-		int scrolly = state->m_control[0 + 2 * laynum];
-		int scrollx = state->m_control[1 + 2 * laynum];
+		int scrolly = m_control[0 + 2 * laynum];
+		int scrollx = m_control[1 + 2 * laynum];
 
-		if (state->m_control[0x08 + laynum] & 0x01) //used by World PK Soccer goal scrolling and Fire Barrel sea wave effect (stage 2) / canyon parallax effect (stage 6)
+		if (m_control[0x08 + laynum] & 0x01) //used by World PK Soccer goal scrolling and Fire Barrel sea wave effect (stage 2) / canyon parallax effect (stage 6)
 		{
-			const UINT16 *scrolldata = state->m_vram_data + (0xe000 + 0x200 * laynum) / 2;
+			const UINT16 *scrolldata = m_vram_data + (0xe000 + 0x200 * laynum) / 2;
 
-			tilemap_set_scroll_rows(layer->tmap, 512);
+			layer->tmap->set_scroll_rows(512);
 			for (i = 0; i < 512; i++)
-				tilemap_set_scrollx(layer->tmap, i, scrolldata[((i+0xff80)-(scrolly))&0x1ff] + scrollx);
+				layer->tmap->set_scrollx(i, scrolldata[((i+0xff80)-(scrolly))&0x1ff] + scrollx);
 
 		}
 		else
 		{
-			tilemap_set_scroll_rows(layer->tmap, 1);
-			tilemap_set_scrollx(layer->tmap, 0, scrollx);
+			layer->tmap->set_scroll_rows(1);
+			layer->tmap->set_scrollx(0, scrollx);
 		}
 
-		tilemap_set_scrolly(layer->tmap, 0,scrolly);
+		layer->tmap->set_scrolly(0,scrolly);
 	}
 }
 
 /*****************************************************************************/
 
-static void m107_tilemap_draw(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, int laynum, int category,int opaque)
+void m107_state::m107_tilemap_draw(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect, int laynum, int category,int opaque)
 {
-	m107_state *state = machine.driver_data<m107_state>();
 	int line;
 	rectangle clip;
-	const rectangle &visarea = machine.primary_screen->visible_area();
-	clip.min_x = visarea.min_x;
-	clip.max_x = visarea.max_x;
-	clip.min_y = visarea.min_y;
-	clip.max_y = visarea.max_y;
+	const rectangle &visarea = m_screen->visible_area();
+	clip = visarea;
 
-	if (state->m_control[0x08 + laynum] & 0x02)
+	if (m_control[0x08 + laynum] & 0x02)
 	{
-		for (line = cliprect->min_y; line <= cliprect->max_y;line++)
+		for (line = cliprect.min_y; line <= cliprect.max_y;line++)
 		{
-			const UINT16 *scrolldata = state->m_vram_data + (0xe800 + 0x200 * laynum) / 2;
+			const UINT16 *scrolldata = m_vram_data + (0xe800 + 0x200 * laynum) / 2;
 			clip.min_y = clip.max_y = line;
 
-			tilemap_set_scrollx(state->m_pf_layer[laynum].tmap,0,  state->m_control[1 + 2 * laynum]);
-			tilemap_set_scrolly(state->m_pf_layer[laynum].tmap,0,  (state->m_control[0 + 2 * laynum] + scrolldata[line]));
+			m_pf_layer[laynum].tmap->set_scrollx(0,  m_control[1 + 2 * laynum]);
+			m_pf_layer[laynum].tmap->set_scrolly(0,  (m_control[0 + 2 * laynum] + scrolldata[line]));
 
-			tilemap_draw(bitmap, &clip, state->m_pf_layer[laynum].tmap, category | opaque, category);
+			m_pf_layer[laynum].tmap->draw(screen, bitmap, clip, category | opaque, category);
 		}
 	}
 	else
-		tilemap_draw(bitmap, cliprect, state->m_pf_layer[laynum].tmap, category | opaque, category);
+		m_pf_layer[laynum].tmap->draw(screen, bitmap, cliprect, category | opaque, category);
 }
 
 
-static void m107_screenrefresh(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
+void m107_state::m107_screenrefresh(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	m107_state *state = machine.driver_data<m107_state>();
-	bitmap_fill(machine.priority_bitmap, cliprect, 0);
+	screen.priority().fill(0, cliprect);
 
-	if ((~state->m_control[0x0b] >> 7) & 1)
+	if ((~m_control[0x0b] >> 7) & 1)
 	{
-		m107_tilemap_draw(machine, bitmap, cliprect, 3, 0,0);
-		m107_tilemap_draw(machine, bitmap, cliprect, 3, 1,0);
+		m107_tilemap_draw(screen, bitmap, cliprect, 3, 0,0);
+		m107_tilemap_draw(screen, bitmap, cliprect, 3, 1,0);
 	}
 	else
-		bitmap_fill(bitmap, cliprect, 0);
+		bitmap.fill(0, cliprect);
 
 	/* note: the opaque flag is used if layer 3 is disabled, noticeable in World PK Soccer title and gameplay screens */
-	m107_tilemap_draw(machine, bitmap, cliprect, 2, 0,(((state->m_control[0x0b] >> 7) & 1) ? TILEMAP_DRAW_OPAQUE : 0));
-	m107_tilemap_draw(machine, bitmap, cliprect, 1, 0,0);
-	m107_tilemap_draw(machine, bitmap, cliprect, 0, 0,0);
-	m107_tilemap_draw(machine, bitmap, cliprect, 2, 1,0);
-	m107_tilemap_draw(machine, bitmap, cliprect, 1, 1,0);
-	m107_tilemap_draw(machine, bitmap, cliprect, 0, 1,0);
+	m107_tilemap_draw(screen, bitmap, cliprect, 2, 0,(((m_control[0x0b] >> 7) & 1) ? TILEMAP_DRAW_OPAQUE : 0));
+	m107_tilemap_draw(screen, bitmap, cliprect, 1, 0,0);
+	m107_tilemap_draw(screen, bitmap, cliprect, 0, 0,0);
+	m107_tilemap_draw(screen, bitmap, cliprect, 2, 1,0);
+	m107_tilemap_draw(screen, bitmap, cliprect, 1, 1,0);
+	m107_tilemap_draw(screen, bitmap, cliprect, 0, 1,0);
 
-	if(state->m_sprite_display)
-		draw_sprites(machine, bitmap, cliprect);
+	if(m_sprite_display)
+		draw_sprites(screen, bitmap, cliprect);
 
 	/* This hardware probably has more priority values - but I haven't found
-        any used yet */
+	    any used yet */
 }
 
 /*****************************************************************************/
 
-WRITE16_HANDLER( m107_spritebuffer_w )
+WRITE16_MEMBER(m107_state::m107_spritebuffer_w)
 {
-	m107_state *state = space->machine().driver_data<m107_state>();
 	if (ACCESSING_BITS_0_7) {
 		/*
-        TODO: this register looks a lot more complex than how the game uses it. All of them seems to test various bit combinations during POST.
-        */
-//      logerror("%04x: buffered spriteram\n",cpu_get_pc(&space->device()));
-		state->m_sprite_display	= (!(data & 0x1000));
+		TODO: this register looks a lot more complex than how the game uses it. All of them seems to test various bit combinations during POST.
+		*/
+//      logerror("%04x: buffered spriteram\n",space.device().safe_pc());
+		m_sprite_display    = (!(data & 0x1000));
 
-		memcpy(state->m_buffered_spriteram, state->m_spriteram, 0x1000);
+		memcpy(m_buffered_spriteram, m_spriteram, 0x1000);
 	}
 }
 
 /*****************************************************************************/
 
-SCREEN_UPDATE( m107 )
+UINT32 m107_state::screen_update_m107(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	m107_update_scroll_positions(screen->machine());
-	m107_screenrefresh(screen->machine(), bitmap, cliprect);
+	m107_update_scroll_positions();
+	m107_screenrefresh(screen, bitmap, cliprect);
 	return 0;
 }
-

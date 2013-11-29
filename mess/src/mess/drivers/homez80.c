@@ -17,14 +17,10 @@
         while M 1234 will display memory at 9123.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define VIDEO_START_MEMBER(name) void name::video_start()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
 class homez80_state : public driver_device
 {
@@ -32,16 +28,18 @@ public:
 	homez80_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
 	m_maincpu(*this, "maincpu")
-	{ }
+	,
+		m_p_videoram(*this, "p_videoram"){ }
 
 	required_device<cpu_device> m_maincpu;
 	DECLARE_READ8_MEMBER( homez80_keyboard_r );
-	UINT8* m_p_videoram;
+	required_shared_ptr<UINT8> m_p_videoram;
 	UINT8* m_p_chargen;
 	bool m_irq;
 	virtual void machine_reset();
 	virtual void video_start();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	INTERRUPT_GEN_MEMBER(homez80_interrupt);
 };
 
 
@@ -49,13 +47,13 @@ READ8_MEMBER( homez80_state::homez80_keyboard_r )
 {
 	char kbdrow[8];
 	sprintf(kbdrow,"LINE%d",offset);
-	return input_port_read(machine(), kbdrow);
+	return ioport(kbdrow)->read();
 }
 
 static ADDRESS_MAP_START(homez80_mem, AS_PROGRAM, 8, homez80_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE( 0x0000, 0x0fff ) AM_ROM  // Monitor
-	AM_RANGE( 0x2000, 0x23ff ) AM_RAM  AM_BASE(m_p_videoram) // Video RAM
+	AM_RANGE( 0x2000, 0x23ff ) AM_RAM  AM_SHARE("p_videoram") // Video RAM
 	AM_RANGE( 0x7020, 0x702f ) AM_READ(homez80_keyboard_r)
 	AM_RANGE( 0x8000, 0xffff ) AM_RAM  // 32 K RAM
 ADDRESS_MAP_END
@@ -213,17 +211,17 @@ INPUT_PORTS_START( homez80 )
 INPUT_PORTS_END
 
 
-MACHINE_RESET_MEMBER( homez80_state )
+void homez80_state::machine_reset()
 {
 	m_irq = 0;
 }
 
-VIDEO_START_MEMBER( homez80_state )
+void homez80_state::video_start()
 {
-	m_p_chargen = machine().region("chargen")->base();
+	m_p_chargen = memregion("chargen")->base();
 }
 
-SCREEN_UPDATE_MEMBER( homez80_state )
+UINT32 homez80_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	UINT8 y,ra,chr,gfx;
 	UINT16 sy=0,ma=0,x;
@@ -232,7 +230,7 @@ SCREEN_UPDATE_MEMBER( homez80_state )
 	{
 		for (ra = 0; ra < 8; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(&bitmap, sy++, 44);
+			UINT16 *p = &bitmap.pix16(sy++, 44);
 
 			for (x = ma; x < ma+32; x++)
 			{
@@ -260,13 +258,13 @@ SCREEN_UPDATE_MEMBER( homez80_state )
 
 const gfx_layout homez80_charlayout =
 {
-	8, 8,				/* 8x8 characters */
-	256,				/* 256 characters */
-	1,				    /* 1 bits per pixel */
-	{0},				/* no bitplanes; 1 bit per pixel */
+	8, 8,               /* 8x8 characters */
+	256,                /* 256 characters */
+	1,                  /* 1 bits per pixel */
+	{0},                /* no bitplanes; 1 bit per pixel */
 	{0, 1, 2, 3, 4, 5, 6, 7},
 	{0 * 8, 1 * 8, 2 * 8, 3 * 8, 4 * 8, 5 * 8, 6 * 8, 7 * 8},
-	8*8					/* size of one char */
+	8*8                 /* size of one char */
 };
 
 static GFXDECODE_START( homez80 )
@@ -274,11 +272,10 @@ static GFXDECODE_START( homez80 )
 GFXDECODE_END
 
 
-static INTERRUPT_GEN( homez80_interrupt )
+INTERRUPT_GEN_MEMBER(homez80_state::homez80_interrupt)
 {
-	homez80_state *state = device->machine().driver_data<homez80_state>();
-	device_set_input_line(device, 0, (state->m_irq) ? HOLD_LINE : CLEAR_LINE);
-	state->m_irq ^= 1;
+	device.execute().set_input_line(0, (m_irq) ? HOLD_LINE : CLEAR_LINE);
+	m_irq ^= 1;
 }
 
 static MACHINE_CONFIG_START( homez80, homez80_state )
@@ -286,17 +283,17 @@ static MACHINE_CONFIG_START( homez80, homez80_state )
 	MCFG_CPU_ADD("maincpu",Z80, XTAL_8MHz / 2)
 	MCFG_CPU_PROGRAM_MAP(homez80_mem)
 	MCFG_CPU_IO_MAP(homez80_io)
-	MCFG_CPU_PERIODIC_INT(homez80_interrupt, 50)
+	MCFG_CPU_PERIODIC_INT_DRIVER(homez80_state, homez80_interrupt,  50)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(homez80_state, screen_update)
 	MCFG_SCREEN_SIZE(344, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 344-1, 0, 32*8-1)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 	MCFG_GFXDECODE( homez80 )
 MACHINE_CONFIG_END
 
@@ -312,4 +309,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 2008, homez80,  0,     0,      homez80,   homez80, 0,    "Kun-Szabo Marton", "Homebrew Z80 Computer", GAME_NO_SOUND_HW)
+COMP( 2008, homez80,  0,     0,      homez80,   homez80, driver_device, 0,    "Kun-Szabo Marton", "Homebrew Z80 Computer", GAME_NO_SOUND_HW)

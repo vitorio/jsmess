@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     Intel 8214 Priority Interrupt Controller emulation
@@ -9,7 +11,6 @@
 
 #include "emu.h"
 #include "i8214.h"
-#include "machine/devhelpr.h"
 
 
 
@@ -91,7 +92,7 @@ inline void i8214_device::check_interrupt()
 //-------------------------------------------------
 
 i8214_device::i8214_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, I8214, "I8214", tag, owner, clock)
+	: device_t(mconfig, I8214, "I8214", tag, owner, clock, "i8214", __FILE__)
 {
 }
 
@@ -127,6 +128,8 @@ void i8214_device::device_start()
 	// resolve callbacks
 	m_out_int_func.resolve(m_out_int_cb, *this);
 	m_out_enlg_func.resolve(m_out_enlg_cb, *this);
+
+	m_int_dis = 0;
 
 	// register for state saving
 	save_item(NAME(m_inte));

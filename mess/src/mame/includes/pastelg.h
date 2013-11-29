@@ -1,8 +1,20 @@
+#include "includes/nb1413m3.h"
+
 class pastelg_state : public driver_device
 {
 public:
+	enum
+	{
+		TIMER_BLITTER
+	};
+
 	pastelg_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu"),
+		m_nb1413m3(*this, "nb1413m3")   { }
+
+	required_device<cpu_device> m_maincpu;
+	required_device<nb1413m3_device> m_nb1413m3;
 
 	UINT8 m_mux_data;
 	int m_blitter_destx;
@@ -19,20 +31,29 @@ public:
 	UINT8 *m_videoram;
 	UINT8 *m_clut;
 	int m_flipscreen_old;
+	DECLARE_READ8_MEMBER(pastelg_sndrom_r);
+	DECLARE_READ8_MEMBER(pastelg_irq_ack_r);
+	DECLARE_READ8_MEMBER(threeds_inputport1_r);
+	DECLARE_READ8_MEMBER(threeds_inputport2_r);
+	DECLARE_WRITE8_MEMBER(threeds_inputportsel_w);
+	DECLARE_WRITE8_MEMBER(pastelg_clut_w);
+	DECLARE_WRITE8_MEMBER(pastelg_blitter_w);
+	DECLARE_WRITE8_MEMBER(threeds_romsel_w);
+	DECLARE_WRITE8_MEMBER(threeds_output_w);
+	DECLARE_READ8_MEMBER(threeds_rom_readback_r);
+	DECLARE_WRITE8_MEMBER(pastelg_romsel_w);
+	DECLARE_CUSTOM_INPUT_MEMBER(nb1413m3_busyflag_r);
+	DECLARE_CUSTOM_INPUT_MEMBER(nb1413m3_hackbusyflag_r);
+	virtual void video_start();
+	virtual void palette_init();
+	UINT32 screen_update_pastelg(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	int pastelg_blitter_src_addr_r(address_space &space);
+	void pastelg_vramflip();
+	void pastelg_gfxdraw();
+
+protected:
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 };
 
-
 /*----------- defined in video/pastelg.c -----------*/
-
-PALETTE_INIT( pastelg );
-SCREEN_UPDATE( pastelg );
-VIDEO_START( pastelg );
-
-WRITE8_HANDLER( pastelg_clut_w );
-WRITE8_HANDLER( pastelg_romsel_w );
-WRITE8_HANDLER( threeds_romsel_w );
-WRITE8_HANDLER( threeds_output_w );
-WRITE8_HANDLER( pastelg_blitter_w );
-READ8_HANDLER( threeds_rom_readback_r );
-
-int pastelg_blitter_src_addr_r(address_space *space);
+int pastelg_blitter_src_addr_r(address_space &space);

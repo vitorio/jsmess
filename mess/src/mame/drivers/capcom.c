@@ -2,31 +2,42 @@
     Capcom A0015405
 */
 
+
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
-
-extern const char layout_pinball[];
 
 class capcom_state : public driver_device
 {
 public:
 	capcom_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+			m_maincpu(*this, "maincpu")
+	{ }
+
+protected:
+
+	// devices
+	required_device<cpu_device> m_maincpu;
+
+	// driver_device overrides
+	virtual void machine_reset();
+public:
+	DECLARE_DRIVER_INIT(capcom);
 };
 
 
-static ADDRESS_MAP_START( capcom_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( capcom_map, AS_PROGRAM, 16, capcom_state )
 	AM_RANGE(0x0000, 0xffffff) AM_NOP
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( capcom )
 INPUT_PORTS_END
 
-static MACHINE_RESET( capcom )
+void capcom_state::machine_reset()
 {
 }
 
-static DRIVER_INIT( capcom )
+DRIVER_INIT_MEMBER(capcom_state,capcom)
 {
 }
 
@@ -34,11 +45,6 @@ static MACHINE_CONFIG_START( capcom, capcom_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 16670000) // M68306
 	MCFG_CPU_PROGRAM_MAP(capcom_map)
-
-	MCFG_MACHINE_RESET( capcom )
-
-	/* video hardware */
-	MCFG_DEFAULT_LAYOUT(layout_pinball)
 MACHINE_CONFIG_END
 
 /*-------------------------------------------------------------------
@@ -275,24 +281,25 @@ ROM_END
 /-------------------------------------------------------------------*/
 ROM_START(ghv101)
 	ROM_REGION16_BE(0x00500000, "user1",0)
-	ROM_LOAD16_BYTE("u06_v11.bin", 0x000001, 0x80000, CRC(3b6ab802))
-	ROM_LOAD16_BYTE("u23_v11.bin", 0x000000, 0x80000, CRC(f6cac3aa))
-	ROM_LOAD16_BYTE("u13_v10.bin", 0x400001, 0x80000, CRC(1712f21f))
-	ROM_LOAD16_BYTE("u17_v10.bin", 0x400000, 0x80000, CRC(b6a39327))
+	ROM_LOAD16_BYTE("u06_v11.bin", 0x000001, 0x80000, CRC(3b6ab802) SHA1(8c43234ce2af3ba7dc8ab2cd6e2e352b5caa9acc))
+	ROM_LOAD16_BYTE("u23_v11.bin", 0x000000, 0x80000, CRC(f6cac3aa) SHA1(eb2018f21fdfb27b1e5ca83a09202614fd865b05))
+	ROM_LOAD16_BYTE("u13_v10.bin", 0x400001, 0x80000, CRC(1712f21f) SHA1(7c0c9d8c28c1c4888f0e6220f3a23d0eb25e218f))
+	ROM_LOAD16_BYTE("u17_v10.bin", 0x400000, 0x80000, CRC(b6a39327) SHA1(d05eaa767422f19dcf5037ffabdfb3ff55f76c32))
 	ROM_REGION(0x00500000, "maincpu", ROMREGION_ERASEFF)
 ROM_END
 
-GAME(1996,	abv106,		0,		capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Airborne",						GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1996,	abv106r,	abv106,	capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Airborne (Redemption)",		GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1996,	bbb109,		0,		capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Big Bang Bar (Beta 1.9 US)",	GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1996,	bbb108,		bbb109,	capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Big Bang Bar (Beta 1.8 US)",	GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1996,	bsv103,		0,		capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Breakshot",					GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1996,	bsv100r,	bsv103,	capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Breakshot (Redemption 1.0)",	GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1996,	bsv102r,	bsv103,	capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Breakshot (Redemption 1.2)",	GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1996,	bsb105,		bsv103,	capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Breakshot (Beta)",				GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1996,	ffv104,		0,		capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Flipper Football (v1.04)",		GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1996,	ffv101,		ffv104,	capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Flipper Football (v1.01)",		GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1996,	kpv106,		0,		capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Kingpin",						GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1995,	pmv112,		0,		capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Pinball Magic",				GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1995,	pmv112r,	pmv112,	capcom,	capcom,	capcom,	ROT0,	"Capcom",		"Pinball Magic (Redemption)",	GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
-GAME(1995,	ghv101,		0,		capcom,	capcom,	capcom,	ROT0,	"Romstar",		"Goofy Hoops",					GAME_NOT_WORKING | GAME_NO_SOUND | GAME_MECHANICAL)
+
+GAME(1996,  abv106,     0,      capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Airborne",                     GAME_IS_SKELETON_MECHANICAL)
+GAME(1996,  abv106r,    abv106, capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Airborne (Redemption)",        GAME_IS_SKELETON_MECHANICAL)
+GAME(1996,  bbb109,     0,      capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Big Bang Bar (Beta 1.9 US)",   GAME_IS_SKELETON_MECHANICAL)
+GAME(1996,  bbb108,     bbb109, capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Big Bang Bar (Beta 1.8 US)",   GAME_IS_SKELETON_MECHANICAL)
+GAME(1996,  bsv103,     0,      capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Breakshot",                    GAME_IS_SKELETON_MECHANICAL)
+GAME(1996,  bsv100r,    bsv103, capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Breakshot (Redemption 1.0)",   GAME_IS_SKELETON_MECHANICAL)
+GAME(1996,  bsv102r,    bsv103, capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Breakshot (Redemption 1.2)",   GAME_IS_SKELETON_MECHANICAL)
+GAME(1996,  bsb105,     bsv103, capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Breakshot (Beta)",             GAME_IS_SKELETON_MECHANICAL)
+GAME(1996,  ffv104,     0,      capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Flipper Football (v1.04)",     GAME_IS_SKELETON_MECHANICAL)
+GAME(1996,  ffv101,     ffv104, capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Flipper Football (v1.01)",     GAME_IS_SKELETON_MECHANICAL)
+GAME(1996,  kpv106,     0,      capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Kingpin (Pinball)",            GAME_IS_SKELETON_MECHANICAL)
+GAME(1995,  pmv112,     0,      capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Pinball Magic",                GAME_IS_SKELETON_MECHANICAL)
+GAME(1995,  pmv112r,    pmv112, capcom, capcom, capcom_state,   capcom, ROT0,   "Capcom",       "Pinball Magic (Redemption)",   GAME_IS_SKELETON_MECHANICAL)
+GAME(1995,  ghv101,     0,      capcom, capcom, capcom_state,   capcom, ROT0,   "Romstar",      "Goofy Hoops",                  GAME_IS_SKELETON_MECHANICAL)

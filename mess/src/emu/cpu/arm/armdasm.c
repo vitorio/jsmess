@@ -15,7 +15,7 @@ static char *WriteImmediateOperand( char *pBuf, UINT32 opcode )
 
 	imm = opcode&0xff;
 	r = ((opcode>>8)&0xf)*2;
-	imm = (imm>>r)|(imm<<(32-r));
+	imm = (imm>>r)|(r?(imm<<(32-r)):0);
 	pBuf += sprintf( pBuf, ", #$%x", imm );
 	return pBuf;
 }
@@ -404,4 +404,3 @@ CPU_DISASSEMBLE( arm_be )
 	UINT32 opcode = oprom[3] | (oprom[2] << 8) | (oprom[1] << 16) | (oprom[0] << 24);
 	return 4 | arm_disasm(buffer, pc, opcode);
 }
-

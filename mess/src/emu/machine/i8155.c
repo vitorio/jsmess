@@ -1,6 +1,8 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
-    Intel 8155 - 2048-Bit Static MOS RAM with I/O Ports and Timer emulation
+    Intel 8155/8156 - 2048-Bit Static MOS RAM with I/O Ports and Timer emulation
 
     Copyright MESS Team.
     Visit http://mamedev.org for licensing and usage restrictions.
@@ -19,15 +21,16 @@
 #include "i8155.h"
 
 
-// device type definition
+// device type definitions
 const device_type I8155 = &device_creator<i8155_device>;
+const device_type I8156 = &device_creator<i8155_device>;
 
 
 //**************************************************************************
 //  MACROS / CONSTANTS
 //**************************************************************************
 
-#define LOG 1
+#define LOG 0
 
 enum
 {
@@ -52,8 +55,8 @@ enum
 {
 	PORT_MODE_INPUT = 0,
 	PORT_MODE_OUTPUT,
-	PORT_MODE_STROBED_PORT_A,	// not supported
-	PORT_MODE_STROBED			// not supported
+	PORT_MODE_STROBED_PORT_A,   // not supported
+	PORT_MODE_STROBED           // not supported
 };
 
 enum
@@ -62,34 +65,34 @@ enum
 	IO
 };
 
-#define COMMAND_PA					0x01
-#define COMMAND_PB					0x02
-#define COMMAND_PC_MASK				0x0c
-#define COMMAND_PC_ALT_1			0x00
-#define COMMAND_PC_ALT_2			0x0c
-#define COMMAND_PC_ALT_3			0x04	// not supported
-#define COMMAND_PC_ALT_4			0x08	// not supported
-#define COMMAND_IEA					0x10	// not supported
-#define COMMAND_IEB					0x20	// not supported
-#define COMMAND_TM_MASK				0xc0
-#define COMMAND_TM_NOP				0x00
-#define COMMAND_TM_STOP				0x40
-#define COMMAND_TM_STOP_AFTER_TC	0x80
-#define COMMAND_TM_START			0xc0
+#define COMMAND_PA                  0x01
+#define COMMAND_PB                  0x02
+#define COMMAND_PC_MASK             0x0c
+#define COMMAND_PC_ALT_1            0x00
+#define COMMAND_PC_ALT_2            0x0c
+#define COMMAND_PC_ALT_3            0x04    // not supported
+#define COMMAND_PC_ALT_4            0x08    // not supported
+#define COMMAND_IEA                 0x10    // not supported
+#define COMMAND_IEB                 0x20    // not supported
+#define COMMAND_TM_MASK             0xc0
+#define COMMAND_TM_NOP              0x00
+#define COMMAND_TM_STOP             0x40
+#define COMMAND_TM_STOP_AFTER_TC    0x80
+#define COMMAND_TM_START            0xc0
 
-#define STATUS_INTR_A				0x01	// not supported
-#define STATUS_A_BF					0x02	// not supported
-#define STATUS_INTE_A				0x04	// not supported
-#define STATUS_INTR_B				0x08	// not supported
-#define STATUS_B_BF					0x10	// not supported
-#define STATUS_INTE_B				0x20	// not supported
-#define STATUS_TIMER				0x40
+#define STATUS_INTR_A               0x01    // not supported
+#define STATUS_A_BF                 0x02    // not supported
+#define STATUS_INTE_A               0x04    // not supported
+#define STATUS_INTR_B               0x08    // not supported
+#define STATUS_B_BF                 0x10    // not supported
+#define STATUS_INTE_B               0x20    // not supported
+#define STATUS_TIMER                0x40
 
-#define TIMER_MODE_MASK				0xc0
-#define TIMER_MODE_LOW				0x00
-#define TIMER_MODE_SQUARE_WAVE		0x40
-#define TIMER_MODE_SINGLE_PULSE		0x80
-#define TIMER_MODE_AUTOMATIC_RELOAD	0xc0
+#define TIMER_MODE_MASK             0xc0
+#define TIMER_MODE_LOW              0x00
+#define TIMER_MODE_SQUARE_WAVE      0x40
+#define TIMER_MODE_SINGLE_PULSE     0x80
+#define TIMER_MODE_AUTOMATIC_RELOAD 0xc0
 
 
 
@@ -98,7 +101,7 @@ enum
 //**************************************************************************
 
 // default address map
-static ADDRESS_MAP_START( i8155, AS_0, 8 )
+static ADDRESS_MAP_START( i8155, AS_0, 8, i8155_device )
 	AM_RANGE(0x00, 0xff) AM_RAM
 ADDRESS_MAP_END
 
@@ -143,10 +146,10 @@ inline int i8155_device::get_port_mode(int port)
 	case PORT_C:
 		switch (m_command & COMMAND_PC_MASK)
 		{
-		case COMMAND_PC_ALT_1: mode = PORT_MODE_INPUT;			break;
-		case COMMAND_PC_ALT_2: mode = PORT_MODE_OUTPUT;			break;
+		case COMMAND_PC_ALT_1: mode = PORT_MODE_INPUT;          break;
+		case COMMAND_PC_ALT_2: mode = PORT_MODE_OUTPUT;         break;
 		case COMMAND_PC_ALT_3: mode = PORT_MODE_STROBED_PORT_A; break;
-		case COMMAND_PC_ALT_4: mode = PORT_MODE_STROBED;		break;
+		case COMMAND_PC_ALT_4: mode = PORT_MODE_STROBED;        break;
 		}
 		break;
 	}
@@ -158,36 +161,19 @@ inline UINT8 i8155_device::read_port(int port)
 {
 	UINT8 data = 0;
 
-	switch (port)
+	switch (get_port_mode(port))
 	{
-	case PORT_A:
-	case PORT_B:
-		switch (get_port_mode(port))
-		{
-		case PORT_MODE_INPUT:
-			data = m_in_port_func[port](0);
-			break;
-
-		case PORT_MODE_OUTPUT:
-			data = m_output[port];
-			break;
-		}
+	case PORT_MODE_INPUT:
+		data = m_in_port_func[port](0);
 		break;
 
-	case PORT_C:
-		switch (get_port_mode(PORT_C))
-		{
-		case PORT_MODE_INPUT:
-			data = m_in_port_func[port](0) & 0x3f;
-			break;
+	case PORT_MODE_OUTPUT:
+		data = m_output[port];
+		break;
 
-		case PORT_MODE_OUTPUT:
-			data = m_output[port] & 0x3f;
-			break;
-
-		default:
-			logerror("8155 '%s' Unsupported Port C mode!\n", tag());
-		}
+	default:
+		// strobed mode not implemented yet
+		logerror("8155 '%s' Unsupported Port C mode!\n", tag());
 		break;
 	}
 
@@ -215,11 +201,12 @@ inline void i8155_device::write_port(int port, UINT8 data)
 //-------------------------------------------------
 
 i8155_device::i8155_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, I8155, "Intel 8155", tag, owner, clock),
-	  device_memory_interface(mconfig, *this),
-	  m_space_config("ram", ENDIANNESS_LITTLE, 8, 8, 0, NULL, *ADDRESS_MAP_NAME(i8155))
+	: device_t(mconfig, I8155, "Intel 8155", tag, owner, clock, "i8155", __FILE__),
+		device_memory_interface(mconfig, *this),
+		m_command(0),
+		m_status(0),
+		m_space_config("ram", ENDIANNESS_LITTLE, 8, 8, 0, NULL, *ADDRESS_MAP_NAME(i8155))
 {
-
 }
 
 
@@ -385,7 +372,7 @@ READ8_MEMBER( i8155_device::io_r )
 {
 	UINT8 data = 0;
 
-	switch (offset & 0x03)
+	switch (offset & 0x07)
 	{
 	case REGISTER_STATUS:
 		data = m_status;
@@ -403,7 +390,15 @@ READ8_MEMBER( i8155_device::io_r )
 		break;
 
 	case REGISTER_PORT_C:
-		data = read_port(PORT_C);
+		data = read_port(PORT_C) | 0xc0;
+		break;
+
+	case REGISTER_TIMER_LOW:
+		data = m_counter & 0xff;
+		break;
+
+	case REGISTER_TIMER_HIGH:
+		data = (m_counter >> 8 & 0x3f) | get_timer_mode();
 		break;
 	}
 
@@ -456,6 +451,8 @@ void i8155_device::register_w(int offset, UINT8 data)
 		case COMMAND_TM_STOP:
 			// NOP if timer has not started, stop counting if the timer is running
 			if (LOG) logerror("8155 '%s' Timer Command: Stop\n", tag());
+			m_to = 1;
+			timer_output();
 			m_timer->enable(0);
 			break;
 
@@ -474,7 +471,7 @@ void i8155_device::register_w(int offset, UINT8 data)
 			else
 			{
 				// load mode and CNT length and start immediately after loading (if timer is not running)
-				m_counter = m_count_length;
+				m_counter = m_count_length & 0x3fff;
 				m_timer->adjust(attotime::zero, 0, attotime::from_hz(clock()));
 			}
 			break;
@@ -490,7 +487,7 @@ void i8155_device::register_w(int offset, UINT8 data)
 		break;
 
 	case REGISTER_PORT_C:
-		write_port(PORT_C, data);
+		write_port(PORT_C, data & 0x3f);
 		break;
 
 	case REGISTER_TIMER_LOW:
@@ -544,7 +541,7 @@ WRITE8_MEMBER( i8155_device::io_w )
 
 READ8_MEMBER( i8155_device::memory_r )
 {
-	return this->space()->read_byte(offset);
+	return this->space().read_byte(offset);
 }
 
 
@@ -554,7 +551,7 @@ READ8_MEMBER( i8155_device::memory_r )
 
 WRITE8_MEMBER( i8155_device::memory_w )
 {
-	this->space()->write_byte(offset, data);
+	this->space().write_byte(offset, data);
 }
 
 

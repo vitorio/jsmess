@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     emutempl.h
 
     Core templates for basic non-string types.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -59,11 +30,11 @@ class simple_list
 
 public:
 	// construction/destruction
-	simple_list(resource_pool &pool = global_resource_pool) :
-		m_head(NULL),
-		m_tail(NULL),
-		m_pool(pool),
-		m_count(0) { }
+	simple_list(resource_pool &pool = global_resource_pool())
+		: m_head(NULL),
+			m_tail(NULL),
+			m_pool(pool),
+			m_count(0) { }
 
 	virtual ~simple_list() { reset(); }
 
@@ -258,10 +229,10 @@ public:
 
 private:
 	// internal state
-	_ElementType *	m_head;			// head of the singly-linked list
-	_ElementType *	m_tail;			// tail of the singly-linked list
-	resource_pool &	m_pool;			// resource pool where objects are freed
-	int 			m_count;		// number of objects in the list
+	_ElementType *  m_head;         // head of the singly-linked list
+	_ElementType *  m_tail;         // tail of the singly-linked list
+	resource_pool & m_pool;         // resource pool where objects are freed
+	int             m_count;        // number of objects in the list
 };
 
 
@@ -274,10 +245,12 @@ template<class _ObjectType>
 class simple_list_wrapper
 {
 public:
+	template<class U> friend class simple_list;
+
 	// construction/destruction
 	simple_list_wrapper(_ObjectType *object)
 		: m_next(NULL),
-		  m_object(object) { }
+			m_object(object) { }
 
 	// operators
 	operator _ObjectType *() { return m_object; }
@@ -291,8 +264,8 @@ public:
 
 private:
 	// internal state
-	simple_list_wrapper *	m_next;
-	_ObjectType *			m_object;
+	simple_list_wrapper *   m_next;
+	_ObjectType *           m_object;
 };
 
 
@@ -307,7 +280,7 @@ class fixed_allocator
 
 public:
 	// construction/destruction
-	fixed_allocator(resource_pool &pool = global_resource_pool)
+	fixed_allocator(resource_pool &pool = global_resource_pool())
 		: m_freelist(pool) { }
 
 	// allocate a new item, either by recycling an old one, or by allocating a new one
@@ -328,7 +301,7 @@ public:
 
 private:
 	// internal state
-	simple_list<_ItemType>	m_freelist;		// list of free objects
+	simple_list<_ItemType>  m_freelist;     // list of free objects
 };
 
 
@@ -343,8 +316,8 @@ class tagged_list
 
 public:
 	// construction/destruction
-	tagged_list(resource_pool &pool = global_resource_pool) :
-		m_list(pool) { }
+	tagged_list(resource_pool &pool = global_resource_pool())
+		: m_list(pool) { }
 
 	// simple getters
 	resource_pool &pool() const { return m_list.pool(); }
@@ -423,9 +396,9 @@ public:
 
 private:
 	// internal state
-	simple_list<_ElementType>	m_list;
-	tagmap_t<_ElementType *>	m_map;
+	simple_list<_ElementType>   m_list;
+	tagmap_t<_ElementType *>    m_map;
 };
 
 
-#endif	/* __EMUTEMPL_H__ */
+#endif  /* __EMUTEMPL_H__ */

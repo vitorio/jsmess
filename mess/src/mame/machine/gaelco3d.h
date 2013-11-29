@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     Gaelco 3D serial hardware
@@ -15,18 +17,18 @@
 	MCFG_DEVICE_CONFIG(_intrf)
 
 /* external status bits */
-#define GAELCOSER_STATUS_READY			0x01
-#define GAELCOSER_STATUS_RTS			0x02
+#define GAELCOSER_STATUS_READY          0x01
+#define GAELCOSER_STATUS_RTS            0x02
 
 /* only RTS currently understood ! */
 //#define GAELCOSER_STATUS_DTR          0x04
 
-#define GAELCOSER_EXT_STATUS_MASK		0x03
+#define GAELCOSER_EXT_STATUS_MASK       0x03
 
 /* internal bits follow ... */
-#define GAELCOSER_STATUS_IRQ_ENABLE		0x10
-#define GAELCOSER_STATUS_RESET			0x20
-#define GAELCOSER_STATUS_SEND			0x40
+#define GAELCOSER_STATUS_IRQ_ENABLE     0x10
+#define GAELCOSER_STATUS_RESET          0x20
+#define GAELCOSER_STATUS_SEND           0x40
 
 
 
@@ -34,40 +36,89 @@
     DEVICE INTERFACE TYPE
 ***************************************************************************/
 
-typedef struct _gaelco_serial_interface gaelco_serial_interface;
-struct _gaelco_serial_interface
+struct gaelco_serial_interface
 {
-	devcb_write_line irq_func;
+	devcb_write_line m_irq;
 };
-
-
-/***************************************************************************
-    FUNCTION PROTOTYPES
-***************************************************************************/
-
-READ8_DEVICE_HANDLER( gaelco_serial_status_r);
-WRITE8_DEVICE_HANDLER( gaelco_serial_data_w);
-READ8_DEVICE_HANDLER( gaelco_serial_data_r);
-WRITE8_DEVICE_HANDLER( gaelco_serial_rts_w );
-/* Set to 1 during transmit, 0 for receive */
-WRITE8_DEVICE_HANDLER( gaelco_serial_tr_w);
-
-
-/* Big questions marks, related to serial i/o */
-
-/* Not used in surfplnt, but in radikalb
- * Set at beginning of transfer sub, cleared at end
- */
-WRITE8_DEVICE_HANDLER( gaelco_serial_unknown_w);
-
-
-/* only used in radikalb, set at beginning of receive isr, cleared at end */
-WRITE8_DEVICE_HANDLER( gaelco_serial_irq_enable );
-
 
 
 /* ----- device interface ----- */
 
-DECLARE_LEGACY_DEVICE(GAELCO_SERIAL, gaelco_serial);
+struct buf_t
+{
+	volatile UINT8 data;
+	volatile UINT8 stat;
+	volatile int cnt;
+	volatile int data_cnt;
+};
 
-//DEVICE_GET_INFO( gaelco_serial );
+struct shmem_t
+{
+	volatile INT32  lock;
+	buf_t               buf[2];
+};
+
+struct osd_shared_mem
+{
+	char *fn;
+	size_t size;
+	void *ptr;
+	int creator;
+};
+
+class gaelco_serial_device : public device_t,
+												public gaelco_serial_interface
+{
+public:
+	gaelco_serial_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	~gaelco_serial_device() {}
+
+	DECLARE_READ8_MEMBER( status_r);
+	DECLARE_WRITE8_MEMBER( data_w);
+	DECLARE_READ8_MEMBER( data_r);
+	DECLARE_WRITE8_MEMBER( rts_w );
+	/* Set to 1 during transmit, 0 for receive */
+	DECLARE_WRITE8_MEMBER( tr_w);
+
+
+	/* Big questions marks, related to serial i/o */
+
+	/* Not used in surfplnt, but in radikalb
+	 * Set at beginning of transfer sub, cleared at end
+	 */
+	DECLARE_WRITE8_MEMBER( unknown_w);
+
+
+	/* only used in radikalb, set at beginning of receive isr, cleared at end */
+	DECLARE_WRITE8_MEMBER( irq_enable );
+
+protected:
+	// device-level overrides
+	virtual void device_config_complete();
+	virtual void device_start();
+	virtual void device_stop();
+	virtual void device_reset();
+
+private:
+	// internal state
+	devcb_resolved_write_line m_irq_func;
+
+	UINT8 m_status;
+	int m_last_in_msg_cnt;
+	int m_slack_cnt;
+
+	emu_timer *m_sync_timer;
+
+	buf_t *m_in_ptr;
+	buf_t *m_out_ptr;
+	osd_shared_mem *m_os_shmem;
+	shmem_t *m_shmem;
+
+	TIMER_CALLBACK_MEMBER( set_status_cb );
+	TIMER_CALLBACK_MEMBER( link_cb );
+	void set_status(UINT8 mask, UINT8 set, int wait);
+	void process_in();
+	void sync_link();
+};
+
+extern const device_type GAELCO_SERIAL;

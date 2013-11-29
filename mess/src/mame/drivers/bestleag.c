@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Angelo Salese, David Haywood
 /*******************************************************************************************
 
 Best League (c) 1993
@@ -27,60 +29,77 @@ class bestleag_state : public driver_device
 {
 public:
 	bestleag_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_bgram(*this, "bgram"),
+		m_fgram(*this, "fgram"),
+		m_txram(*this, "txram"),
+		m_vregs(*this, "vregs"),
+		m_spriteram(*this, "spriteram"),
+		m_maincpu(*this, "maincpu"),
+		m_oki(*this, "oki") { }
 
-	UINT16 *m_txram;
-	UINT16 *m_bgram;
-	UINT16 *m_fgram;
-	UINT16 *m_vregs;
+	required_shared_ptr<UINT16> m_bgram;
+	required_shared_ptr<UINT16> m_fgram;
+	required_shared_ptr<UINT16> m_txram;
+	required_shared_ptr<UINT16> m_vregs;
+	required_shared_ptr<UINT16> m_spriteram;
 	tilemap_t *m_tx_tilemap;
 	tilemap_t *m_bg_tilemap;
 	tilemap_t *m_fg_tilemap;
-	UINT16 *m_spriteram;
-	size_t m_spriteram_size;
+	DECLARE_WRITE16_MEMBER(bestleag_txram_w);
+	DECLARE_WRITE16_MEMBER(bestleag_bgram_w);
+	DECLARE_WRITE16_MEMBER(bestleag_fgram_w);
+	DECLARE_WRITE16_MEMBER(oki_bank_w);
+	TILE_GET_INFO_MEMBER(get_tx_tile_info);
+	TILE_GET_INFO_MEMBER(get_bg_tile_info);
+	TILE_GET_INFO_MEMBER(get_fg_tile_info);
+	TILEMAP_MAPPER_MEMBER(bsb_bg_scan);
+	virtual void video_start();
+	UINT32 screen_update_bestleag(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	UINT32 screen_update_bestleaw(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
+	required_device<okim6295_device> m_oki;
 };
 
 
 /* Video Handling */
 
 
-static TILE_GET_INFO( get_tx_tile_info )
+TILE_GET_INFO_MEMBER(bestleag_state::get_tx_tile_info)
 {
-	bestleag_state *state = machine.driver_data<bestleag_state>();
-	int code = state->m_txram[tile_index];
+	int code = m_txram[tile_index];
 
-	SET_TILE_INFO(
+	SET_TILE_INFO_MEMBER(
 			0,
 			(code & 0x0fff)|0x8000,
 			(code & 0xf000) >> 12,
 			0);
 }
 
-static TILE_GET_INFO( get_bg_tile_info )
+TILE_GET_INFO_MEMBER(bestleag_state::get_bg_tile_info)
 {
-	bestleag_state *state = machine.driver_data<bestleag_state>();
-	int code = state->m_bgram[tile_index];
+	int code = m_bgram[tile_index];
 
-	SET_TILE_INFO(
+	SET_TILE_INFO_MEMBER(
 			1,
 			(code & 0x0fff),
 			(code & 0xf000) >> 12,
 			0);
 }
 
-static TILE_GET_INFO( get_fg_tile_info )
+TILE_GET_INFO_MEMBER(bestleag_state::get_fg_tile_info)
 {
-	bestleag_state *state = machine.driver_data<bestleag_state>();
-	int code = state->m_fgram[tile_index];
+	int code = m_fgram[tile_index];
 
-	SET_TILE_INFO(
+	SET_TILE_INFO_MEMBER(
 			1,
 			(code & 0x0fff)|0x1000,
 			((code & 0xf000) >> 12)|0x10,
 			0);
 }
 
-static TILEMAP_MAPPER( bsb_bg_scan )
+TILEMAP_MAPPER_MEMBER(bestleag_state::bsb_bg_scan)
 {
 	int offset;
 
@@ -91,15 +110,14 @@ static TILEMAP_MAPPER( bsb_bg_scan )
 	return offset;
 }
 
-static VIDEO_START(bestleag)
+void bestleag_state::video_start()
 {
-	bestleag_state *state = machine.driver_data<bestleag_state>();
-	state->m_tx_tilemap = tilemap_create(machine, get_tx_tile_info,tilemap_scan_cols,8,8,256, 32);
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info,bsb_bg_scan,16,16,128, 64);
-	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info,bsb_bg_scan,16,16,128, 64);
+	m_tx_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(bestleag_state::get_tx_tile_info),this),TILEMAP_SCAN_COLS,8,8,256, 32);
+	m_bg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(bestleag_state::get_bg_tile_info),this),tilemap_mapper_delegate(FUNC(bestleag_state::bsb_bg_scan),this),16,16,128, 64);
+	m_fg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(bestleag_state::get_fg_tile_info),this),tilemap_mapper_delegate(FUNC(bestleag_state::bsb_bg_scan),this),16,16,128, 64);
 
-	tilemap_set_transparent_pen(state->m_tx_tilemap,15);
-	tilemap_set_transparent_pen(state->m_fg_tilemap,15);
+	m_tx_tilemap->set_transparent_pen(15);
+	m_fg_tilemap->set_transparent_pen(15);
 }
 
 /*
@@ -107,20 +125,19 @@ Note: sprite chip is different than the other Big Striker sets and they
       include several similiarities with other Playmark games (including
       the sprite end code and the data being offset (i.e. spriteram starting from 0x16/2))
 */
-static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
+void bestleag_state::draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	bestleag_state *state = machine.driver_data<bestleag_state>();
-	UINT16 *spriteram16 = state->m_spriteram;
+	UINT16 *spriteram16 = m_spriteram;
 
 	/*
 
-    Sprites are the same to sslam, but using 16x16 sprites instead of 8x8
+	Sprites are the same to sslam, but using 16x16 sprites instead of 8x8
 
-    */
+	*/
 
 	int offs;
 
-	for (offs = 0x16/2;offs < state->m_spriteram_size/2;offs += 4)
+	for (offs = 0x16/2;offs < m_spriteram.bytes()/2;offs += 4)
 	{
 		int code = spriteram16[offs+3] & 0xfff;
 		int color = (spriteram16[offs+2] & 0xf000) >> 12;
@@ -133,29 +150,29 @@ static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const recta
 			return;
 
 		/* it can change sprites color mask like the original set */
-		if(state->m_vregs[0x00/2] & 0x1000)
+		if(m_vregs[0x00/2] & 0x1000)
 			color &= 7;
 
-		drawgfx_transpen(bitmap,cliprect,machine.gfx[2],
+		drawgfx_transpen(bitmap,cliprect,machine().gfx[2],
 					code,
 					color,
 					flipx, 0,
 					flipx ? (sx+16) : (sx),sy,15);
 
-		drawgfx_transpen(bitmap,cliprect,machine.gfx[2],
+		drawgfx_transpen(bitmap,cliprect,machine().gfx[2],
 					code+1,
 					color,
 					flipx, 0,
 					flipx ? (sx) : (sx+16),sy,15);
 
 		/* wraparound x */
-		drawgfx_transpen(bitmap,cliprect,machine.gfx[2],
+		drawgfx_transpen(bitmap,cliprect,machine().gfx[2],
 					code,
 					color,
 					flipx, 0,
 					flipx ? (sx+16 - 512) : (sx - 512),sy,15);
 
-		drawgfx_transpen(bitmap,cliprect,machine.gfx[2],
+		drawgfx_transpen(bitmap,cliprect,machine().gfx[2],
 					code+1,
 					color,
 					flipx, 0,
@@ -163,86 +180,80 @@ static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const recta
 	}
 }
 
-static SCREEN_UPDATE(bestleag)
+UINT32 bestleag_state::screen_update_bestleag(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	bestleag_state *state = screen->machine().driver_data<bestleag_state>();
-	tilemap_set_scrollx(state->m_bg_tilemap,0,(state->m_vregs[0x00/2] & 0xfff) + (state->m_vregs[0x08/2] & 0x7) - 3);
-	tilemap_set_scrolly(state->m_bg_tilemap,0,state->m_vregs[0x02/2]);
-	tilemap_set_scrollx(state->m_tx_tilemap,0,state->m_vregs[0x04/2]);
-	tilemap_set_scrolly(state->m_tx_tilemap,0,state->m_vregs[0x06/2]);
-	tilemap_set_scrollx(state->m_fg_tilemap,0,state->m_vregs[0x08/2] & 0xfff8);
-	tilemap_set_scrolly(state->m_fg_tilemap,0,state->m_vregs[0x0a/2]);
+	m_bg_tilemap->set_scrollx(0,(m_vregs[0x00/2] & 0xfff) + (m_vregs[0x08/2] & 0x7) - 3);
+	m_bg_tilemap->set_scrolly(0,m_vregs[0x02/2]);
+	m_tx_tilemap->set_scrollx(0,m_vregs[0x04/2]);
+	m_tx_tilemap->set_scrolly(0,m_vregs[0x06/2]);
+	m_fg_tilemap->set_scrollx(0,m_vregs[0x08/2] & 0xfff8);
+	m_fg_tilemap->set_scrolly(0,m_vregs[0x0a/2]);
 
-	tilemap_draw(bitmap,cliprect,state->m_bg_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,state->m_fg_tilemap,0,0);
-	draw_sprites(screen->machine(),bitmap,cliprect);
-	tilemap_draw(bitmap,cliprect,state->m_tx_tilemap,0,0);
+	m_bg_tilemap->draw(screen, bitmap, cliprect, 0,0);
+	m_fg_tilemap->draw(screen, bitmap, cliprect, 0,0);
+	draw_sprites(bitmap,cliprect);
+	m_tx_tilemap->draw(screen, bitmap, cliprect, 0,0);
 	return 0;
 }
 
-static SCREEN_UPDATE(bestleaw)
+UINT32 bestleag_state::screen_update_bestleaw(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	bestleag_state *state = screen->machine().driver_data<bestleag_state>();
-	tilemap_set_scrollx(state->m_bg_tilemap,0,state->m_vregs[0x08/2]);
-	tilemap_set_scrolly(state->m_bg_tilemap,0,state->m_vregs[0x0a/2]);
-	tilemap_set_scrollx(state->m_tx_tilemap,0,state->m_vregs[0x00/2]);
-	tilemap_set_scrolly(state->m_tx_tilemap,0,state->m_vregs[0x02/2]);
-	tilemap_set_scrollx(state->m_fg_tilemap,0,state->m_vregs[0x04/2]);
-	tilemap_set_scrolly(state->m_fg_tilemap,0,state->m_vregs[0x06/2]);
+	m_bg_tilemap->set_scrollx(0,m_vregs[0x08/2]);
+	m_bg_tilemap->set_scrolly(0,m_vregs[0x0a/2]);
+	m_tx_tilemap->set_scrollx(0,m_vregs[0x00/2]);
+	m_tx_tilemap->set_scrolly(0,m_vregs[0x02/2]);
+	m_fg_tilemap->set_scrollx(0,m_vregs[0x04/2]);
+	m_fg_tilemap->set_scrolly(0,m_vregs[0x06/2]);
 
-	tilemap_draw(bitmap,cliprect,state->m_bg_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,state->m_fg_tilemap,0,0);
-	draw_sprites(screen->machine(),bitmap,cliprect);
-	tilemap_draw(bitmap,cliprect,state->m_tx_tilemap,0,0);
+	m_bg_tilemap->draw(screen, bitmap, cliprect, 0,0);
+	m_fg_tilemap->draw(screen, bitmap, cliprect, 0,0);
+	draw_sprites(bitmap,cliprect);
+	m_tx_tilemap->draw(screen, bitmap, cliprect, 0,0);
 	return 0;
 }
 
-static WRITE16_HANDLER( bestleag_txram_w )
+WRITE16_MEMBER(bestleag_state::bestleag_txram_w)
 {
-	bestleag_state *state = space->machine().driver_data<bestleag_state>();
-	state->m_txram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_tx_tilemap,offset);
+	m_txram[offset] = data;
+	m_tx_tilemap->mark_tile_dirty(offset);
 }
 
-static WRITE16_HANDLER( bestleag_bgram_w )
+WRITE16_MEMBER(bestleag_state::bestleag_bgram_w)
 {
-	bestleag_state *state = space->machine().driver_data<bestleag_state>();
-	state->m_bgram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_bg_tilemap,offset);
+	m_bgram[offset] = data;
+	m_bg_tilemap->mark_tile_dirty(offset);
 }
 
-static WRITE16_HANDLER( bestleag_fgram_w )
+WRITE16_MEMBER(bestleag_state::bestleag_fgram_w)
 {
-	bestleag_state *state = space->machine().driver_data<bestleag_state>();
-	state->m_fgram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_fg_tilemap,offset);
+	m_fgram[offset] = data;
+	m_fg_tilemap->mark_tile_dirty(offset);
 }
 
-static WRITE16_DEVICE_HANDLER( oki_bank_w )
+WRITE16_MEMBER(bestleag_state::oki_bank_w)
 {
-	okim6295_device *oki = downcast<okim6295_device *>(device);
-	oki->set_bank_base(0x40000 * ((data & 3) - 1));
+	m_oki->set_bank_base(0x40000 * ((data & 3) - 1));
 }
 
 
 /* Memory Map */
 
-static ADDRESS_MAP_START( bestleag_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( bestleag_map, AS_PROGRAM, 16, bestleag_state )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x0d2000, 0x0d3fff) AM_NOP // left over from the original game (only read / written in memory test)
-	AM_RANGE(0x0e0000, 0x0e3fff) AM_RAM_WRITE(bestleag_bgram_w) AM_BASE_MEMBER(bestleag_state, m_bgram)
-	AM_RANGE(0x0e8000, 0x0ebfff) AM_RAM_WRITE(bestleag_fgram_w) AM_BASE_MEMBER(bestleag_state, m_fgram)
-	AM_RANGE(0x0f0000, 0x0f3fff) AM_RAM_WRITE(bestleag_txram_w) AM_BASE_MEMBER(bestleag_state, m_txram)
-	AM_RANGE(0x0f8000, 0x0f800b) AM_RAM AM_BASE_MEMBER(bestleag_state, m_vregs)
-	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x200000, 0x200fff) AM_RAM AM_BASE_SIZE_MEMBER(bestleag_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x0e0000, 0x0e3fff) AM_RAM_WRITE(bestleag_bgram_w) AM_SHARE("bgram")
+	AM_RANGE(0x0e8000, 0x0ebfff) AM_RAM_WRITE(bestleag_fgram_w) AM_SHARE("fgram")
+	AM_RANGE(0x0f0000, 0x0f3fff) AM_RAM_WRITE(bestleag_txram_w) AM_SHARE("txram")
+	AM_RANGE(0x0f8000, 0x0f800b) AM_RAM AM_SHARE("vregs")
+	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBRGBx_word_w) AM_SHARE("paletteram")
+	AM_RANGE(0x200000, 0x200fff) AM_RAM AM_SHARE("spriteram")
 	AM_RANGE(0x300010, 0x300011) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x300012, 0x300013) AM_READ_PORT("P1")
 	AM_RANGE(0x300014, 0x300015) AM_READ_PORT("P2")
 	AM_RANGE(0x300016, 0x300017) AM_READ_PORT("DSWA")
 	AM_RANGE(0x300018, 0x300019) AM_READ_PORT("DSWB")
-	AM_RANGE(0x30001c, 0x30001d) AM_DEVWRITE("oki", oki_bank_w)
-	AM_RANGE(0x30001e, 0x30001f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x30001c, 0x30001d) AM_WRITE(oki_bank_w)
+	AM_RANGE(0x30001e, 0x30001f) AM_DEVREADWRITE8("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x304000, 0x304001) AM_WRITENOP
 	AM_RANGE(0xfe0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
@@ -286,7 +297,7 @@ static INPUT_PORTS_START( bestleag )
 	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(    0x0a, DEF_STR( 1C_6C ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )	// also set "Coin B" to "Free Play"
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )    // also set "Coin B" to "Free Play"
 	/* 0x01 to 0x05 gives 2C_3C */
 	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW.A:5,6,7,8")
 	PORT_DIPSETTING(    0x70, DEF_STR( 4C_1C ) )
@@ -299,7 +310,7 @@ static INPUT_PORTS_START( bestleag )
 	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0xb0, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(    0xa0, DEF_STR( 1C_6C ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )	// also set "Coin A" to "Free Play"
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )    // also set "Coin A" to "Free Play"
 	/* 0x10 to 0x50 gives 2C_3C */
 
 	PORT_START("DSWB")
@@ -312,10 +323,10 @@ static INPUT_PORTS_START( bestleag )
 	PORT_DIPSETTING(    0x04, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
 	PORT_DIPNAME( 0x18, 0x18, "Timer Speed" ) PORT_DIPLOCATION("SW.B:4,5")
-	PORT_DIPSETTING(    0x08, "Slow" )				// 65
-	PORT_DIPSETTING(    0x18, DEF_STR( Normal ) )	// 50
-	PORT_DIPSETTING(    0x10, "Fast" )				// 35
-	PORT_DIPSETTING(    0x00, "Fastest" )			// 25
+	PORT_DIPSETTING(    0x08, "Slow" )              // 65
+	PORT_DIPSETTING(    0x18, DEF_STR( Normal ) )   // 50
+	PORT_DIPSETTING(    0x10, "Fast" )              // 35
+	PORT_DIPSETTING(    0x00, "Fastest" )           // 25
 	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW.B:6")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
@@ -358,20 +369,18 @@ GFXDECODE_END
 static MACHINE_CONFIG_START( bestleag, bestleag_state )
 	MCFG_CPU_ADD("maincpu", M68000, 12000000)
 	MCFG_CPU_PROGRAM_MAP(bestleag_map)
-	MCFG_CPU_VBLANK_INT("screen", irq6_line_hold)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", bestleag_state,  irq6_line_hold)
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE(bestleag)
+	MCFG_SCREEN_UPDATE_DRIVER(bestleag_state, screen_update_bestleag)
 
 	MCFG_GFXDECODE(bestleag)
 	MCFG_PALETTE_LENGTH(0x800)
 
-	MCFG_VIDEO_START(bestleag)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -382,7 +391,7 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( bestleaw, bestleag )
 	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_UPDATE(bestleaw)
+	MCFG_SCREEN_UPDATE_DRIVER(bestleag_state, screen_update_bestleaw)
 MACHINE_CONFIG_END
 
 
@@ -390,14 +399,14 @@ MACHINE_CONFIG_END
 
 ROM_START( bestleag )
 	ROM_REGION( 0x40000, "maincpu", 0 ) /* 68000 Code */
-	ROM_LOAD16_BYTE( "2.bin", 0x00000, 0x20000, CRC(d2be3431) SHA1(37815c80b9fbc246fcdaa202d40fb40b10f55b45) )
-	ROM_LOAD16_BYTE( "3.bin", 0x00001, 0x20000, CRC(f29c613a) SHA1(c66fa53f38bfa77ce1b894db74f94ce573c62412) )
+	ROM_LOAD16_BYTE( "2(__bestleag).bin", 0x00000, 0x20000, CRC(d2be3431) SHA1(37815c80b9fbc246fcdaa202d40fb40b10f55b45) )
+	ROM_LOAD16_BYTE( "3(__bestleag).bin", 0x00001, 0x20000, CRC(f29c613a) SHA1(c66fa53f38bfa77ce1b894db74f94ce573c62412) )
 
 	ROM_REGION( 0x200000, "gfx1", 0 ) /* 16x16x4 BG and 8x8x4 FG Tiles */
-	ROM_LOAD( "4.bin", 0x000000, 0x80000, CRC(47f7c9bc) SHA1(f0e5ef971f3bd6972316c248175436055cb5789d) )
-	ROM_LOAD( "5.bin", 0x080000, 0x80000, CRC(6a6f499d) SHA1(cacdccc64d09fa7289221cdea4654e6c2d811647) )
-	ROM_LOAD( "6.bin", 0x100000, 0x80000, CRC(0c3d2609) SHA1(6e1f1c5b010ef0dfa3f7b4ff9a832e758fbb97d5) )
-	ROM_LOAD( "7.bin", 0x180000, 0x80000, CRC(dcece871) SHA1(7db919ab7f51748b77b3bd35228bbf71b951349f) )
+	ROM_LOAD( "4(__bestleag).bin", 0x000000, 0x80000, CRC(47f7c9bc) SHA1(f0e5ef971f3bd6972316c248175436055cb5789d) )
+	ROM_LOAD( "5(__bestleag).bin", 0x080000, 0x80000, CRC(6a6f499d) SHA1(cacdccc64d09fa7289221cdea4654e6c2d811647) )
+	ROM_LOAD( "6(__bestleag).bin", 0x100000, 0x80000, CRC(0c3d2609) SHA1(6e1f1c5b010ef0dfa3f7b4ff9a832e758fbb97d5) )
+	ROM_LOAD( "7(__bestleag).bin", 0x180000, 0x80000, CRC(dcece871) SHA1(7db919ab7f51748b77b3bd35228bbf71b951349f) )
 
 	ROM_REGION( 0x080000, "gfx2", 0 ) /* 16x16x4 Sprites */
 	ROM_LOAD( "27_27c010.u86",  0x000000, 0x20000, CRC(a463422a) SHA1(a3b6efd1c57b0a3b0ce4ce734a9a9b79540c4136) )
@@ -455,6 +464,5 @@ ROM_END
 
 /* GAME drivers */
 
-GAME( 1993, bestleag, bigstrik, bestleag, bestleag, 0, ROT0, "bootleg", "Best League (bootleg of Big Striker, Italian Serie A)", 0 )
-GAME( 1993, bestleaw, bigstrik, bestleaw, bestleag, 0, ROT0, "bootleg", "Best League (bootleg of Big Striker, World Cup)", 0 )
-
+GAME( 1993, bestleag, bigstrik, bestleag, bestleag, driver_device, 0, ROT0, "bootleg", "Best League (bootleg of Big Striker, Italian Serie A)", GAME_NO_COCKTAIL )
+GAME( 1993, bestleaw, bigstrik, bestleaw, bestleag, driver_device, 0, ROT0, "bootleg", "Best League (bootleg of Big Striker, World Cup)", GAME_NO_COCKTAIL )

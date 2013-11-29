@@ -19,11 +19,17 @@ class orbit_state : public driver_device
 {
 public:
 	orbit_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_playfield_ram(*this, "playfield_ram"),
+		m_sprite_ram(*this, "sprite_ram"),
+		m_discrete(*this, "discrete"),
+		m_maincpu(*this, "maincpu"){ }
 
 	/* memory pointers */
-	UINT8 *    m_playfield_ram;
-	UINT8 *    m_sprite_ram;
+	required_shared_ptr<UINT8> m_playfield_ram;
+	required_shared_ptr<UINT8> m_sprite_ram;
+
+	required_device<discrete_device> m_discrete;
 
 	/* video-related */
 	tilemap_t  *m_bg_tilemap;
@@ -33,23 +39,24 @@ public:
 	UINT8      m_misc_flags;
 
 	/* devices */
-	device_t *m_maincpu;
-	device_t *m_discrete;
+	required_device<cpu_device> m_maincpu;
+	DECLARE_WRITE8_MEMBER(orbit_misc_w);
+	DECLARE_WRITE8_MEMBER(orbit_playfield_w);
+	TILE_GET_INFO_MEMBER(get_tile_info);
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void video_start();
+	UINT32 screen_update_orbit(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	INTERRUPT_GEN_MEMBER(orbit_interrupt);
+	TIMER_CALLBACK_MEMBER(irq_off);
+	TIMER_DEVICE_CALLBACK_MEMBER(nmi_32v);
+	DECLARE_WRITE8_MEMBER(orbit_note_w);
+	DECLARE_WRITE8_MEMBER(orbit_note_amp_w);
+	DECLARE_WRITE8_MEMBER(orbit_noise_amp_w);
+	DECLARE_WRITE8_MEMBER(orbit_noise_rst_w);
+	void draw_sprites( bitmap_ind16 &bitmap, const rectangle &cliprect );
+	void update_misc_flags(address_space &space, UINT8 val);
 };
-
-
 /*----------- defined in audio/orbit.c -----------*/
 
-WRITE8_DEVICE_HANDLER( orbit_note_w );
-WRITE8_DEVICE_HANDLER( orbit_note_amp_w );
-WRITE8_DEVICE_HANDLER( orbit_noise_amp_w );
-WRITE8_DEVICE_HANDLER( orbit_noise_rst_w );
-
 DISCRETE_SOUND_EXTERN( orbit );
-
-/*----------- defined in video/orbit.c -----------*/
-
-VIDEO_START( orbit );
-SCREEN_UPDATE( orbit );
-
-WRITE8_HANDLER( orbit_playfield_w );

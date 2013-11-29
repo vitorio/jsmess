@@ -3,22 +3,52 @@
 #ifndef __3812INTF_H__
 #define __3812INTF_H__
 
-#include "devlegcy.h"
+#include "emu.h"
 
-typedef struct _ym3812_interface ym3812_interface;
-struct _ym3812_interface
+#define MCFG_YM3812_IRQ_HANDLER(_devcb) \
+	devcb = &ym3812_device::set_irq_handler(*device, DEVCB2_##_devcb);
+
+class ym3812_device : public device_t,
+									public device_sound_interface
 {
-	void (*handler)(device_t *device, int linestate);
+public:
+	ym3812_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+
+	// static configuration helpers
+	template<class _Object> static devcb2_base &set_irq_handler(device_t &device, _Object object) { return downcast<ym3812_device &>(device).m_irq_handler.set_callback(object); }
+
+	DECLARE_READ8_MEMBER( read );
+	DECLARE_WRITE8_MEMBER( write );
+
+	DECLARE_READ8_MEMBER( status_port_r );
+	DECLARE_READ8_MEMBER( read_port_r );
+	DECLARE_WRITE8_MEMBER( control_port_w );
+	DECLARE_WRITE8_MEMBER( write_port_w );
+
+	void _IRQHandler(int irq);
+	void _timer_handler(int c, attotime period);
+	void _ym3812_update_request();
+
+protected:
+	// device-level overrides
+	virtual void device_config_complete();
+	virtual void device_start();
+	virtual void device_stop();
+	virtual void device_reset();
+
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
+
+	// sound stream update overrides
+	virtual void sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples);
+
+private:
+	sound_stream *  m_stream;
+	emu_timer *     m_timer[2];
+	void *          m_chip;
+	devcb2_write_line m_irq_handler;
 };
 
-READ8_DEVICE_HANDLER( ym3812_r );
-WRITE8_DEVICE_HANDLER( ym3812_w );
+extern const device_type YM3812;
 
-READ8_DEVICE_HANDLER( ym3812_status_port_r );
-READ8_DEVICE_HANDLER( ym3812_read_port_r );
-WRITE8_DEVICE_HANDLER( ym3812_control_port_w );
-WRITE8_DEVICE_HANDLER( ym3812_write_port_w );
-
-DECLARE_LEGACY_SOUND_DEVICE(YM3812, ym3812);
 
 #endif /* __3812INTF_H__ */

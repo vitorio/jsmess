@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:R. Belmont
 /*****************************************************************************
  *
  *   sh2common.c
@@ -13,48 +15,58 @@
 
 #define VERBOSE 0
 
-#define LOG(x)	do { if (VERBOSE) logerror x; } while (0)
+#define LOG(x)  do { if (VERBOSE) logerror x; } while (0)
 
-#ifdef USE_SH2DRC
-#define GET_SH2(dev) *(sh2_state **)downcast<legacy_cpu_device *>(dev)->token()
-#else
-#define GET_SH2(dev) (sh2_state *)downcast<legacy_cpu_device *>(dev)->token()
-#endif
-
+INLINE sh2_state *GET_SH2(device_t *dev)
+{
+	if (dev->machine().options().drc()) {
+	return *(sh2_state **)downcast<legacy_cpu_device *>(dev)->token();
+	} else {
+	return (sh2_state *)downcast<legacy_cpu_device *>(dev)->token();
+	}
+}
 
 static const int div_tab[4] = { 3, 5, 7, 0 };
 
 INLINE UINT32 RL(sh2_state *sh2, offs_t A)
 {
-	if (A >= 0xe0000000)
-		return sh2_internal_r(sh2->internal, (A & 0x1fc)>>2, 0xffffffff);
+	if (A >= 0xe0000000) /* I/O */
+		return sh2_internal_r(*sh2->internal, (A & 0x1fc)>>2, 0xffffffff);
 
-	if (A >= 0xc0000000)
+	if (A >= 0xc0000000) /* Cache Data Array */
 		return sh2->program->read_dword(A);
 
-	if (A >= 0x40000000)
+	/*  0x60000000 Cache Address Data Array */
+
+	if (A >= 0x40000000) /* Cache Associative Purge Area */
 		return 0xa5a5a5a5;
 
-  return sh2->program->read_dword(A & AM);
+	/* 0x20000000 no Cache */
+	/* 0x00000000 read thru Cache if CE bit is 1 */
+	return sh2->program->read_dword(A & AM);
 }
 
 INLINE void WL(sh2_state *sh2, offs_t A, UINT32 V)
 {
-	if (A >= 0xe0000000)
+	if (A >= 0xe0000000) /* I/O */
 	{
-		sh2_internal_w(sh2->internal, (A & 0x1fc)>>2, V, 0xffffffff);
+		sh2_internal_w(*sh2->internal, (A & 0x1fc)>>2, V, 0xffffffff);
 		return;
 	}
 
-	if (A >= 0xc0000000)
+	if (A >= 0xc0000000) /* Cache Data Array */
 	{
 		sh2->program->write_dword(A,V);
 		return;
 	}
 
-	if (A >= 0x40000000)
+	/*  0x60000000 Cache Address Data Array */
+
+	if (A >= 0x40000000) /* Cache Associative Purge Area */
 		return;
 
+	/* 0x20000000 no Cache */
+	/* 0x00000000 read thru Cache if CE bit is 1 */
 	sh2->program->write_dword(A & AM,V);
 }
 
@@ -62,10 +74,15 @@ static void sh2_timer_resync(sh2_state *sh2)
 {
 	int divider = div_tab[(sh2->m[5] >> 8) & 3];
 	UINT64 cur_time = sh2->device->total_cycles();
+	UINT64 add = (cur_time - sh2->frc_base) >> divider;
 
-	if(divider)
-		sh2->frc += (cur_time - sh2->frc_base) >> divider;
-	sh2->frc_base = cur_time;
+	if (add > 0)
+	{
+		if(divider)
+			sh2->frc += add;
+
+		sh2->frc_base = cur_time;
+	}
 }
 
 static void sh2_timer_activate(sh2_state *sh2)
@@ -186,8 +203,6 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 
 	if (sh2->active_dma_count[dma] > 0)
 	{
-
-
 		// process current DMA
 		switch(sh2->active_dma_size[dma])
 		{
@@ -220,7 +235,7 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 				}
 
 				#ifdef USE_TIMER_FOR_DMA
-				 //schedule next DMA callback
+					//schedule next DMA callback
 				sh2->dma_current_active_timer[dma]->adjust(sh2->device->cycles_to_attotime(2), dma);
 				#endif
 
@@ -268,12 +283,12 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 				}
 
 				#ifdef USE_TIMER_FOR_DMA
-				 //schedule next DMA callback
+					//schedule next DMA callback
 				sh2->dma_current_active_timer[dma]->adjust(sh2->device->cycles_to_attotime(2), dma);
 				#endif
 
 				// check: should this really be using read_word_32 / write_word_32?
-				dmadata	= sh2->program->read_word(tempsrc);
+				dmadata = sh2->program->read_word(tempsrc);
 				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(sh2->device, tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
 				sh2->program->write_word(tempdst, dmadata);
 
@@ -315,11 +330,11 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 				}
 
 				#ifdef USE_TIMER_FOR_DMA
-				 //schedule next DMA callback
+					//schedule next DMA callback
 				sh2->dma_current_active_timer[dma]->adjust(sh2->device->cycles_to_attotime(2), dma);
 				#endif
 
-				dmadata	= sh2->program->read_dword(tempsrc);
+				dmadata = sh2->program->read_dword(tempsrc);
 				if (sh2->dma_callback_kludge) dmadata = sh2->dma_callback_kludge(sh2->device, tempsrc, tempdst, dmadata, sh2->active_dma_size[dma]);
 				sh2->program->write_dword(tempdst, dmadata);
 
@@ -355,12 +370,12 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 					{
 						//printf("dma stalled\n");
 						sh2->dma_timer_active[dma]=2;// mark as stalled
-						fatalerror("SH2 dma_callback_fifo_data_available == 0 in unsupported mode");
+						fatalerror("SH2 dma_callback_fifo_data_available == 0 in unsupported mode\n");
 					}
 				}
 
 				#ifdef USE_TIMER_FOR_DMA
-				 //schedule next DMA callback
+					//schedule next DMA callback
 				sh2->dma_current_active_timer[dma]->adjust(sh2->device->cycles_to_attotime(2), dma);
 				#endif
 
@@ -407,6 +422,7 @@ void sh2_do_dma(sh2_state *sh2, int dma)
 		LOG(("SH2.%s: DMA %d complete\n", sh2->device->tag(), dma));
 		sh2->m[0x63+4*dma] |= 2;
 		sh2->dma_timer_active[dma] = 0;
+		sh2->dma_irq[dma] |= 1;
 		sh2_recalc_irq(sh2);
 
 	}
@@ -427,7 +443,6 @@ static void sh2_dmac_check(sh2_state *sh2, int dma)
 	{
 		if(!sh2->dma_timer_active[dma] && !(sh2->m[0x63+4*dma] & 2))
 		{
-
 			sh2->active_dma_incd[dma] = (sh2->m[0x63+4*dma] >> 14) & 3;
 			sh2->active_dma_incs[dma] = (sh2->m[0x63+4*dma] >> 12) & 3;
 			sh2->active_dma_size[dma] = (sh2->m[0x63+4*dma] >> 10) & 3;
@@ -503,12 +518,12 @@ static void sh2_dmac_check(sh2_state *sh2, int dma)
 
 WRITE32_HANDLER( sh2_internal_w )
 {
-	sh2_state *sh2 = GET_SH2(&space->device());
+	sh2_state *sh2 = GET_SH2(&space.device());
 	UINT32 old;
 
-#ifdef USE_SH2DRC
-	offset &= 0x7f;
-#endif
+	if (sh2->isdrc)
+		offset &= 0x7f;
+
 
 	old = sh2->m[offset];
 	COMBINE_DATA(sh2->m+offset);
@@ -517,14 +532,16 @@ WRITE32_HANDLER( sh2_internal_w )
 	//      logerror("sh2_internal_w:  Write %08x (%x), %08x @ %08x\n", 0xfffffe00+offset*4, offset, data, mem_mask);
 
 //    if(offset != 0x20)
-//        printf("sh2_internal_w:  Write %08x (%x), %08x @ %08x (PC %x)\n", 0xfffffe00+offset*4, offset, data, mem_mask, cpu_get_pc(&space->device()));
+//        printf("sh2_internal_w:  Write %08x (%x), %08x @ %08x (PC %x)\n", 0xfffffe00+offset*4, offset, data, mem_mask, space.device().safe_pc());
 
 	switch( offset )
 	{
 		// Timers
 	case 0x04: // TIER, FTCSR, FRC
 		if((mem_mask & 0x00ffffff) != 0)
+		{
 			sh2_timer_resync(sh2);
+		}
 //      printf("SH2.%s: TIER write %04x @ %04x\n", sh2->device->tag(), data >> 16, mem_mask>>16);
 		sh2->m[4] = (sh2->m[4] & ~(ICF|OCFA|OCFB|OVF)) | (old & sh2->m[4] & (ICF|OCFA|OCFB|OVF));
 		COMBINE_DATA(&sh2->frc);
@@ -558,10 +575,51 @@ WRITE32_HANDLER( sh2_internal_w )
 
 		// Watchdog
 	case 0x20: // WTCNT, RSTCSR
+		if((sh2->m[0x20] & 0xff000000) == 0x5a000000)
+			sh2->wtcnt = (sh2->m[0x20] >> 16) & 0xff;
+
+		if((sh2->m[0x20] & 0xff000000) == 0xa5000000)
+		{
+			/*
+			WTCSR
+			x--- ---- Overflow in IT mode
+			-x-- ---- Timer mode (0: IT 1: watchdog)
+			--x- ---- Timer enable
+			---1 1---
+			---- -xxx Clock select
+			*/
+
+			sh2->wtcsr = (sh2->m[0x20] >> 16) & 0xff;
+		}
+
+		if((sh2->m[0x20] & 0x0000ff00) == 0x00005a00)
+		{
+			// -x-- ---- RSTE (1: resets wtcnt when overflows 0: no reset)
+			// --x- ---- RSTS (0: power-on reset 1: Manual reset)
+			// ...
+		}
+
+		if((sh2->m[0x20] & 0x0000ff00) == 0x0000a500)
+		{
+			// clear WOVF
+			// ...
+		}
+
+
+
 		break;
 
 		// Standby and cache
 	case 0x24: // SBYCR, CCR
+		/*
+		    CCR
+		    xx-- ---- ---- ---- Way 0/1
+		    ---x ---- ---- ---- Cache Purge (CP)
+		    ---- x--- ---- ---- Two-Way Mode (TW)
+		    ---- -x-- ---- ---- Data Replacement Disable (OD)
+		    ---- --x- ---- ---- Instruction Replacement Disable (ID)
+		    ---- ---x ---- ---- Cache Enable (CE)
+		*/
 		break;
 
 		// Interrupt vectors cont.
@@ -681,18 +739,22 @@ WRITE32_HANDLER( sh2_internal_w )
 
 READ32_HANDLER( sh2_internal_r )
 {
-	sh2_state *sh2 = GET_SH2(&space->device());
+	sh2_state *sh2 = GET_SH2(&space.device());
 
-#ifdef USE_SH2DRC
+	if (sh2->isdrc)
 	offset &= 0x7f;
-#endif
-	//  logerror("sh2_internal_r:  Read %08x (%x) @ %08x\n", 0xfffffe00+offset*4, offset, mem_mask);
+
+//  logerror("sh2_internal_r:  Read %08x (%x) @ %08x\n", 0xfffffe00+offset*4, offset, mem_mask);
 	switch( offset )
 	{
 	case 0x04: // TIER, FTCSR, FRC
 		if ( mem_mask == 0x00ff0000 )
+		{
 			if ( sh2->ftcsr_read_callback != NULL )
+			{
 				sh2->ftcsr_read_callback( (sh2->m[4] & 0xffff0000) | sh2->frc );
+			}
+		}
 		sh2_timer_resync(sh2);
 		return (sh2->m[4] & 0xffff0000) | sh2->frc;
 	case 0x05: // OCRx, TCR, TOCR
@@ -702,6 +764,12 @@ READ32_HANDLER( sh2_internal_r )
 			return (sh2->ocra << 16) | (sh2->m[5] & 0xffff);
 	case 0x06: // ICR
 		return sh2->icr << 16;
+
+	case 0x20:
+		return (((sh2->wtcsr | 0x18) & 0xff) << 24)  | ((sh2->wtcnt & 0xff) << 16);
+
+	case 0x24: // SBYCR, CCR
+		return sh2->m[0x24] & ~0x3000; /* bit 4-5 of CCR are always zero */
 
 	case 0x38: // ICR, IPRA
 		return (sh2->m[0x38] & 0x7fffffff) | (sh2->nmi_line_state == ASSERT_LINE ? 0 : 0x80000000);
@@ -777,9 +845,8 @@ void sh2_set_irq_line(sh2_state *sh2, int irqline, int state)
 
 			sh2_exception(sh2, "Set IRQ line", 16);
 
-			#ifdef USE_SH2DRC
-			sh2->pending_nmi = 1;
-			#endif
+			if (sh2->isdrc)
+				sh2->pending_nmi = 1;
 		}
 	}
 	else
@@ -797,14 +864,15 @@ void sh2_set_irq_line(sh2_state *sh2, int irqline, int state)
 		{
 			LOG(("SH-2 '%s' assert irq #%d\n", sh2->device->tag(), irqline));
 			sh2->pending_irq |= 1 << irqline;
-			#ifdef USE_SH2DRC
+			if (sh2->isdrc)
+			{
 			sh2->test_irq = 1;
-			#else
+			} else {
 			if(sh2->delay)
 				sh2->test_irq = 1;
 			else
 				CHECK_PENDING_IRQ("sh2_set_irq_line");
-			#endif
+			}
 		}
 	}
 }
@@ -832,19 +900,20 @@ void sh2_recalc_irq(sh2_state *sh2)
 	}
 
 	// DMA irqs
-	if((sh2->m[0x63] & 6) == 6) {
+	if((sh2->m[0x63] & 6) == 6 && sh2->dma_irq[0]) {
 		level = (sh2->m[0x38] >> 8) & 15;
 		if(level > irq) {
 			irq = level;
-			vector = (sh2->m[0x68] >> 24) & 0x7f;
+			sh2->dma_irq[0] &= ~1;
+			vector = (sh2->m[0x68]) & 0x7f;
 		}
 	}
-
-	if((sh2->m[0x67] & 6) == 6) {
+	else if((sh2->m[0x67] & 6) == 6 && sh2->dma_irq[1]) {
 		level = (sh2->m[0x38] >> 8) & 15;
 		if(level > irq) {
 			irq = level;
-			vector = (sh2->m[0x6a] >> 24) & 0x7f;
+			sh2->dma_irq[1] &= ~1;
+			vector = (sh2->m[0x6a]) & 0x7f;
 		}
 	}
 
@@ -866,6 +935,8 @@ void sh2_exception(sh2_state *sh2, const char *message, int irqline)
 		if (sh2->internal_irq_level == irqline)
 		{
 			vector = sh2->internal_irq_vector;
+			/* avoid spurious irqs with this (TODO: needs a better fix) */
+			sh2->internal_irq_level = -1;
 			LOG(("SH-2 '%s' exception #%d (internal vector: $%x) after [%s]\n", sh2->device->tag(), irqline, vector, message));
 		}
 		else
@@ -889,7 +960,8 @@ void sh2_exception(sh2_state *sh2, const char *message, int irqline)
 		LOG(("SH-2 '%s' nmi exception (autovector: $%x) after [%s]\n", sh2->device->tag(), vector, message));
 	}
 
-	#ifdef USE_SH2DRC
+	if (sh2->isdrc)
+	{
 	sh2->evec = RL( sh2, sh2->vbr + vector * 4 );
 	sh2->evec &= AM;
 	sh2->irqsr = sh2->sr;
@@ -901,11 +973,11 @@ void sh2_exception(sh2_state *sh2, const char *message, int irqline)
 		sh2->sr = (sh2->sr & ~I) | (irqline << 4);
 
 //  printf("sh2_exception [%s] irqline %x evec %x save SR %x new SR %x\n", message, irqline, sh2->evec, sh2->irqsr, sh2->sr);
-	#else
+	} else {
 	sh2->r[15] -= 4;
-	WL( sh2, sh2->r[15], sh2->sr );		/* push SR onto stack */
+	WL( sh2, sh2->r[15], sh2->sr );     /* push SR onto stack */
 	sh2->r[15] -= 4;
-	WL( sh2, sh2->r[15], sh2->pc );		/* push PC onto stack */
+	WL( sh2, sh2->r[15], sh2->pc );     /* push PC onto stack */
 
 	/* set I flags in SR */
 	if (irqline > SH2_INT_15)
@@ -915,14 +987,17 @@ void sh2_exception(sh2_state *sh2, const char *message, int irqline)
 
 	/* fetch PC */
 	sh2->pc = RL( sh2, sh2->vbr + vector * 4 );
-	#endif
+	}
+
+	if(sh2->sleep_mode == 1) { sh2->sleep_mode = 2; }
 }
 
-void sh2_common_init(sh2_state *sh2, legacy_cpu_device *device, device_irq_callback irqcallback)
+void sh2_common_init(sh2_state *sh2, legacy_cpu_device *device, device_irq_acknowledge_callback irqcallback, bool drc)
 {
 	const sh2_cpu_core *conf = (const sh2_cpu_core *)device->static_config();
 	int i;
 
+	sh2->isdrc = drc;
 	sh2->timer = device->machine().scheduler().timer_alloc(FUNC(sh2_timer_callback), sh2);
 	sh2->timer->adjust(attotime::never);
 
@@ -950,9 +1025,9 @@ void sh2_common_init(sh2_state *sh2, legacy_cpu_device *device, device_irq_callb
 	}
 	sh2->irq_callback = irqcallback;
 	sh2->device = device;
-	sh2->program = device->space(AS_PROGRAM);
+	sh2->program = &device->space(AS_PROGRAM);
 	sh2->direct = &sh2->program->direct();
-	sh2->internal = device->space(AS_PROGRAM);
+	sh2->internal = &device->space(AS_PROGRAM);
 
 	device->save_item(NAME(sh2->pc));
 	device->save_item(NAME(sh2->sr));
@@ -996,5 +1071,8 @@ void sh2_common_init(sh2_state *sh2, legacy_cpu_device *device, device_irq_callb
 	device->save_item(NAME(sh2->internal_irq_level));
 	device->save_item(NAME(sh2->internal_irq_vector));
 	device->save_item(NAME(sh2->dma_timer_active));
+	device->save_item(NAME(sh2->dma_irq));
+	device->save_item(NAME(sh2->wtcnt));
+	device->save_item(NAME(sh2->wtcsr));
+	device->save_item(NAME(sh2->sleep_mode));
 }
-

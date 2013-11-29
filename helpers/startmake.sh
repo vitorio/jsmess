@@ -2,10 +2,20 @@
 #
 # Take a MESS driver (system) name as the sole argument
 #
+if [ "$#" -ne 1 ]
+then
+	echo "Generates MESS tiny makefiles given a system name."
+	echo "For names, see \"name\", \"parent\" and \"sourcefile\" columns here:"
+	echo "http://www.progettoemma.net/mess/sysset.php/"
+	echo ""
+	echo "e.g. \"$0 a1200xl\" for the Atari 1200XL plus ~12 related models"
+	exit 1
+fi
+
 
 # Path to the correct, identical version of MESS as JSMESS uses
 # No trailing slash!
-MESS64PATH=../../mess
+MESS64PATH=../mess
 
 # Name of that same MESS executable (it's probably MESS64, but JIC)
 MESS64NAME=mess64
@@ -51,20 +61,19 @@ if [ "$FULLNAME" == "" ]
    exit 1
 fi
 
-echo "Creating the $DRIVER makefiles."
-
+#resolution
 width=`$MESS64PATH/$MESS64NAME -listxml $DRIVER | grep "<display " | sed 's/.*width=\"//g' | cut -f1 -d'"'`
 height=`$MESS64PATH/$MESS64NAME -listxml $DRIVER | grep "<display " | sed 's/.*height=\"//g' | cut -f1 -d'"'`
 RESOLUTION="${width}x${height}"
 
-#echo "Run this to figure out a potential format for files (it can change later, as needed)"
-#echo "src/mame/mess64 -listxml $DRIVER | grep briefname"
-#echo "[?] Please enter what sort of device name for software (cart1, cart, flop, dump)"
+#files
 DEVICE=`$MESS64PATH/$MESS64NAME -listxml $DRIVER | grep briefname= | cut -f4 -d'"' | head -1`
 
-SOURCEFILE=`$MESS64PATH/$MESS64NAME -listxml $1 | grep "sourcefile=" | sed "s/.*sourcefile=\"\(.*\)\.c.*/\1/"`
+#parent
+SOURCEFILE=`$MESS64PATH/$MESS64NAME -listxml $DRIVER | grep "$DRIVER.*sourcefile" | sed "s/.*sourcefile=\"\(.*\)\.c.*/\1/"`
 echo "$DRIVER is part of $SOURCEFILE, along with:"
 
+#children
 if [ ! -f $MESSDRV/$SOURCEFILE.c ]
    then
    CHILDREN=`grep "^COMP\|^CONS\|^SYST\|^GAME" $MAMEDRV/$SOURCEFILE.c | cut -d "," -f 2`
@@ -74,14 +83,12 @@ fi
 echo "$CHILDREN"
 echo "(building any of those should be very fast now)"
 
-echo "Blowing out $JSMESSMAKE/$DRIVER.mak..."
+echo "(1/3) Creating $JSMESSMAKE/$DRIVER.mak"
 
 O="$JSMESSMAKE/$DRIVER.mak"
-echo "##################################################################" >$O
-echo "#                                                                " >>$O
-echo "#    JSMESS-specific makefile for ${FULLNAME}." >>$O
-echo "#                                                                " >>$O
-echo "##################################################################" >>$O
+echo "## " >$O
+echo "## JSMESS-specific makefile for ${FULLNAME}" >>$O
+echo "## " >>$O
 echo "" >>$O
 echo "# ${FULLNAME} BIOS File Location" >> $O
 echo "#         " >>$O
@@ -107,7 +114,7 @@ if [ "$DEVICE" != "" ]
    then
    echo -n "\"-${DEVICE}\",gamename," >>$O
 fi
-echo "\"-window\",\"-resolution\",\"${RESOLUTION}\",\"-nokeepaspect\"]" >> $O
+echo "\"-window\",\"-resolution\",\"${RESOLUTION}\",\"-nokeepaspect\",\"-str\",\"1\"]" >> $O
 echo "" >>$O
 echo "# MESS Compilation Flags" >>$O
 echo "# " >>$O
@@ -128,7 +135,7 @@ if [ -f $MESSMAKE/$SOURCEFILE.mak ]
    exit 1
 fi
 
-echo "Creating the ${MESSMAKE}/${SOURCEFILE}.mak file."
+echo "(2/3) Creating ${MESSMAKE}/${SOURCEFILE}.mak"
 
 O=${MESSMAKE}/${SOURCEFILE}.mak
 
@@ -136,32 +143,20 @@ echo "## " >$O
 echo "## $SOURCEFILE.mak" >>$O
 echo "## " >>$O
 echo "" >>$O
-echo "MESSUI = 0" >>$O
 echo "include \$(SRC)/mess/messcore.mak" >>$O
-echo "include \$(SRC)/mess/osd/\$(OSD)/\$(OSD).mak" >>$O
-echo "include \$(SRC)/mess/emudummy.mak" >>$O
 echo "" >>$O
-echo "# CPUS +=" >>$O
-echo "" >>$O
-echo "# SOUNDS +=" >>$O
-echo "" >>$O
-echo "# DRVLIBS +=" >>$O
 ./fulldeps.sh $SOURCEFILE >> $O
 echo "" >>$O
-echo "include \$(SRC)/mess/osd/\$(OSD)/\$(OSD).mak" >>$O
 
 ## It's safe and easy to regenerate the .lst file
 
-echo "Creating the $MESSMAKE/${SOURCEFILE}.lst file."
+echo "(3/3) Creating $MESSMAKE/${SOURCEFILE}.lst"
 
 O=${MESSMAKE}/${SOURCEFILE}.lst
 
-echo "/******************************************************************************" >$O
-echo "" >> $O
-echo "     List of drivers $SOURCEFILE supports. This file is parsed by" >>$O
-echo "     makelist.exe, sorted, and output as C code describing the drivers." >>$O
-echo "" >> $O
-echo "******************************************************************************/" >>$O
+echo "// " >$O
+echo "// List of drivers $SOURCEFILE.mak supports" >>$O
+echo "// " >>$O
 echo "" >> $O
 
 for AAA in $CHILDREN
@@ -172,10 +167,4 @@ for AAA in $CHILDREN
       echo "${AAA} // ${BBB}" >>$O
    fi
 done
-
-echo ""
-echo "You may need to edit ${MESSMAKE}/${SOURCEFILE}.mak"
-echo "to add 'CPUS +=' lines, or to set up layout files."
-echo "See the JSMESS wiki for more instructions."
-echo ""
 

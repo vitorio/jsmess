@@ -30,36 +30,18 @@ Standard dm01 memorymap
 -----------+---+-----------------+-----------------------------------------
 
   TODO: - find out clockspeed of CPU
+        - sometimes screen isn't cleared, is the a clear bit missing?
 
 ***************************************************************************/
 
 #include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "bfm_dm01.h"
-// local prototypes ///////////////////////////////////////////////////////
-
-extern void Scorpion2_SetSwitchState(running_machine &machine, int strobe, int data, int state);
-extern int  Scorpion2_GetSwitchState(running_machine &machine, int strobe, int data);
 
 // local vars /////////////////////////////////////////////////////////////
 
-#define DM_BYTESPERROW 9
 #define DM_MAXLINES    21
 
-#define FEEDBACK_STROBE 4
-#define FEEDBACK_DATA   4
-
-static int   control;
-static int   xcounter;
-static int   busy;
-static int   data_avail;
-
-static UINT8 scanline[DM_BYTESPERROW];
-
-static UINT8 comdata;
-
-//static int   read_index;
-//static int   write_index;
 
 #ifdef MAME_DEBUG
 #define VERBOSE 1
@@ -69,104 +51,162 @@ static UINT8 comdata;
 
 #define LOG(x) do { if (VERBOSE) logerror x; } while (0)
 
+const device_type BF_DM01 = &device_creator<bfmdm01_device>;
+
+bfmdm01_device::bfmdm01_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, BF_DM01, "Bellfruit Dotmatrix 01", tag, owner, clock, "bfm_dm01", __FILE__),
+	m_data_avail(0),
+	m_control(0),
+	m_xcounter(0),
+	m_busy(0),
+	m_comdata(0)
+{
+	for (int i = 0; i < 65; i++)
+	m_segbuffer[i] = 0;
+
+	for (int i = 0; i < DM_BYTESPERROW; i++)
+	m_scanline[i] = 0;
+}
+
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void bfmdm01_device::device_config_complete()
+{
+	// inherit a copy of the static data
+	const bfmdm01_interface *intf = reinterpret_cast<const bfmdm01_interface *>(static_config());
+	if (intf != NULL)
+		*static_cast<bfmdm01_interface *>(this) = *intf;
+
+	// or initialize to defaults if none provided
+	else
+	{
+	}
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void bfmdm01_device::device_start()
+{
+	save_item(NAME(m_data_avail));
+	save_item(NAME(m_control));
+	save_item(NAME(m_xcounter));
+	save_item(NAME(m_busy));
+	save_item(NAME(m_comdata));
+
+	for (int i = 0; i < 65; i++)
+	save_item(NAME(m_segbuffer), i);
+
+	for (int i = 0; i < DM_BYTESPERROW; i++)
+	save_item(NAME(m_scanline), i);
+}
+
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void bfmdm01_device::device_reset()
+{
+	m_busy     = 0;
+	m_control  = 0;
+	m_xcounter = 0;
+	m_data_avail = 0;
+
+	m_busy_func(machine(), m_busy);
+}
+
 ///////////////////////////////////////////////////////////////////////////
 
-static int read_data(void)
+int bfmdm01_device::read_data(void)
 {
-	int data = comdata;
+	int data = m_comdata;
 
-	data_avail = 0;
+	m_data_avail = 0;
 
 	return data;
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
-static READ8_HANDLER( control_r )
+READ8_MEMBER( bfmdm01_device::control_r )
 {
 	return 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
-static WRITE8_HANDLER( control_w )
+WRITE8_MEMBER( bfmdm01_device::control_w )
 {
-	int changed = control ^ data;
+	int changed = m_control ^ data;
 
-	control = data;
+	m_control = data;
 
 	if ( changed & 2 )
-	{	// reset horizontal counter
+	{   // reset horizontal counter
 		if ( !(data & 2) )
 		{
 			//int offset = 0;
 
-			xcounter = 0;
+			m_xcounter = 0;
 		}
 	}
 
 	if ( changed & 8 )
 	{ // bit 3 changed = BUSY line
-		if ( data & 8 )	  busy = 0;
-		else			  busy = 1;
+		if ( data & 8 )   m_busy = 0;
+		else              m_busy = 1;
 
-		Scorpion2_SetSwitchState(space->machine(), FEEDBACK_STROBE,FEEDBACK_DATA, busy?0:1);
+		m_busy_func(machine(), m_busy);
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
-static READ8_HANDLER( mux_r )
+READ8_MEMBER( bfmdm01_device::mux_r )
 {
 	return 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
-static WRITE8_HANDLER( mux_w )
+WRITE8_MEMBER( bfmdm01_device::mux_w )
 {
-	int x = xcounter;
-
-	if ( x < DM_BYTESPERROW )
+	if ( m_xcounter < DM_BYTESPERROW )
 	{
-		scanline[xcounter++] = data;
+		m_scanline[m_xcounter] = data;
+		m_xcounter++;
 	}
-
-	if ( x == 8 )
+	if ( m_xcounter == 9 )
 	{
-    	int row = ((0xFF^data) & 0x7C) >> 2;	// 7C = 000001111100
-
-		scanline[x] &= 0x80;
+		int row = ((0xFF^data) & 0x7C) >> 2;    // 7C = 000001111100
+		m_scanline[8] &= 0x80;//filter all other bits
 		if ( (row >= 0)  && (row < DM_MAXLINES) )
 		{
-			int p,dots;
-
-			x = 0;
-			p = 0;
-			dots = 0;
+			int p = 0;
 
 			while ( p < (DM_BYTESPERROW) )
 			{
+				UINT8 d = m_scanline[p];
 
-				UINT8 d = scanline[p];
-				if (d & 0x80) dots |= 0x01;
-				else          dots &=~0x01;
-				if (d & 0x40) dots |= 0x02;
-				else          dots &=~0x02;
-				if (d & 0x20) dots |= 0x04;
-				else          dots &=~0x04;
-				if (d & 0x10) dots |= 0x08;
-				else          dots &=~0x08;
-				if (d & 0x08) dots |= 0x10;
-				else          dots &=~0x10;
-				if (d & 0x04) dots |= 0x20;
-				else          dots &=~0x20;
-				if (d & 0x02) dots |= 0x40;
-				else          dots &=~0x40;
-				if (d & 0x01) dots |= 0x80;
-				else          dots &=~0x80;
-				output_set_indexed_value("matrix", p +(8*row), dots);
+				for (int bitpos=0; bitpos <8; bitpos++)
+				{
+					if (((p*8)+bitpos) <65)
+					{
+						if (d & 1<<(7-bitpos)) m_segbuffer[(p*8)+bitpos]=1;
+						else m_segbuffer[(p*8)+bitpos]=0;
+					}
+				}
 				p++;
+			}
+
+			for (int pos=0;pos<65;pos++)
+			{
+				output_set_indexed_value("dotmatrix", pos +(65*row), m_segbuffer[(pos)]);
 			}
 		}
 	}
@@ -174,18 +214,18 @@ static WRITE8_HANDLER( mux_w )
 
 ///////////////////////////////////////////////////////////////////////////
 
-static READ8_HANDLER( comm_r )
+READ8_MEMBER( bfmdm01_device::comm_r )
 {
 	int result = 0;
 
-	if ( data_avail )
+	if ( m_data_avail )
 	{
 		result = read_data();
 
 		#ifdef UNUSED_FUNCTION
-		if ( data_avail() )
+		if ( m_data_avail() )
 		{
-			cpu_set_irq_line(1, M6809_IRQ_LINE, ASSERT_LINE );	// trigger IRQ
+			cpu_set_irq_line(1, M6809_IRQ_LINE, ASSERT_LINE );  // trigger IRQ
 		}
 		#endif
 	}
@@ -195,64 +235,47 @@ static READ8_HANDLER( comm_r )
 
 ///////////////////////////////////////////////////////////////////////////
 
-static WRITE8_HANDLER( comm_w )
+WRITE8_MEMBER( bfmdm01_device::comm_w )
 {
 }
 ///////////////////////////////////////////////////////////////////////////
 
-static READ8_HANDLER( unknown_r )
+READ8_MEMBER( bfmdm01_device::unknown_r )
 {
 	return 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
-static WRITE8_HANDLER( unknown_w )
+WRITE8_MEMBER( bfmdm01_device::unknown_w )
 {
-	cputag_set_input_line(space->machine(), "matrix", INPUT_LINE_NMI, CLEAR_LINE ); //?
+	space.machine().device("matrix")->execute().set_input_line(INPUT_LINE_NMI, CLEAR_LINE ); //?
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
-ADDRESS_MAP_START( bfm_dm01_memmap, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAM								// 8k RAM
-	AM_RANGE(0x2000, 0x2000) AM_READWRITE(control_r, control_w)	// control reg
-	AM_RANGE(0x2800, 0x2800) AM_READWRITE(mux_r,mux_w)			// mux
-	AM_RANGE(0x3000, 0x3000) AM_READWRITE(comm_r,comm_w)		//
-	AM_RANGE(0x3800, 0x3800) AM_READWRITE(unknown_r,unknown_w)	// ???
-	AM_RANGE(0x4000, 0xFfff) AM_ROM								// 48k  ROM
+ADDRESS_MAP_START( bfm_dm01_memmap, AS_PROGRAM, 8, bfmdm01_device )
+	AM_RANGE(0x0000, 0x1fff) AM_RAM                             // 8k RAM
+	AM_RANGE(0x2000, 0x2000) AM_DEVREADWRITE("dm01", bfmdm01_device, control_r, control_w)  // control reg
+	AM_RANGE(0x2800, 0x2800) AM_DEVREADWRITE("dm01", bfmdm01_device, mux_r, mux_w)           // mux
+	AM_RANGE(0x3000, 0x3000) AM_DEVREADWRITE("dm01", bfmdm01_device, comm_r, comm_w)     //
+	AM_RANGE(0x3800, 0x3800) AM_DEVREADWRITE("dm01", bfmdm01_device, unknown_r, unknown_w)   // ???
+	AM_RANGE(0x4000, 0xFfff) AM_ROM                             // 48k  ROM
 ADDRESS_MAP_END
 
 ///////////////////////////////////////////////////////////////////////////
 
-void BFM_dm01_writedata(running_machine &machine, UINT8 data)
+void bfmdm01_device::writedata(UINT8 data)
 {
-	comdata = data;
-	data_avail = 1;
+	m_comdata = data;
+	m_data_avail = 1;
 
-  //pulse IRQ line
-	cputag_set_input_line(machine, "matrix", M6809_IRQ_LINE, HOLD_LINE ); // trigger IRQ
+	//pulse IRQ line
+	machine().device("matrix")->execute().set_input_line(M6809_IRQ_LINE, HOLD_LINE ); // trigger IRQ
 }
 
 ///////////////////////////////////////////////////////////////////////////
-
-INTERRUPT_GEN( bfm_dm01_vbl )
+int bfmdm01_device::busy(void)
 {
-	device_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE );
-}
-
-///////////////////////////////////////////////////////////////////////////
-int BFM_dm01_busy(void)
-{
-	return data_avail;
-}
-
-void BFM_dm01_reset(running_machine &machine)
-{
-	busy     = 0;
-	control  = 0;
-	xcounter = 0;
-	data_avail = 0;
-
-	Scorpion2_SetSwitchState(machine, FEEDBACK_STROBE,FEEDBACK_DATA, busy?0:1);
+	return m_data_avail;
 }

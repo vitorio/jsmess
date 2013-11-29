@@ -37,13 +37,10 @@
 /*****************************************************************************/
 
 #include "emu.h"
-#include "cpu/mcs48/mcs48.h"
-#include "sound/ay8910.h"
-#include "sound/samples.h"
 #include "includes/vicdual.h"
 
 
-#define	PSG_CLOCK		(3579545 / 3)	/* Hz */
+#define PSG_CLOCK       (3579545 / 3)   /* Hz */
 
 
 /* output port 0x01 definitions - sound effect drive outputs */
@@ -75,24 +72,24 @@
 #define PSG_BC_LATCH_ADDRESS    ( MUSIC_PORT2_PSG_BDIR | MUSIC_PORT2_PSG_BC1 )
 
 
-#define PLAY(samp,id,loop)      sample_start( samp, id, id, loop )
-#define STOP(samp,id)           sample_stop( samp, id )
+#define PLAY(samp,id,loop)      samp->start( id, id, loop )
+#define STOP(samp,id)           samp->stop( id )
 
 
 /* sample file names */
 static const char *const carnival_sample_names[] =
 {
 	"*carnival",
-	"bear.wav",
-	"bonus1.wav",
-	"bonus2.wav",
-	"clang.wav",
-	"duck1.wav",
-	"duck2.wav",
-	"duck3.wav",
-	"pipehit.wav",
-	"ranking.wav",
-	"rifle.wav",
+	"bear",
+	"bonus1",
+	"bonus2",
+	"clang",
+	"duck1",
+	"duck2",
+	"duck3",
+	"pipehit",
+	"ranking",
+	"rifle",
 	0
 };
 
@@ -119,15 +116,9 @@ enum
 	SND_RIFLE_SHOT
 };
 
-
-static int port2State = 0;
-static int psgData = 0;
-
-
-WRITE8_HANDLER( carnival_audio_1_w )
+WRITE8_MEMBER( vicdual_state::carnival_audio_1_w )
 {
 	static int port1State = 0;
-	device_t *samples = space->machine().device("samples");
 	int bitsChanged;
 	int bitsGoneHigh;
 	int bitsGoneLow;
@@ -152,61 +143,60 @@ WRITE8_HANDLER( carnival_audio_1_w )
 
 	if ( bitsGoneLow & OUT_PORT_1_RIFLE_SHOT )
 	{
-		PLAY( samples, SND_RIFLE_SHOT, 0 );
+		PLAY( m_samples, SND_RIFLE_SHOT, 0 );
 	}
 
 	if ( bitsGoneLow & OUT_PORT_1_CLANG )
 	{
-		PLAY( samples, SND_CLANG, 0 );
+		PLAY( m_samples, SND_CLANG, 0 );
 	}
 
 	if ( bitsGoneLow & OUT_PORT_1_DUCK_1 )
 	{
-		PLAY( samples, SND_DUCK_1, 1 );
+		PLAY( m_samples, SND_DUCK_1, 1 );
 	}
 	if ( bitsGoneHigh & OUT_PORT_1_DUCK_1 )
 	{
-		STOP( samples, SND_DUCK_1 );
+		STOP( m_samples, SND_DUCK_1 );
 	}
 
 	if ( bitsGoneLow & OUT_PORT_1_DUCK_2 )
 	{
-		PLAY( samples, SND_DUCK_2, 1 );
+		PLAY( m_samples, SND_DUCK_2, 1 );
 	}
 	if ( bitsGoneHigh & OUT_PORT_1_DUCK_2 )
 	{
-		STOP( samples, SND_DUCK_2 );
+		STOP( m_samples, SND_DUCK_2 );
 	}
 
 	if ( bitsGoneLow & OUT_PORT_1_DUCK_3 )
 	{
-		PLAY( samples, SND_DUCK_3, 1 );
+		PLAY( m_samples, SND_DUCK_3, 1 );
 	}
 	if ( bitsGoneHigh & OUT_PORT_1_DUCK_3 )
 	{
-		STOP( samples, SND_DUCK_3 );
+		STOP( m_samples, SND_DUCK_3 );
 	}
 
 	if ( bitsGoneLow & OUT_PORT_1_PIPE_HIT )
 	{
-		PLAY( samples, SND_PIPE_HIT, 0 );
+		PLAY( m_samples, SND_PIPE_HIT, 0 );
 	}
 
 	if ( bitsGoneLow & OUT_PORT_1_BONUS_1 )
 	{
-		PLAY( samples, SND_BONUS_1, 0 );
+		PLAY( m_samples, SND_BONUS_1, 0 );
 	}
 
 	if ( bitsGoneLow & OUT_PORT_1_BONUS_2 )
 	{
-		PLAY( samples, SND_BONUS_2, 0 );
+		PLAY( m_samples, SND_BONUS_2, 0 );
 	}
 }
 
 
-WRITE8_HANDLER( carnival_audio_2_w )
+WRITE8_MEMBER( vicdual_state::carnival_audio_2_w )
 {
-	device_t *samples = space->machine().device("samples");
 	int bitsChanged;
 	int bitsGoneHigh;
 	int bitsGoneLow;
@@ -222,38 +212,38 @@ WRITE8_HANDLER( carnival_audio_2_w )
 	/* bit 6: connector pin 42 */
 	/* bit 7: connector pin 41 */
 
-	bitsChanged  = port2State ^ data;
+	bitsChanged  = m_port2State ^ data;
 	bitsGoneHigh = bitsChanged & data;
 	bitsGoneLow  = bitsChanged & ~data;
 
-	port2State = data;
+	m_port2State = data;
 
 	if ( bitsGoneLow & OUT_PORT_2_BEAR )
-		PLAY( samples, SND_BEAR, 0 );
+		PLAY( m_samples, SND_BEAR, 0 );
 
 	if ( bitsGoneLow & OUT_PORT_2_RANKING )
-		PLAY( samples, SND_RANKING, 0 );
+		PLAY( m_samples, SND_RANKING, 0 );
 
 	if ( bitsGoneHigh & OUT_PORT_2_MUSIC_RESET )
 		/* reset output is no longer asserted active low */
-		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, PULSE_LINE );
+		m_audiocpu->set_input_line(INPUT_LINE_RESET, PULSE_LINE );
 }
 
 
-static READ8_HANDLER( carnival_music_port_t1_r )
+READ8_MEMBER( vicdual_state::carnival_music_port_t1_r )
 {
 	/* note: 8039 T1 signal is inverted on music board */
-	return ( port2State & OUT_PORT_2_MUSIC_T1 ) ? 0 : 1;
+	return ( m_port2State & OUT_PORT_2_MUSIC_T1 ) ? 0 : 1;
 }
 
 
-static WRITE8_HANDLER( carnival_music_port_1_w )
+WRITE8_MEMBER( vicdual_state::carnival_music_port_1_w )
 {
-	psgData = data;
+	m_psgData = data;
 }
 
 
-static WRITE8_DEVICE_HANDLER( carnival_music_port_2_w )
+WRITE8_MEMBER( vicdual_state::carnival_music_port_2_w )
 {
 	static int psgSelect = 0;
 	int newSelect;
@@ -274,25 +264,25 @@ static WRITE8_DEVICE_HANDLER( carnival_music_port_2_w )
 			break;
 
 		case PSG_BC_WRITE:
-			ay8910_data_w( device, 0, psgData );
+			m_psg->data_w(space, 0, m_psgData);
 			break;
 
 		case PSG_BC_LATCH_ADDRESS:
-			ay8910_address_w( device, 0, psgData );
+			m_psg->address_w(space, 0, m_psgData);
 			break;
 		}
 	}
 }
 
 
-static ADDRESS_MAP_START( carnival_audio_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( carnival_audio_map, AS_PROGRAM, 8, vicdual_state )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( carnival_audio_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( carnival_audio_io_map, AS_IO, 8, vicdual_state )
 	AM_RANGE(MCS48_PORT_T1, MCS48_PORT_T1) AM_READ(carnival_music_port_t1_r)
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_WRITE(carnival_music_port_1_w)
-	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_DEVWRITE("psg", carnival_music_port_2_w)
+	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_WRITE(carnival_music_port_2_w)
 ADDRESS_MAP_END
 
 
@@ -306,7 +296,6 @@ MACHINE_CONFIG_FRAGMENT( carnival_audio )
 	MCFG_SOUND_ADD("psg", AY8910, PSG_CLOCK)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(carnival_samples_interface)
+	MCFG_SAMPLES_ADD("samples", carnival_samples_interface)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 MACHINE_CONFIG_END

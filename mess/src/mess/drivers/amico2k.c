@@ -14,9 +14,19 @@
 
     http://www.computerhistory.it/index.php?option=com_content&task=view&id=85&Itemid=117
 
+    Pasting:
+        0-F : as is
+        ^ (inc) : ^
+        AD : -
+        DA : =
+        GO : X
+
+    Test Paste:
+        =11^22^33^44^55^66^77^88^99^-0000
+        Now press up-arrow to confirm the data has been entered.
+
 ****************************************************************************/
 
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/m6502/m6502.h"
@@ -28,7 +38,8 @@ class amico2k_state : public driver_device
 {
 public:
 	amico2k_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu") { }
 
 	void machine_start();
 
@@ -42,6 +53,8 @@ public:
 
 	// timers
 	emu_timer *m_led_refresh_timer;
+	TIMER_CALLBACK_MEMBER(led_refresh);
+	required_device<cpu_device> m_maincpu;
 };
 
 
@@ -78,22 +91,20 @@ static INPUT_PORTS_START( amico2k )
 
 	PORT_START("Q2")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("PC") PORT_CODE(KEYCODE_P)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("RUN") PORT_CODE(KEYCODE_R)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME(UTF8_UP) PORT_CODE(KEYCODE_UP)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("DA") PORT_CODE(KEYCODE_F1)
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("AD") PORT_CODE(KEYCODE_F2)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("RUN") PORT_CODE(KEYCODE_X) PORT_CHAR('X')
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME(UTF8_UP) PORT_CODE(KEYCODE_UP) PORT_CHAR('^')
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("DA") PORT_CODE(KEYCODE_EQUALS) PORT_CHAR('=')
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("AD") PORT_CODE(KEYCODE_MINUS) PORT_CHAR('-')
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F) PORT_CHAR('F')
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_E) PORT_CHAR('E')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
-static TIMER_CALLBACK( led_refresh )
+TIMER_CALLBACK_MEMBER(amico2k_state::led_refresh)
 {
-	amico2k_state *state = machine.driver_data<amico2k_state>();
-
-	if (state->m_ls145_p > 3)
+	if (m_ls145_p > 3)
 	{
-		output_set_digit_value(state->m_ls145_p - 4, state->m_segment);
+		output_set_digit_value(m_ls145_p - 4, m_segment);
 	}
 }
 
@@ -101,25 +112,25 @@ READ8_MEMBER( amico2k_state::ppi_pa_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     keyboard data 0
-        PA1     keyboard data 1
-        PA2     keyboard data 2
-        PA3     keyboard data 3
-        PA4     keyboard data 4
-        PA5     keyboard data 5
-        PA6     keyboard data 6
-        PA7     reg out
+	    PA0     keyboard data 0
+	    PA1     keyboard data 1
+	    PA2     keyboard data 2
+	    PA3     keyboard data 3
+	    PA4     keyboard data 4
+	    PA5     keyboard data 5
+	    PA6     keyboard data 6
+	    PA7     reg out
 
-    */
+	*/
 
 	switch (m_ls145_p)
 	{
-	case 0:		return input_port_read(machine(), "Q0");
-	case 1:		return input_port_read(machine(), "Q1");
-	case 2:		return input_port_read(machine(), "Q2");
-	default:	return 0xff;
+	case 0:     return ioport("Q0")->read();
+	case 1:     return ioport("Q1")->read();
+	case 2:     return ioport("Q2")->read();
+	default:    return 0xff;
 	}
 }
 
@@ -127,18 +138,18 @@ WRITE8_MEMBER( amico2k_state::ppi_pa_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     LED segment A
-        PA1     LED segment B
-        PA2     LED segment C
-        PA3     LED segment D
-        PA4     LED segment E
-        PA5     LED segment F
-        PA6     LED segment G
-        PA7
+	    PA0     LED segment A
+	    PA1     LED segment B
+	    PA2     LED segment C
+	    PA3     LED segment D
+	    PA4     LED segment E
+	    PA5     LED segment F
+	    PA6     LED segment G
+	    PA7
 
-    */
+	*/
 
 	m_segment = data;
 	m_led_refresh_timer->adjust(attotime::from_usec(70));
@@ -148,18 +159,18 @@ READ8_MEMBER( amico2k_state::ppi_pb_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0     reg out
-        PB1
-        PB2
-        PB3
-        PB4
-        PB5
-        PB6
-        PB7
+	    PB0     reg out
+	    PB1
+	    PB2
+	    PB3
+	    PB4
+	    PB5
+	    PB6
+	    PB7
 
-    */
+	*/
 
 	return 0;
 }
@@ -168,35 +179,35 @@ WRITE8_MEMBER( amico2k_state::ppi_pb_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0
-        PB1     LS145 P0
-        PB2     LS145 P1
-        PB3     LS145 P2
-        PB4     LS145 P3
-        PB5     reg in
-        PB6     reg in
-        PB7     led output enable
+	    PB0
+	    PB1     LS145 P0
+	    PB2     LS145 P1
+	    PB3     LS145 P2
+	    PB4     LS145 P3
+	    PB5     reg in
+	    PB6     reg in
+	    PB7     led output enable
 
-    */
+	*/
 
 	m_ls145_p = (data >> 1) & 0x0f;
 }
 
 static I8255_INTERFACE( ppi_intf )
 {
-	DEVCB_DRIVER_MEMBER(amico2k_state, ppi_pa_r),	// Port A read
-	DEVCB_DRIVER_MEMBER(amico2k_state, ppi_pa_w),	// Port A write
-	DEVCB_DRIVER_MEMBER(amico2k_state, ppi_pb_r),	// Port B read
-	DEVCB_DRIVER_MEMBER(amico2k_state, ppi_pb_w),	// Port B write
-	DEVCB_NULL,							// Port C read
-	DEVCB_NULL							// Port C write
+	DEVCB_DRIVER_MEMBER(amico2k_state, ppi_pa_r),   // Port A read
+	DEVCB_DRIVER_MEMBER(amico2k_state, ppi_pa_w),   // Port A write
+	DEVCB_DRIVER_MEMBER(amico2k_state, ppi_pb_r),   // Port B read
+	DEVCB_DRIVER_MEMBER(amico2k_state, ppi_pb_w),   // Port B write
+	DEVCB_NULL,                 // Port C read
+	DEVCB_NULL                  // Port C write
 };
 
 void amico2k_state::machine_start()
 {
-	m_led_refresh_timer = machine().scheduler().timer_alloc(FUNC(led_refresh));
+	m_led_refresh_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(amico2k_state::led_refresh),this));
 
 	// state saving
 	save_item(NAME(m_ls145_p));
@@ -205,7 +216,7 @@ void amico2k_state::machine_start()
 
 static MACHINE_CONFIG_START( amico2k, amico2k_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6502, 1000000)	/* 1MHz */
+	MCFG_CPU_ADD("maincpu", M6502, 1000000) /* 1MHz */
 	MCFG_CPU_PROGRAM_MAP(amico2k_mem)
 
 	/* video hardware */
@@ -219,7 +230,7 @@ MACHINE_CONFIG_END
 // not sure the ROMs are loaded correctly
 ROM_START( amico2k )
 	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
-	ROM_LOAD( "prom.ic10", 0xfb00, 0x200, NO_DUMP )		// cassette recorder ROM, not published anywhere. a board is needed!
+	ROM_LOAD( "prom.ic10", 0xfb00, 0x200, NO_DUMP )     // cassette recorder ROM, not published anywhere. a board is needed!
 	ROM_LOAD( "prom.ic9",  0xfe00, 0x200, CRC(86449f7c) SHA1(fe7deca86e90ab89aae23f11e9dbaf343b4242dc) )
 
 	ROM_REGION( 0x200, "proms", ROMREGION_ERASEFF )
@@ -230,5 +241,5 @@ ROM_END
 
 /* Driver */
 
-/*    YEAR  NAME    PARENT  COMPAT MACHINE INPUT   INIT   COMPANY  FULLNAME                 FLAGS */
-COMP( 1978, amico2k,    0,    0,     amico2k,    amico2k,    0,     "A.S.EL.",   "Amico 2000",            GAME_NOT_WORKING | GAME_NO_SOUND)
+/*    YEAR  NAME      PARENT  COMPAT MACHINE     INPUT       INIT     COMPANY   FULLNAME         FLAGS */
+COMP( 1978, amico2k,  0,      0,     amico2k,    amico2k, driver_device,    0,     "A.S.E.L.", "Amico 2000", GAME_NO_SOUND_HW)

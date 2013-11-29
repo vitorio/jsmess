@@ -9,7 +9,6 @@
 
 #include "emu.h"
 #include "hd44102.h"
-#include "machine/devhelpr.h"
 
 
 
@@ -20,19 +19,19 @@
 #define LOG 0
 
 
-#define CONTROL_DISPLAY_OFF			0x38
-#define CONTROL_DISPLAY_ON			0x39
-#define CONTROL_COUNT_DOWN_MODE		0x3a
-#define CONTROL_COUNT_UP_MODE		0x3b
-#define CONTROL_Y_ADDRESS_MASK		0x3f
-#define CONTROL_X_ADDRESS_MASK		0xc0
-#define CONTROL_DISPLAY_START_PAGE	0x3e
+#define CONTROL_DISPLAY_OFF         0x38
+#define CONTROL_DISPLAY_ON          0x39
+#define CONTROL_COUNT_DOWN_MODE     0x3a
+#define CONTROL_COUNT_UP_MODE       0x3b
+#define CONTROL_Y_ADDRESS_MASK      0x3f
+#define CONTROL_X_ADDRESS_MASK      0xc0
+#define CONTROL_DISPLAY_START_PAGE  0x3e
 
 
-#define STATUS_BUSY					0x80	/* not supported */
-#define STATUS_COUNT_UP				0x40
-#define STATUS_DISPLAY_OFF			0x20
-#define STATUS_RESET				0x10	/* not supported */
+#define STATUS_BUSY                 0x80    /* not supported */
+#define STATUS_COUNT_UP             0x40
+#define STATUS_DISPLAY_OFF          0x20
+#define STATUS_RESET                0x10    /* not supported */
 
 
 // device type definition
@@ -70,11 +69,12 @@ inline void hd44102_device::count_up_or_down()
 //-------------------------------------------------
 
 hd44102_device::hd44102_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, HD44102, "HD44102", tag, owner, clock),
-	  m_cs2(0),
-	  m_page(0),
-	  m_x(0),
-	  m_y(0)
+	: device_t(mconfig, HD44102, "HD44102", tag, owner, clock, "hd44102", __FILE__),
+		device_video_interface(mconfig, *this),
+		m_cs2(0),
+		m_page(0),
+		m_x(0),
+		m_y(0)
 {
 }
 
@@ -83,13 +83,10 @@ hd44102_device::hd44102_device(const machine_config &mconfig, const char *tag, d
 //  static_set_config - configuration helper
 //-------------------------------------------------
 
-void hd44102_device::static_set_config(device_t &device, const char *screen_tag, int sx, int sy)
+void hd44102_device::static_set_config(device_t &device, int sx, int sy)
 {
 	hd44102_device &hd44102 = downcast<hd44102_device &>(device);
 
-	assert(screen_tag != NULL);
-
-	hd44102.m_screen_tag = screen_tag;
 	hd44102.m_sx = sx;
 	hd44102.m_sy = sy;
 }
@@ -101,9 +98,6 @@ void hd44102_device::static_set_config(device_t &device, const char *screen_tag,
 
 void hd44102_device::device_start()
 {
-	// find screen
-	m_screen = machine().device<screen_device>(m_screen_tag);
-
 	// register for state saving
 	save_item(NAME(m_ram[0]));
 	save_item(NAME(m_ram[1]));
@@ -271,7 +265,7 @@ WRITE_LINE_MEMBER( hd44102_device::cs2_w )
 //  update_screen - update screen
 //-------------------------------------------------
 
-void hd44102_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
+UINT32 hd44102_device::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	for (int y = 0; y < 50; y++)
 	{
@@ -284,15 +278,16 @@ void hd44102_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 			int sy = m_sy + z;
 			int sx = m_sx + y;
 
-			if ((sy >= cliprect->min_y) && (sy <= cliprect->max_y) && (sx >= cliprect->min_x) && (sx <= cliprect->max_x))
+			if (cliprect.contains(sx, sy))
 			{
 				int color = (m_status & STATUS_DISPLAY_OFF) ? 0 : BIT(data, z % 8);
 
-				*BITMAP_ADDR16(bitmap, sy, sx) = color;
+				bitmap.pix16(sy, sx) = color;
 			}
 
 			z++;
 			z %= 32;
 		}
 	}
+	return 0;
 }

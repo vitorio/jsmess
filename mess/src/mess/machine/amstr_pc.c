@@ -1,12 +1,9 @@
 #include "emu.h"
 
 #include "machine/pit8253.h"
-#include "machine/pc_lpt.h"
-#include "machine/pcshare.h"
 #include "includes/amstr_pc.h"
 #include "includes/pc.h"
 #include "video/pc_vga.h"
-#include "memconv.h"
 
 
 /* pc20 (v2)
@@ -99,20 +96,6 @@ port 03de write/read
    cmos ram 23 dipswitches?
 */
 
-static struct {
-	struct {
-		UINT8 x,y; //byte clipping needed
-	} mouse;
-
-	// 64 system status register?
-	UINT8 port60;
-	UINT8 port61;
-	UINT8 port62;
-	UINT8 port65;
-
-	int dipstate;
-} pc1640={{0}, 0};
-
 /* test sequence in bios
  write 00 to 65
  write 30 to 61
@@ -147,27 +130,73 @@ static struct {
    7d 01 01 mouse button right
 */
 
-WRITE8_HANDLER( pc1640_port60_w )
+DRIVER_INIT_MEMBER(amstrad_pc_state,pc1640)
+{
+	address_space &io_space = machine().firstcpu->space( AS_IO );
+
+	io_space.install_read_handler(0x278, 0x27b, read8_delegate(FUNC(amstrad_pc_state::pc1640_port278_r),this), 0xffff);
+	io_space.install_read_handler(0x4278, 0x427b, read8_delegate(FUNC(amstrad_pc_state::pc1640_port4278_r),this), 0xffff);
+
+	mess_init_pc_common(pc_set_keyb_int);
+}
+
+
+DRIVER_INIT_MEMBER(amstrad_pc_state,pc200)
+{
+	UINT8 *gfx = &memregion("gfx1")->base()[0x8000];
+	int i;
+
+	/* just a plain bit pattern for graphics data generation */
+	for (i = 0; i < 256; i++)
+		gfx[i] = i;
+
+	mess_init_pc_common(pc_set_keyb_int);
+}
+
+DRIVER_INIT_MEMBER(amstrad_pc_state,ppc512)
+{
+	UINT8 *gfx = &memregion("gfx1")->base()[0x8000];
+	int i;
+
+	/* just a plain bit pattern for graphics data generation */
+	for (i = 0; i < 256; i++)
+		gfx[i] = i;
+
+	mess_init_pc_common(pc_set_keyb_int);
+}
+DRIVER_INIT_MEMBER(amstrad_pc_state,pc1512)
+{
+	UINT8 *gfx = &memregion("gfx1")->base()[0x8000];
+	int i;
+
+	/* just a plain bit pattern for graphics data generation */
+	for (i = 0; i < 256; i++)
+		gfx[i] = i;
+
+	mess_init_pc_common(pc_set_keyb_int);
+}
+
+WRITE8_MEMBER( amstrad_pc_state::pc1640_port60_w )
 {
 	switch (offset) {
 	case 1:
-		pc1640.port61=data;
-		if (data==0x30) pc1640.port62=(pc1640.port65&0x10)>>4;
-		else if (data==0x34) pc1640.port62=pc1640.port65&0xf;
-		pit8253_gate2_w(space->machine().device("pit8253"), BIT(data, 0));
-		pc_speaker_set_spkrdata( space->machine(), data & 0x02 );
+		m_port61=data;
+		if (data==0x30) m_port62=(m_port65&0x10)>>4;
+		else if (data==0x34) m_port62=m_port65&0xf;
+		machine().device<pit8253_device>("pit8253")->gate2_w(BIT(data, 0));
+		pc_speaker_set_spkrdata( data & 0x02 );
 		pc_keyb_set_clock(data&0x40);
 		break;
 	case 4:
 		if (data&0x80) {
-			pc1640.port60=data^0x8d;
+			m_port60=data^0x8d;
 		} else {
-			pc1640.port60=data;
+			m_port60=data;
 		}
 		break;
 	case 5:
 		// stores the configuration data for port 62 configuration dipswitch emulation
-		pc1640.port65=data;
+		m_port65=data;
 		break;
 	}
 
@@ -175,76 +204,73 @@ WRITE8_HANDLER( pc1640_port60_w )
 }
 
 
- READ8_HANDLER( pc1640_port60_r )
+READ8_MEMBER( amstrad_pc_state::pc1640_port60_r )
 {
 	int data=0;
 	switch (offset) {
 	case 0:
-		if (pc1640.port61&0x80)
-			data=pc1640.port60;
+		if (m_port61&0x80)
+			data=m_port60;
 		else
 			data = pc_keyb_read();
 		break;
 
 	case 1:
-		data = pc1640.port61;
+		data = m_port61;
 		break;
 
 	case 2:
-		data = pc1640.port62;
-		if (pit8253_get_output(space->machine().device("pit8253"), 2))
+		data = m_port62;
+		if (machine().device<pit8253_device>("pit8253")->get_output(2))
 			data |= 0x20;
 		break;
 	}
 	return data;
 }
 
-READ8_HANDLER( pc200_port378_r )
+READ8_MEMBER( amstrad_pc_state::pc200_port378_r )
 {
-	device_t *lpt = space->machine().device("lpt_1");
-	UINT8 data = pc_lpt_r(lpt, offset);
+	UINT8 data = m_lpt1->read(space, offset);
 
 	if (offset == 1)
-		data = (data & ~7) | (input_port_read(space->machine(), "DSW0") & 7);
+		data = (data & ~7) | (ioport("DSW0")->read() & 7);
 	if (offset == 2)
-		data = (data & ~0xe0) | (input_port_read(space->machine(), "DSW0") & 0xc0);
+		data = (data & ~0xe0) | (ioport("DSW0")->read() & 0xc0);
 
 	return data;
 }
 
-static READ8_HANDLER( pc200_port278_r )
+READ8_MEMBER( amstrad_pc_state::pc200_port278_r )
 {
-	device_t *lpt = space->machine().device("lpt_2");
-	UINT8 data = pc_lpt_r(lpt, offset);
+	UINT8 data = m_lpt2->read(space, offset);
 
 	if (offset == 1)
-		data = (data & ~7) | (input_port_read(space->machine(), "DSW0") & 7);
+		data = (data & ~7) | (ioport("DSW0")->read() & 7);
 	if (offset == 2)
-		data = (data & ~0xe0) | (input_port_read(space->machine(), "DSW0") & 0xc0);
+		data = (data & ~0xe0) | (ioport("DSW0")->read() & 0xc0);
 
 	return data;
 }
 
 
-READ8_HANDLER( pc1640_port378_r )
+READ8_MEMBER( amstrad_pc_state::pc1640_port378_r )
 {
-	 device_t *lpt = space->machine().device("lpt_1");
-	 UINT8 data = pc_lpt_r(lpt, offset);
+	UINT8 data = m_lpt1->read(space, offset);
 
 	if (offset == 1)
-		data=(data & ~7) | (input_port_read(space->machine(), "DSW0") & 7);
+		data=(data & ~7) | (ioport("DSW0")->read() & 7);
 	if (offset == 2)
 	{
-		switch (pc1640.dipstate)
+		switch (m_dipstate)
 		{
 		case 0:
-			data = (data&~0xe0) | (input_port_read(space->machine(), "DSW0") & 0xe0);
+			data = (data&~0xe0) | (ioport("DSW0")->read() & 0xe0);
 			break;
 		case 1:
-			data = (data&~0xe0) | ((input_port_read(space->machine(), "DSW0") & 0xe000)>>8);
+			data = (data&~0xe0) | ((ioport("DSW0")->read() & 0xe000)>>8);
 			break;
 		case 2:
-			data = (data&~0xe0) | ((input_port_read(space->machine(), "DSW0") & 0xe00)>>4);
+			data = (data&~0xe0) | ((ioport("DSW0")->read() & 0xe00)>>4);
 			break;
 
 		}
@@ -252,55 +278,50 @@ READ8_HANDLER( pc1640_port378_r )
 	return data;
 }
 
- READ8_HANDLER( pc1640_port3d0_r )
+READ8_MEMBER( amstrad_pc_state::pc1640_port3d0_r )
 {
-	if (offset==0xa) pc1640.dipstate=0;
-	return space->read_byte(0x3d0+offset);
+	if (offset==0xa) m_dipstate=0;
+	return space.read_byte(0x3d0+offset);
 }
 
- READ8_HANDLER( pc1640_port4278_r )
+READ8_MEMBER( amstrad_pc_state::pc1640_port4278_r )
 {
-	if (offset==2) pc1640.dipstate=1;
+	if (offset==2) m_dipstate=1;
 	// read parallelport
 	return 0;
 }
 
-READ8_HANDLER( pc1640_port278_r )
+READ8_MEMBER( amstrad_pc_state::pc1640_port278_r )
 {
-	if ((offset==2)||(offset==0)) pc1640.dipstate=2;
+	if ((offset==2)||(offset==0)) m_dipstate=2;
 	// read parallelport
 	return 0;
 }
 
-static READ8_HANDLER( pc1640_mouse_x_r )
+READ8_MEMBER( amstrad_pc_state::pc1640_mouse_x_r )
 {
-	return pc1640.mouse.x - input_port_read(space->machine(), "pc_mouse_x");
+	return m_mouse.x - ioport("pc_mouse_x")->read();
 }
 
-static READ8_HANDLER( pc1640_mouse_y_r )
+READ8_MEMBER( amstrad_pc_state::pc1640_mouse_y_r )
 {
-	return pc1640.mouse.y - input_port_read(space->machine(), "pc_mouse_y");
+	return m_mouse.y - ioport("pc_mouse_y")->read();
 }
 
-static WRITE8_HANDLER( pc1640_mouse_x_w )
+WRITE8_MEMBER( amstrad_pc_state::pc1640_mouse_x_w )
 {
-	pc1640.mouse.x = data + input_port_read(space->machine(), "pc_mouse_x");
+	m_mouse.x = data + ioport("pc_mouse_x")->read();
 }
 
-static WRITE8_HANDLER( pc1640_mouse_y_w )
+WRITE8_MEMBER( amstrad_pc_state::pc1640_mouse_y_w )
 {
-	pc1640.mouse.y = data + input_port_read(space->machine(), "pc_mouse_y");
+	m_mouse.y = data + ioport("pc_mouse_y")->read();
 }
-
-READ16_HANDLER( pc1640_16le_mouse_x_r )	 { return read16le_with_read8_handler(pc1640_mouse_x_r, space, offset, mem_mask); }
-READ16_HANDLER( pc1640_16le_mouse_y_r )  { return read16le_with_read8_handler(pc1640_mouse_y_r, space, offset, mem_mask); }
-WRITE16_HANDLER( pc1640_16le_mouse_x_w ) { write16le_with_write8_handler(pc1640_mouse_x_w, space, offset, data, mem_mask); }
-WRITE16_HANDLER( pc1640_16le_mouse_y_w ) { write16le_with_write8_handler(pc1640_mouse_y_w, space, offset, data, mem_mask); }
 
 INPUT_PORTS_START( amstrad_keyboard )
 
 	PORT_START("pc_keyboard_0")
-	PORT_BIT ( 0x0001, 0x0000, IPT_UNUSED ) 	/* unused scancode 0 */
+	PORT_BIT ( 0x0001, 0x0000, IPT_UNUSED )     /* unused scancode 0 */
 	PORT_BIT(0x0002, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Esc") PORT_CODE(KEYCODE_ESC)
 	PORT_BIT(0x0004, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1 !") PORT_CODE(KEYCODE_1)
 	PORT_BIT(0x0008, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2 @") PORT_CODE(KEYCODE_2)
@@ -424,14 +445,3 @@ INPUT_PORTS_START( amstrad_keyboard )
 	PORT_BIT( 0xff, 0x00, IPT_MOUSE_Y) PORT_SENSITIVITY(100) PORT_KEYDELTA(0) PORT_PLAYER(1)
 
 INPUT_PORTS_END
-
-
-READ16_HANDLER( pc1640_16le_port60_r ) { return read16le_with_read8_handler(pc1640_port60_r, space, offset, mem_mask); }
-WRITE16_HANDLER( pc1640_16le_port60_w ) { write16le_with_write8_handler(pc1640_port60_w, space, offset, data, mem_mask); }
-
-READ16_HANDLER( pc200_16le_port278_r ) { return read16le_with_read8_handler(pc200_port278_r, space, offset, mem_mask); }
-READ16_HANDLER( pc200_16le_port378_r ) { return read16le_with_read8_handler(pc200_port378_r, space, offset, mem_mask); }
-READ16_HANDLER( pc1640_16le_port378_r ) { return read16le_with_read8_handler(pc1640_port378_r, space, offset, mem_mask); }
-READ16_HANDLER( pc1640_16le_port3d0_r ) { return read16le_with_read8_handler(pc1640_port3d0_r, space, offset, mem_mask); }
-READ16_HANDLER( pc1640_16le_port4278_r ) { return read16le_with_read8_handler(pc1640_port4278_r, space, offset, mem_mask); }
-READ16_HANDLER( pc1640_16le_port278_r ) { return read16le_with_read8_handler(pc1640_port278_r, space, offset, mem_mask); }

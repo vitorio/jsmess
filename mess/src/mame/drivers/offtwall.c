@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     Atari "Round" hardware
@@ -19,8 +21,6 @@
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
-#include "audio/atarijsa.h"
-#include "video/atarimo.h"
 #include "includes/offtwall.h"
 
 
@@ -31,11 +31,10 @@
  *
  *************************************/
 
-static void update_interrupts(running_machine &machine)
+void offtwall_state::update_interrupts()
 {
-	offtwall_state *state = machine.driver_data<offtwall_state>();
-	cputag_set_input_line(machine, "maincpu", 4, state->m_scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 6, state->m_sound_int_state ? ASSERT_LINE : CLEAR_LINE);
+	m_maincpu->set_input_line(4, m_scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
+	m_maincpu->set_input_line(6, m_sound_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -46,39 +45,9 @@ static void update_interrupts(running_machine &machine)
  *
  *************************************/
 
-static MACHINE_START( offtwall )
+MACHINE_RESET_MEMBER(offtwall_state,offtwall)
 {
-	atarigen_init(machine);
-}
-
-
-static MACHINE_RESET( offtwall )
-{
-	offtwall_state *state = machine.driver_data<offtwall_state>();
-
-	atarigen_eeprom_reset(state);
-	atarigen_interrupt_reset(state, update_interrupts);
-	atarivc_reset(*machine.primary_screen, state->m_atarivc_eof_data, 1);
-	atarijsa_reset();
-}
-
-
-
-/*************************************
- *
- *  Video controller access
- *
- *************************************/
-
-static READ16_HANDLER( offtwall_atarivc_r )
-{
-	return atarivc_r(*space->machine().primary_screen, offset);
-}
-
-
-static WRITE16_HANDLER( offtwall_atarivc_w )
-{
-	atarivc_w(*space->machine().primary_screen, offset, data, mem_mask);
+	atarigen_state::machine_reset();
 }
 
 
@@ -89,23 +58,15 @@ static WRITE16_HANDLER( offtwall_atarivc_w )
  *
  *************************************/
 
-static READ16_HANDLER( special_port3_r )
-{
-	offtwall_state *state = space->machine().driver_data<offtwall_state>();
-	int result = input_port_read(space->machine(), "260010");
-	if (state->m_cpu_to_sound_ready) result ^= 0x0020;
-	return result;
-}
-
-
-static WRITE16_HANDLER( io_latch_w )
+WRITE16_MEMBER(offtwall_state::io_latch_w)
 {
 	/* lower byte */
 	if (ACCESSING_BITS_0_7)
 	{
 		/* bit 4 resets the sound CPU */
-		cputag_set_input_line(space->machine(), "jsa", INPUT_LINE_RESET, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
-		if (!(data & 0x10)) atarijsa_reset();
+		m_jsa->soundcpu().set_input_line(INPUT_LINE_RESET, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
+		if (!(data & 0x10))
+			m_jsa->reset();
 	}
 
 	logerror("sound control = %04X\n", data);
@@ -149,30 +110,26 @@ static WRITE16_HANDLER( io_latch_w )
 
 
 
-static READ16_HANDLER( bankswitch_r )
+READ16_MEMBER(offtwall_state::bankswitch_r)
 {
-	offtwall_state *state = space->machine().driver_data<offtwall_state>();
-
 	/* this is the table lookup; the bank is determined by the address that was requested */
-	state->m_bank_offset = (offset & 3) * 0x1000;
-	logerror("Bankswitch index %d -> %04X\n", offset, state->m_bank_offset);
+	m_bank_offset = (offset & 3) * 0x1000;
+	logerror("Bankswitch index %d -> %04X\n", offset, m_bank_offset);
 
-	return state->m_bankswitch_base[offset];
+	return m_bankswitch_base[offset];
 }
 
 
-static READ16_HANDLER( bankrom_r )
+READ16_MEMBER(offtwall_state::bankrom_r)
 {
-	offtwall_state *state = space->machine().driver_data<offtwall_state>();
-
 	/* this is the banked ROM read */
-	logerror("%06X: %04X\n", cpu_get_previouspc(&space->device()), offset);
+	logerror("%06X: %04X\n", space.device().safe_pcbase(), offset);
 
 	/* if the values are $3e000 or $3e002 are being read by code just below the
-        ROM bank area, we need to return the correct value to give the proper checksum */
-	if ((offset == 0x3000 || offset == 0x3001) && cpu_get_previouspc(&space->device()) > 0x37000)
+	    ROM bank area, we need to return the correct value to give the proper checksum */
+	if ((offset == 0x3000 || offset == 0x3001) && space.device().safe_pcbase() > 0x37000)
 	{
-		UINT32 checksum = (space->read_word(0x3fd210) << 16) | space->read_word(0x3fd212);
+		UINT32 checksum = (space.read_word(0x3fd210) << 16) | space.read_word(0x3fd212);
 		UINT32 us = 0xaaaa5555 - checksum;
 		if (offset == 0x3001)
 			return us & 0xffff;
@@ -180,7 +137,7 @@ static READ16_HANDLER( bankrom_r )
 			return us >> 16;
 	}
 
-	return state->m_bankrom_base[(state->m_bank_offset + offset) & 0x3fff];
+	return m_bankrom_base[(m_bank_offset + offset) & 0x3fff];
 }
 
 
@@ -203,16 +160,15 @@ static READ16_HANDLER( bankrom_r )
 -------------------------------------------------------------------------*/
 
 
-static READ16_HANDLER( spritecache_count_r )
+READ16_MEMBER(offtwall_state::spritecache_count_r)
 {
-	offtwall_state *state = space->machine().driver_data<offtwall_state>();
-	int prevpc = cpu_get_previouspc(&space->device());
+	int prevpc = space.device().safe_pcbase();
 
 	/* if this read is coming from $99f8 or $9992, it's in the sprite copy loop */
 	if (prevpc == 0x99f8 || prevpc == 0x9992)
 	{
-		UINT16 *data = &state->m_spritecache_count[-0x100];
-		int oldword = state->m_spritecache_count[0];
+		UINT16 *data = &m_spritecache_count[-0x100];
+		int oldword = m_spritecache_count[0];
 		int count = oldword >> 8;
 		int i, width = 0;
 
@@ -233,12 +189,12 @@ static READ16_HANDLER( spritecache_count_r )
 			}
 
 			/* update the final count in memory */
-			state->m_spritecache_count[0] = (count << 8) | (oldword & 0xff);
+			m_spritecache_count[0] = (count << 8) | (oldword & 0xff);
 		}
 	}
 
 	/* and then read the data */
-	return state->m_spritecache_count[offset];
+	return m_spritecache_count[offset];
 }
 
 
@@ -258,14 +214,13 @@ static READ16_HANDLER( spritecache_count_r )
 
 
 
-static READ16_HANDLER( unknown_verify_r )
+READ16_MEMBER(offtwall_state::unknown_verify_r)
 {
-	offtwall_state *state = space->machine().driver_data<offtwall_state>();
-	int prevpc = cpu_get_previouspc(&space->device());
+	int prevpc = space.device().safe_pcbase();
 	if (prevpc < 0x5c5e || prevpc > 0xc432)
-		return state->m_unknown_verify_base[offset];
+		return m_unknown_verify_base[offset];
 	else
-		return state->m_unknown_verify_base[offset] | 0x100;
+		return m_unknown_verify_base[offset] | 0x100;
 }
 
 
@@ -276,30 +231,30 @@ static READ16_HANDLER( unknown_verify_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16, offtwall_state )
 	AM_RANGE(0x000000, 0x037fff) AM_ROM
-	AM_RANGE(0x038000, 0x03ffff) AM_READ(bankrom_r) AM_REGION("maincpu", 0x38000) AM_BASE_MEMBER(offtwall_state, m_bankrom_base)
-	AM_RANGE(0x120000, 0x120fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_SHARE("eeprom")
+	AM_RANGE(0x038000, 0x03ffff) AM_READ(bankrom_r) AM_REGION("maincpu", 0x38000) AM_SHARE("bankrom_base")
+	AM_RANGE(0x120000, 0x120fff) AM_DEVREADWRITE8("eeprom", atari_eeprom_device, read, write, 0x00ff)
 	AM_RANGE(0x260000, 0x260001) AM_READ_PORT("260000")
 	AM_RANGE(0x260002, 0x260003) AM_READ_PORT("260002")
-	AM_RANGE(0x260010, 0x260011) AM_READ(special_port3_r)
+	AM_RANGE(0x260010, 0x260011) AM_READ_PORT("260010")
 	AM_RANGE(0x260012, 0x260013) AM_READ_PORT("260012")
 	AM_RANGE(0x260020, 0x260021) AM_READ_PORT("260020")
 	AM_RANGE(0x260022, 0x260023) AM_READ_PORT("260022")
 	AM_RANGE(0x260024, 0x260025) AM_READ_PORT("260024")
-	AM_RANGE(0x260030, 0x260031) AM_READ(atarigen_sound_r)
-	AM_RANGE(0x260040, 0x260041) AM_WRITE(atarigen_sound_w)
+	AM_RANGE(0x260030, 0x260031) AM_DEVREAD8("jsa", atari_jsa_iii_device, main_response_r, 0x00ff)
+	AM_RANGE(0x260040, 0x260041) AM_DEVWRITE8("jsa", atari_jsa_iii_device, main_command_w, 0x00ff)
 	AM_RANGE(0x260050, 0x260051) AM_WRITE(io_latch_w)
-	AM_RANGE(0x260060, 0x260061) AM_WRITE(atarigen_eeprom_enable_w)
+	AM_RANGE(0x260060, 0x260061) AM_DEVWRITE("eeprom", atari_eeprom_device, unlock_write)
 	AM_RANGE(0x2a0000, 0x2a0001) AM_WRITE(watchdog_reset16_w)
-	AM_RANGE(0x3e0000, 0x3e0fff) AM_RAM_WRITE(atarigen_666_paletteram_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x3effc0, 0x3effff) AM_READWRITE(offtwall_atarivc_r, offtwall_atarivc_w) AM_BASE_MEMBER(offtwall_state, m_atarivc_data)
-	AM_RANGE(0x3f4000, 0x3f5eff) AM_RAM_WRITE(atarigen_playfield_latched_msb_w) AM_BASE_MEMBER(offtwall_state, m_playfield)
-	AM_RANGE(0x3f5f00, 0x3f5f7f) AM_RAM AM_BASE_MEMBER(offtwall_state, m_atarivc_eof_data)
-	AM_RANGE(0x3f5f80, 0x3f5fff) AM_READWRITE(atarimo_0_slipram_r, atarimo_0_slipram_w)
-	AM_RANGE(0x3f6000, 0x3f7fff) AM_RAM_WRITE(atarigen_playfield_upper_w) AM_BASE_MEMBER(offtwall_state, m_playfield_upper)
+	AM_RANGE(0x3e0000, 0x3e0fff) AM_RAM_WRITE(paletteram_666_w) AM_SHARE("paletteram")
+	AM_RANGE(0x3effc0, 0x3effff) AM_DEVREADWRITE("vad", atari_vad_device, control_read, control_write)
+	AM_RANGE(0x3f4000, 0x3f5eff) AM_RAM_DEVWRITE("vad", atari_vad_device, playfield_latched_msb_w) AM_SHARE("vad:playfield")
+	AM_RANGE(0x3f5f00, 0x3f5f7f) AM_RAM AM_SHARE("vad:eof")
+	AM_RANGE(0x3f5f80, 0x3f5fff) AM_RAM AM_SHARE("vad:mob:slip")
+	AM_RANGE(0x3f6000, 0x3f7fff) AM_RAM_DEVWRITE("vad", atari_vad_device, playfield_upper_w) AM_SHARE("vad:playfield_ext")
 	AM_RANGE(0x3f8000, 0x3fcfff) AM_RAM
-	AM_RANGE(0x3fd000, 0x3fd7ff) AM_READWRITE(atarimo_0_spriteram_r, atarimo_0_spriteram_w)
+	AM_RANGE(0x3fd000, 0x3fd7ff) AM_RAM AM_SHARE("vad:mob")
 	AM_RANGE(0x3fd800, 0x3fffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -344,14 +299,14 @@ static INPUT_PORTS_START( offtwall )
 	PORT_START("260010")
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_DIPNAME( 0x0002, 0x0000, DEF_STR( Controls ) )
-	PORT_DIPSETTING(      0x0000, "Whirly-gigs" )	/* this is official Atari terminology! */
+	PORT_DIPSETTING(      0x0000, "Whirly-gigs" )   /* this is official Atari terminology! */
 	PORT_DIPSETTING(      0x0002, "Joysticks" )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_UNUSED )	/* tested at a454 */
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNUSED )	/* tested at a466 */
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_UNUSED )   /* tested at a454 */
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNUSED )   /* tested at a466 */
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_UNUSED )	/* tested before writing to 260040 */
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_CUSTOM ) PORT_ATARI_JSA_MAIN_TO_SOUND_READY("jsa")  /* tested before writing to 260040 */
 	PORT_SERVICE( 0x0040, IP_ACTIVE_LOW )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_VBLANK )
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_CUSTOM ) PORT_VBLANK("screen")
 	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("260012")
@@ -368,8 +323,6 @@ static INPUT_PORTS_START( offtwall )
 	PORT_START("260024")
 	PORT_BIT( 0xff, 0, IPT_DIAL_V ) PORT_SENSITIVITY(50) PORT_KEYDELTA(10) PORT_REVERSE PORT_PLAYER(3)
 	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_INCLUDE( atarijsa_iii )		/* audio board port */
 INPUT_PORTS_END
 
 
@@ -393,7 +346,7 @@ static const gfx_layout pfmolayout =
 
 
 static GFXDECODE_START( offtwall )
-	GFXDECODE_ENTRY( "gfx1", 0, pfmolayout,  256, 32 )		/* sprites & playfield */
+	GFXDECODE_ENTRY( "gfx1", 0, pfmolayout,  256, 32 )      /* sprites & playfield */
 GFXDECODE_END
 
 
@@ -410,26 +363,34 @@ static MACHINE_CONFIG_START( offtwall, offtwall_state )
 	MCFG_CPU_ADD("maincpu", M68000, ATARI_CLOCK_14MHz/2)
 	MCFG_CPU_PROGRAM_MAP(main_map)
 
-	MCFG_MACHINE_START(offtwall)
-	MCFG_MACHINE_RESET(offtwall)
-	MCFG_NVRAM_ADD_1FILL("eeprom")
+	MCFG_MACHINE_RESET_OVERRIDE(offtwall_state,offtwall)
+
+	MCFG_ATARI_EEPROM_2816_ADD("eeprom")
 
 	/* video hardware */
 	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
 	MCFG_GFXDECODE(offtwall)
 	MCFG_PALETTE_LENGTH(2048)
 
+	MCFG_ATARI_VAD_ADD("vad", "screen", WRITELINE(atarigen_state, scanline_int_write_line))
+	MCFG_ATARI_VAD_PLAYFIELD(offtwall_state, get_playfield_tile_info)
+	MCFG_ATARI_VAD_MOB(offtwall_state::s_mob_config)
+
 	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	/* note: these parameters are from published specs, not derived */
 	/* the board uses a VAD chip to generate video signals */
 	MCFG_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
-	MCFG_SCREEN_UPDATE(offtwall)
+	MCFG_SCREEN_UPDATE_DRIVER(offtwall_state, screen_update_offtwall)
 
-	MCFG_VIDEO_START(offtwall)
+	MCFG_VIDEO_START_OVERRIDE(offtwall_state,offtwall)
 
 	/* sound hardware */
-	MCFG_FRAGMENT_ADD(jsa_iii_mono_noadpcm)
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_ATARI_JSA_III_ADD("jsa", WRITELINE(atarigen_state, sound_int_write_line))
+	MCFG_ATARI_JSA_TEST_PORT("260010", 6)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_DEVICE_REMOVE("jsa:oki1")
 MACHINE_CONFIG_END
 
 
@@ -441,11 +402,11 @@ MACHINE_CONFIG_END
  *************************************/
 
 ROM_START( offtwall )
-	ROM_REGION( 0x40000, "maincpu", 0 )	/* 4*64k for 68000 code */
+	ROM_REGION( 0x40000, "maincpu", 0 ) /* 4*64k for 68000 code */
 	ROM_LOAD16_BYTE( "otw2012.bin", 0x00000, 0x20000, CRC(d08d81eb) SHA1(5a72aa2e4fc6455b94aa59a7719d0ddc8bcc80f2) )
 	ROM_LOAD16_BYTE( "otw2013.bin", 0x00001, 0x20000, CRC(61c2553d) SHA1(343d39f9b75fd236e9769ec21ab65310f85e31ca) )
 
-	ROM_REGION( 0x14000, "jsa", 0 )	/* 64k for 6502 code */
+	ROM_REGION( 0x14000, "jsa:cpu", 0 ) /* 64k for 6502 code */
 	ROM_LOAD( "otw1020.bin", 0x10000, 0x4000, CRC(488112a5) SHA1(55e84855daacfa303d1031de8c9adb992a846e21) )
 	ROM_CONTINUE(            0x04000, 0xc000 )
 
@@ -457,17 +418,17 @@ ROM_START( offtwall )
 	ROM_LOAD( "otw1017.bin", 0x080000, 0x20000, CRC(7f7f8012) SHA1(1123ea3c6cd2c73617a87d6a5bbb26fca8941af3) )
 	ROM_LOAD( "otw1019.bin", 0x0a0000, 0x20000, CRC(9efe511b) SHA1(db1f1d8792bf497bc9ad652b0b7d78c3abf0e817) )
 
-	ROM_REGION( 0x1000, "eeprom", 0 )
-	ROM_LOAD( "offtwall-eeprom.bin", 0x0000, 0x1000, CRC(73dc2139) SHA1(28ee9be4b5a65708a4f3e7d88e98af15cd9badca) )
+	ROM_REGION( 0x800, "eeprom:eeprom", 0 )
+	ROM_LOAD( "offtwall-eeprom.bin", 0x0000, 0x800, CRC(5eaf2d5b) SHA1(934a76a23960e6ed2cc33c359f9735caee762145) )
 ROM_END
 
 
 ROM_START( offtwallc )
-	ROM_REGION( 0x40000, "maincpu", 0 )	/* 4*64k for 68000 code */
+	ROM_REGION( 0x40000, "maincpu", 0 ) /* 4*64k for 68000 code */
 	ROM_LOAD16_BYTE( "090-2612.rom", 0x00000, 0x20000, CRC(fc891a3f) SHA1(027815a20fbc6c0c9242768581b97362b39941c2) )
 	ROM_LOAD16_BYTE( "090-2613.rom", 0x00001, 0x20000, CRC(805d79d4) SHA1(943ec9f408ba875bdf1794ce7d24803043480401) )
 
-	ROM_REGION( 0x14000, "jsa", 0 )	/* 64k for 6502 code */
+	ROM_REGION( 0x14000, "jsa:cpu", 0 ) /* 64k for 6502 code */
 	ROM_LOAD( "otw1020.bin", 0x10000, 0x4000, CRC(488112a5) SHA1(55e84855daacfa303d1031de8c9adb992a846e21) )
 	ROM_CONTINUE(            0x04000, 0xc000 )
 
@@ -479,8 +440,8 @@ ROM_START( offtwallc )
 	ROM_LOAD( "090-1617.rom", 0x080000, 0x20000, CRC(15208a89) SHA1(124484ab54959a1e6d9022a4f3ee4288a79c768b) )
 	ROM_LOAD( "090-1619.rom", 0x0a0000, 0x20000, CRC(8a5d79b3) SHA1(0a202d20e6c86989ce2223e10eadf9009dd6ca8e) )
 
-	ROM_REGION( 0x1000, "eeprom", 0 )
-	ROM_LOAD( "offtwall-eeprom.bin", 0x0000, 0x1000, CRC(73dc2139) SHA1(28ee9be4b5a65708a4f3e7d88e98af15cd9badca) )
+	ROM_REGION( 0x800, "eeprom:eeprom", 0 )
+	ROM_LOAD( "offtwall-eeprom.bin", 0x0000, 0x800, CRC(5eaf2d5b) SHA1(934a76a23960e6ed2cc33c359f9735caee762145) )
 ROM_END
 
 
@@ -491,29 +452,21 @@ ROM_END
  *
  *************************************/
 
-static DRIVER_INIT( offtwall )
+DRIVER_INIT_MEMBER(offtwall_state,offtwall)
 {
-	offtwall_state *state = machine.driver_data<offtwall_state>();
-
-	atarijsa_init(machine, "260010", 0x0040);
-
 	/* install son-of-slapstic workarounds */
-	state->m_spritecache_count = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x3fde42, 0x3fde43, FUNC(spritecache_count_r));
-	state->m_bankswitch_base = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x037ec2, 0x037f39, FUNC(bankswitch_r));
-	state->m_unknown_verify_base = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x3fdf1e, 0x3fdf1f, FUNC(unknown_verify_r));
+	m_spritecache_count = m_maincpu->space(AS_PROGRAM).install_read_handler(0x3fde42, 0x3fde43, read16_delegate(FUNC(offtwall_state::spritecache_count_r),this));
+	m_bankswitch_base = m_maincpu->space(AS_PROGRAM).install_read_handler(0x037ec2, 0x037f39, read16_delegate(FUNC(offtwall_state::bankswitch_r),this));
+	m_unknown_verify_base = m_maincpu->space(AS_PROGRAM).install_read_handler(0x3fdf1e, 0x3fdf1f, read16_delegate(FUNC(offtwall_state::unknown_verify_r),this));
 }
 
 
-static DRIVER_INIT( offtwalc )
+DRIVER_INIT_MEMBER(offtwall_state,offtwalc)
 {
-	offtwall_state *state = machine.driver_data<offtwall_state>();
-
-	atarijsa_init(machine, "260010", 0x0040);
-
 	/* install son-of-slapstic workarounds */
-	state->m_spritecache_count = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x3fde42, 0x3fde43, FUNC(spritecache_count_r));
-	state->m_bankswitch_base = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x037eca, 0x037f43, FUNC(bankswitch_r));
-	state->m_unknown_verify_base = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x3fdf24, 0x3fdf25, FUNC(unknown_verify_r));
+	m_spritecache_count = m_maincpu->space(AS_PROGRAM).install_read_handler(0x3fde42, 0x3fde43, read16_delegate(FUNC(offtwall_state::spritecache_count_r),this));
+	m_bankswitch_base = m_maincpu->space(AS_PROGRAM).install_read_handler(0x037eca, 0x037f43, read16_delegate(FUNC(offtwall_state::bankswitch_r),this));
+	m_unknown_verify_base = m_maincpu->space(AS_PROGRAM).install_read_handler(0x3fdf24, 0x3fdf25, read16_delegate(FUNC(offtwall_state::unknown_verify_r),this));
 }
 
 
@@ -524,5 +477,5 @@ static DRIVER_INIT( offtwalc )
  *
  *************************************/
 
-GAME( 1991, offtwall, 0,        offtwall, offtwall, offtwall, ROT0, "Atari Games", "Off the Wall (2/3-player upright)", 0 )
-GAME( 1991, offtwallc,offtwall, offtwall, offtwall, offtwalc, ROT0, "Atari Games", "Off the Wall (2-player cocktail)", 0 )
+GAME( 1991, offtwall, 0,        offtwall, offtwall, offtwall_state, offtwall, ROT0, "Atari Games", "Off the Wall (2/3-player upright)", 0 )
+GAME( 1991, offtwallc,offtwall, offtwall, offtwall, offtwall_state, offtwalc, ROT0, "Atari Games", "Off the Wall (2-player cocktail)", 0 )

@@ -13,22 +13,20 @@ void deco_karnovsprites_device::set_gfx_region(device_t &device, int region)
 const device_type DECO_KARNOVSPRITES = &device_creator<deco_karnovsprites_device>;
 
 deco_karnovsprites_device::deco_karnovsprites_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, DECO_KARNOVSPRITES, "karnovsprites_device", tag, owner, clock),
-	  m_gfxregion(0)
+	: device_t(mconfig, DECO_KARNOVSPRITES, "karnovsprites_device", tag, owner, clock, "deco_karnovsprites", __FILE__),
+		m_gfxregion(0)
 {
 }
 
 void deco_karnovsprites_device::device_start()
 {
-
 }
 
 void deco_karnovsprites_device::device_reset()
 {
-
 }
 
-void deco_karnovsprites_device::draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect, UINT16* spriteram, int size, int priority )
+void deco_karnovsprites_device::draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, UINT16* spriteram, int size, int priority )
 {
 	int offs;
 
@@ -52,8 +50,9 @@ void deco_karnovsprites_device::draw_sprites( running_machine &machine, bitmap_t
 
 		fx = spriteram[offs + 1];
 
-		// the 8-bit implementation had this, why?
-		//if ((fx & 0x1) == 0) continue;
+		/* the 8-bit implementation had this.
+		           illustrated by enemy projectile explosions in Shackled being left on screen. */
+		if ((fx & 0x1) == 0) continue;
 
 		extra = (fx & 0x10) ? 1 : 0;
 		fy = fx & 0x2;
@@ -70,7 +69,7 @@ void deco_karnovsprites_device::draw_sprites( running_machine &machine, bitmap_t
 		y = (y + 16) % 0x200;
 		x = 256 - x;
 		y = 256 - y;
-		if (flip_screen_get(machine))
+		if (machine.driver_data()->flip_screen())
 		{
 			y = 240 - y;
 			x = 240 - x;
@@ -92,9 +91,9 @@ void deco_karnovsprites_device::draw_sprites( running_machine &machine, bitmap_t
 				sprite,
 				colour,fx,fy,x,y,0);
 
-    	/* 1 more sprite drawn underneath */
-    	if (extra)
-    		drawgfx_transpen(bitmap,cliprect,machine.gfx[m_gfxregion],
+		/* 1 more sprite drawn underneath */
+		if (extra)
+			drawgfx_transpen(bitmap,cliprect,machine.gfx[m_gfxregion],
 				sprite2,
 				colour,fx,fy,x,y+16,0);
 	}

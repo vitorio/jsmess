@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /*********************************************************************
 
     dvdisasm.c
 
     Disassembly debugger view.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -54,9 +25,9 @@
 
 debug_view_disasm_source::debug_view_disasm_source(const char *name, device_t &device)
 	: debug_view_source(name, &device),
-	  m_device(device),
-	  m_disasmintf(dynamic_cast<device_disasm_interface *>(&device)),
-	  m_space(dynamic_cast<device_memory_interface *>(&device)->space(AS_PROGRAM))
+		m_device(device),
+		m_disasmintf(dynamic_cast<device_disasm_interface *>(&device)),
+		m_space(device.memory().space(AS_PROGRAM))
 {
 }
 
@@ -72,20 +43,20 @@ debug_view_disasm_source::debug_view_disasm_source(const char *name, device_t &d
 
 debug_view_disasm::debug_view_disasm(running_machine &machine, debug_view_osd_update_func osdupdate, void *osdprivate)
 	: debug_view(machine, DVT_DISASSEMBLY, osdupdate, osdprivate),
-	  m_right_column(DASM_RIGHTCOL_RAW),
-	  m_backwards_steps(3),
-	  m_dasm_width(DEFAULT_DASM_WIDTH),
-	  m_last_direct_raw(NULL),
-	  m_last_direct_decrypted(NULL),
-	  m_last_change_count(0),
-	  m_last_pcbyte(0),
-	  m_divider1(0),
-	  m_divider2(0),
-	  m_divider3(0),
-	  m_expression(machine),
-	  m_allocated(0,0),
-	  m_byteaddress(NULL),
-	  m_dasm(NULL)
+		m_right_column(DASM_RIGHTCOL_RAW),
+		m_backwards_steps(3),
+		m_dasm_width(DEFAULT_DASM_WIDTH),
+		m_last_direct_raw(NULL),
+		m_last_direct_decrypted(NULL),
+		m_last_change_count(0),
+		m_last_pcbyte(0),
+		m_divider1(0),
+		m_divider2(0),
+		m_divider3(0),
+		m_expression(machine),
+		m_allocated(0,0),
+		m_byteaddress(NULL),
+		m_dasm(NULL)
 {
 	// fail if no available sources
 	enumerate_sources();
@@ -99,10 +70,6 @@ debug_view_disasm::debug_view_disasm(running_machine &machine, debug_view_osd_up
 		const debug_view_disasm_source &dasmsource = downcast<const debug_view_disasm_source &>(*source);
 		total_comments += dasmsource.m_device.debug()->comment_count();
 	}
-
-	// initialize
-	if (total_comments > 0)
-		m_right_column = DASM_RIGHTCOL_COMMENTS;
 
 	// configure the view
 	m_total.y = DEFAULT_DASM_LINES;
@@ -132,9 +99,9 @@ void debug_view_disasm::enumerate_sources()
 	m_source_list.reset();
 
 	// iterate over devices with disassembly interfaces
-	device_disasm_interface *dasm = NULL;
+	disasm_interface_iterator iter(machine().root_device());
 	astring name;
-	for (bool gotone = machine().devicelist().first(dasm); gotone; gotone = dasm->next(dasm))
+	for (device_disasm_interface *dasm = iter.first(); dasm != NULL; dasm = iter.next())
 	{
 		name.printf("%s '%s'", dasm->device().name(), dasm->device().tag());
 		m_source_list.append(*auto_alloc(machine(), debug_view_disasm_source(name, dasm->device())));
@@ -199,10 +166,10 @@ void debug_view_disasm::view_char(int chval)
 				m_cursor.y = temp;
 			break;
 
-		case DCH_HOME:				// set the active column to the PC
+		case DCH_HOME:              // set the active column to the PC
 		{
 			const debug_view_disasm_source &source = downcast<const debug_view_disasm_source &>(*m_source);
-			offs_t pc = source.m_space->address_to_byte(cpu_get_pc(&source.m_device)) & source.m_space->logbytemask();
+			offs_t pc = source.m_space.address_to_byte(source.m_device.safe_pc()) & source.m_space.logbytemask();
 
 			// figure out which row the pc is on
 			for (int curline = 0; curline < m_allocated.y; curline++)
@@ -232,6 +199,32 @@ void debug_view_disasm::view_char(int chval)
 
 
 //-------------------------------------------------
+//  view_click - handle a mouse click within the
+//  current view
+//-------------------------------------------------
+
+void debug_view_disasm::view_click(const int button, const debug_view_xy& pos)
+{
+	const debug_view_xy origcursor = m_cursor;
+	m_cursor = pos;
+
+	/* cursor popup|toggle */
+	bool cursorVisible = true;
+	if (m_cursor.y == origcursor.y)
+	{
+		cursorVisible = !m_cursor_visible;
+	}
+
+	/* send a cursor changed notification */
+	begin_update();
+	m_cursor_visible = cursorVisible;
+	view_notify(VIEW_NOTIFY_CURSOR_CHANGED);
+	m_update_pending = true;
+	end_update();
+}
+
+
+//-------------------------------------------------
 //  find_pc_backwards - back up the specified
 //  number of instructions from the given PC
 //-------------------------------------------------
@@ -241,9 +234,9 @@ offs_t debug_view_disasm::find_pc_backwards(offs_t targetpc, int numinstrs)
 	const debug_view_disasm_source &source = downcast<const debug_view_disasm_source &>(*m_source);
 
 	// compute the increment
-	int minlen = source.m_space->byte_to_address(source.m_disasmintf->min_opcode_bytes());
+	int minlen = source.m_space.byte_to_address(source.m_disasmintf->min_opcode_bytes());
 	if (minlen == 0) minlen = 1;
-	int maxlen = source.m_space->byte_to_address(source.m_disasmintf->max_opcode_bytes());
+	int maxlen = source.m_space.byte_to_address(source.m_disasmintf->max_opcode_bytes());
 	if (maxlen == 0) maxlen = 1;
 
 	// start off numinstrs back
@@ -252,13 +245,13 @@ offs_t debug_view_disasm::find_pc_backwards(offs_t targetpc, int numinstrs)
 		curpc = 0;
 
 	/* loop until we find what we are looking for */
-	offs_t targetpcbyte = source.m_space->address_to_byte(targetpc) & source.m_space->logbytemask();
+	offs_t targetpcbyte = source.m_space.address_to_byte(targetpc) & source.m_space.logbytemask();
 	offs_t fillpcbyte = targetpcbyte;
 	offs_t lastgoodpc = targetpc;
 	while (1)
 	{
 		// fill the buffer up to the target
-		offs_t curpcbyte = source.m_space->address_to_byte(curpc) & source.m_space->logbytemask();
+		offs_t curpcbyte = source.m_space.address_to_byte(curpc) & source.m_space.logbytemask();
 		UINT8 opbuf[1024], argbuf[1024];
 		while (curpcbyte < fillpcbyte)
 		{
@@ -273,7 +266,7 @@ offs_t debug_view_disasm::find_pc_backwards(offs_t targetpc, int numinstrs)
 		offs_t scanpc;
 		for (scanpc = curpc; scanpc < targetpc; scanpc += instlen)
 		{
-			offs_t scanpcbyte = source.m_space->address_to_byte(scanpc) & source.m_space->logbytemask();
+			offs_t scanpcbyte = source.m_space.address_to_byte(scanpc) & source.m_space.logbytemask();
 			offs_t physpcbyte = scanpcbyte;
 
 			// get the disassembly, but only if mapped
@@ -318,21 +311,21 @@ offs_t debug_view_disasm::find_pc_backwards(offs_t targetpc, int numinstrs)
 void debug_view_disasm::generate_bytes(offs_t pcbyte, int numbytes, int minbytes, char *string, int maxchars, bool encrypted)
 {
 	const debug_view_disasm_source &source = downcast<const debug_view_disasm_source &>(*m_source);
-
+	int char_num = source.is_octal() ? 3 : 2;
 	// output the first value
 	int offset = 0;
-	if (maxchars >= 2 * minbytes)
-		offset = sprintf(string, "%s", core_i64_hex_format(debug_read_opcode(source.m_space, pcbyte, minbytes, FALSE), minbytes * 2));
+	if (maxchars >= char_num * minbytes)
+		offset = sprintf(string, "%s", core_i64_format(debug_read_opcode(source.m_space, pcbyte, minbytes, FALSE), minbytes * char_num, source.is_octal()));
 
 	// output subsequent values
 	int byte;
-	for (byte = minbytes; byte < numbytes && offset + 1 + 2 * minbytes < maxchars; byte += minbytes)
-		offset += sprintf(&string[offset], " %s", core_i64_hex_format(debug_read_opcode(source.m_space, pcbyte + byte, minbytes, encrypted), minbytes * 2));
+	for (byte = minbytes; byte < numbytes && offset + 1 + char_num * minbytes < maxchars; byte += minbytes)
+		offset += sprintf(&string[offset], " %s", core_i64_format(debug_read_opcode(source.m_space, pcbyte + byte, minbytes, encrypted), minbytes * char_num, source.is_octal()));
 
 	// if we ran out of room, indicate more
 	string[maxchars - 1] = 0;
-	if (byte < numbytes && maxchars > 3)
-		string[maxchars - 2] = string[maxchars - 3] = string[maxchars - 4] = '.';
+	if (byte < numbytes && maxchars > (char_num*2 -1))
+		string[maxchars - char_num] = string[maxchars - char_num - 1] = string[maxchars - char_num -2] = '.';
 }
 
 
@@ -345,9 +338,10 @@ bool debug_view_disasm::recompute(offs_t pc, int startline, int lines)
 {
 	bool changed = false;
 	const debug_view_disasm_source &source = downcast<const debug_view_disasm_source &>(*m_source);
+	int char_num =  source.is_octal() ? 3 : 2;
 
 	// determine how many characters we need for an address and set the divider
-	m_divider1 = 1 + source.m_space->logaddrchars() + 1;
+	m_divider1 = 1 + (source.m_space.logaddrchars()/2*char_num) + 1;
 
 	// assume a fixed number of characters for the disassembly
 	m_divider2 = m_divider1 + 1 + m_dasm_width + 1;
@@ -357,16 +351,16 @@ bool debug_view_disasm::recompute(offs_t pc, int startline, int lines)
 	int maxbytes = source.m_disasmintf->max_opcode_bytes();
 
 	// ensure that the PC is aligned to the minimum opcode size
-	pc &= ~source.m_space->byte_to_address_end(minbytes - 1);
+	pc &= ~source.m_space.byte_to_address_end(minbytes - 1);
 
 	// set the width of the third column according to display mode
 	if (m_right_column == DASM_RIGHTCOL_RAW || m_right_column == DASM_RIGHTCOL_ENCRYPTED)
 	{
 		int maxbytes_clamped = MIN(maxbytes, DASM_MAX_BYTES);
-		m_total.x = m_divider2 + 1 + 2 * maxbytes_clamped + (maxbytes_clamped / minbytes - 1) + 1;
+		m_total.x = m_divider2 + 1 + char_num * maxbytes_clamped + (maxbytes_clamped / minbytes - 1) + 1;
 	}
 	else if (m_right_column == DASM_RIGHTCOL_COMMENTS)
-		m_total.x = m_divider2 + 1 + 50;		// DEBUG_COMMENT_MAX_LINE_LENGTH
+		m_total.x = m_divider2 + 1 + 50;        // DEBUG_COMMENT_MAX_LINE_LENGTH
 	else
 		m_total.x = m_divider2 + 1;
 
@@ -389,7 +383,7 @@ bool debug_view_disasm::recompute(offs_t pc, int startline, int lines)
 	for (int line = 0; line < lines; line++)
 	{
 		// convert PC to a byte offset
-		offs_t pcbyte = source.m_space->address_to_byte(pc) & source.m_space->logbytemask();
+		offs_t pcbyte = source.m_space.address_to_byte(pc) & source.m_space.logbytemask();
 
 		// save a copy of the previous line as a backup if we're only doing one line
 		int instr = startline + line;
@@ -400,7 +394,7 @@ bool debug_view_disasm::recompute(offs_t pc, int startline, int lines)
 
 		// convert back and set the address of this instruction
 		m_byteaddress[instr] = pcbyte;
-		sprintf(&destbuf[0], " %s  ", core_i64_hex_format(source.m_space->byte_to_address(pcbyte), source.m_space->logaddrchars()));
+		sprintf(&destbuf[0], " %s  ", core_i64_format(source.m_space.byte_to_address(pcbyte), source.m_space.logaddrchars()/2*char_num, source.is_octal()));
 
 		// make sure we can translate the address, and then disassemble the result
 		char buffer[100];
@@ -418,7 +412,7 @@ bool debug_view_disasm::recompute(offs_t pc, int startline, int lines)
 			}
 
 			// disassemble the result
-			pc += numbytes = source.m_device.debug()->disassemble(buffer, pc & source.m_space->logaddrmask(), opbuf, argbuf) & DASMFLAG_LENGTHMASK;
+			pc += numbytes = source.m_device.debug()->disassemble(buffer, pc & source.m_space.logaddrmask(), opbuf, argbuf) & DASMFLAG_LENGTHMASK;
 		}
 		else
 			strcpy(buffer, "<unmapped>");
@@ -430,13 +424,13 @@ bool debug_view_disasm::recompute(offs_t pc, int startline, int lines)
 		if (m_right_column == DASM_RIGHTCOL_RAW || m_right_column == DASM_RIGHTCOL_ENCRYPTED)
 		{
 			// get the bytes
-			numbytes = source.m_space->address_to_byte(numbytes) & source.m_space->logbytemask();
+			numbytes = source.m_space.address_to_byte(numbytes) & source.m_space.logbytemask();
 			generate_bytes(pcbyte, numbytes, minbytes, &destbuf[m_divider2], m_allocated.x - m_divider2, m_right_column == DASM_RIGHTCOL_ENCRYPTED);
 		}
 		else if (m_right_column == DASM_RIGHTCOL_COMMENTS)
 		{
 			// get and add the comment, if present
-			offs_t comment_address = source.m_space->byte_to_address(m_byteaddress[instr]);
+			offs_t comment_address = source.m_space.byte_to_address(m_byteaddress[instr]);
 			const char *text = source.m_device.debug()->comment_text(comment_address);
 			if (text != NULL)
 				sprintf(&destbuf[m_divider2], "// %.*s", m_allocated.x - m_divider2 - 1, text);
@@ -448,8 +442,8 @@ bool debug_view_disasm::recompute(offs_t pc, int startline, int lines)
 	}
 
 	// update opcode base information
-	m_last_direct_decrypted = source.m_space->direct().decrypted();
-	m_last_direct_raw = source.m_space->direct().raw();
+	m_last_direct_decrypted = source.m_space.direct().decrypted();
+	m_last_direct_raw = source.m_space.direct().raw();
 	m_last_change_count = source.m_device.debug()->comment_change_count();
 
 	// now longer need to recompute
@@ -467,8 +461,8 @@ void debug_view_disasm::view_update()
 {
 	const debug_view_disasm_source &source = downcast<const debug_view_disasm_source &>(*m_source);
 
-	offs_t pc = cpu_get_pc(&source.m_device);
-	offs_t pcbyte = source.m_space->address_to_byte(pc) & source.m_space->logbytemask();
+	offs_t pc = source.m_device.safe_pc();
+	offs_t pcbyte = source.m_space.address_to_byte(pc) & source.m_space.logbytemask();
 
 	// update our context; if the expression is dirty, recompute
 	if (m_expression.dirty())
@@ -479,7 +473,7 @@ void debug_view_disasm::view_update()
 	UINT64 result = m_expression.value();
 	if (result != previous)
 	{
-		offs_t resultbyte = source.m_space->address_to_byte(result) & source.m_space->logbytemask();
+		offs_t resultbyte = source.m_space.address_to_byte(result) & source.m_space.logbytemask();
 
 		// see if the new result is an address we already have
 		UINT32 row;
@@ -497,7 +491,7 @@ void debug_view_disasm::view_update()
 	}
 
 	// if the opcode base has changed, rework things
-	if (source.m_space->direct().decrypted() != m_last_direct_decrypted || source.m_space->direct().raw() != m_last_direct_raw)
+	if (source.m_space.direct().decrypted() != m_last_direct_decrypted || source.m_space.direct().raw() != m_last_direct_raw)
 		m_recompute = true;
 
 	// if the comments have changed, redo it
@@ -516,7 +510,7 @@ recompute:
 			m_topleft.x = 0;
 
 			// recompute from where we last recomputed!
-			recompute(source.m_space->byte_to_address(m_byteaddress[0]), 0, m_total.y);
+			recompute(source.m_space.byte_to_address(m_byteaddress[0]), 0, m_total.y);
 		}
 		else
 		{
@@ -578,13 +572,17 @@ recompute:
 			else
 			{
 				for (device_debug::breakpoint *bp = source.m_device.debug()->breakpoint_first(); bp != NULL; bp = bp->next())
-					if (m_byteaddress[effrow] == (source.m_space->address_to_byte(bp->address()) & source.m_space->logbytemask()))
+					if (m_byteaddress[effrow] == (source.m_space.address_to_byte(bp->address()) & source.m_space.logbytemask()))
 						attrib = DCA_CHANGED;
 			}
 
 			// if we're on the active column and everything is couth, highlight it
 			if (m_cursor_visible && effrow == m_cursor.y)
 				attrib |= DCA_SELECTED;
+
+			// if we've visited this pc, mark it as such
+			if (source.m_device.debug()->track_pc_visited(m_byteaddress[effrow]))
+				attrib |= DCA_VISITED;
 
 			// get the effective string
 			const char *data = &m_dasm[effrow * m_allocated.x];
@@ -626,7 +624,7 @@ recompute:
 offs_t debug_view_disasm::selected_address()
 {
 	flush_updates();
-	return downcast<const debug_view_disasm_source &>(*m_source).m_space->byte_to_address(m_byteaddress[m_cursor.y]);
+	return downcast<const debug_view_disasm_source &>(*m_source).m_space.byte_to_address(m_byteaddress[m_cursor.y]);
 }
 
 
@@ -694,7 +692,7 @@ void debug_view_disasm::set_disasm_width(UINT32 width)
 void debug_view_disasm::set_selected_address(offs_t address)
 {
 	const debug_view_disasm_source &source = downcast<const debug_view_disasm_source &>(*m_source);
-	offs_t byteaddress = source.m_space->address_to_byte(address) & source.m_space->logbytemask();
+	offs_t byteaddress = source.m_space.address_to_byte(address) & source.m_space.logbytemask();
 	for (int line = 0; line < m_total.y; line++)
 		if (m_byteaddress[line] == byteaddress)
 		{

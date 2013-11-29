@@ -9,7 +9,6 @@
     - Proper artwork
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/m6800/m6800.h"
@@ -21,7 +20,7 @@ class et3400_state : public driver_device
 public:
 	et3400_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, "maincpu")
+			m_maincpu(*this, "maincpu")
 	{ }
 
 	required_device<cpu_device> m_maincpu;
@@ -36,11 +35,11 @@ READ8_MEMBER( et3400_state::et3400_keypad_r )
 	UINT8 data = 0xff;
 
 	if (~offset & 4)
-		data &= input_port_read(machine(), "X2");
+		data &= ioport("X2")->read();
 	if (~offset & 2)
-		data &= input_port_read(machine(), "X1");
+		data &= ioport("X1")->read();
 	if (~offset & 1)
-		data &= input_port_read(machine(), "X0");
+		data &= ioport("X0")->read();
 
 	return data;
 }
@@ -119,5 +118,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1976, et3400,  0,     0,       et3400,    et3400,  0,    "Heath Inc", "Heathkit ET-3400", GAME_NO_SOUND_HW)
-
+COMP( 1976, et3400,  0,     0,       et3400,    et3400, driver_device,  0,    "Heath Inc", "Heathkit ET-3400", GAME_NO_SOUND_HW)

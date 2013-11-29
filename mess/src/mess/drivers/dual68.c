@@ -5,7 +5,6 @@
         09/12/2009 Skeleton driver.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
@@ -20,26 +19,28 @@ public:
 		: driver_device(mconfig, type, tag),
 	m_maincpu(*this, "maincpu"),
 	m_terminal(*this, TERMINAL_TAG)
-	{ }
+	,
+		m_p_ram(*this, "p_ram"){ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_terminal;
+	required_device<generic_terminal_device> m_terminal;
 	DECLARE_WRITE8_MEMBER( kbd_put );
 	DECLARE_WRITE16_MEMBER( dual68_terminal_w );
 	//UINT8 m_term_data;
-	UINT16* m_p_ram;
+	required_shared_ptr<UINT16> m_p_ram;
+	virtual void machine_reset();
 };
 
 
 
 WRITE16_MEMBER( dual68_state::dual68_terminal_w )
 {
-	terminal_write(m_terminal, 0, data >> 8);
+	m_terminal->write(space, 0, data >> 8);
 }
 
 static ADDRESS_MAP_START(dual68_mem, AS_PROGRAM, 16, dual68_state)
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x00000000, 0x0000ffff) AM_RAM AM_BASE(m_p_ram)
+	AM_RANGE(0x00000000, 0x0000ffff) AM_RAM AM_SHARE("p_ram")
 	AM_RANGE(0x00080000, 0x00081fff) AM_ROM AM_REGION("user1",0)
 	AM_RANGE(0x007f0000, 0x007f0001) AM_WRITE(dual68_terminal_w)
 	AM_RANGE(0x00800000, 0x00801fff) AM_ROM AM_REGION("user1",0)
@@ -60,14 +61,13 @@ static INPUT_PORTS_START( dual68 )
 INPUT_PORTS_END
 
 
-static MACHINE_RESET(dual68)
+void dual68_state::machine_reset()
 {
-	dual68_state *state = machine.driver_data<dual68_state>();
-	UINT8* user1 = machine.region("user1")->base();
+	UINT8* user1 = memregion("user1")->base();
 
-	memcpy((UINT8*)state->m_p_ram,user1,0x2000);
+	memcpy((UINT8*)m_p_ram.target(),user1,0x2000);
 
-	machine.device("maincpu")->reset();
+	m_maincpu->reset();
 }
 
 WRITE8_MEMBER( dual68_state::kbd_put )
@@ -89,10 +89,8 @@ static MACHINE_CONFIG_START( dual68, dual68_state )
 	MCFG_CPU_PROGRAM_MAP(sio4_mem)
 	MCFG_CPU_IO_MAP(sio4_io)
 
-	MCFG_MACHINE_RESET(dual68)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG,terminal_intf)
 MACHINE_CONFIG_END
 
@@ -114,5 +112,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY                        FULLNAME       FLAGS */
-COMP( 1981, dual68,  0,     0,       dual68,    dual68,   0,  "Dual Systems Corporation", "Dual Systems 68000", GAME_NOT_WORKING | GAME_NO_SOUND)
-
+COMP( 1981, dual68,  0,     0,       dual68,    dual68, driver_device,   0,  "Dual Systems Corporation", "Dual Systems 68000", GAME_NOT_WORKING | GAME_NO_SOUND)

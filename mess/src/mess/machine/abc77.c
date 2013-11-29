@@ -1,9 +1,18 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
+/**********************************************************************
+
+    Luxor ABC-55/77 keyboard emulation
+
+    Copyright MESS Team.
+    Visit http://mamedev.org for licensing and usage restrictions.
+
+*********************************************************************/
+
 /*
 
-Luxor ABC55/77
-
-Keyboard PCB Layout
--------------------
+PCB Layout
+----------
 
 KTC A65-02486-232
 
@@ -43,8 +52,8 @@ Notes:
 //  MACROS / CONSTANTS
 //**************************************************************************
 
-#define I8035_TAG		"z16"
-#define DISCRETE_TAG	"discrete"
+#define I8035_TAG       "z16"
+#define DISCRETE_TAG    "discrete"
 
 
 
@@ -53,31 +62,7 @@ Notes:
 //**************************************************************************
 
 const device_type ABC77 = &device_creator<abc77_device>;
-
-
-//-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
-//-------------------------------------------------
-
-void abc77_device::device_config_complete()
-{
-	// inherit a copy of the static data
-	const abc77_interface *intf = reinterpret_cast<const abc77_interface *>(static_config());
-	if (intf != NULL)
-		*static_cast<abc77_interface *>(this) = *intf;
-
-	// or initialize to defaults if none provided
-	else
-	{
-		memset(&m_out_txd_cb, 0, sizeof(m_out_txd_cb));
-		memset(&m_out_clock_cb, 0, sizeof(m_out_clock_cb));
-		memset(&m_out_keydown_cb, 0, sizeof(m_out_keydown_cb));
-	}
-
-	m_shortname = "abc77";
-}
+const device_type ABC55 = &device_creator<abc55_device>;
 
 
 //-------------------------------------------------
@@ -131,7 +116,7 @@ ADDRESS_MAP_END
 static const discrete_555_desc abc77_ne556_a =
 {
 	DISC_555_OUT_SQW | DISC_555_OUT_DC,
-	5,		// B+ voltage of 555
+	5,      // B+ voltage of 555
 	DEFAULT_555_VALUES
 };
 
@@ -176,25 +161,23 @@ machine_config_constructor abc77_device::device_mconfig_additions() const
 
 
 //-------------------------------------------------
-//  INPUT_CHANGED( keyboard_reset )
+//  INPUT_CHANGED_MEMBER( keyboard_reset )
 //-------------------------------------------------
 
-INPUT_CHANGED( abc77_device::keyboard_reset )
+INPUT_CHANGED_MEMBER( abc77_device::keyboard_reset )
 {
-    abc77_device *keyboard = static_cast<abc77_device *>(field.machine().device(ABC77_TAG));
-
 	if (oldval && !newval)
 	{
-		keyboard->device_reset();
+		device_reset();
 	}
 }
 
 
 //-------------------------------------------------
-//  INPUT_PORTS( abc77 )
+//  INPUT_PORTS( abc55 )
 //-------------------------------------------------
 
-INPUT_PORTS_START( abc77 )
+INPUT_PORTS_START( abc55 )
 	PORT_START("X0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -286,23 +269,23 @@ INPUT_PORTS_START( abc77 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_X) PORT_CHAR('x') PORT_CHAR('X')
 
 	PORT_START("X9")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 9") PORT_CODE(KEYCODE_9_PAD) PORT_CHAR(UCHAR_MAMEKEY(9_PAD))
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad +") PORT_CODE(KEYCODE_PLUS_PAD) PORT_CHAR(UCHAR_MAMEKEY(PLUS_PAD))
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 6") PORT_CODE(KEYCODE_6_PAD) PORT_CHAR(UCHAR_MAMEKEY(6_PAD))
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad -") PORT_CODE(KEYCODE_MINUS_PAD) PORT_CHAR(UCHAR_MAMEKEY(MINUS_PAD))
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 3") PORT_CODE(KEYCODE_3_PAD) PORT_CHAR(UCHAR_MAMEKEY(3_PAD))
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad RETURN") PORT_CODE(KEYCODE_ENTER_PAD) PORT_CHAR(UCHAR_MAMEKEY(ENTER_PAD))
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad .") PORT_CODE(KEYCODE_DEL_PAD) PORT_CHAR(UCHAR_MAMEKEY(DEL_PAD))
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("X10")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 7") PORT_CODE(KEYCODE_7_PAD) PORT_CHAR(UCHAR_MAMEKEY(7_PAD))
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 8") PORT_CODE(KEYCODE_8_PAD) PORT_CHAR(UCHAR_MAMEKEY(8_PAD))
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 4") PORT_CODE(KEYCODE_4_PAD) PORT_CHAR(UCHAR_MAMEKEY(4_PAD))
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 5") PORT_CODE(KEYCODE_5_PAD) PORT_CHAR(UCHAR_MAMEKEY(5_PAD))
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 1") PORT_CODE(KEYCODE_1_PAD) PORT_CHAR(UCHAR_MAMEKEY(1_PAD))
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 2") PORT_CODE(KEYCODE_2_PAD) PORT_CHAR(UCHAR_MAMEKEY(2_PAD))
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 0") PORT_CODE(KEYCODE_0_PAD) PORT_CHAR(UCHAR_MAMEKEY(0_PAD))
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("X11")
@@ -325,7 +308,7 @@ INPUT_PORTS_START( abc77 )
 	PORT_DIPNAME( 0x04, 0x04, "External Encoding PROM" ) // @ Z14
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x18, 0x18, "Keyboard Language" ) PORT_CONDITION("DSW", 0x04, PORTCOND_EQUALS, 0x00)
+	PORT_DIPNAME( 0x18, 0x18, "Keyboard Language" ) PORT_CONDITION("DSW", 0x04, EQUALS, 0x00)
 	PORT_DIPSETTING(    0x00, "Danish" )
 	PORT_DIPSETTING(    0x10, DEF_STR( French ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( German ) )
@@ -333,7 +316,46 @@ INPUT_PORTS_START( abc77 )
 	PORT_BIT( 0xe0, IP_ACTIVE_LOW, IPT_UNUSED)
 
 	PORT_START("SW1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_NAME("Keyboard Reset") PORT_CHANGED(abc77_device::keyboard_reset, 0)
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_NAME("Keyboard Reset") PORT_CHANGED_MEMBER(DEVICE_SELF, abc77_device, keyboard_reset, 0)
+INPUT_PORTS_END
+
+
+//-------------------------------------------------
+//  input_ports - device-specific input ports
+//-------------------------------------------------
+
+ioport_constructor abc55_device::device_input_ports() const
+{
+	return INPUT_PORTS_NAME( abc55 );
+}
+
+
+//-------------------------------------------------
+//  INPUT_PORTS( abc77 )
+//-------------------------------------------------
+
+INPUT_PORTS_START( abc77 )
+	PORT_INCLUDE( abc55 )
+
+	PORT_MODIFY("X9")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 9") PORT_CODE(KEYCODE_9_PAD) PORT_CHAR(UCHAR_MAMEKEY(9_PAD))
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad +") PORT_CODE(KEYCODE_PLUS_PAD) PORT_CHAR(UCHAR_MAMEKEY(PLUS_PAD))
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 6") PORT_CODE(KEYCODE_6_PAD) PORT_CHAR(UCHAR_MAMEKEY(6_PAD))
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad -") PORT_CODE(KEYCODE_MINUS_PAD) PORT_CHAR(UCHAR_MAMEKEY(MINUS_PAD))
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 3") PORT_CODE(KEYCODE_3_PAD) PORT_CHAR(UCHAR_MAMEKEY(3_PAD))
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad RETURN") PORT_CODE(KEYCODE_ENTER_PAD) PORT_CHAR(UCHAR_MAMEKEY(ENTER_PAD))
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad .") PORT_CODE(KEYCODE_DEL_PAD) PORT_CHAR(UCHAR_MAMEKEY(DEL_PAD))
+
+	PORT_MODIFY("X10")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 7") PORT_CODE(KEYCODE_7_PAD) PORT_CHAR(UCHAR_MAMEKEY(7_PAD))
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 8") PORT_CODE(KEYCODE_8_PAD) PORT_CHAR(UCHAR_MAMEKEY(8_PAD))
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 4") PORT_CODE(KEYCODE_4_PAD) PORT_CHAR(UCHAR_MAMEKEY(4_PAD))
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 5") PORT_CODE(KEYCODE_5_PAD) PORT_CHAR(UCHAR_MAMEKEY(5_PAD))
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 1") PORT_CODE(KEYCODE_1_PAD) PORT_CHAR(UCHAR_MAMEKEY(1_PAD))
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 2") PORT_CODE(KEYCODE_2_PAD) PORT_CHAR(UCHAR_MAMEKEY(2_PAD))
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 0") PORT_CODE(KEYCODE_0_PAD) PORT_CHAR(UCHAR_MAMEKEY(0_PAD))
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 
@@ -361,8 +383,6 @@ inline void abc77_device::serial_output(int state)
 	if (m_txd != state)
 	{
 		m_txd = state;
-
-		m_out_txd_func(m_txd);
 	}
 }
 
@@ -375,7 +395,7 @@ inline void abc77_device::serial_clock()
 {
 	m_clock = !m_clock;
 
-	m_out_clock_func(!m_clock);
+	m_slot->trxc_w(!m_clock);
 }
 
 
@@ -387,7 +407,7 @@ inline void abc77_device::key_down(int state)
 {
 	if (m_keydown != state)
 	{
-		m_out_keydown_func(state);
+		m_slot->keydown_w(state);
 		m_keydown = state;
 	}
 }
@@ -403,15 +423,57 @@ inline void abc77_device::key_down(int state)
 //-------------------------------------------------
 
 abc77_device::abc77_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, ABC77, "Luxor ABC 77", tag, owner, clock),
-	  m_maincpu(*this, I8035_TAG),
-	  m_discrete(*this, DISCRETE_TAG),
-	  m_txd(1),
-	  m_keydown(1),
-	  m_clock(0),
-	  m_stb(1)
+	: device_t(mconfig, ABC77, "Luxor ABC 77", tag, owner, clock, "abc77", __FILE__),
+		abc_keyboard_interface(mconfig, *this),
+		m_maincpu(*this, I8035_TAG),
+		m_discrete(*this, DISCRETE_TAG),
+		m_x0(*this, "X0"),
+		m_x1(*this, "X1"),
+		m_x2(*this, "X2"),
+		m_x3(*this, "X3"),
+		m_x4(*this, "X4"),
+		m_x5(*this, "X5"),
+		m_x6(*this, "X6"),
+		m_x7(*this, "X7"),
+		m_x8(*this, "X8"),
+		m_x9(*this, "X9"),
+		m_x10(*this, "X10"),
+		m_x11(*this, "X11"),
+		m_dsw(*this, "DSW"),
+		m_txd(1),
+		m_keydown(1),
+		m_clock(0),
+		m_stb(1)
 {
 }
+
+abc77_device::abc77_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source)
+	: device_t(mconfig, type, name, tag, owner, clock, shortname, source),
+		abc_keyboard_interface(mconfig, *this),
+		m_maincpu(*this, I8035_TAG),
+		m_discrete(*this, DISCRETE_TAG),
+		m_x0(*this, "X0"),
+		m_x1(*this, "X1"),
+		m_x2(*this, "X2"),
+		m_x3(*this, "X3"),
+		m_x4(*this, "X4"),
+		m_x5(*this, "X5"),
+		m_x6(*this, "X6"),
+		m_x7(*this, "X7"),
+		m_x8(*this, "X8"),
+		m_x9(*this, "X9"),
+		m_x10(*this, "X10"),
+		m_x11(*this, "X11"),
+		m_dsw(*this, "DSW"),
+		m_txd(1),
+		m_keydown(1),
+		m_clock(0),
+		m_stb(1)
+{
+}
+
+abc55_device::abc55_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: abc77_device(mconfig, ABC55, "Luxor ABC 55", tag, owner, clock, "abc55", __FILE__) { }
 
 
 //-------------------------------------------------
@@ -425,11 +487,6 @@ void abc77_device::device_start()
 	m_serial_timer->adjust(attotime::from_hz(19200), 0, attotime::from_hz(19200)); // ALE/32
 
 	m_reset_timer = timer_alloc(TIMER_RESET);
-
-	// resolve callbacks
-    m_out_txd_func.resolve(m_out_txd_cb, *this);
-    m_out_clock_func.resolve(m_out_clock_cb, *this);
-    m_out_keydown_func.resolve(m_out_keydown_cb, *this);
 }
 
 
@@ -440,13 +497,13 @@ void abc77_device::device_start()
 void abc77_device::device_reset()
 {
 	int t = 1.1 * RES_K(100) * CAP_N(100) * 1000; // t = 1.1 * R1 * C1
-	int ea = BIT(input_port_read(this, "DSW"), 7);
+	int ea = BIT(m_dsw->read(), 7);
 
 	// trigger reset
-	device_set_input_line(m_maincpu, INPUT_LINE_RESET, ASSERT_LINE);
+	m_maincpu->set_input_line(INPUT_LINE_RESET, ASSERT_LINE);
 	m_reset_timer->adjust(attotime::from_msec(t));
 
-	device_set_input_line(m_maincpu, MCS48_INPUT_EA, ea ? CLEAR_LINE : ASSERT_LINE);
+	m_maincpu->set_input_line(MCS48_INPUT_EA, ea ? CLEAR_LINE : ASSERT_LINE);
 }
 
 
@@ -463,9 +520,29 @@ void abc77_device::device_timer(emu_timer &timer, device_timer_id id, int param,
 		break;
 
 	case TIMER_RESET:
-		device_set_input_line(m_maincpu, INPUT_LINE_RESET, CLEAR_LINE);
+		m_maincpu->set_input_line(INPUT_LINE_RESET, CLEAR_LINE);
 		break;
 	}
+}
+
+
+//-------------------------------------------------
+//  rxd_r -
+//-------------------------------------------------
+
+int abc77_device::rxd_r()
+{
+	return m_txd;
+}
+
+
+//-------------------------------------------------
+//  txd_w -
+//-------------------------------------------------
+
+void abc77_device::txd_w(int state)
+{
+	m_maincpu->set_input_line(MCS48_INPUT_IRQ, state ? CLEAR_LINE : ASSERT_LINE);
 }
 
 
@@ -477,25 +554,38 @@ READ8_MEMBER( abc77_device::p1_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        P10     Z17 Y0
-        P11     Z17 Y1
-        P12     Z17 Y2
-        P13     Z17 Y3
-        P14     Z17 Y4
-        P15     Z17 Y5
-        P16     Z17 Y6
-        P17     Z17 Y7
+	    P10     Z17 Y0
+	    P11     Z17 Y1
+	    P12     Z17 Y2
+	    P13     Z17 Y3
+	    P14     Z17 Y4
+	    P15     Z17 Y5
+	    P16     Z17 Y6
+	    P17     Z17 Y7
 
-    */
+	*/
 
-	static const char *const keynames[] = { "X0", "X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8", "X9", "X10", "X11" };
 	UINT8 data = 0xff;
 
-	if (m_stb && m_keylatch < 12)
+	if (m_stb)
 	{
-		data = input_port_read(this, keynames[m_keylatch]);
+		switch (m_keylatch)
+		{
+		case 0: data = m_x0->read(); break;
+		case 1: data = m_x1->read(); break;
+		case 2: data = m_x2->read(); break;
+		case 3: data = m_x3->read(); break;
+		case 4: data = m_x4->read(); break;
+		case 5: data = m_x5->read(); break;
+		case 6: data = m_x6->read(); break;
+		case 7: data = m_x7->read(); break;
+		case 8: data = m_x8->read(); break;
+		case 9: data = m_x9->read(); break;
+		case 10: data = m_x10->read(); break;
+		case 11: data = m_x11->read(); break;
+		}
 	}
 
 	return data;
@@ -510,18 +600,18 @@ WRITE8_MEMBER( abc77_device::p2_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        P20     Z2 A0
-        P21     Z2 A1
-        P22     Z2 A2
-        P23     Z2 A3
-        P24     NE556 2,6
-        P25     TxD
-        P26     _KEYDOWN
-        P27     Z17 HYS
+	    P20     Z2 A0
+	    P21     Z2 A1
+	    P22     Z2 A2
+	    P23     Z2 A3
+	    P24     NE556 2,6
+	    P25     TxD
+	    P26     _KEYDOWN
+	    P27     Z17 HYS
 
-    */
+	*/
 
 	if (!m_stb)
 	{
@@ -529,12 +619,12 @@ WRITE8_MEMBER( abc77_device::p2_w )
 
 		if (m_keylatch == 1)
 		{
-			watchdog_reset(machine());
+			machine().watchdog_reset();
 		}
 	}
 
 	// beep
-	discrete_sound_w(m_discrete, NODE_01, BIT(data, 4));
+	discrete_sound_w(m_discrete, space, NODE_01, BIT(data, 4));
 
 	// transmit data
 	serial_output(BIT(data, 5));
@@ -574,39 +664,4 @@ WRITE8_MEMBER( abc77_device::prog_w )
 WRITE8_MEMBER( abc77_device::j3_w )
 {
 	m_j3 = data;
-}
-
-
-//-------------------------------------------------
-//  rxd_w -
-//-------------------------------------------------
-
-WRITE_LINE_MEMBER( abc77_device::rxd_w )
-{
-	device_set_input_line(m_maincpu, MCS48_INPUT_IRQ, state ? CLEAR_LINE : ASSERT_LINE);
-}
-
-
-//-------------------------------------------------
-//  txd_r -
-//-------------------------------------------------
-
-READ_LINE_MEMBER( abc77_device::txd_r )
-{
-	return m_txd;
-}
-
-
-//-------------------------------------------------
-//  reset_w -
-//-------------------------------------------------
-
-WRITE_LINE_MEMBER( abc77_device::reset_w )
-{
-	if (m_reset && !state)
-	{
-		device_reset();
-	}
-
-	m_reset = state;
 }

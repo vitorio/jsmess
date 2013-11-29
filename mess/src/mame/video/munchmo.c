@@ -2,11 +2,12 @@
 #include "includes/munchmo.h"
 
 
-PALETTE_INIT( mnchmobl )
+void munchmo_state::palette_init()
 {
+	const UINT8 *color_prom = memregion("proms")->base();
 	int i;
 
-	for (i = 0; i < machine.total_colors(); i++)
+	for (i = 0; i < machine().total_colors(); i++)
 	{
 		int bit0, bit1, bit2, r, g, b;
 
@@ -25,39 +26,35 @@ PALETTE_INIT( mnchmobl )
 		bit1 = BIT(color_prom[i], 7);
 		b = 0x4f * bit0 + 0xa8 * bit1;
 
-		palette_set_color(machine, i, MAKE_RGB(r, g, b));
+		palette_set_color(machine(), i, MAKE_RGB(r, g, b));
 	}
 }
 
-WRITE8_HANDLER( mnchmobl_palette_bank_w )
+WRITE8_MEMBER(munchmo_state::mnchmobl_palette_bank_w)
 {
-	munchmo_state *state = space->machine().driver_data<munchmo_state>();
-	state->m_palette_bank = data & 0x3;
+	m_palette_bank = data & 0x3;
 }
 
-WRITE8_HANDLER( mnchmobl_flipscreen_w )
+WRITE8_MEMBER(munchmo_state::mnchmobl_flipscreen_w)
 {
-	munchmo_state *state = space->machine().driver_data<munchmo_state>();
-	state->m_flipscreen = data;
+	m_flipscreen = data;
 }
 
 
-VIDEO_START( mnchmobl )
+void munchmo_state::video_start()
 {
-	munchmo_state *state = machine.driver_data<munchmo_state>();
-	state->m_tmpbitmap = auto_bitmap_alloc(machine, 512, 512, machine.primary_screen->format());
+	m_tmpbitmap = auto_bitmap_ind16_alloc(machine(), 512, 512);
 }
 
-static void draw_status( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
+void munchmo_state::draw_status( bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
-	munchmo_state *state = machine.driver_data<munchmo_state>();
-	const gfx_element *gfx = machine.gfx[0];
+	gfx_element *gfx = machine().gfx[0];
 	int row;
 
 	for (row = 0; row < 4; row++)
 	{
 		int sy, sx = (row & 1) * 8;
-		const UINT8 *source = state->m_status_vram + (~row & 1) * 32;
+		const UINT8 *source = m_status_vram + (~row & 1) * 32;
 		if (row <= 1)
 		{
 			source += 2 * 32;
@@ -76,31 +73,30 @@ static void draw_status( running_machine &machine, bitmap_t *bitmap, const recta
 	}
 }
 
-static void draw_background( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
+void munchmo_state::draw_background( bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
 /*
     ROM B1.2C contains 256 tilemaps defining 4x4 configurations of
     the tiles in ROM B2.2B
 */
-	munchmo_state *state = machine.driver_data<munchmo_state>();
-	UINT8 *rom = machine.region("gfx2")->base();
-	const gfx_element *gfx = machine.gfx[1];
+	UINT8 *rom = memregion("gfx2")->base();
+	gfx_element *gfx = machine().gfx[1];
 	int offs;
 
 	for (offs = 0; offs < 0x100; offs++)
 	{
 		int sy = (offs % 16) * 32;
 		int sx = (offs / 16) * 32;
-		int tile_number = state->m_videoram[offs];
+		int tile_number = m_videoram[offs];
 		int row, col;
 
 		for (row = 0; row < 4; row++)
 		{
 			for (col = 0; col < 4; col++)
 			{
-				drawgfx_opaque(state->m_tmpbitmap, 0, gfx,
+				drawgfx_opaque(*m_tmpbitmap, m_tmpbitmap->cliprect(), gfx,
 					rom[col + tile_number * 4 + row * 0x400],
-					state->m_palette_bank,
+					m_palette_bank,
 					0,0, /* flip */
 					sx + col * 8, sy + row * 8 );
 			}
@@ -108,33 +104,32 @@ static void draw_background( running_machine &machine, bitmap_t *bitmap, const r
 	}
 
 	{
-		int scrollx = -(state->m_vreg[6] *2 + (state->m_vreg[7] >> 7)) - 64 - 128 - 16;
+		int scrollx = -(m_vreg[6] *2 + (m_vreg[7] >> 7)) - 64 - 128 - 16;
 		int scrolly = 0;
 
-		copyscrollbitmap(bitmap, state->m_tmpbitmap, 1, &scrollx, 1, &scrolly, cliprect);
+		copyscrollbitmap(bitmap, *m_tmpbitmap, 1, &scrollx, 1, &scrolly, cliprect);
 	}
 }
 
-static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
+void munchmo_state::draw_sprites( bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
-	munchmo_state *state = machine.driver_data<munchmo_state>();
-	int scroll = state->m_vreg[6];
-	int flags = state->m_vreg[7];							/*   XB?????? */
+	int scroll = m_vreg[6];
+	int flags = m_vreg[7];                           /*   XB?????? */
 	int xadjust = - 128 - 16 - ((flags & 0x80) ? 1 : 0);
 	int bank = (flags & 0x40) ? 1 : 0;
-	const gfx_element *gfx = machine.gfx[2 + bank];
-	int color_base = state->m_palette_bank * 4 + 3;
+	gfx_element *gfx = machine().gfx[2 + bank];
+	int color_base = m_palette_bank * 4 + 3;
 	int i, j;
-	int firstsprite = state->m_vreg[4] & 0x3f;
+	int firstsprite = m_vreg[4] & 0x3f;
 	for (i = firstsprite; i < firstsprite + 0x40; i++)
 	{
 		for (j = 0; j < 8; j++)
 		{
 			int offs = (j << 6) | (i & 0x3f);
-			int tile_number = state->m_sprite_tile[offs];		/*   ETTTTTTT */
-			int attributes = state->m_sprite_attr[offs];		/*   XYYYYYCC */
-			int sx = state->m_sprite_xpos[offs];				/*   XXXXXXX? */
-			int sy = (offs >> 6) << 5;					/* Y YY------ */
+			int tile_number = m_sprite_tile[offs];       /*   ETTTTTTT */
+			int attributes = m_sprite_attr[offs];        /*   XYYYYYCC */
+			int sx = m_sprite_xpos[offs];                /*   XXXXXXX? */
+			int sy = (offs >> 6) << 5;                  /* Y YY------ */
 			sy += (attributes >> 2) & 0x1f;
 			if( attributes & 0x80 )
 			{
@@ -143,17 +138,17 @@ static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rect
 				drawgfx_transpen( bitmap, cliprect, gfx,
 					0x7f - (tile_number & 0x7f),
 					color_base - (attributes & 0x03),
-					0,0,							/* no flip */
+					0,0,                            /* no flip */
 					sx,sy, 7 );
 			}
 		}
 	}
 }
 
-SCREEN_UPDATE( mnchmobl )
+UINT32 munchmo_state::screen_update_mnchmobl(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	draw_background(screen->machine(), bitmap, cliprect);
-	draw_sprites(screen->machine(), bitmap, cliprect);
-	draw_status(screen->machine(), bitmap, cliprect);
+	draw_background(bitmap, cliprect);
+	draw_sprites(bitmap, cliprect);
+	draw_status(bitmap, cliprect);
 	return 0;
 }

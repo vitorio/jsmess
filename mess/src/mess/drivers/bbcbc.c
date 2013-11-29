@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Incog, Robbbert
 /***************************************************************************
 
   bbcbc.c
@@ -8,7 +10,6 @@
   Clock Freq added - 2009-05-18 - incog
 
 ***************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
@@ -27,6 +28,11 @@ public:
 	{ }
 
 	required_device<cpu_device> m_maincpu;
+	virtual void machine_start();
+	virtual void machine_reset();
+	DECLARE_WRITE_LINE_MEMBER(tms_interrupt);
+
+	DECLARE_DEVICE_IMAGE_LOAD_MEMBER( bbcbc_cart );
 };
 
 
@@ -54,9 +60,9 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( bbcbc_io, AS_IO, 8, bbcbc_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x40, 0x43) AM_DEVREADWRITE_LEGACY("z80pio", z80pio_cd_ba_r, z80pio_cd_ba_w)
-	AM_RANGE(0x80, 0x80) AM_READWRITE_LEGACY(TMS9928A_vram_r, TMS9928A_vram_w)
-	AM_RANGE(0x81, 0x81) AM_READWRITE_LEGACY(TMS9928A_register_r, TMS9928A_register_w)
+	AM_RANGE(0x40, 0x43) AM_DEVREADWRITE("z80pio", z80pio_device, read, write)
+	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("tms9129", tms9129_device, vram_read, vram_write)
+	AM_RANGE(0x81, 0x81) AM_DEVREADWRITE("tms9129", tms9129_device, register_read, register_write)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( bbcbc )
@@ -97,34 +103,27 @@ static INPUT_PORTS_START( bbcbc )
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Play, No") PORT_CODE(KEYCODE_B) PORT_IMPULSE(1)
 INPUT_PORTS_END
 
-static void tms_interrupt(running_machine &machine, int irq_state)
+WRITE_LINE_MEMBER(bbcbc_state::tms_interrupt)
 {
-	cputag_set_input_line(machine, "maincpu", 0, irq_state ? ASSERT_LINE : CLEAR_LINE);
+	m_maincpu->set_input_line(0, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
-static INTERRUPT_GEN( bbcbc_interrupt )
+static TMS9928A_INTERFACE(tms9129_interface)
 {
-	TMS9928A_interrupt(device->machine());
-}
-
-static const TMS9928a_interface tms9129_interface =
-{
-	TMS9929A,
 	0x4000,
-	0, 0,
-	tms_interrupt
+	DEVCB_DRIVER_LINE_MEMBER(bbcbc_state, tms_interrupt)
 };
 
 /* TODO */
 static Z80PIO_INTERFACE( bbcbc_z80pio_intf )
 {
-	DEVCB_NULL,	/* int callback */
-	DEVCB_NULL,	/* port a read */
-	DEVCB_NULL,	/* port b read */
-	DEVCB_NULL,	/* port a write */
-	DEVCB_NULL,	/* port b write */
-	DEVCB_NULL,	/* ready a */
-	DEVCB_NULL	/* ready b */
+	DEVCB_NULL, /* int callback */
+	DEVCB_NULL, /* port a read */
+	DEVCB_NULL, /* port a write */
+	DEVCB_NULL, /* ready a */
+	DEVCB_NULL, /* port b read */
+	DEVCB_NULL, /* port b write */
+	DEVCB_NULL  /* ready b */
 };
 
 static const z80_daisy_config bbcbc_daisy_chain[] =
@@ -134,17 +133,9 @@ static const z80_daisy_config bbcbc_daisy_chain[] =
 };
 
 
-static DEVICE_START( bbcbc_cart )
+DEVICE_IMAGE_LOAD_MEMBER( bbcbc_state, bbcbc_cart )
 {
-	UINT8 *cart = device->machine().region("maincpu" )->base() + 0x4000;
-
-	memset( cart, 0xFF, 0x8000 );
-}
-
-
-static DEVICE_IMAGE_LOAD( bbcbc_cart )
-{
-	UINT8 *cart = image.device().machine().region("maincpu" )->base() + 0x4000;
+	UINT8 *cart = memregion("maincpu" )->base() + 0x4000;
 
 	if ( image.software_entry() == NULL )
 	{
@@ -166,12 +157,11 @@ static DEVICE_IMAGE_LOAD( bbcbc_cart )
 
 }
 
-static MACHINE_START( bbcbc )
+void bbcbc_state::machine_start()
 {
-	TMS9928A_configure(&tms9129_interface);
 }
 
-static MACHINE_RESET( bbcbc )
+void bbcbc_state::machine_reset()
 {
 }
 
@@ -181,22 +171,18 @@ static MACHINE_CONFIG_START( bbcbc, bbcbc_state )
 	MCFG_CPU_PROGRAM_MAP( bbcbc_prg)
 	MCFG_CPU_IO_MAP( bbcbc_io)
 	MCFG_CPU_CONFIG(bbcbc_daisy_chain)
-	MCFG_CPU_VBLANK_INT("screen", bbcbc_interrupt)
 
-	MCFG_MACHINE_START( bbcbc )
-	MCFG_MACHINE_RESET( bbcbc )
 
 	MCFG_Z80PIO_ADD( "z80pio", MAIN_CLOCK / 8, bbcbc_z80pio_intf )
 
-	MCFG_FRAGMENT_ADD( tms9928a )
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_REFRESH_RATE( 50 )
+	MCFG_TMS9928A_ADD( "tms9129", TMS9129, tms9129_interface )
+	MCFG_TMS9928A_SCREEN_ADD_PAL( "screen" )
+	MCFG_SCREEN_UPDATE_DEVICE( "tms9129", tms9928a_device, screen_update )
 
 	MCFG_CARTSLOT_ADD("cart")
 	MCFG_CARTSLOT_NOT_MANDATORY
 	MCFG_CARTSLOT_INTERFACE("bbcbc_cart")
-	MCFG_CARTSLOT_START( bbcbc_cart )
-	MCFG_CARTSLOT_LOAD( bbcbc_cart )
+	MCFG_CARTSLOT_LOAD( bbcbc_state, bbcbc_cart )
 
 	/* Software lists */
 	MCFG_SOFTWARE_LIST_ADD("cart_list","bbcbc")
@@ -204,7 +190,7 @@ MACHINE_CONFIG_END
 
 
 ROM_START( bbcbc )
-	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
 	ROM_LOAD("br_4_1.ic3", 0x0000, 0x2000, CRC(7c880d75) SHA1(954db096bd9e8edfef72946637a12f1083841fb0))
 	ROM_LOAD("br_4_2.ic4", 0x2000, 0x2000, CRC(16a33aef) SHA1(9529f9f792718a3715af2063b91a5fb18f741226))
 ROM_END
@@ -216,4 +202,4 @@ ROM_END
 ***************************************************************************/
 
 /*   YEAR  NAME  PARENT  COMPAT  MACHINE INPUT  INIT  COMPANY  FULLNAME  FLAGS */
-CONS(1985, bbcbc,     0, 0,      bbcbc,  bbcbc, 0,    "BBC",   "Bridge Companion", GAME_NO_SOUND_HW )
+CONS(1985, bbcbc,     0, 0,      bbcbc,  bbcbc, driver_device, 0,    "BBC",   "Bridge Companion", GAME_NO_SOUND_HW )

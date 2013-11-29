@@ -10,14 +10,20 @@
 #include "machine/i8255.h"
 #include "machine/pit8253.h"
 #include "machine/pic8259.h"
+#include "machine/wd_fdc.h"
 #include "sound/speaker.h"
 #include "sound/wave.h"
+#include "machine/ram.h"
 
 class b2m_state : public driver_device
 {
 public:
 	b2m_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this, "maincpu"),
+		m_speaker(*this, "speaker"),
+		m_pit(*this, "pit8253"),
+		m_ram(*this, RAM_TAG) { }
 
 	UINT8 m_b2m_8255_porta;
 	UINT8 m_b2m_video_scroll;
@@ -33,35 +39,49 @@ public:
 	UINT8 m_b2m_color[4];
 	UINT8 m_b2m_localmachine;
 	UINT8 m_vblank_state;
+	required_device<cpu_device> m_maincpu;
+	required_device<speaker_sound_device> m_speaker;
+	required_device<pit8253_device> m_pit;
+	required_device<ram_device> m_ram;
 
 	/* devices */
-	device_t *m_fdc;
-	device_t *m_pic;
-	device_t *m_speaker;
+	fd1793_t *m_fdc;
+	pic8259_device *m_pic;
+	DECLARE_READ8_MEMBER(b2m_keyboard_r);
+	DECLARE_WRITE8_MEMBER(b2m_palette_w);
+	DECLARE_READ8_MEMBER(b2m_palette_r);
+	DECLARE_WRITE8_MEMBER(b2m_localmachine_w);
+	DECLARE_READ8_MEMBER(b2m_localmachine_r);
+	DECLARE_DRIVER_INIT(b2m);
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void video_start();
+	virtual void palette_init();
+	UINT32 screen_update_b2m(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	INTERRUPT_GEN_MEMBER(b2m_vblank_interrupt);
+	DECLARE_WRITE_LINE_MEMBER(bm2_pit_out1);
+	DECLARE_WRITE8_MEMBER(b2m_8255_porta_w);
+	DECLARE_WRITE8_MEMBER(b2m_8255_portb_w);
+	DECLARE_WRITE8_MEMBER(b2m_8255_portc_w);
+	DECLARE_READ8_MEMBER(b2m_8255_portb_r);
+	DECLARE_WRITE8_MEMBER(b2m_ext_8255_portc_w);
+	DECLARE_READ8_MEMBER(b2m_romdisk_porta_r);
+	DECLARE_WRITE8_MEMBER(b2m_romdisk_portb_w);
+	DECLARE_WRITE8_MEMBER(b2m_romdisk_portc_w);
+	DECLARE_WRITE_LINE_MEMBER(b2m_pic_set_int_line);
+	void b2m_fdc_drq(bool state);
+	DECLARE_FLOPPY_FORMATS( b2m_floppy_formats );
+	IRQ_CALLBACK_MEMBER(b2m_irq_callback);
+	void b2m_postload();
+	void b2m_set_bank(int bank);
 };
 
 /*----------- defined in machine/b2m.c -----------*/
 
-extern const struct pit8253_config b2m_pit8253_intf;
-extern const struct pic8259_interface b2m_pic8259_config;
+extern const struct pit8253_interface b2m_pit8253_intf;
 
 extern const i8255_interface b2m_ppi8255_interface_1;
 extern const i8255_interface b2m_ppi8255_interface_2;
 extern const i8255_interface b2m_ppi8255_interface_3;
-
-extern DRIVER_INIT( b2m );
-extern MACHINE_START( b2m );
-extern MACHINE_RESET( b2m );
-extern INTERRUPT_GEN( b2m_vblank_interrupt );
-extern READ8_HANDLER( b2m_palette_r );
-extern WRITE8_HANDLER( b2m_palette_w );
-extern READ8_HANDLER( b2m_localmachine_r );
-extern WRITE8_HANDLER( b2m_localmachine_w );
-
-/*----------- defined in video/b2m.c -----------*/
-
-extern VIDEO_START( b2m );
-extern SCREEN_UPDATE( b2m );
-extern PALETTE_INIT( b2m );
 
 #endif

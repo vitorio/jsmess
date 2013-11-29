@@ -7,37 +7,68 @@
 
 ***************************************************************************/
 
-#define TLC34076_6_BIT		0
-#define TLC34076_8_BIT		1
+#pragma once
 
-const pen_t *tlc34076_get_pens(device_t *device);
+#ifndef __TLC34076_H__
+#define __TLC34076_H__
+
+
+/***************************************************************************
+    CONSTANTS
+***************************************************************************/
+
+enum tlc34076_bits
+{
+	TLC34076_6_BIT = 6,
+	TLC34076_8_BIT = 8
+};
 
 
 /***************************************************************************
     TYPE DEFINITIONS
 ***************************************************************************/
 
-typedef struct _tlc34076_config tlc34076_config;
-struct _tlc34076_config
+class tlc34076_device : public device_t
 {
-	int res_sel;
-};
+public:
+	// construction/destruction
+	tlc34076_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
-DECLARE_LEGACY_DEVICE(TLC34076, tlc34076);
+	// static configuration helpers
+	static void static_set_bits(device_t &device, tlc34076_bits bits);
+
+	// public interface
+	const pen_t *get_pens();
+	DECLARE_READ8_MEMBER(read);
+	DECLARE_WRITE8_MEMBER(write);
+
+protected:
+	// device-level overrides
+	virtual void device_start();
+	virtual void device_reset();
+
+private:
+	// internal state
+	UINT8 m_local_paletteram[0x300];
+	UINT8 m_regs[0x10];
+	UINT8 m_palettedata[3];
+	UINT8 m_writeindex;
+	UINT8 m_readindex;
+	UINT8 m_dacbits;
+	rgb_t m_pens[0x100];
+};
 
 
 /***************************************************************************
     DEVICE CONFIGURATION MACROS
 ***************************************************************************/
 
-#define MCFG_TLC34076_ADD(_tag, _res_sel) \
+#define MCFG_TLC34076_ADD(_tag, _bits) \
 	MCFG_DEVICE_ADD(_tag, TLC34076, 0) \
-	MCFG_DEVICE_CONFIG_DATA32(tlc34076_config, res_sel, _res_sel)
+	tlc34076_device::static_set_bits(*device, _bits);
 
 
-/***************************************************************************
-    DEVICE I/O FUNCTIONS
-***************************************************************************/
+extern const device_type TLC34076;
 
-WRITE8_DEVICE_HANDLER( tlc34076_w );
-READ8_DEVICE_HANDLER( tlc34076_r );
+
+#endif /* __TLC34076_H__ */

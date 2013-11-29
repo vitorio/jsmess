@@ -7,7 +7,6 @@
 ***************************************************************************/
 
 #include "emu.h"
-#include "video/konicdev.h"
 #include "includes/chqflag.h"
 
 
@@ -52,17 +51,13 @@ void chqflag_zoom_callback_1( running_machine &machine, int *code, int *color, i
 
 ***************************************************************************/
 
-VIDEO_START( chqflag )
+void chqflag_state::video_start()
 {
-	chqflag_state *state = machine.driver_data<chqflag_state>();
+	m_generic_paletteram_8.allocate(0x800);
 
-	machine.generic.paletteram.u8 = auto_alloc_array(machine, UINT8, 0x800);
-
-	state->m_sprite_colorbase = 0;
-	state->m_zoom_colorbase[0] = 0x10;
-	state->m_zoom_colorbase[1] = 0x02;
-
-	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 0x800);
+	m_sprite_colorbase = 0;
+	m_zoom_colorbase[0] = 0x10;
+	m_zoom_colorbase[1] = 0x02;
 }
 
 /***************************************************************************
@@ -71,16 +66,14 @@ VIDEO_START( chqflag )
 
 ***************************************************************************/
 
-SCREEN_UPDATE( chqflag )
+UINT32 chqflag_state::screen_update_chqflag(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	chqflag_state *state = screen->machine().driver_data<chqflag_state>();
+	bitmap.fill(0, cliprect);
 
-	bitmap_fill(bitmap, cliprect, 0);
-
-	k051316_zoom_draw(state->m_k051316_2, bitmap, cliprect, TILEMAP_DRAW_LAYER1, 0);
-	k051960_sprites_draw(state->m_k051960, bitmap, cliprect, 0, 0);
-	k051316_zoom_draw(state->m_k051316_2, bitmap, cliprect, TILEMAP_DRAW_LAYER0, 0);
-	k051960_sprites_draw(state->m_k051960, bitmap, cliprect, 1, 1);
-	k051316_zoom_draw(state->m_k051316_1, bitmap, cliprect, 0, 0);
+	m_k051316_2->zoom_draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER1, 0);
+	m_k051960->k051960_sprites_draw(bitmap, cliprect, screen.priority(), 0, 0);
+	m_k051316_2->zoom_draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER0, 0);
+	m_k051960->k051960_sprites_draw(bitmap, cliprect, screen.priority(), 1, 1);
+	m_k051316_1->zoom_draw(screen, bitmap, cliprect, 0, 0);
 	return 0;
 }

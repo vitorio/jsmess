@@ -1,7 +1,10 @@
 /******************************************************************************
- Epson EX-800 Dot Matrix printer
 
- Written by Dirk Best, October 2007
+    Epson EX-800 Dot Matrix printer
+
+    license: MAME, GPL-2.0+
+    copyright-holders: Dirk Best
+
 
  --
 
@@ -123,7 +126,6 @@ TODO:  - The UPD7810 core is missing analog port emulation
        - (much later) write an interface so that other drivers can hook
          into this one and use to print
 
-
 ******************************************************************************/
 
 #include "emu.h"
@@ -136,9 +138,29 @@ class ex800_state : public driver_device
 {
 public:
 	ex800_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu"),
+		m_beeper(*this, "beeper") { }
 
 	int m_irq_state;
+	DECLARE_READ8_MEMBER(ex800_porta_r);
+	DECLARE_READ8_MEMBER(ex800_portb_r);
+	DECLARE_READ8_MEMBER(ex800_portc_r);
+	DECLARE_WRITE8_MEMBER(ex800_porta_w);
+	DECLARE_WRITE8_MEMBER(ex800_portb_w);
+	DECLARE_WRITE8_MEMBER(ex800_portc_w);
+	DECLARE_READ8_MEMBER(ex800_devsel_r);
+	DECLARE_WRITE8_MEMBER(ex800_devsel_w);
+	DECLARE_READ8_MEMBER(ex800_gate5a_r);
+	DECLARE_WRITE8_MEMBER(ex800_gate5a_w);
+	DECLARE_READ8_MEMBER(ex800_iosel_r);
+	DECLARE_WRITE8_MEMBER(ex800_iosel_w);
+	DECLARE_READ8_MEMBER(ex800_gate7a_r);
+	DECLARE_WRITE8_MEMBER(ex800_gate7a_w);
+	virtual void machine_start();
+	DECLARE_INPUT_CHANGED_MEMBER(online_switch);
+	required_device<cpu_device> m_maincpu;
+	required_device<beep_device> m_beeper;
 };
 
 
@@ -177,134 +199,130 @@ public:
 
 
 /* The ON LINE switch is directly connected to the INT1 input of the CPU */
-static INPUT_CHANGED( online_switch )
+INPUT_CHANGED_MEMBER(ex800_state::online_switch)
 {
-	ex800_state *state = field.machine().driver_data<ex800_state>();
 	if (newval)
 	{
-		cputag_set_input_line(field.machine(), "maincpu", UPD7810_INTF1, state->m_irq_state);
-		state->m_irq_state = (state->m_irq_state == ASSERT_LINE) ? CLEAR_LINE : ASSERT_LINE;
+		m_maincpu->set_input_line(UPD7810_INTF1, m_irq_state);
+		m_irq_state = (m_irq_state == ASSERT_LINE) ? CLEAR_LINE : ASSERT_LINE;
 	}
 }
 
 
-static MACHINE_START(ex800)
+void ex800_state::machine_start()
 {
-	ex800_state *state = machine.driver_data<ex800_state>();
-	state->m_irq_state = ASSERT_LINE;
-	device_t *speaker = machine.device(BEEPER_TAG);
+	m_irq_state = ASSERT_LINE;
 	/* Setup beep */
-	beep_set_state(speaker, 0);
-	beep_set_frequency(speaker, 4000); /* measured at 4000 Hz */
+	m_beeper->set_state(0);
+	m_beeper->set_frequency(4000); /* measured at 4000 Hz */
 }
 
 
-static READ8_HANDLER(ex800_porta_r)
+READ8_MEMBER(ex800_state::ex800_porta_r)
 {
-	logerror("PA R @%x\n", cpu_get_pc(&space->device()));
-	return space->machine().rand();
+	logerror("PA R @%x\n", space.device().safe_pc());
+	return machine().rand();
 }
 
-static READ8_HANDLER(ex800_portb_r)
+READ8_MEMBER(ex800_state::ex800_portb_r)
 {
-	logerror("PB R @%x\n", cpu_get_pc(&space->device()));
-	return space->machine().rand();
+	logerror("PB R @%x\n", space.device().safe_pc());
+	return machine().rand();
 }
 
-static READ8_HANDLER(ex800_portc_r)
+READ8_MEMBER(ex800_state::ex800_portc_r)
 {
-	logerror("PC R @%x\n", cpu_get_pc(&space->device()));
-	return space->machine().rand();
+	logerror("PC R @%x\n", space.device().safe_pc());
+	return machine().rand();
 }
 
-static WRITE8_HANDLER(ex800_porta_w)
+WRITE8_MEMBER(ex800_state::ex800_porta_w)
 {
 	if (PA6) logerror("BNK0 selected.\n");
 	if (PA7) logerror("BNK1 selected.\n");
 
-	logerror("PA W %x @%x\n", data, cpu_get_pc(&space->device()));
+	logerror("PA W %x @%x\n", data, space.device().safe_pc());
 }
 
-static WRITE8_HANDLER(ex800_portb_w)
+WRITE8_MEMBER(ex800_state::ex800_portb_w)
 {
 	if (data & 3)
-		logerror("PB0/1 Line feed @%x\n", cpu_get_pc(&space->device()));
+		logerror("PB0/1 Line feed @%x\n", space.device().safe_pc());
 	if (!(data & 4))
-		logerror("PB2 Line feed @%x\n", cpu_get_pc(&space->device()));
+		logerror("PB2 Line feed @%x\n", space.device().safe_pc());
 	if (data & 8)
-		logerror("PB3 Online LED on @%x\n", cpu_get_pc(&space->device()));
+		logerror("PB3 Online LED on @%x\n", space.device().safe_pc());
 	else
-		logerror("PB3 Online LED off @%x\n", cpu_get_pc(&space->device()));
+		logerror("PB3 Online LED off @%x\n", space.device().safe_pc());
 	if (data & 16)
-		logerror("PB4 Serial @%x\n", cpu_get_pc(&space->device()));
+		logerror("PB4 Serial @%x\n", space.device().safe_pc());
 	if (data & 32)
-		logerror("PB4 Serial @%x\n", cpu_get_pc(&space->device()));
+		logerror("PB4 Serial @%x\n", space.device().safe_pc());
 	if (data & 64)
-		logerror("PB4 Serial @%x\n", cpu_get_pc(&space->device()));
+		logerror("PB4 Serial @%x\n", space.device().safe_pc());
 	if (data & 128)
-		logerror("PB3 Paper empty LED on @%x\n", cpu_get_pc(&space->device()));
+		logerror("PB3 Paper empty LED on @%x\n", space.device().safe_pc());
 	else
-		logerror("PB3 Paper empty LED off @%x\n", cpu_get_pc(&space->device()));
+		logerror("PB3 Paper empty LED off @%x\n", space.device().safe_pc());
 
-//  logerror("PB W %x @%x\n", data, cpu_get_pc(&space->device()));
+//  logerror("PB W %x @%x\n", data, space.device().safe_pc());
 }
 
-static WRITE8_HANDLER(ex800_portc_w)
+WRITE8_MEMBER(ex800_state::ex800_portc_w)
 {
-	device_t *speaker = space->machine().device(BEEPER_TAG);
 	if (data & 0x80)
-		beep_set_state(speaker, 0);
+		m_beeper->set_state(0);
 	else
-		beep_set_state(speaker, 1);
+		m_beeper->set_state(1);
 
-	logerror("PC W %x @%x\n", data, cpu_get_pc(&space->device()));
+	logerror("PC W %x @%x\n", data, space.device().safe_pc());
 }
 
 
 /* Memory mapped I/O access */
 
-static READ8_HANDLER(ex800_devsel_r)
+READ8_MEMBER(ex800_state::ex800_devsel_r)
 {
-	logerror("DEVSEL R @%x with offset %x\n", cpu_get_pc(&space->device()), offset);
-	return space->machine().rand();
+	logerror("DEVSEL R @%x with offset %x\n", space.device().safe_pc(), offset);
+	return machine().rand();
 }
 
-static WRITE8_HANDLER(ex800_devsel_w)
+WRITE8_MEMBER(ex800_state::ex800_devsel_w)
 {
-	logerror("DEVSEL W %x @%x with offset %x\n", data, cpu_get_pc(&space->device()), offset);
+	logerror("DEVSEL W %x @%x with offset %x\n", data, space.device().safe_pc(), offset);
 }
 
-static READ8_HANDLER(ex800_gate5a_r)
+READ8_MEMBER(ex800_state::ex800_gate5a_r)
 {
-	logerror("GATE5A R @%x with offset %x\n", cpu_get_pc(&space->device()), offset);
-	return space->machine().rand();
+	logerror("GATE5A R @%x with offset %x\n", space.device().safe_pc(), offset);
+	return machine().rand();
 }
 
-static WRITE8_HANDLER(ex800_gate5a_w)
+WRITE8_MEMBER(ex800_state::ex800_gate5a_w)
 {
-	logerror("GATE5A W %x @%x with offset %x\n", data, cpu_get_pc(&space->device()), offset);
+	logerror("GATE5A W %x @%x with offset %x\n", data, space.device().safe_pc(), offset);
 }
 
-static READ8_HANDLER(ex800_iosel_r)
+READ8_MEMBER(ex800_state::ex800_iosel_r)
 {
-	logerror("IOSEL R @%x with offset %x\n", cpu_get_pc(&space->device()), offset);
-	return space->machine().rand();
+	logerror("IOSEL R @%x with offset %x\n", space.device().safe_pc(), offset);
+	return machine().rand();
 }
 
-static WRITE8_HANDLER(ex800_iosel_w)
+WRITE8_MEMBER(ex800_state::ex800_iosel_w)
 {
-	logerror("IOSEL W %x @%x with offset %x\n", data, cpu_get_pc(&space->device()), offset);
+	logerror("IOSEL W %x @%x with offset %x\n", data, space.device().safe_pc(), offset);
 }
 
-static READ8_HANDLER(ex800_gate7a_r)
+READ8_MEMBER(ex800_state::ex800_gate7a_r)
 {
-	logerror("GATE7A R @%x with offset %x\n", cpu_get_pc(&space->device()), offset);
-	return space->machine().rand();
+	logerror("GATE7A R @%x with offset %x\n", space.device().safe_pc(), offset);
+	return machine().rand();
 }
 
-static WRITE8_HANDLER(ex800_gate7a_w)
+WRITE8_MEMBER(ex800_state::ex800_gate7a_w)
 {
-	logerror("GATE7A W %x @%x with offset %x\n", data, cpu_get_pc(&space->device()), offset);
+	logerror("GATE7A W %x @%x with offset %x\n", data, space.device().safe_pc(), offset);
 }
 
 
@@ -313,7 +331,7 @@ static WRITE8_HANDLER(ex800_gate7a_w)
 ******************************************************************************/
 
 
-static ADDRESS_MAP_START( ex800_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( ex800_mem, AS_PROGRAM, 8, ex800_state )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM AM_REGION("maincpu", 0)
 	AM_RANGE(0x8000, 0xbfff) AM_RAM /* external RAM */
 	AM_RANGE(0xc000, 0xc7ff) AM_MIRROR(0x1800) AM_READWRITE(ex800_devsel_r, ex800_devsel_w)
@@ -326,7 +344,7 @@ static ADDRESS_MAP_START( ex800_mem, AS_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( ex800_io, AS_IO, 8 )
+static ADDRESS_MAP_START( ex800_io, AS_IO, 8, ex800_state )
 	AM_RANGE(UPD7810_PORTA, UPD7810_PORTA) AM_READ(ex800_porta_r) AM_WRITE(ex800_porta_w)
 	AM_RANGE(UPD7810_PORTB, UPD7810_PORTB) AM_READ(ex800_portb_r) AM_WRITE(ex800_portb_w)
 	AM_RANGE(UPD7810_PORTC, UPD7810_PORTC) AM_READ(ex800_portc_r) AM_WRITE(ex800_portc_w)
@@ -342,7 +360,7 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( ex800 )
 	PORT_START("ONLISW")
 	PORT_BIT(0xfe, IP_ACTIVE_HIGH, IPT_UNUSED)
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("ON LINE")   PORT_CODE(KEYCODE_F9) PORT_CHANGED(online_switch, NULL)
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("ON LINE")   PORT_CODE(KEYCODE_F9) PORT_CHANGED_MEMBER(DEVICE_SELF, ex800_state, online_switch, NULL)
 
 	PORT_START("FEED")
 	PORT_BIT(0xfc, IP_ACTIVE_LOW, IPT_UNUSED)
@@ -419,8 +437,8 @@ INPUT_PORTS_END
 
 static const UPD7810_CONFIG ex800_cpu_config =
 {
-    TYPE_7810,
-    0
+	TYPE_7810,
+	0
 };
 
 
@@ -431,19 +449,18 @@ static const UPD7810_CONFIG ex800_cpu_config =
 
 
 static MACHINE_CONFIG_START( ex800, ex800_state )
-    /* basic machine hardware */
-    MCFG_CPU_ADD("maincpu", UPD7810, 12000000)  /* 12 MHz? */
-    MCFG_CPU_CONFIG(ex800_cpu_config)
-    MCFG_CPU_PROGRAM_MAP(ex800_mem)
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", UPD7810, 12000000)  /* 12 MHz? */
+	MCFG_CPU_CONFIG(ex800_cpu_config)
+	MCFG_CPU_PROGRAM_MAP(ex800_mem)
 	MCFG_CPU_IO_MAP(ex800_io)
 
-	MCFG_MACHINE_START(ex800)
 
 	MCFG_DEFAULT_LAYOUT(layout_ex800)
 
 	/* audio hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(BEEPER_TAG, BEEP, 0)
+	MCFG_SOUND_ADD("beeper", BEEP, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 
@@ -455,7 +472,7 @@ MACHINE_CONFIG_END
 
 
 ROM_START( ex800 )
-    ROM_REGION(0x8000, "maincpu", 0)
+	ROM_REGION(0x8000, "maincpu", 0)
 	ROM_LOAD("w8_pe9.9b", 0x0000, 0x8000, CRC(6dd41e9b) SHA1(8e30ead727b9317154742efd881206e9f9bbf95b))
 ROM_END
 
@@ -467,4 +484,4 @@ ROM_END
 
 
 /*    YEAR  NAME   PARENT  COMPAT  MACHINE INPUT  INIT   COMPANY  FULLNAME  FLAGS */
-COMP( 1986, ex800,      0,      0, ex800,  ex800, 0,     "Epson", "EX-800", GAME_NO_SOUND | GAME_NOT_WORKING)
+COMP( 1986, ex800,      0,      0, ex800,  ex800, driver_device, 0,     "Epson", "EX-800", GAME_NO_SOUND | GAME_NOT_WORKING)

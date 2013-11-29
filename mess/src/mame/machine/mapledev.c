@@ -10,7 +10,7 @@ void maple_device::static_set_host(device_t &device, const char *_host_tag, int 
 }
 
 
-maple_device::maple_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock) : device_t(mconfig, type, name, tag, owner, clock)
+maple_device::maple_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source) : device_t(mconfig, type, name, tag, owner, clock, shortname, source)
 {
 	host_tag = 0;
 	host_port = 0;
@@ -27,6 +27,11 @@ void maple_device::device_start()
 	save_item(NAME(reply_buffer));
 	save_item(NAME(reply_size));
 	save_item(NAME(reply_partial));
+}
+
+void maple_device::maple_reset()
+{
+	device_reset();
 }
 
 void maple_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
@@ -73,4 +78,3 @@ void maple_device::reply_start(UINT8 code, UINT8 source, UINT8 size)
 	reply_size = size;
 	reply_partial = false;
 }
-

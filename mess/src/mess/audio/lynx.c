@@ -3,7 +3,7 @@
 ******************************************************************************/
 
 #include "emu.h"
-#include "includes/lynx.h"
+#include "audio/lynx.h"
 
 
 /* accordingly to atari's reference manual
@@ -79,358 +79,460 @@ AUD_A_RIGHT EQU %00000001
 
  */
 
-typedef struct {
-    union {
-	UINT8 data[8];
-	struct {
-	    UINT8 volume;
-	    UINT8 feedback;
-	    INT8 output;
-	    UINT8 shifter;
-	    UINT8 bakup;
-	    UINT8 control1;
-	    UINT8 counter;
-	    UINT8 control2;
-	} n;
-    } reg;
-    UINT8 attenuation;
-    int mask;
-    int shifter;
-    int ticks;
-    int count;
-} LYNX_AUDIO;
+#define LYNX_AUDIO_CHANNELS 4
 
-typedef struct _lynx_sound_state lynx_sound_state;
-struct _lynx_sound_state
-{
-	sound_stream *mixer_channel;
-	int usec_per_sample;
-	int *shift_mask;
-	int *shift_xor;
-	UINT8 attenuation_enable;
-	UINT8 master_enable;
-	LYNX_AUDIO audio[4];
-};
 
-INLINE lynx_sound_state *get_safe_token(device_t *device)
+// device type definition
+const device_type LYNX_SND = &device_creator<lynx_sound_device>;
+const device_type LYNX2_SND = &device_creator<lynx2_sound_device>;
+
+//**************************************************************************
+//  LIVE DEVICE
+//**************************************************************************
+
+//-------------------------------------------------
+//  lynx_sound_device - constructor
+//-------------------------------------------------
+
+lynx_sound_device::lynx_sound_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+					: device_t(mconfig, LYNX_SND, "Mikey", tag, owner, clock, "lynx_sound", __FILE__),
+						device_sound_interface(mconfig, *this)
 {
-	assert(device != NULL);
-	assert(device->type() == LYNX || device->type() == LYNX2);
-	return (lynx_sound_state *)downcast<legacy_device_base *>(device)->token();
+	m_timer_delegate = lynx_sound_timer_delegate();
 }
 
-static void lynx_audio_reset_channel(LYNX_AUDIO *This)
+lynx_sound_device::lynx_sound_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source)
+					: device_t(mconfig, type, name, tag, owner, clock, shortname, source),
+						device_sound_interface(mconfig, *this)
 {
-    memset(This->reg.data, 0, (char*)(This+1)-(char*)(This->reg.data));
 }
 
-void lynx_audio_count_down(device_t *device, int nr)
+
+lynx2_sound_device::lynx2_sound_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+					: lynx_sound_device(mconfig, LYNX2_SND, "Mikey (Lynx II)", tag, owner, clock, "lynx2_sound", __FILE__)
 {
-    lynx_sound_state *state = get_safe_token(device);
-    LYNX_AUDIO *This=state->audio+nr;
-    if (This->reg.n.control1&8 && (This->reg.n.control1&7)!=7) return;
-    if (nr==0) state->mixer_channel->update();
-    This->count--;
 }
 
-static void lynx_audio_shift(device_t *device, LYNX_AUDIO *channel)
-{
-    lynx_sound_state *state = get_safe_token(device);
-    int nr = (int)(channel - state->audio);
-    channel->shifter=((channel->shifter<<1)&0x3ff)
-	|state->shift_xor[channel->shifter&channel->mask];
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
 
-    if (channel->reg.n.control1&0x20) {
-	if (channel->shifter&1) {
-	    channel->reg.n.output+=channel->reg.n.volume;
-	} else {
-	    channel->reg.n.output-=channel->reg.n.volume;
+void lynx_sound_device::set_timer_delegate(device_t &device, lynx_sound_timer_delegate cb)
+{
+	lynx_sound_device &dev = downcast<lynx_sound_device &>(device);
+	dev.m_timer_delegate = cb;
+}
+
+void lynx_sound_device::device_config_complete()
+{
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void lynx_sound_device::register_save()
+{
+	save_item(NAME(m_attenuation_enable));
+	save_item(NAME(m_master_enable));
+	for (int chan = 0; chan < LYNX_AUDIO_CHANNELS; chan++)
+	{
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].reg.volume);
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].reg.feedback);
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].reg.output);
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].reg.shifter);
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].reg.bakup);
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].reg.control1);
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].reg.counter);
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].reg.control2);
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].attenuation);
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].mask);
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].shifter);
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].ticks);
+		state_save_register_item(machine(), "Lynx sound", NULL, chan, m_audio[chan].count);
 	}
-    }
-    switch (nr) {
-    case 0: lynx_audio_count_down(device, 1); break;
-    case 1: lynx_audio_count_down(device, 2); break;
-    case 2: lynx_audio_count_down(device, 3); break;
-    case 3: lynx_timer_count_down(device->machine(), 1); break;
-    }
 }
 
-static void lynx_audio_execute(device_t *device, LYNX_AUDIO *channel)
+void lynx_sound_device::init()
 {
-    lynx_sound_state *state = get_safe_token(device);
-    if (channel->reg.n.control1&8) { // count_enable
-        channel->ticks+=state->usec_per_sample;
-	if ((channel->reg.n.control1&7)==7) { // timer input
-	    if (channel->count<0) {
-		channel->count+=channel->reg.n.counter;
-		lynx_audio_shift(device, channel);
-	    }
-	} else {
-	    int t=1<<(channel->reg.n.control1&7);
-	    for (;;) {
-		for (;(channel->ticks>=t)&&channel->count>=0; channel->ticks-=t)
-		    channel->count--;
-		if (channel->ticks<t) break;
-		if (channel->count<0) {
-		    channel->count=channel->reg.n.counter;
-		    lynx_audio_shift(device, channel);
+	m_shift_mask = auto_alloc_array_clear(machine(), int, 512);
+	m_shift_xor = auto_alloc_array_clear(machine(), int, 4096);
+
+	for (int i = 0; i < 512; i++)
+	{
+		m_shift_mask[i] = 0;
+		if (i & 1) m_shift_mask[i] |= 1;
+		if (i & 2) m_shift_mask[i] |= 2;
+		if (i & 4) m_shift_mask[i] |= 4;
+		if (i & 8) m_shift_mask[i] |= 8;
+		if (i & 0x10) m_shift_mask[i] |= 0x10;
+		if (i & 0x20) m_shift_mask[i] |= 0x20;
+		if (i & 0x40) m_shift_mask[i] |= 0x400;
+		if (i & 0x80) m_shift_mask[i] |= 0x800;
+		if (i & 0x100) m_shift_mask[i] |= 0x80;
+	}
+
+	for (int i = 0; i < 4096; i++)
+	{
+		m_shift_xor[i] = 1;
+		for (int j = 4096/2; j > 0; j >>= 1)
+		{
+			if (i & j)
+				m_shift_xor[i] ^= 1;
 		}
-	    }
 	}
-	if (!(channel->reg.n.control1&0x20)) {
-	    channel->reg.n.output=channel->shifter&1?0-channel->reg.n.volume:channel->reg.n.volume;
+}
+
+void lynx_sound_device::device_start()
+{
+	m_mixer_channel = machine().sound().stream_alloc(*this, 0, 1, machine().sample_rate(), this);
+	m_usec_per_sample = 1000000 / machine().sample_rate();
+	m_timer_delegate.bind_relative_to(*owner());
+	init();
+	register_save();
+}
+
+
+void lynx2_sound_device::device_start()
+{
+	m_mixer_channel = machine().sound().stream_alloc(*this, 0, 2, machine().sample_rate(), this);
+	m_usec_per_sample = 1000000 / machine().sample_rate();
+	m_timer_delegate.bind_relative_to(*owner());
+	init();
+	register_save();
+}
+
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void lynx_sound_device::device_reset()
+{
+	for (int i = 0; i < LYNX_AUDIO_CHANNELS; i++)
+	{
+		reset_channel(&m_audio[i]);
 	}
-    } else {
-	channel->ticks=0;
-	channel->count=0;
-    }
 }
 
 
-UINT8 lynx_audio_read(device_t *device, int offset)
+void lynx_sound_device::reset_channel(LYNX_AUDIO *channel)
 {
-    lynx_sound_state *state = get_safe_token(device);
-    UINT8 data=0;
-    state->mixer_channel->update();
-    switch (offset) {
-    case 0x20: case 0x21: case 0x22: case 0x24: case 0x25:
-    case 0x28: case 0x29: case 0x2a: case 0x2c: case 0x2d:
-    case 0x30: case 0x31: case 0x32: case 0x34: case 0x35:
-    case 0x38: case 0x39: case 0x3a: case 0x3c: case 0x3d:
-	data=state->audio[(offset>>3)&3].reg.data[offset&7];
-	break;
-    case 0x23: case 0x2b: case 0x33: case 0x3b:
-	data=state->audio[(offset>>3)&3].shifter&0xff;
-	break;
-    case 0x26:case 0x2e:case 0x36:case 0x3e:
-	data=state->audio[(offset>>3)&3].count;
-	break;
-    case 0x27: case 0x2f: case 0x37: case 0x3f:
-	data=(state->audio[(offset>>3)&3].shifter>>4)&0xf0;
-	data|=state->audio[(offset>>3)&3].reg.data[offset&7]&0x0f;
-	break;
-    case 0x40: case 0x41: case 0x42: case 0x43:
-	data=state->audio[offset&3].attenuation;
-	break;
-    case 0x44:
-	data=state->attenuation_enable;
-	break;
-    case 0x50:
-	data=state->master_enable;
-	break;
-    }
-    return data;
+	channel->reg.volume = 0;
+	channel->reg.feedback = 0;
+	channel->reg.output = 0;
+	channel->reg.shifter = 0;
+	channel->reg.bakup = 0;
+	channel->reg.control1 = 0;
+	channel->reg.counter = 0;
+	channel->reg.control2 = 0;
+
+	channel->attenuation = 0;
+	channel->mask = 0;
+	channel->shifter = 0;
+	channel->ticks = 0;
+	channel->count = 0;
 }
 
-void lynx_audio_write(device_t *device, int offset, UINT8 data)
+void lynx_sound_device::count_down(int nr)
 {
-	lynx_sound_state *state = get_safe_token(device);
-//  logerror("%.6f audio write %.2x %.2x\n", machine.time(), offset, data);
-    LYNX_AUDIO *channel=state->audio+((offset>>3)&3);
-    state->mixer_channel->update();
-    switch (offset) {
-    case 0x20: case 0x22: case 0x24: case 0x26:
-    case 0x28: case 0x2a: case 0x2c: case 0x2e:
-    case 0x30: case 0x32: case 0x34: case 0x36:
-    case 0x38: case 0x3a: case 0x3c: case 0x3e:
-	state->audio[(offset>>3)&3].reg.data[offset&7]=data;
-	break;
-    case 0x23: case 0x2b: case 0x33: case 0x3b:
-	state->audio[(offset>>3)&3].reg.data[offset&7]=data;
-	state->audio[(offset>>3)&3].shifter&=~0xff;
-	state->audio[(offset>>3)&3].shifter|=data;
-	break;
-    case 0x27: case 0x2f: case 0x37: case 0x3f:
-	state->audio[(offset>>3)&3].reg.data[offset&7]=data;
-	state->audio[(offset>>3)&3].shifter&=~0xf00;
-	state->audio[(offset>>3)&3].shifter|=(data&0xf0)<<4;
-	break;
-    case 0x21: case 0x25:
-    case 0x29: case 0x2d:
-    case 0x31: case 0x35:
-    case 0x39: case 0x3d:
-	channel->reg.data[offset&7]=data;
-	channel->mask=channel->reg.n.feedback;
-	channel->mask|=(channel->reg.data[5]&0x80)<<1;
-	break;
-    case 0x40: case 0x41: case 0x42: case 0x43: // lynx2 only, howard extension board
-	state->audio[offset&3].attenuation=data;
-	break;
-    case 0x44:
-	state->attenuation_enable=data; //lynx2 only, howard extension board
-	break;
-    case 0x50:
-	state->master_enable=data;//lynx2 only, howard write only
-	break;
-    }
+	LYNX_AUDIO *channel = &m_audio[nr];
+	if (channel->reg.control1 & 8 && (channel->reg.control1 & 7) != 7)
+		return;
+	if (nr == 0)
+		m_mixer_channel->update();
+	//if ((channel->reg.control1 & 0x0f) == 0x0f) //count down if linking enabled and count enabled
+		channel->count--;
 }
 
-/************************************/
-/* Sound handler update             */
-/************************************/
-static STREAM_UPDATE( lynx_update )
+void lynx_sound_device::shift(int chan_nr)
 {
-	lynx_sound_state *state = get_safe_token(device);
-	int i, j;
+	INT16 out_temp;
 	LYNX_AUDIO *channel;
+
+	assert(chan_nr < 4);
+
+	channel = &m_audio[chan_nr];
+	//channel->shifter = ((channel->shifter<<1)&0xffe) | (m_shift_xor[ channel->shifter & channel->mask ]&1);
+
+	// alternative method (functionally the same as above)
+	UINT8 xor_out = 0;
+	for (int bit = 0; bit < 12; bit++)
+	{
+		if ((channel->mask >> bit) & 1)
+			xor_out ^= (channel->shifter >> bit) & 1;
+	}
+	channel->shifter = ((channel->shifter << 1) & 0xffe) | (xor_out ^ 1); // output of xor is inverted
+
+
+	if (channel->reg.control1 & 0x20) // integrate mode enabled
+	{
+		if (channel->shifter & 1)
+			out_temp = channel->reg.output + channel->reg.volume;
+		else
+			out_temp = channel->reg.output - channel->reg.volume;
+
+		// clipping
+		if (out_temp > 127) out_temp = 127;
+		if (out_temp < -128) out_temp = -128;
+		channel->reg.output = (INT16)out_temp;
+	}
+
+	switch (chan_nr)
+	{
+		case 0: count_down(1); break;
+		case 1: count_down(2); break;
+		case 2: count_down(3); break;
+		case 3:
+			if (!m_timer_delegate.isnull())
+				m_timer_delegate();
+			break;
+	}
+}
+
+void lynx_sound_device::execute(int chan_nr)
+{
+	LYNX_AUDIO *channel;
+
+	assert(chan_nr < 4);
+
+	channel = &m_audio[chan_nr];
+
+	if (channel->reg.control1 & 8) // count enable
+	{
+		channel->ticks += m_usec_per_sample;
+		if ((channel->reg.control1 & 7) == 7) // link
+		{
+			if (channel->count < 0) // counter finished
+			{
+				//channel->count+=channel->reg.counter; // reload (wrong?)
+				if (channel->reg.control1 & 0x10)
+					channel->count = channel->reg.bakup;
+				shift(chan_nr);
+			}
+		}
+		else
+		{
+			int t = 1 << (channel->reg.control1 & 7); // microseconds per count
+			for (;;)
+			{
+				for (; (channel->ticks >= t) && (channel->count >= 0); channel->ticks -= t) // at least one sampled worth of time left, timer not expired
+					channel->count--;
+
+				if (channel->ticks < t)
+					break;
+
+				if (channel->count < 0)
+				{
+					shift(chan_nr);
+					if (channel->reg.control1 & 0x10)
+						channel->count = channel->reg.bakup;
+					else
+						break;
+				}
+			}
+		}
+
+		if (!(channel->reg.control1 & 0x20)) // normal mode
+		{
+			channel->reg.output = (channel->shifter & 1) ? channel->reg.volume : -channel->reg.volume;
+		}
+	}
+	else
+	{
+		channel->ticks = 0;
+		channel->count = 0;
+	}
+}
+
+READ8_MEMBER(lynx_sound_device::read)
+{
+	UINT8 value = 0;
+	LYNX_AUDIO *channel = &m_audio[(offset >> 3) & 3];
+
+	m_mixer_channel->update();
+
+	if (offset < 0x40)
+	{
+		switch (offset & 7)
+		{
+			case 0:
+				value = channel->reg.volume;
+				break;
+			case 1:
+				value = channel->reg.feedback;
+				break;
+			case 2:
+				value = channel->reg.output;
+				break;
+			case 3:
+				// current shifter state (lower 8 bits)
+				value = channel->shifter & 0xff;
+				break;
+			case 4:
+				value = channel->reg.bakup;
+				break;
+			case 5:
+				value = channel->reg.control1;
+				break;
+			case 6:
+				//current timer value
+				if (channel->count >=0)
+					value = channel->count;
+				else
+					value = 0;
+				break;
+			case 7:
+				// current shifter state (upper 4 bits), status bits
+				value = (channel->shifter >> 4) & 0xf0;
+				value |= channel->reg.control2 & 0x0f;
+				break;
+		}
+	}
+	else
+	{
+		switch (offset) // Lynx II stereo control registers
+		{
+			case 0x40: case 0x41: case 0x42: case 0x43:
+				value = m_audio[offset & 3].attenuation;
+				break;
+			case 0x44:
+				value = m_attenuation_enable;
+				break;
+			case 0x50:
+				value = m_master_enable;
+				break;
+		}
+
+	}
+	return value;
+}
+
+WRITE8_MEMBER(lynx_sound_device::write)
+{
+	//logerror("audio write %.2x %.2x\n", offset, data);
+	LYNX_AUDIO *channel = &m_audio[(offset >> 3) & 3];
+
+	m_mixer_channel->update();
+
+	if (offset < 0x40)
+	{
+		switch (offset & 0x07)
+		{
+			// Volume control (signed)
+			case 0:
+				channel->reg.volume = data;
+				//logerror("write to volume %d\n", data);
+				break;
+			// Shift register feedback enable bits 0-5, 11,10
+			case 1:
+				channel->reg.feedback = data;
+				channel->mask &= 0x80;
+				channel->mask |= (data & 0x3f) | ((data & 0xc0)<<4);
+				break;
+			// Output value
+			case 2:
+				channel->reg.output = data;
+				//logerror("write to output %d\n", data);
+				break;
+			// Lower 8 bits of shift register
+			case 3:
+				channel->shifter &= 0xf00;
+				channel->shifter |= data;
+				break;
+			// Audio timer backup value
+			case 4:
+				channel->reg.bakup = data;
+				break;
+			// Audio control bits
+			case 5:
+				channel->mask &= ~0x80;
+				channel->mask |= (data&0x80);
+				channel->reg.control1 = data;
+				break;
+			// Current count
+			case 6:
+				channel->count=data;
+				break;
+			// Upper 4 bits of shift register and audio status bits
+			case 7:
+				channel->shifter&=0xff;
+				channel->shifter|=(data&0xf0)<<4;
+				channel->reg.control2 = data;
+				break;
+		}
+	}
+	else
+	{
+		switch (offset) // Stereo Registers
+		{
+			case 0x40: case 0x41: case 0x42: case 0x43:
+				m_audio[offset&3].attenuation = data;
+				break;
+			case 0x44:
+				m_attenuation_enable = data;
+				break;
+			case 0x50:
+				m_master_enable = data;
+				break;
+		}
+	}
+}
+
+
+//-------------------------------------------------
+//  sound_stream_update - handle a stream update
+//-------------------------------------------------
+
+void lynx_sound_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
+{
 	int v;
 	stream_sample_t *buffer = outputs[0];
 
-	for (i = 0; i < samples; i++, buffer++)
+	for (int i = 0; i < samples; i++, buffer++)
 	{
 		*buffer = 0;
-		for (channel=state->audio, j=0; j<ARRAY_LENGTH(state->audio); j++, channel++)
+		for (int channel = 0; channel < LYNX_AUDIO_CHANNELS; channel++)
 		{
-			lynx_audio_execute(device, channel);
-			v=channel->reg.n.output;
-			*buffer+=v*15;
+			execute(channel);
+			v = m_audio[channel].reg.output;
+			*buffer += v * 15; // where does the *15 come from?
 		}
 	}
 }
 
-static STREAM_UPDATE( lynx2_update )
+//-------------------------------------------------
+//  sound_stream_update - handle a stream update
+//-------------------------------------------------
+
+void lynx2_sound_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
 {
-	lynx_sound_state *state = get_safe_token(device);
 	stream_sample_t *left=outputs[0], *right=outputs[1];
-	int i, j;
-	LYNX_AUDIO *channel;
 	int v;
 
-	for (i = 0; i < samples; i++, left++, right++)
+	for (int i = 0; i < samples; i++, left++, right++)
 	{
 		*left = 0;
 		*right= 0;
-		for (channel=state->audio, j=0; j<ARRAY_LENGTH(state->audio); j++, channel++)
+		for (int channel = 0; channel < LYNX_AUDIO_CHANNELS; channel++)
 		{
-			lynx_audio_execute(device, channel);
-			v=channel->reg.n.output;
-			if (!(state->master_enable&(0x10<<j)))
+			execute(channel);
+			v = m_audio[channel].reg.output;
+			if (!(m_master_enable & (0x10 << channel)))
 			{
-				if (state->attenuation_enable&(0x10<<j)) {
-					*left+=v*(channel->attenuation>>4);
-				} else {
-					*left+=v*15;
-				}
+				if (m_attenuation_enable & (0x10 << channel))
+					*left += v * (m_audio[channel].attenuation >> 4);
+				else
+					*left += v * 15;
 			}
-			if (!(state->master_enable&(1<<j)))
+			if (!(m_master_enable & (1 << channel)))
 			{
-				if (state->attenuation_enable&(1<<j)) {
-					*right+=v*(channel->attenuation&0xf);
-				} else {
-					*right+=v*15;
-				}
+				if (m_attenuation_enable & (1 << channel))
+					*right += v * (m_audio[channel].attenuation & 0xf);
+				else
+					*right += v * 15;
 			}
 		}
 	}
 }
-
-static void lynx_audio_init(device_t *device)
-{
-	lynx_sound_state *state = get_safe_token(device);
-	int i;
-	state->shift_mask = auto_alloc_array(device->machine(), int, 512);
-	assert(state->shift_mask);
-
-	state->shift_xor = auto_alloc_array(device->machine(), int, 4096);
-	assert(state->shift_xor);
-
-	for (i=0; i<512; i++)
-	{
-		state->shift_mask[i]=0;
-		if (i&1) state->shift_mask[i]|=1;
-		if (i&2) state->shift_mask[i]|=2;
-		if (i&4) state->shift_mask[i]|=4;
-		if (i&8) state->shift_mask[i]|=8;
-		if (i&0x10) state->shift_mask[i]|=0x10;
-		if (i&0x20) state->shift_mask[i]|=0x20;
-		if (i&0x40) state->shift_mask[i]|=0x400;
-		if (i&0x80) state->shift_mask[i]|=0x800;
-		if (i&0x100) state->shift_mask[i]|=0x80;
-	}
-	for (i=0; i<4096; i++)
-	{
-		int j;
-		state->shift_xor[i]=1;
-		for (j=4096/2; j>0; j>>=1)
-		{
-			if (i & j)
-				state->shift_xor[i] ^= 1;
-		}
-	}
-}
-
-static DEVICE_RESET( lynx_sound )
-{
-	lynx_sound_state *state = get_safe_token(device);
-	int i;
-	for (i=0; i<ARRAY_LENGTH(state->audio); i++)
-	{
-		lynx_audio_reset_channel(state->audio+i);
-	}
-}
-
-
-
-/************************************/
-/* Sound handler start              */
-/************************************/
-
-static DEVICE_START(lynx_sound)
-{
-	lynx_sound_state *state = get_safe_token(device);
-	state->mixer_channel = device->machine().sound().stream_alloc(*device, 0, 1, device->machine().sample_rate(), 0, lynx_update);
-
-	state->usec_per_sample = 1000000 / device->machine().sample_rate();
-
-	lynx_audio_init(device);
-}
-
-
-static DEVICE_START(lynx2_sound)
-{
-	lynx_sound_state *state = get_safe_token(device);
-	state->mixer_channel = device->machine().sound().stream_alloc(*device, 0, 2, device->machine().sample_rate(), 0, lynx2_update);
-
-	state->usec_per_sample = 1000000 / device->machine().sample_rate();
-
-	lynx_audio_init(device);
-}
-
-
-DEVICE_GET_INFO( lynx_sound )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(lynx_sound_state);			break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(lynx_sound);	break;
-		case DEVINFO_FCT_RESET:							info->start = DEVICE_RESET_NAME(lynx_sound);	break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "Mikey");				break;
-		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);						break;
-	}
-}
-
-
-DEVICE_GET_INFO( lynx2_sound )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(lynx_sound_state);			break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(lynx2_sound);	break;
-		case DEVINFO_FCT_RESET:							info->start = DEVICE_RESET_NAME(lynx_sound);	break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "Mikey (Lynx II)");				break;
-		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);						break;
-	}
-}
-
-DEFINE_LEGACY_SOUND_DEVICE(LYNX, lynx_sound);
-DEFINE_LEGACY_SOUND_DEVICE(LYNX2, lynx2_sound);

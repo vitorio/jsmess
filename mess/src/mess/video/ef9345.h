@@ -1,3 +1,5 @@
+// license:?
+// copyright-holders:Daniel Coulom,Sandro Ronco
 /*********************************************************************
 
     ef9345.h
@@ -21,42 +23,33 @@
 //  TYPE DEFINITIONS
 //**************************************************************************
 
-// ======================> ef9345_interface
-
-struct ef9345_interface
-{
-	const char *screen_tag;		// screen we are acting on
-};
-
 // ======================> ef9345_device
 
-class ef9345_device :	public device_t,
+class ef9345_device :   public device_t,
 						public device_memory_interface,
-						public ef9345_interface
+						public device_video_interface
 {
 public:
-    // construction/destruction
-    ef9345_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	// construction/destruction
+	ef9345_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
 	// device interface
-	READ8_MEMBER( data_r );
-	WRITE8_MEMBER( data_w );
+	DECLARE_READ8_MEMBER( data_r );
+	DECLARE_WRITE8_MEMBER( data_w );
 	void update_scanline(UINT16 scanline);
-	void video_update(bitmap_t *bitmap, const rectangle *cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect);
 
 protected:
-    // device-level overrides
-    virtual void device_start();
-    virtual void device_reset();
+	// device-level overrides
+	virtual void device_start();
+	virtual void device_reset();
 	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
-	// device_config overrides
-	virtual void device_config_complete();
 
 	// device_config_memory_interface overrides
 	virtual const address_space_config *memory_space_config(address_spacenum spacenum = AS_0) const;
 
-    // address space configurations
-	const address_space_config		m_space_config;
+	// address space configurations
+	const address_space_config      m_space_config;
 
 	// inline helper
 	inline UINT16 indexram(UINT8 r);
@@ -89,28 +82,26 @@ private:
 	static const device_timer_id BUSY_TIMER = 0;
 	static const device_timer_id BLINKING_TIMER = 1;
 
-	const memory_region *m_charset;
+	memory_region *m_charset;
 	address_space *m_videoram;
 
-	screen_device *m_screen;				//screen we are acting on
+	UINT8 m_bf;                             //busy flag
+	UINT8 m_char_mode;                      //40 or 80 chars for line
+	UINT8 m_acc_char[0x2000];               //accented chars
+	UINT8 m_registers[8];                   //registers R0-R7
+	UINT8 m_state;                          //status register
+	UINT8 m_tgs,m_mat,m_pat,m_dor,m_ror;    //indirect registers
+	UINT8 m_border[80];                     //border color
+	UINT16 m_block;                         //current memory block
+	UINT16 m_ram_base[4];                   //index of ram charset
+	UINT8 m_blink;                          //cursor status
+	UINT8 m_last_dial[40];                  //last chars dial (for determinate the zoom position)
+	UINT8 m_latchc0;                        //background color latch
+	UINT8 m_latchm;                         //hided atribute latch
+	UINT8 m_latchi;                         //insert atribute latch
+	UINT8 m_latchu;                         //underline atribute latch
 
-	UINT8 m_bf;								//busy flag
-	UINT8 m_char_mode;						//40 or 80 chars for line
-	UINT8 m_acc_char[0x2000];				//accented chars
-	UINT8 m_registers[8];					//registers R0-R7
-	UINT8 m_state;							//status register
-	UINT8 m_tgs,m_mat,m_pat,m_dor,m_ror;	//indirect registers
-	UINT8 m_border[80];						//border color
-	UINT16 m_block;							//current memory block
-	UINT16 m_ram_base[4];					//index of ram charset
-	UINT8 m_blink;							//cursor status
-	UINT8 m_last_dial[40];					//last chars dial (for determinate the zoom position)
-	UINT8 m_latchc0;						//background color latch
-	UINT8 m_latchm;							//hided atribute latch
-	UINT8 m_latchi;							//insert atribute latch
-	UINT8 m_latchu;							//underline atribute latch
-
-	bitmap_t *m_screen_out;
+	bitmap_rgb32 m_screen_out;
 
 	// timers
 	emu_timer *m_busy_timer;

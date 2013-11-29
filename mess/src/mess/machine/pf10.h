@@ -1,49 +1,61 @@
-/***************************************************************************
+/**********************************************************************
 
-    Epson PF-10
+    EPSON PF-10
 
-    Serial floppy drive
+    license: MAME, GPL-2.0+
+    copyright-holders: Dirk Best
 
-***************************************************************************/
+    Battery operated portable 3.5" floppy drive
+
+**********************************************************************/
+
+#pragma once
 
 #ifndef __PF10_H__
 #define __PF10_H__
 
-#include "devcb.h"
+#include "emu.h"
+#include "cpu/m6800/m6800.h"
+#include "machine/upd765.h"
+#include "machine/epson_sio.h"
 
 
-/***************************************************************************
-    TYPE DEFINITIONS
-***************************************************************************/
+//**************************************************************************
+//  TYPE DEFINITIONS
+//**************************************************************************
 
-#if 0
-typedef struct _pf10_interface pf10_interface;
-struct _pf10_interface
+class epson_pf10_device : public device_t,
+							public device_epson_sio_interface
 {
+public:
+	// construction/destruction
+	epson_pf10_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+
+	// optional information overrides
+	virtual const rom_entry *device_rom_region() const;
+	virtual machine_config_constructor device_mconfig_additions() const;
+
+protected:
+	// device-level overrides
+	virtual void device_start();
+
+	// device_epson_sio_interface overrides
+	virtual int rx_r();
+	virtual int pin_r();
+	virtual void tx_w(int level);
+	virtual void pout_w(int level);
+
+private:
+	required_device<cpu_device> m_cpu;
+	required_device<upd765a_device> m_fdc;
+	required_device<epson_sio_device> m_sio;
+
+	floppy_image_device *m_floppy;
 };
-#endif
 
 
-/***************************************************************************
-    FUNCTION PROTOTYPES
-***************************************************************************/
-/* serial interface in (to the host computer) */
-READ_LINE_DEVICE_HANDLER( pf10_txd1_r );
-WRITE_LINE_DEVICE_HANDLER( pf10_rxd1_w );
-
-/* serial interface out (to another floppy drive) */
-READ_LINE_DEVICE_HANDLER( pf10_txd2_r );
-WRITE_LINE_DEVICE_HANDLER( pf10_rxd2_w );
+// device type definition
+extern const device_type EPSON_PF10;
 
 
-/***************************************************************************
-    DEVICE CONFIGURATION MACROS
-***************************************************************************/
-
-DECLARE_LEGACY_DEVICE(PF10, pf10);
-
-#define MCFG_PF10_ADD(_tag) \
-	MCFG_DEVICE_ADD(_tag, PF10, 0) \
-
-
-#endif /* __PF10_H__ */
+#endif // __PF10_H__

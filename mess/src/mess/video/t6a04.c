@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Sandro Ronco
 /***************************************************************************
 
         Toshiba T6A04 LCD controller
@@ -42,17 +44,10 @@ void t6a04_device::device_config_complete()
 //  on this device
 //-------------------------------------------------
 
-bool t6a04_device::device_validity_check( const game_driver &driver ) const
+void t6a04_device::device_validity_check(validity_checker &valid) const
 {
-	bool error = false;
-
 	if (height == 0 || width == 0)
-	{
-		mame_printf_error("%s: %s device '%s' has invalid parameter\n", driver.source_file, driver.name, tag());
-		error = true;
-	}
-
-	return error;
+		mame_printf_error("Configured with invalid parameter\n");
 }
 
 //**************************************************************************
@@ -64,7 +59,7 @@ bool t6a04_device::device_validity_check( const game_driver &driver ) const
 //-------------------------------------------------
 
 t6a04_device::t6a04_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock) :
-	device_t(mconfig, T6A04, "T6A04", tag, owner, clock)
+	device_t(mconfig, T6A04, "T6A04", tag, owner, clock, "t6a04", __FILE__)
 {
 }
 
@@ -107,7 +102,7 @@ void t6a04_device::device_reset()
 	m_zpos = 0;
 	m_direction = 1;
 	m_active_counter = 1;
-	m_word_len = 1;	//8bit mode
+	m_word_len = 1; //8bit mode
 	m_opa1 = 0;
 	m_opa2 = 0;
 	m_output_reg = 0;
@@ -118,7 +113,7 @@ void t6a04_device::device_reset()
 //  device interface
 //**************************************************************************
 
-int t6a04_device::video_update(bitmap_t *bitmap, const rectangle *cliprect)
+UINT32 t6a04_device::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	UINT8 ypages = width>>3;
 	UINT8 last_line = m_zpos + height;
@@ -132,14 +127,14 @@ int t6a04_device::video_update(bitmap_t *bitmap, const rectangle *cliprect)
 
 				for (int b=7; b>=0; b--)
 				{
-					*BITMAP_ADDR16(bitmap, x&0x3f, y*8+b) = data & 1;
+					bitmap.pix16(x&0x3f, y*8+b) = data & 1;
 					data>>=1;
 				}
 			}
 	}
 	else
 	{
-		bitmap_fill(bitmap, cliprect, 0);
+		bitmap.fill(0, cliprect);
 	}
 
 	return 0;
@@ -193,15 +188,15 @@ WRITE8_MEMBER(t6a04_device::control_write)
 READ8_MEMBER(t6a04_device::control_read)
 {
 	/*
-        status read
-        x--- ----   busy
-        -x-- ----   8/6 mode
-        --x- ----   display on/off
-        ---x ----   reset state
-        ---- xx--   unused (always 0)
-        ---- --x-   x/y counter
-        ---- ---x   up/down mode
-    */
+	    status read
+	    x--- ----   busy
+	    -x-- ----   8/6 mode
+	    --x- ----   display on/off
+	    ---x ----   reset state
+	    ---- xx--   unused (always 0)
+	    ---- --x-   x/y counter
+	    ---- ---x   up/down mode
+	*/
 
 	return (m_busy_flag<<7) | (m_word_len<<6) | (m_display_on<<5) | (m_active_counter<<1) | (m_direction == 1 ? 1 : 0);
 }

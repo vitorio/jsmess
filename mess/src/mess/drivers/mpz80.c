@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /*
 
     Morrow MPZ80 "Decision"
@@ -54,20 +56,20 @@ enum
 	FULL_ACCESS
 };
 
-#define TASK0	((m_task & 0x0f) == 0)
+#define TASK0   ((m_task & 0x0f) == 0)
 
-#define R10	0x04
+#define R10 0x04
 
 
 // mask register
-#define MASK_STOP_ENBL		0x01
-#define MASK_AUX_ENBL		0x02
-#define MASK_TINT_ENBL		0x04
-#define MASK_RUN_ENBL		0x08
-#define MASK_HALT_ENBL		0x10
-#define MASK_SINT_ENBL		0x20
-#define MASK_IOENBL			0x40
-#define MASK_ZIO_MODE		0x80
+#define MASK_STOP_ENBL      0x01
+#define MASK_AUX_ENBL       0x02
+#define MASK_TINT_ENBL      0x04
+#define MASK_RUN_ENBL       0x08
+#define MASK_HALT_ENBL      0x10
+#define MASK_SINT_ENBL      0x20
+#define MASK_IOENBL         0x40
+#define MASK_ZIO_MODE       0x80
 
 
 
@@ -163,7 +165,6 @@ inline offs_t mpz80_state::get_address(offs_t offset)
 READ8_MEMBER( mpz80_state::mmu_r )
 {
 	m_addr = get_address(offset);
-	UINT8 *rom = machine().region(Z80_TAG)->base();
 	UINT8 data = 0;
 
 	if (m_pretrap)
@@ -180,8 +181,7 @@ READ8_MEMBER( mpz80_state::mmu_r )
 	{
 		if (offset < 0x400)
 		{
-			UINT8 *ram = ram_get_ptr(m_ram);
-			data = ram[offset & 0x3ff];
+			data = m_ram->pointer()[offset & 0x3ff];
 		}
 		else if (offset == 0x400)
 		{
@@ -206,7 +206,7 @@ READ8_MEMBER( mpz80_state::mmu_r )
 		else if (offset < 0xc00)
 		{
 			UINT16 rom_addr = (m_trap_reset << 10) | (offset & 0x3ff);
-			data = rom[rom_addr];
+			data = m_rom->base()[rom_addr];
 		}
 		else
 		{
@@ -234,8 +234,7 @@ WRITE8_MEMBER( mpz80_state::mmu_w )
 	{
 		if (offset < 0x400)
 		{
-			UINT8 *ram = ram_get_ptr(m_ram);
-			ram[offset & 0x3ff] = data;
+			m_ram->pointer()[offset & 0x3ff] = data;
 		}
 		else if (offset == 0x400)
 		{
@@ -313,18 +312,18 @@ READ8_MEMBER( mpz80_state::trap_addr_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       DADDR 12
-        1       DADDR 13
-        2       DADDR 14
-        3       DADDR 15
-        4       I-ADDR 12
-        5       I-ADDR 13
-        6       I-ADDR 14
-        7       I-ADDR 15
+	    0       DADDR 12
+	    1       DADDR 13
+	    2       DADDR 14
+	    3       DADDR 15
+	    4       I-ADDR 12
+	    5       I-ADDR 13
+	    6       I-ADDR 14
+	    7       I-ADDR 15
 
-    */
+	*/
 
 	return m_trap_addr;
 }
@@ -338,18 +337,18 @@ READ8_MEMBER( mpz80_state::status_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       _TRAP VOID
-        1       _IORQ
-        2       _TRAP HALT
-        3       _TRAP INT
-        4       _TRAP STOP
-        5       _TRAP AUX
-        6       R10
-        7       _RD STB
+	    0       _TRAP VOID
+	    1       _IORQ
+	    2       _TRAP HALT
+	    3       _TRAP INT
+	    4       _TRAP STOP
+	    5       _TRAP AUX
+	    6       R10
+	    7       _RD STB
 
-    */
+	*/
 
 	return m_status;
 }
@@ -363,18 +362,18 @@ WRITE8_MEMBER( mpz80_state::task_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       T0, A16
-        1       T1, A17
-        2       T2, A18
-        3       T3, A19
-        4       T4, S-100 A20
-        5       T5, S-100 A21
-        6       T6, S-100 A22
-        7       T7, S-100 A23
+	    0       T0, A16
+	    1       T1, A17
+	    2       T2, A18
+	    3       T3, A19
+	    4       T4, S-100 A20
+	    5       T5, S-100 A21
+	    6       T6, S-100 A22
+	    7       T7, S-100 A23
 
-    */
+	*/
 
 	m_task = data;
 
@@ -391,18 +390,18 @@ WRITE8_MEMBER( mpz80_state::mask_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       _STOP ENBL
-        1       AUX ENBL
-        2       _TINT ENBL
-        3       RUN ENBL
-        4       _HALT ENBL
-        5       SINT ENBL
-        6       _IOENBL
-        7       _ZIO MODE
+	    0       _STOP ENBL
+	    1       AUX ENBL
+	    2       _TINT ENBL
+	    3       RUN ENBL
+	    4       _HALT ENBL
+	    5       SINT ENBL
+	    6       _IOENBL
+	    7       _ZIO MODE
 
-    */
+	*/
 
 	m_mask = data;
 }
@@ -421,18 +420,18 @@ READ8_MEMBER( mpz80_state::keyboard_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0
-        1
-        2
-        3
-        4
-        5
-        6
-        7
+	    0
+	    1
+	    2
+	    3
+	    4
+	    5
+	    6
+	    7
 
-    */
+	*/
 
 	return 0;
 }
@@ -446,18 +445,18 @@ READ8_MEMBER( mpz80_state::switch_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       _TRAP RESET
-        1       INT PEND
-        2       16C S6
-        3       16C S5
-        4       16C S4
-        5       16C S3
-        6       16C S2
-        7       16C S1
+	    0       _TRAP RESET
+	    1       INT PEND
+	    2       16C S6
+	    3       16C S5
+	    4       16C S4
+	    5       16C S3
+	    6       16C S2
+	    7       16C S1
 
-    */
+	*/
 
 	UINT8 data = 0;
 
@@ -468,7 +467,7 @@ READ8_MEMBER( mpz80_state::switch_r )
 	data |= m_int_pend << 1;
 
 	// boot address
-	data |= input_port_read(machine(), "16C") & 0xfc;
+	data |= m_16c->read() & 0xfc;
 
 	return data;
 }
@@ -482,18 +481,18 @@ WRITE8_MEMBER( mpz80_state::disp_seg_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0
-        1
-        2
-        3
-        4
-        5
-        6
-        7
+	    0
+	    1
+	    2
+	    3
+	    4
+	    5
+	    6
+	    7
 
-    */
+	*/
 }
 
 
@@ -505,18 +504,18 @@ WRITE8_MEMBER( mpz80_state::disp_col_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0
-        1
-        2
-        3
-        4
-        5
-        6
-        7
+	    0
+	    1
+	    2
+	    3
+	    4
+	    5
+	    6
+	    7
 
-    */
+	*/
 }
 
 
@@ -539,7 +538,7 @@ static ADDRESS_MAP_START( mpz80_mem, AS_PROGRAM, 8, mpz80_state )
     AM_RANGE(0x0401, 0x0401) AM_READWRITE(keyboard_r, disp_col_w)
     AM_RANGE(0x0402, 0x0402) AM_READWRITE(switch_r, task_w)
     AM_RANGE(0x0403, 0x0403) AM_READWRITE(status_r, mask_w)
-    AM_RANGE(0x0600, 0x07ff) AM_RAM AM_BASE(m_map_ram)
+    AM_RANGE(0x0600, 0x07ff) AM_RAM AM_SHARE("map_ram")
     AM_RANGE(0x0800, 0x0bff) AM_ROM AM_REGION(Z80_TAG, 0)
     AM_RANGE(0x0c00, 0x0c00) AM_DEVREADWRITE(AM9512_TAG, am9512_device, read, write)
 */
@@ -566,47 +565,48 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( mpz80 )
 	PORT_START("16C")
-	PORT_DIPNAME( 0xf8, 0xf8, "Boot Address" ) PORT_DIPLOCATION("16C:1,2,3,4,5")
-	PORT_DIPSETTING(    0xf8, "F800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0xf0, "F000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0xe8, "E800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0xe0, "E000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0xd8, "D800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0xd0, "D000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0xc8, "C800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0xc0, "C000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0xb8, "B800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0xb0, "B000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0xa8, "A800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0xa0, "A000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x98, "9800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x90, "9000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x88, "8800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x80, "8000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x78, "7800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x70, "7000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x68, "6800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x60, "6000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x58, "5800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x50, "5000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x48, "4800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x40, "4000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x38, "3800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x30, "3000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x28, "2800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x20, "2000H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x18, "1800H" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x10, "Boot DJ/DMA" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x08, "Boot HD/DMA" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x00, "Boot HDCA" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x02)
-	PORT_DIPSETTING(    0x00, "Read Registers" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x00)
-	PORT_DIPSETTING(    0x10, "Write Registers" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x00)
-	PORT_DIPSETTING(    0x20, "Write Map RAMs" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x00)
-	PORT_DIPSETTING(    0x30, "Write R/W RAMs" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x00)
-	PORT_DIPSETTING(    0x40, "R/W FPP" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x00)
-	PORT_DIPSETTING(    0x50, "R/W S-100 Bus" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x00)
-	PORT_DIPSETTING(    0x60, "R/W S-100 Bus" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x00)
-	PORT_DIPSETTING(    0x70, "Read Switches" ) PORT_CONDITION("12C", 0x02, PORTCOND_EQUALS, 0x00)
+	PORT_DIPNAME( 0xf8, 0xf8, "Power-On-Jump Address" ) PORT_DIPLOCATION("16C:1,2,3,4,5") PORT_CONDITION("12C", 0x02, EQUALS, 0x02)
+	PORT_DIPSETTING(    0xf8, "F800H" )
+	PORT_DIPSETTING(    0xf0, "F000H" )
+	PORT_DIPSETTING(    0xe8, "E800H" )
+	PORT_DIPSETTING(    0xe0, "E000H" )
+	PORT_DIPSETTING(    0xd8, "D800H" )
+	PORT_DIPSETTING(    0xd0, "D000H" )
+	PORT_DIPSETTING(    0xc8, "C800H" )
+	PORT_DIPSETTING(    0xc0, "C000H" )
+	PORT_DIPSETTING(    0xb8, "B800H" )
+	PORT_DIPSETTING(    0xb0, "B000H" )
+	PORT_DIPSETTING(    0xa8, "A800H" )
+	PORT_DIPSETTING(    0xa0, "A000H" )
+	PORT_DIPSETTING(    0x98, "9800H" )
+	PORT_DIPSETTING(    0x90, "9000H" )
+	PORT_DIPSETTING(    0x88, "8800H" )
+	PORT_DIPSETTING(    0x80, "8000H" )
+	PORT_DIPSETTING(    0x78, "7800H" )
+	PORT_DIPSETTING(    0x70, "7000H" )
+	PORT_DIPSETTING(    0x68, "6800H" )
+	PORT_DIPSETTING(    0x60, "6000H" )
+	PORT_DIPSETTING(    0x58, "5800H" )
+	PORT_DIPSETTING(    0x50, "5000H" )
+	PORT_DIPSETTING(    0x48, "4800H" )
+	PORT_DIPSETTING(    0x40, "4000H" )
+	PORT_DIPSETTING(    0x38, "3800H" )
+	PORT_DIPSETTING(    0x30, "3000H" )
+	PORT_DIPSETTING(    0x28, "2800H" )
+	PORT_DIPSETTING(    0x20, "2000H" )
+	PORT_DIPSETTING(    0x18, "1800H" )
+	PORT_DIPSETTING(    0x10, "Boot DJ/DMA" )
+	PORT_DIPSETTING(    0x08, "Boot HD/DMA" )
+	PORT_DIPSETTING(    0x00, "Boot HDCA" )
+	PORT_DIPNAME( 0x70, 0x00, "Diagnostics" ) PORT_DIPLOCATION("16C:2,3,4") PORT_CONDITION("12C", 0x02, EQUALS, 0x00)
+	PORT_DIPSETTING(    0x00, "Read Registers" )
+	PORT_DIPSETTING(    0x10, "Write Registers" )
+	PORT_DIPSETTING(    0x20, "Write Map RAMs" )
+	PORT_DIPSETTING(    0x30, "Write R/W RAMs" )
+	PORT_DIPSETTING(    0x40, "R/W FPP" )
+	PORT_DIPSETTING(    0x50, "R/W S-100 Bus (High/Low)" )
+	PORT_DIPSETTING(    0x60, "R/W S-100 Bus (Alternating)" )
+	PORT_DIPSETTING(    0x70, "Read Switches" )
 	PORT_DIPNAME( 0x04, 0x00, "Power Up" ) PORT_DIPLOCATION("16C:6")
 	PORT_DIPSETTING(    0x04, "Boot Address" )
 	PORT_DIPSETTING(    0x00, "Monitor" )
@@ -629,33 +629,6 @@ INPUT_PORTS_END
 //**************************************************************************
 //  DEVICE CONFIGURATION
 //**************************************************************************
-
-//-------------------------------------------------
-//  floppy_interface floppy_intf
-//-------------------------------------------------
-
-static const floppy_interface floppy_intf =
-{
-    DEVCB_NULL,
-    DEVCB_NULL,
-    DEVCB_NULL,
-    DEVCB_NULL,
-    DEVCB_NULL,
-    FLOPPY_STANDARD_8_DSDD,
-    FLOPPY_OPTIONS_NAME(default),
-    "floppy_8",
-	NULL
-};
-
-//-------------------------------------------------
-//  GENERIC_TERMINAL_INTERFACE( terminal_intf )
-//-------------------------------------------------
-
-static GENERIC_TERMINAL_INTERFACE( terminal_intf )
-{
-	DEVCB_DEVICE_MEMBER(S100_TAG, s100_device, terminal_receive_w)
-};
-
 
 //-------------------------------------------------
 //  S100_INTERFACE( s100_intf )
@@ -694,10 +667,9 @@ static S100_INTERFACE( s100_intf )
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
+	DEVCB_CPU_INPUT_LINE(Z80_TAG, Z80_INPUT_LINE_WAIT),
 	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_DEVICE_HANDLER(TERMINAL_TAG, terminal_write)
+	DEVCB_NULL
 };
 
 static SLOT_INTERFACE_START( mpz80_s100_cards )
@@ -722,13 +694,9 @@ SLOT_INTERFACE_END
 
 void mpz80_state::machine_start()
 {
-	m_map_ram = auto_alloc_array_clear(machine(), UINT8, 0x200);
+	m_map_ram.allocate(0x200);
 }
 
-
-//-------------------------------------------------
-//  MACHINE_RESET( mpz80 )
-//-------------------------------------------------
 
 void mpz80_state::machine_reset()
 {
@@ -757,29 +725,22 @@ static MACHINE_CONFIG_START( mpz80, mpz80_state )
 	MCFG_CPU_PROGRAM_MAP(mpz80_mem)
 	MCFG_CPU_IO_MAP(mpz80_io)
 
-	// video hardware
-	MCFG_FRAGMENT_ADD( generic_terminal )
-
 	// S-100
-	MCFG_S100_BUS_ADD(Z80_TAG, s100_intf)
-	MCFG_S100_SLOT_ADD( 1,  "s100_1", mpz80_s100_cards, "mm65k16s")
-	MCFG_S100_SLOT_ADD( 2,  "s100_2", mpz80_s100_cards, "wunderbus")
-	MCFG_S100_SLOT_ADD( 3,  "s100_3", mpz80_s100_cards, "dj2db")
-	MCFG_S100_SLOT_ADD( 4,  "s100_4", mpz80_s100_cards, NULL)//"hdcdma")
-	MCFG_S100_SLOT_ADD( 5,  "s100_5", mpz80_s100_cards, NULL)
-	MCFG_S100_SLOT_ADD( 6,  "s100_6", mpz80_s100_cards, NULL)
-	MCFG_S100_SLOT_ADD( 7,  "s100_7", mpz80_s100_cards, NULL)
-	MCFG_S100_SLOT_ADD( 8,  "s100_8", mpz80_s100_cards, NULL)
-	MCFG_S100_SLOT_ADD( 9,  "s100_9", mpz80_s100_cards, NULL)
-	MCFG_S100_SLOT_ADD(10, "s100_10", mpz80_s100_cards, NULL)
-	MCFG_S100_SLOT_ADD(11, "s100_11", mpz80_s100_cards, NULL)
-	MCFG_S100_SLOT_ADD(12, "s100_12", mpz80_s100_cards, NULL)
-	MCFG_S100_SLOT_ADD(13, "s100_13", mpz80_s100_cards, NULL)
-	MCFG_S100_SLOT_ADD(14, "s100_14", mpz80_s100_cards, NULL)
-
-	// devices
-	MCFG_FLOPPY_2_DRIVES_ADD(floppy_intf)
-	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
+	MCFG_S100_BUS_ADD(s100_intf)
+	MCFG_S100_SLOT_ADD("s100_1", mpz80_s100_cards, "mm65k16s")
+	MCFG_S100_SLOT_ADD("s100_2", mpz80_s100_cards, "wunderbus")
+	MCFG_S100_SLOT_ADD("s100_3", mpz80_s100_cards, "dj2db")
+	MCFG_S100_SLOT_ADD("s100_4", mpz80_s100_cards, NULL)//"hdcdma")
+	MCFG_S100_SLOT_ADD("s100_5", mpz80_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_6", mpz80_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_7", mpz80_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_8", mpz80_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_9", mpz80_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_10", mpz80_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_11", mpz80_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_12", mpz80_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_13", mpz80_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_14", mpz80_s100_cards, NULL)
 
 	// internal ram
 	MCFG_RAM_ADD(RAM_TAG)
@@ -809,11 +770,14 @@ ROM_START( mpz80 )
 	ROM_SYSTEM_BIOS( 2, "447", "4.47" )
 	ROMX_LOAD( "mon 4.47 f4f6.17c", 0x0000, 0x1000, CRC(b99c5d7f) SHA1(11181432ee524c7e5a68ead0671fc945256f5d1b), ROM_BIOS(3) )
 
-	ROM_REGION( 0x20, "proms", 0 )
-	ROM_LOAD( "z80-2 15a.15a", 0x00, 0x20, CRC(8a84249d) SHA1(dfbc49c5944f110f48419fd893fa84f4f0e113b8) ) // this is actually the 6331 PROM?
+	ROM_REGION( 0x20, "s100rev2", 0 )
+	ROM_LOAD( "z80-2 15a.15a", 0x00, 0x20, CRC(8a84249d) SHA1(dfbc49c5944f110f48419fd893fa84f4f0e113b8) ) // 82S123 or 6331
 
-	ROM_REGION( 0x20, "plds", 0 )
-	ROM_LOAD( "z80-2 5c.5c", 0x00, 0x20, NO_DUMP )
+	ROM_REGION( 0xeb, "s100rev3", 0 )
+	ROM_LOAD( "z80-15a-a.15a", 0x00, 0xeb, CRC(713243cd) SHA1(802b318cc9795d87f03622e878d9a4d5d7dea7d4) ) // 82S153
+
+	ROM_REGION( 0x104, "mm1", 0 )
+	ROM_LOAD( "z80-2 5c.5c", 0x000, 0x104, CRC(732be0cd) SHA1(545a37e5a871fcd1bb59b30056b837f03889b4d5) ) // PAL16R4
 ROM_END
 
 
@@ -823,26 +787,24 @@ ROM_END
 //**************************************************************************
 
 //-------------------------------------------------
-//  DRIVER_INIT( abc800c )
+//  DRIVER_INIT( mpz80 )
 //-------------------------------------------------
 
-DIRECT_UPDATE_HANDLER( mpz80_direct_update_handler )
+DIRECT_UPDATE_MEMBER(mpz80_state::mpz80_direct_update_handler)
 {
-	mpz80_state *state = machine.driver_data<mpz80_state>();
-
-	if (state->m_trap && address >= state->m_trap_start && address <= state->m_trap_start + 0xf)
+	if (m_trap && address >= m_trap_start && address <= m_trap_start + 0xf)
 	{
-		direct.explicit_configure(state->m_trap_start, state->m_trap_start + 0xf, 0xf, machine.region(Z80_TAG)->base() + ((state->m_trap_reset << 10) | 0x3f0));
+		direct.explicit_configure(m_trap_start, m_trap_start + 0xf, 0xf, m_rom->base() + ((m_trap_reset << 10) | 0x3f0));
 		return ~0;
 	}
 
 	return address;
 }
 
-static DRIVER_INIT( mpz80 )
+DRIVER_INIT_MEMBER(mpz80_state,mpz80)
 {
-	address_space *program = machine.device<cpu_device>(Z80_TAG)->space(AS_PROGRAM);
-	program->set_direct_update_handler(direct_update_delegate(FUNC(mpz80_direct_update_handler), &machine));
+	address_space &program = machine().device<cpu_device>(Z80_TAG)->space(AS_PROGRAM);
+	program.set_direct_update_handler(direct_update_delegate(FUNC(mpz80_state::mpz80_direct_update_handler), this));
 }
 
 
@@ -852,4 +814,4 @@ static DRIVER_INIT( mpz80 )
 //**************************************************************************
 
 //    YEAR  NAME     PARENT  COMPAT  MACHINE  INPUT    INIT    COMPANY                          FULLNAME        FLAGS
-COMP( 1980, mpz80,  0,      0,      mpz80,  mpz80,  mpz80,      "Morrow Designs",	"MPZ80",	GAME_NOT_WORKING | GAME_NO_SOUND_HW )
+COMP( 1980, mpz80,  0,      0,      mpz80,  mpz80, mpz80_state,  mpz80,      "Morrow Designs",  "MPZ80",    GAME_NOT_WORKING | GAME_NO_SOUND_HW )

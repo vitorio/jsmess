@@ -16,20 +16,26 @@ class buster_state : public driver_device
 {
 public:
 	buster_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_vram(*this, "vram"),
+		m_maincpu(*this, "maincpu") { }
 
-	UINT8 *m_vram;
+	required_shared_ptr<UINT8> m_vram;
+	DECLARE_READ8_MEMBER(test_r);
+	virtual void video_start();
+	virtual void palette_init();
+	UINT32 screen_update_buster(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
 };
 
 
-static VIDEO_START(buster)
+void buster_state::video_start()
 {
 }
 
-static SCREEN_UPDATE(buster)
+UINT32 buster_state::screen_update_buster(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	buster_state *state = screen->machine().driver_data<buster_state>();
-	const gfx_element *gfx = screen->machine().gfx[0];
+	gfx_element *gfx = machine().gfx[0];
 	int count = 0x0000;
 
 	int y,x;
@@ -39,7 +45,7 @@ static SCREEN_UPDATE(buster)
 	{
 		for (x=0;x<32;x++)
 		{
-			int tile = (state->m_vram[count+1])|(state->m_vram[count]<<8);
+			int tile = (m_vram[count+1])|(m_vram[count]<<8);
 			//int colour = tile>>12;
 			drawgfx_opaque(bitmap,cliprect,gfx,tile,0,0,0,x*8,y*4);
 
@@ -50,18 +56,18 @@ static SCREEN_UPDATE(buster)
 }
 
 #if 0
-static READ8_HANDLER( test_r )
+READ8_MEMBER(buster_state::test_r)
 {
-	return space->machine().rand();
+	return machine().rand();
 }
 #endif
 
-static ADDRESS_MAP_START( mainmap, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x3fff) AM_ROM// AM_BASE_MEMBER(buster_state, m_rom)
+static ADDRESS_MAP_START( mainmap, AS_PROGRAM, 8, buster_state )
+	AM_RANGE(0x0000, 0x3fff) AM_ROM// AM_SHARE("rom")
 	AM_RANGE(0x4000, 0x47ff) AM_RAM AM_SHARE("wram")
-	AM_RANGE(0x5000, 0x5fff) AM_RAM AM_BASE_MEMBER(buster_state, m_vram)
-	AM_RANGE(0x6000, 0x6000) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
-	AM_RANGE(0x6001, 0x6001) AM_DEVREADWRITE_MODERN("crtc", mc6845_device, register_r, register_w)
+	AM_RANGE(0x5000, 0x5fff) AM_RAM AM_SHARE("vram")
+	AM_RANGE(0x6000, 0x6000) AM_DEVWRITE("crtc", mc6845_device, address_w)
+	AM_RANGE(0x6001, 0x6001) AM_DEVREADWRITE("crtc", mc6845_device, register_r, register_w)
 	AM_RANGE(0x7c80, 0x7c80) AM_READ_PORT("IN0")
 	AM_RANGE(0x7c82, 0x7c82) AM_READ_PORT("IN1")
 	AM_RANGE(0x7c84, 0x7c84) AM_READ_PORT("IN2")
@@ -302,50 +308,47 @@ static GFXDECODE_START( buster )
 	GFXDECODE_ENTRY( "gfx1", 0, tiles8x8_layout, 0, 1 )
 GFXDECODE_END
 
-static const mc6845_interface mc6845_intf =
+static MC6845_INTERFACE( mc6845_intf )
 {
-	"screen",	/* screen we are acting on */
-	8,			/* number of pixels per video memory address */
-	NULL,		/* before pixel update callback */
-	NULL,		/* row update callback */
-	NULL,		/* after pixel update callback */
-	DEVCB_NULL,	/* callback for display state changes */
-	DEVCB_NULL,	/* callback for cursor state changes */
-	DEVCB_NULL,	/* HSYNC callback */
-	DEVCB_NULL,	/* VSYNC callback */
-	NULL		/* update address callback */
+	false,      /* show border area */
+	8,          /* number of pixels per video memory address */
+	NULL,       /* before pixel update callback */
+	NULL,       /* row update callback */
+	NULL,       /* after pixel update callback */
+	DEVCB_NULL, /* callback for display state changes */
+	DEVCB_NULL, /* callback for cursor state changes */
+	DEVCB_NULL, /* HSYNC callback */
+	DEVCB_NULL, /* VSYNC callback */
+	NULL        /* update address callback */
 };
 
-static PALETTE_INIT( buster )
+void buster_state::palette_init()
 {
 	int i;
 
 	/* RGB format */
 	for(i=0;i<8;i++)
-		palette_set_color(machine, i, MAKE_RGB(pal1bit(i >> 0),pal1bit(i >> 1),pal1bit(i >> 2)));
+		palette_set_color(machine(), i, MAKE_RGB(pal1bit(i >> 0),pal1bit(i >> 1),pal1bit(i >> 2)));
 }
 
 static MACHINE_CONFIG_START( buster, buster_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,XTAL_3_579545MHz)		 /* ? MHz */
+	MCFG_CPU_ADD("maincpu", Z80,XTAL_3_579545MHz)        /* ? MHz */
 	MCFG_CPU_PROGRAM_MAP(mainmap)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", buster_state,  irq0_line_hold)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
-	MCFG_SCREEN_UPDATE(buster)
-	MCFG_MC6845_ADD("crtc", MC6845, XTAL_3_579545MHz/4, mc6845_intf) //unknown clock / type
+	MCFG_SCREEN_UPDATE_DRIVER(buster_state, screen_update_buster)
+	MCFG_MC6845_ADD("crtc", MC6845, "screen", XTAL_3_579545MHz/4, mc6845_intf) //unknown clock / type
 
 	MCFG_GFXDECODE(buster)
 	MCFG_PALETTE_LENGTH(8)
-	MCFG_PALETTE_INIT(buster)
 
-	MCFG_VIDEO_START(buster)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
@@ -369,4 +372,4 @@ ROM_START( buster )
 ROM_END
 
 
-GAME( 1982, buster,  0,    buster, buster,  0, ROT0, "Marian Electronics Ltd.", "Buster", GAME_NOT_WORKING|GAME_NO_SOUND )
+GAME( 1982, buster,  0,    buster, buster, driver_device,  0, ROT0, "Marian Electronics Ltd.", "Buster", GAME_NOT_WORKING|GAME_NO_SOUND )

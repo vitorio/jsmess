@@ -22,7 +22,7 @@ Undumped carts:
 		</part>
 	</software>
 
-	<software name="frntline">
+	<software name="frontlin">
 		<description>Front Line</description>
 		<year>1983</year>
 		<publisher>Casio / Taito</publisher>
@@ -69,7 +69,7 @@ Undumped carts:
 	<software name="mrpackn">
 		<description>Mr. Packn</description>
 		<year>1982</year>
-		<publisher>Casio / Konami</publisher>
+		<publisher>Casio / Namco</publisher>
 		<part name="cart" interface="pv2000_cart">
 			<dataarea name="rom" size="8192">
 				<rom name="mrpackn.bin" size="8192" crc="ee0d3948" sha1="fd311a46b87ddd6263c4f12e88178d9e2150ea5a" offset="0" />
@@ -99,7 +99,7 @@ Undumped carts:
 		</part>
 	</software>
 
-	<software name="skicmmnd">
+	<software name="skicomm">
 		<description>Ski Command</description>
 		<year>198?</year>
 		<publisher>Casio</publisher>
@@ -110,7 +110,7 @@ Undumped carts:
 		</part>
 	</software>
 
-	<software name="suprcobr">
+	<software name="scobra">
 		<description>Super Cobra</description>
 		<year>1981</year>
 		<publisher>Casio</publisher>

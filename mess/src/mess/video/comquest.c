@@ -2,11 +2,11 @@
 
 #include "includes/comquest.h"
 
-VIDEO_START( comquest )
+void comquest_state::video_start()
 {
 }
 
-SCREEN_UPDATE( comquest )
+UINT32 comquest_state::screen_update_comquest(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	int x, y, j;
 

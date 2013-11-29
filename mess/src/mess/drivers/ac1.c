@@ -28,7 +28,7 @@ static GFXDECODE_START( ac1 )
 GFXDECODE_END
 
 /* Address maps */
-static ADDRESS_MAP_START(ac1_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(ac1_mem, AS_PROGRAM, 8, ac1_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE( 0x0000, 0x07ff ) AM_ROM  // Monitor
 	AM_RANGE( 0x0800, 0x0fff ) AM_ROM  // BASIC
@@ -36,7 +36,7 @@ static ADDRESS_MAP_START(ac1_mem, AS_PROGRAM, 8)
 	AM_RANGE( 0x1800, 0x1fff ) AM_RAM  // RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(ac1_32_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(ac1_32_mem, AS_PROGRAM, 8, ac1_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE( 0x0000, 0x07ff ) AM_ROM  // Monitor
 	AM_RANGE( 0x0800, 0x0fff ) AM_ROM  // BASIC
@@ -44,9 +44,9 @@ static ADDRESS_MAP_START(ac1_32_mem, AS_PROGRAM, 8)
 	AM_RANGE( 0x1800, 0xffff ) AM_RAM  // RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ac1_io, AS_IO, 8 )
+static ADDRESS_MAP_START( ac1_io, AS_IO, 8, ac1_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE("z80pio", z80pio_cd_ba_r, z80pio_cd_ba_w)
+	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE("z80pio", z80pio_device, read, write)
 ADDRESS_MAP_END
 
 /* Input ports */
@@ -125,7 +125,6 @@ static MACHINE_CONFIG_START( ac1, ac1_state )
 	MCFG_CPU_ADD("maincpu", Z80, XTAL_8MHz / 4)
 	MCFG_CPU_PROGRAM_MAP(ac1_mem)
 	MCFG_CPU_IO_MAP(ac1_io)
-	MCFG_MACHINE_RESET( ac1 )
 
 	MCFG_Z80PIO_ADD( "z80pio", XTAL_8MHz / 4, ac1_z80pio_intf )
 
@@ -133,23 +132,21 @@ static MACHINE_CONFIG_START( ac1, ac1_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*6, 16*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 64*6-1, 0, 16*8-1)
-	MCFG_SCREEN_UPDATE(ac1)
+	MCFG_SCREEN_UPDATE_DRIVER(ac1_state, screen_update_ac1)
 
 	MCFG_GFXDECODE( ac1 )
 
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
-	MCFG_VIDEO_START(ac1)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, default_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", default_cassette_interface )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( ac1_32, ac1 )
@@ -160,7 +157,7 @@ static MACHINE_CONFIG_DERIVED( ac1_32, ac1 )
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_SIZE(64*6, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 64*6-1, 0, 32*8-1)
-	MCFG_SCREEN_UPDATE(ac1_32)
+	MCFG_SCREEN_UPDATE_DRIVER(ac1_state, screen_update_ac1_32)
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -211,6 +208,6 @@ ROM_END
 
 /* Driver */
 /*    YEAR  NAME   PARENT  COMPAT  MACHINE  INPUT   INIT  COMPANY                 FULLNAME   FLAGS */
-COMP( 1984, ac1,     0,      0, 	ac1,	ac1,	ac1,  "Frank Heyder", "Amateurcomputer AC1 Berlin", 0 )
-COMP( 1984, ac1_32,  ac1,    0, 	ac1_32,	ac1,	ac1,  "Frank Heyder", "Amateurcomputer AC1 Berlin (32 lines)", 0 )
-COMP( 1984, ac1scch, ac1,    0, 	ac1_32,	ac1,	ac1,  "Frank Heyder", "Amateurcomputer AC1 SCCH", 0 )
+COMP( 1984, ac1,     0,      0,     ac1,    ac1, ac1_state, ac1,  "Frank Heyder", "Amateurcomputer AC1 Berlin", 0 )
+COMP( 1984, ac1_32,  ac1,    0,     ac1_32, ac1, ac1_state, ac1,  "Frank Heyder", "Amateurcomputer AC1 Berlin (32 lines)", 0 )
+COMP( 1984, ac1scch, ac1,    0,     ac1_32, ac1, ac1_state, ac1,  "Frank Heyder", "Amateurcomputer AC1 SCCH", 0 )

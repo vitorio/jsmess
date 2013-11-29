@@ -40,27 +40,27 @@ struct k056230_interface
 // ======================> k056230_device
 
 class k056230_device :  public device_t,
-                        public k056230_interface
+						public k056230_interface
 {
 public:
-    // construction/destruction
-    k056230_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	// construction/destruction
+	k056230_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
-	UINT32 lanc_ram_r(UINT32 offset);
-	void lanc_ram_w(UINT32 offset, UINT32 data, UINT32 mem_mask);
+	DECLARE_READ32_MEMBER(lanc_ram_r);
+	DECLARE_WRITE32_MEMBER(lanc_ram_w);
 
-	UINT8 k056230_r(UINT32 offset);
-	void k056230_w(UINT32 offset, UINT8 data);
+	DECLARE_READ8_MEMBER(k056230_r);
+	DECLARE_WRITE8_MEMBER(k056230_w);
 
 	static TIMER_CALLBACK( network_irq_clear_callback );
 
 protected:
-    // device-level overrides
-    virtual void device_config_complete();
-    virtual void device_start();
-    virtual void device_reset() { }
-    virtual void device_post_load() { }
-    virtual void device_clock_changed() { }
+	// device-level overrides
+	virtual void device_config_complete();
+	virtual void device_start();
+	virtual void device_reset() { }
+	virtual void device_post_load() { }
+	virtual void device_clock_changed() { }
 
 private:
 
@@ -74,16 +74,4 @@ private:
 // device type definition
 extern const device_type K056230;
 
-
-
-/***************************************************************************
-    PROTOTYPES
-***************************************************************************/
-
-extern READ32_DEVICE_HANDLER( lanc_ram_r );
-extern WRITE32_DEVICE_HANDLER( lanc_ram_w );
-extern READ8_DEVICE_HANDLER( k056230_r );
-extern WRITE8_DEVICE_HANDLER( k056230_w );
-
-
-#endif	/* __K056230_H__ */
+#endif  /* __K056230_H__ */

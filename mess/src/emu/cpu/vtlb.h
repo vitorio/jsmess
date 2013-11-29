@@ -1,12 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     vtlb.h
 
     Generic virtual TLB implementation.
-
-    Copyright Aaron Giles
-    Released for general non-commercial use under the MAME license
-    Visit http://mamedev.org for licensing and usage restrictions.
 
 ***************************************************************************/
 
@@ -21,16 +19,16 @@
     CONSTANTS
 ***************************************************************************/
 
-#define VTLB_FLAGS_MASK				0xff
+#define VTLB_FLAGS_MASK             0xff
 
-#define VTLB_READ_ALLOWED			0x01		/* (1 << TRANSLATE_READ) */
-#define VTLB_WRITE_ALLOWED			0x02		/* (1 << TRANSLATE_WRITE) */
-#define VTLB_FETCH_ALLOWED			0x04		/* (1 << TRANSLATE_FETCH) */
-#define VTLB_FLAG_VALID				0x08
-#define VTLB_USER_READ_ALLOWED		0x10		/* (1 << TRANSLATE_READ_USER) */
-#define VTLB_USER_WRITE_ALLOWED		0x20		/* (1 << TRANSLATE_WRITE_USER) */
-#define VTLB_USER_FETCH_ALLOWED		0x40		/* (1 << TRANSLATE_FETCH_USER) */
-#define VTLB_FLAG_FIXED				0x80
+#define VTLB_READ_ALLOWED           0x01        /* (1 << TRANSLATE_READ) */
+#define VTLB_WRITE_ALLOWED          0x02        /* (1 << TRANSLATE_WRITE) */
+#define VTLB_FETCH_ALLOWED          0x04        /* (1 << TRANSLATE_FETCH) */
+#define VTLB_FLAG_VALID             0x08
+#define VTLB_USER_READ_ALLOWED      0x10        /* (1 << TRANSLATE_READ_USER) */
+#define VTLB_USER_WRITE_ALLOWED     0x20        /* (1 << TRANSLATE_WRITE_USER) */
+#define VTLB_USER_FETCH_ALLOWED     0x40        /* (1 << TRANSLATE_FETCH_USER) */
+#define VTLB_FLAG_FIXED             0x80
 
 
 
@@ -43,7 +41,7 @@ typedef UINT32 vtlb_entry;
 
 
 /* opaque structure describing VTLB state */
-typedef struct _vtlb_state vtlb_state;
+struct vtlb_state;
 
 
 
@@ -69,6 +67,8 @@ int vtlb_fill(vtlb_state *vtlb, offs_t address, int intention);
 /* load a fixed VTLB entry */
 void vtlb_load(vtlb_state *vtlb, int entrynum, int numpages, offs_t address, vtlb_entry value);
 
+/* load a dynamic VTLB entry */
+void vtlb_dynload(vtlb_state *vtlb, UINT32 index, offs_t address, vtlb_entry value);
 
 /* ----- flushing ----- */
 

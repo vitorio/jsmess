@@ -14,13 +14,13 @@
 #include "osdcore.h"
 #include "imgtool.h"
 
-typedef enum
+enum imgtype_t
 {
 	IMG_FILE,
 	IMG_MEM
-} imgtype_t;
+};
 
-struct _imgtool_stream
+struct imgtool_stream
 {
 	imgtype_t imgtype;
 	int write_protect;
@@ -40,7 +40,7 @@ struct _imgtool_stream
 static imgtool_stream *stream_open_zip(const char *zipname, const char *subname, int read_or_write)
 {
 	imgtool_stream *imgfile = NULL;
-	zip_error ziperr;
+//  zip_error ziperr;
 	zip_file *z = NULL;
 	const zip_file_header *zipent;
 	FILE *f;
@@ -54,7 +54,7 @@ static imgtool_stream *stream_open_zip(const char *zipname, const char *subname,
 		goto error;
 	fclose(f);
 
-	imgfile = (imgtool_stream *)malloc(sizeof(struct _imgtool_stream));
+	imgfile = (imgtool_stream *)malloc(sizeof(imgtool_stream));
 	if (!imgfile)
 		goto error;
 
@@ -63,7 +63,8 @@ static imgtool_stream *stream_open_zip(const char *zipname, const char *subname,
 	imgfile->write_protect = 1;
 	imgfile->position = 0;
 
-	ziperr = zip_file_open(zipname, &z);
+//  ziperr =
+	zip_file_open(zipname, &z);
 	if (!z)
 		goto error;
 
@@ -155,7 +156,7 @@ imgtool_stream *stream_open(const char *fname, int read_or_write)
 		goto error;
 	}
 
-	imgfile = (imgtool_stream *)malloc(sizeof(struct _imgtool_stream));
+	imgfile = (imgtool_stream *)malloc(sizeof(imgtool_stream));
 	if (!imgfile)
 		goto error;
 
@@ -185,7 +186,7 @@ imgtool_stream *stream_open_write_stream(int size)
 {
 	imgtool_stream *imgfile;
 
-	imgfile = (imgtool_stream *)malloc(sizeof(struct _imgtool_stream));
+	imgfile = (imgtool_stream *)malloc(sizeof(imgtool_stream));
 	if (!imgfile)
 		return NULL;
 
@@ -210,7 +211,7 @@ imgtool_stream *stream_open_mem(void *buf, size_t sz)
 {
 	imgtool_stream *imgfile;
 
-	imgfile = (imgtool_stream *)malloc(sizeof(struct _imgtool_stream));
+	imgfile = (imgtool_stream *)malloc(sizeof(imgtool_stream));
 	if (!imgfile)
 		return NULL;
 
@@ -531,5 +532,3 @@ UINT32 stream_printf(imgtool_stream *stream, const char *fmt, ...)
 
 	return stream_puts(stream, buf);
 }
-
-

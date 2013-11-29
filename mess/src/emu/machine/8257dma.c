@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Couriersud
 /**********************************************************************
 
     8257 DMA interface and emulation
@@ -30,21 +32,19 @@
 **********************************************************************/
 
 #include "emu.h"
-#include "memconv.h"
 #include "8257dma.h"
-#include "devhelpr.h"
 
-#define I8257_STATUS_UPDATE		0x10
-#define I8257_STATUS_TC_CH3		0x08
-#define I8257_STATUS_TC_CH2		0x04
-#define I8257_STATUS_TC_CH1		0x02
-#define I8257_STATUS_TC_CH0		0x01
+#define I8257_STATUS_UPDATE     0x10
+#define I8257_STATUS_TC_CH3     0x08
+#define I8257_STATUS_TC_CH2     0x04
+#define I8257_STATUS_TC_CH1     0x02
+#define I8257_STATUS_TC_CH0     0x01
 
-#define DMA_MODE_AUTOLOAD(mode)		((mode) & 0x80)
-#define DMA_MODE_TCSTOP(mode)		((mode) & 0x40)
-#define DMA_MODE_EXWRITE(mode)		((mode) & 0x20)
-#define DMA_MODE_ROTPRIO(mode)		((mode) & 0x10)
-#define DMA_MODE_CH_EN(mode, chan)	((mode) & (1 << (chan)))
+#define DMA_MODE_AUTOLOAD(mode)     ((mode) & 0x80)
+#define DMA_MODE_TCSTOP(mode)       ((mode) & 0x40)
+#define DMA_MODE_EXWRITE(mode)      ((mode) & 0x20)
+#define DMA_MODE_ROTPRIO(mode)      ((mode) & 0x10)
+#define DMA_MODE_CH_EN(mode, chan)  ((mode) & (1 << (chan)))
 
 
 //**************************************************************************
@@ -59,12 +59,12 @@ const device_type I8257 = &device_creator<i8257_device>;
 //-------------------------------------------------
 
 i8257_device::i8257_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, I8257, "DMA8257", tag, owner, clock),
-      m_mode(0),
-      m_rr(0),
-      m_msb(0),
-      m_drq(0),
-      m_status(0x0f)
+	: device_t(mconfig, I8257, "DMA8257", tag, owner, clock, "i8257", __FILE__),
+		m_mode(0),
+		m_rr(0),
+		m_msb(0),
+		m_drq(0),
+		m_status(0x0f)
 {
 	memset(m_registers, 0, sizeof(m_registers));
 	memset(m_address, 0, sizeof(m_address));
@@ -91,19 +91,19 @@ void i8257_device::device_config_complete()
 	// or initialize to defaults if none provided
 	else
 	{
-    	memset(&m_out_hrq_cb, 0, sizeof(m_out_hrq_cb));
-    	memset(&m_out_tc_cb, 0, sizeof(m_out_tc_cb));
-    	memset(&m_out_mark_cb, 0, sizeof(m_out_mark_cb));
-    	memset(&m_in_memr_cb, 0, sizeof(m_in_memr_cb));
-    	memset(&m_out_memw_cb, 0, sizeof(m_out_memw_cb));
-    	memset(&m_in_ior_cb[0], 0, sizeof(m_in_ior_cb[0]));
-    	memset(&m_in_ior_cb[1], 0, sizeof(m_in_ior_cb[1]));
-    	memset(&m_in_ior_cb[2], 0, sizeof(m_in_ior_cb[2]));
-    	memset(&m_in_ior_cb[3], 0, sizeof(m_in_ior_cb[3]));
-    	memset(&m_out_iow_cb[0], 0, sizeof(m_out_iow_cb[0]));
-    	memset(&m_out_iow_cb[1], 0, sizeof(m_out_iow_cb[1]));
-    	memset(&m_out_iow_cb[2], 0, sizeof(m_out_iow_cb[2]));
-    	memset(&m_out_iow_cb[3], 0, sizeof(m_out_iow_cb[3]));
+		memset(&m_out_hrq_cb, 0, sizeof(m_out_hrq_cb));
+		memset(&m_out_tc_cb, 0, sizeof(m_out_tc_cb));
+		memset(&m_out_mark_cb, 0, sizeof(m_out_mark_cb));
+		memset(&m_in_memr_cb, 0, sizeof(m_in_memr_cb));
+		memset(&m_out_memw_cb, 0, sizeof(m_out_memw_cb));
+		memset(&m_in_ior_cb[0], 0, sizeof(m_in_ior_cb[0]));
+		memset(&m_in_ior_cb[1], 0, sizeof(m_in_ior_cb[1]));
+		memset(&m_in_ior_cb[2], 0, sizeof(m_in_ior_cb[2]));
+		memset(&m_in_ior_cb[3], 0, sizeof(m_in_ior_cb[3]));
+		memset(&m_out_iow_cb[0], 0, sizeof(m_out_iow_cb[0]));
+		memset(&m_out_iow_cb[1], 0, sizeof(m_out_iow_cb[1]));
+		memset(&m_out_iow_cb[2], 0, sizeof(m_out_iow_cb[2]));
+		memset(&m_out_iow_cb[3], 0, sizeof(m_out_iow_cb[3]));
 	}
 }
 
@@ -347,7 +347,7 @@ void i8257_device::i8257_prepare_msb_flip()
 }
 
 
-READ8_DEVICE_HANDLER_TRAMPOLINE(i8257, i8257_r)
+READ8_MEMBER(i8257_device::i8257_r)
 {
 	UINT8 data = 0xFF;
 
@@ -383,7 +383,7 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(i8257, i8257_r)
 }
 
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(i8257, i8257_w)
+WRITE8_MEMBER(i8257_device::i8257_w)
 {
 	switch(offset)
 	{

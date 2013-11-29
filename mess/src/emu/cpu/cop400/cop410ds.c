@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /***************************************************************************
 
     cop410ds.c
@@ -33,7 +35,7 @@ CPU_DISASSEMBLE( cop410 )
 				address = (UINT16)((pc & 0x3C0) | (opcode & 0x3F));
 				sprintf(buffer, "JP %x", address);
 			}
-			else					//JSRP
+			else                    //JSRP
 			{
 				address = (UINT16)(0x80 | (opcode & 0x3F));
 				sprintf(buffer, "JSRP %x", address);
@@ -195,7 +197,7 @@ CPU_DISASSEMBLE( cop410 )
 		case 0x33:
 			bytes = 2;
 
-			if (next_opcode >= 0x60 || next_opcode <= 0x6F)
+			if (next_opcode >= 0x60 && next_opcode <= 0x6F)
 			{
 				sprintf(buffer, "LEI %x", next_opcode & 0xF);
 			}

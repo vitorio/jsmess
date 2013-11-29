@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     Sinclair ZX8301 emulation
@@ -33,6 +35,19 @@
 static const int ZX8301_COLOR_MODE4[] = { 0, 2, 4, 7 };
 
 
+static const rgb_t PALETTE[] =
+{
+	MAKE_RGB(0x00, 0x00, 0x00), // black
+	MAKE_RGB(0x00, 0x00, 0xff), // blue
+	MAKE_RGB(0xff, 0x00, 0x00), // red
+	MAKE_RGB(0xff, 0x00, 0xff), // magenta
+	MAKE_RGB(0x00, 0xff, 0x00), // green
+	MAKE_RGB(0x00, 0xff, 0xff), // cyan
+	MAKE_RGB(0xff, 0xff, 0x00), // yellow
+	MAKE_RGB(0xff, 0xff, 0xff) // white
+};
+
+
 
 //**************************************************************************
 //  GLOBAL VARIABLES
@@ -43,7 +58,7 @@ const device_type ZX8301 = &device_creator<zx8301_device>;
 
 
 // default address map
-static ADDRESS_MAP_START( zx8301, AS_0, 8 )
+static ADDRESS_MAP_START( zx8301, AS_0, 8, zx8301_device )
 	AM_RANGE(0x00000, 0x1ffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -90,7 +105,7 @@ void zx8301_device::device_config_complete()
 
 inline UINT8 zx8301_device::readbyte(offs_t address)
 {
-	return space()->read_byte(address);
+	return space().read_byte(address);
 }
 
 
@@ -100,7 +115,7 @@ inline UINT8 zx8301_device::readbyte(offs_t address)
 
 inline void zx8301_device::writebyte(offs_t address, UINT8 data)
 {
-	space()->write_byte(address, data);
+	space().write_byte(address, data);
 }
 
 
@@ -114,15 +129,16 @@ inline void zx8301_device::writebyte(offs_t address, UINT8 data)
 //-------------------------------------------------
 
 zx8301_device::zx8301_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, ZX8301, "Sinclair ZX8301", tag, owner, clock),
-	  device_memory_interface(mconfig, *this),
-	  m_space_config("videoram", ENDIANNESS_LITTLE, 8, 17, 0, NULL, *ADDRESS_MAP_NAME(zx8301)),
-	  m_dispoff(1),
-	  m_mode8(0),
-	  m_base(0),
-	  m_flash(1),
-	  m_vsync(1),
-	  m_vda(0)
+	: device_t(mconfig, ZX8301, "Sinclair ZX8301", tag, owner, clock, "zx8301", __FILE__),
+		device_memory_interface(mconfig, *this),
+		device_video_interface(mconfig, *this),
+		m_space_config("videoram", ENDIANNESS_LITTLE, 8, 17, 0, NULL, *ADDRESS_MAP_NAME(zx8301)),
+		m_dispoff(1),
+		m_mode8(0),
+		m_base(0),
+		m_flash(1),
+		m_vsync(1),
+		m_vda(0)
 {
 }
 
@@ -137,12 +153,8 @@ void zx8301_device::device_start()
 	m_cpu = machine().device<cpu_device>(cpu_tag);
 	assert(m_cpu != NULL);
 
-	// get the screen device
-	m_screen = machine().device<screen_device>(screen_tag);
-	assert(m_screen != NULL);
-
 	// resolve callbacks
-    m_out_vsync_func.resolve(out_vsync_cb, *this);
+	m_out_vsync_func.resolve(out_vsync_cb, *this);
 
 	// allocate timers
 	m_vsync_timer = timer_alloc(TIMER_VSYNC);
@@ -190,18 +202,18 @@ WRITE8_MEMBER( zx8301_device::control_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0
-        1       display off
-        2
-        3       graphics mode
-        4
-        5
-        6
-        7       display base address
+	    0
+	    1       display off
+	    2
+	    3       graphics mode
+	    4
+	    5
+	    6
+	    7       display base address
 
-    */
+	*/
 
 	if (LOG) logerror("ZX8301 Control: %02x\n", data);
 
@@ -226,7 +238,7 @@ READ8_MEMBER( zx8301_device::data_r )
 
 	if (m_vda)
 	{
-		device_spin_until_time(m_cpu, m_screen->time_until_pos(256, 0));
+		m_cpu->spin_until_time(m_screen->time_until_pos(256, 0));
 	}
 
 	return readbyte(offset);
@@ -243,7 +255,7 @@ WRITE8_MEMBER( zx8301_device::data_w )
 
 	if (m_vda)
 	{
-		device_spin_until_time(m_cpu, m_screen->time_until_pos(256, 0));
+		m_cpu->spin_until_time(m_screen->time_until_pos(256, 0));
 	}
 
 	writebyte(offset, data);
@@ -254,7 +266,7 @@ WRITE8_MEMBER( zx8301_device::data_w )
 //  draw_line_mode4 - draw mode 4 line
 //-------------------------------------------------
 
-void zx8301_device::draw_line_mode4(bitmap_t *bitmap, int y, UINT16 da)
+void zx8301_device::draw_line_mode4(bitmap_rgb32 &bitmap, int y, UINT16 da)
 {
 	int x = 0;
 
@@ -269,7 +281,7 @@ void zx8301_device::draw_line_mode4(bitmap_t *bitmap, int y, UINT16 da)
 			int green = BIT(byte_high, 7);
 			int color = (green << 1) | red;
 
-			*BITMAP_ADDR16(bitmap, y, x++) = ZX8301_COLOR_MODE4[color];
+			bitmap.pix32(y, x++) = PALETTE[ZX8301_COLOR_MODE4[color]];
 
 			byte_high <<= 1;
 			byte_low <<= 1;
@@ -282,7 +294,7 @@ void zx8301_device::draw_line_mode4(bitmap_t *bitmap, int y, UINT16 da)
 //  draw_line_mode8 - draw mode 8 line
 //-------------------------------------------------
 
-void zx8301_device::draw_line_mode8(bitmap_t *bitmap, int y, UINT16 da)
+void zx8301_device::draw_line_mode8(bitmap_rgb32 &bitmap, int y, UINT16 da)
 {
 	int x = 0;
 
@@ -305,8 +317,8 @@ void zx8301_device::draw_line_mode8(bitmap_t *bitmap, int y, UINT16 da)
 				color = 0;
 			}
 
-			*BITMAP_ADDR16(bitmap, y, x++) = color;
-			*BITMAP_ADDR16(bitmap, y, x++) = color;
+			bitmap.pix32(y, x++) = PALETTE[color];
+			bitmap.pix32(y, x++) = PALETTE[color];
 
 			byte_high <<= 2;
 			byte_low <<= 2;
@@ -316,10 +328,10 @@ void zx8301_device::draw_line_mode8(bitmap_t *bitmap, int y, UINT16 da)
 
 
 //-------------------------------------------------
-//  update_screen -
+//  screen_update -
 //-------------------------------------------------
 
-void zx8301_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
+UINT32 zx8301_device::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
 	if (!m_dispoff)
 	{
@@ -341,6 +353,8 @@ void zx8301_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 	}
 	else
 	{
-		bitmap_fill(bitmap, cliprect, get_black_pen(machine()));
+		bitmap.fill(RGB_BLACK, cliprect);
 	}
+
+	return 0;
 }

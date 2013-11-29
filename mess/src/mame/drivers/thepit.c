@@ -112,6 +112,42 @@ HT-01B
 |-------------------------------------------------------|
 
 
+*************************************************************
+
+           Desert Dan (C)1982 by Video Optics
+                 pinout
+                          -------------
+
+       ---------------------------------------------------
+                   SOLDER SIDE  |  COMPONENT SIDE
+       -------------------------+-------------------------
+                       GND |  A | 1  | GND
+                        +5 |  B | 2  | +5
+                        +5 |  C | 3  | +5
+                           |  D | 4  |
+                  1P START |  E | 5  | 2P START
+                           |  F | 6  |
+                           |  H | 7  | COIN
+                           |  J | 8  |
+                           |  K | 9  |
+                           |  L | 10 | ATTACK
+                           |  M | 11 |
+                           |  N | 12 |
+                        UP |  P | 13 |
+                      DOWN |  R | 14 |
+                      LEFT |  S | 15 |
+                     RIGHT |  T | 16 |
+                     SPK + |  U | 17 | SPK - (GND)
+                           |  V | 18 |
+               SYNC (COMP) |  W | 19 | RED
+                     GREEN |  X | 20 | BLUE
+                      + 12 |  Y | 21 | + 12
+                       GND |  Z | 22 | GND
+       ---------------------------------------------------
+
+NOTE:
+Player 2 and Player 1 share the same controls !
+
 ***************************************************************************/
 
 #include "emu.h"
@@ -120,65 +156,89 @@ HT-01B
 #include "includes/thepit.h"
 
 
-#define MASTER_CLOCK		(18432000)
-#define SOUND_CLOCK			(10000000)
+#define MASTER_CLOCK        (18432000)
+#define SOUND_CLOCK         (10000000)
 
-#define PIXEL_CLOCK			(MASTER_CLOCK/3)
+#define PIXEL_CLOCK         (MASTER_CLOCK/3)
 
 /* H counts from 128->511, HBLANK starts at 128 and ends at 256 */
-#define HTOTAL				(384)
-#define HBEND				(0)		/*(256)*/
-#define HBSTART				(256)	/*(128)*/
+#define HTOTAL              (384)
+#define HBEND               (0)     /*(256)*/
+#define HBSTART             (256)   /*(128)*/
 
-#define VTOTAL				(264)
-#define VBEND				(16)
-#define VBSTART				(224+16)
+#define VTOTAL              (264)
+#define VBEND               (16)
+#define VBSTART             (224+16)
 
 
-static READ8_HANDLER( thepit_colorram_r )
+READ8_MEMBER(thepit_state::thepit_colorram_r)
 {
-	thepit_state *state = space->machine().driver_data<thepit_state>();
-	return state->m_colorram[offset];
+	return m_colorram[offset];
 }
 
-static WRITE8_HANDLER( thepit_sound_enable_w )
+WRITE8_MEMBER(thepit_state::thepit_sound_enable_w)
 {
-	space->machine().sound().system_enable(data);
+	machine().sound().system_enable(data);
+}
+
+WRITE8_MEMBER(thepit_state::nmi_mask_w)
+{
+	m_nmi_mask = data & 1;
 }
 
 
-static ADDRESS_MAP_START( thepit_main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( thepit_main_map, AS_PROGRAM, 8, thepit_state )
 	AM_RANGE(0x0000, 0x4fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8bff) AM_MIRROR(0x0400) AM_RAM_WRITE(thepit_colorram_w) AM_BASE_MEMBER(thepit_state, m_colorram)
-	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM_WRITE(thepit_videoram_w) AM_BASE_MEMBER(thepit_state, m_videoram)
-	AM_RANGE(0x9800, 0x983f) AM_MIRROR(0x0700) AM_RAM AM_BASE_MEMBER(thepit_state, m_attributesram)
-	AM_RANGE(0x9840, 0x985f) AM_RAM AM_BASE_MEMBER(thepit_state, m_spriteram) AM_SIZE_MEMBER(thepit_state, m_spriteram_size)
+	AM_RANGE(0x8800, 0x8bff) AM_MIRROR(0x0400) AM_RAM_WRITE(thepit_colorram_w) AM_SHARE("colorram")
+	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM_WRITE(thepit_videoram_w) AM_SHARE("videoram")
+	AM_RANGE(0x9800, 0x983f) AM_MIRROR(0x0700) AM_RAM AM_SHARE("attributesram")
+	AM_RANGE(0x9840, 0x985f) AM_RAM AM_SHARE("spriteram")
 	AM_RANGE(0x9860, 0x98ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ(thepit_input_port_0_r) AM_WRITENOP // Not hooked up according to the schematics
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("IN1")
-	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW") AM_WRITE(interrupt_enable_w)
+	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW") AM_WRITE(nmi_mask_w)
 	AM_RANGE(0xb001, 0xb001) AM_WRITENOP // Unused, but initialized
 	AM_RANGE(0xb002, 0xb002) AM_WRITENOP // coin_lockout_w
 	AM_RANGE(0xb003, 0xb003) AM_WRITE(thepit_sound_enable_w)
 	AM_RANGE(0xb004, 0xb005) AM_WRITENOP // Unused, but initialized
 	AM_RANGE(0xb006, 0xb006) AM_WRITE(thepit_flip_screen_x_w)
 	AM_RANGE(0xb007, 0xb007) AM_WRITE(thepit_flip_screen_y_w)
-	AM_RANGE(0xb800, 0xb800) AM_READWRITE(watchdog_reset_r, soundlatch_w)
+	AM_RANGE(0xb800, 0xb800) AM_READWRITE(watchdog_reset_r, soundlatch_byte_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( intrepid_main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( desertdan_main_map, AS_PROGRAM, 8, thepit_state )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8c00, 0x8fff) AM_READWRITE(thepit_colorram_r, thepit_colorram_w) /* mirror for intrepi2 */
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(thepit_videoram_w) AM_BASE_MEMBER(thepit_state, m_videoram)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(thepit_colorram_w) AM_BASE_MEMBER(thepit_state, m_colorram)
-	AM_RANGE(0x9800, 0x983f) AM_MIRROR(0x0700) AM_RAM AM_BASE_MEMBER(thepit_state, m_attributesram)
-	AM_RANGE(0x9840, 0x985f) AM_RAM AM_BASE_MEMBER(thepit_state, m_spriteram) AM_SIZE_MEMBER(thepit_state, m_spriteram_size)
+	AM_RANGE(0x8800, 0x8bff) AM_MIRROR(0x0400) AM_RAM_WRITE(thepit_colorram_w) AM_SHARE("colorram")
+	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM_WRITE(thepit_videoram_w) AM_SHARE("videoram")
+	AM_RANGE(0x9800, 0x983f) AM_MIRROR(0x0700) AM_RAM AM_SHARE("attributesram")
+	AM_RANGE(0x9840, 0x985f) AM_RAM AM_SHARE("spriteram")
+	AM_RANGE(0x9860, 0x98ff) AM_RAM
+	AM_RANGE(0xa000, 0xa000) AM_READ(thepit_input_port_0_r) AM_WRITENOP // Not hooked up according to the schematics
+	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("IN1")
+	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW") AM_WRITE(nmi_mask_w)
+	AM_RANGE(0xb001, 0xb001) AM_WRITENOP // Unused, but initialized
+	AM_RANGE(0xb002, 0xb002) AM_WRITENOP // coin_lockout_w
+	AM_RANGE(0xb003, 0xb003) AM_WRITE(thepit_sound_enable_w)
+	AM_RANGE(0xb004, 0xb005) AM_WRITENOP // Unused, but initialized
+	AM_RANGE(0xb006, 0xb006) AM_WRITE(thepit_flip_screen_x_w)
+	AM_RANGE(0xb007, 0xb007) AM_WRITE(thepit_flip_screen_y_w)
+	AM_RANGE(0xb800, 0xb800) AM_READWRITE(watchdog_reset_r, soundlatch_byte_w)
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( intrepid_main_map, AS_PROGRAM, 8, thepit_state )
+	AM_RANGE(0x0000, 0x7fff) AM_ROM
+	AM_RANGE(0x8000, 0x87ff) AM_RAM
+	AM_RANGE(0x8c00, 0x8fff) AM_READ(thepit_colorram_r) AM_WRITE(thepit_colorram_w) /* mirror for intrepi2 */
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(thepit_videoram_w) AM_SHARE("videoram")
+	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(thepit_colorram_w) AM_SHARE("colorram")
+	AM_RANGE(0x9800, 0x983f) AM_MIRROR(0x0700) AM_RAM AM_SHARE("attributesram")
+	AM_RANGE(0x9840, 0x985f) AM_RAM AM_SHARE("spriteram")
 	AM_RANGE(0x9860, 0x98ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ(thepit_input_port_0_r)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("IN1")
-	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW") AM_WRITE(interrupt_enable_w)
+	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW") AM_WRITE(nmi_mask_w)
 	AM_RANGE(0xb001, 0xb001) AM_WRITENOP // Unused, but initialized
 	AM_RANGE(0xb002, 0xb002) AM_WRITENOP // coin_lockout_w
 	AM_RANGE(0xb003, 0xb003) AM_WRITE(thepit_sound_enable_w)
@@ -186,23 +246,23 @@ static ADDRESS_MAP_START( intrepid_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xb005, 0xb005) AM_WRITE(intrepid_graphics_bank_w)
 	AM_RANGE(0xb006, 0xb006) AM_WRITE(thepit_flip_screen_x_w)
 	AM_RANGE(0xb007, 0xb007) AM_WRITE(thepit_flip_screen_y_w)
-	AM_RANGE(0xb800, 0xb800) AM_READWRITE(watchdog_reset_r, soundlatch_w)
+	AM_RANGE(0xb800, 0xb800) AM_READWRITE(watchdog_reset_r, soundlatch_byte_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x0fff) AM_ROM
+static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8, thepit_state )
+	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x3800, 0x3bff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( audio_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( audio_io_map, AS_IO, 8, thepit_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_WRITE(soundlatch_clear_w)
-	AM_RANGE(0x8c, 0x8d) AM_DEVWRITE("ay2", ay8910_address_data_w)
-	AM_RANGE(0x8d, 0x8d) AM_DEVREAD("ay2", ay8910_r)
-	AM_RANGE(0x8e, 0x8f) AM_DEVWRITE("ay1", ay8910_address_data_w)
-	AM_RANGE(0x8f, 0x8f) AM_DEVREAD("ay1", ay8910_r)
+	AM_RANGE(0x00, 0x00) AM_WRITE(soundlatch_clear_byte_w)
+	AM_RANGE(0x8c, 0x8d) AM_DEVWRITE("ay2", ay8910_device, address_data_w)
+	AM_RANGE(0x8d, 0x8d) AM_DEVREAD("ay2", ay8910_device, data_r)
+	AM_RANGE(0x8e, 0x8f) AM_DEVWRITE("ay1", ay8910_device, address_data_w)
+	AM_RANGE(0x8f, 0x8f) AM_DEVREAD("ay1", ay8910_device, data_r)
 ADDRESS_MAP_END
 
 
@@ -244,32 +304,75 @@ static INPUT_PORTS_START( thepit )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Coinage ) )
+	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Coinage ) )      PORT_DIPLOCATION("SW1:!1,!2")
 	PORT_DIPSETTING(    0x01, DEF_STR( 2C_3C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 2C_4C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x04, 0x00, "Game Speed" )
+	PORT_DIPNAME( 0x04, 0x00, "Game Speed" )        PORT_DIPLOCATION("SW1:!3")
 	PORT_DIPSETTING(    0x04, "Slow" )
 	PORT_DIPSETTING(    0x00, "Fast" )
-	PORT_DIPNAME( 0x08, 0x00, "Time Limit" )
+	PORT_DIPNAME( 0x08, 0x00, "Time Limit" )        PORT_DIPLOCATION("SW1:!4")
 	PORT_DIPSETTING(    0x00, "Long" )
 	PORT_DIPSETTING(    0x08, "Short" )
-	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Flip_Screen ) )
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Flip_Screen ) )  PORT_DIPLOCATION("SW2:!1")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Cabinet ) )      PORT_DIPLOCATION("SW2:!2")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Lives ) )        PORT_DIPLOCATION("SW2:!3")
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x40, "4" )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) ) /* Manual states "Always On" */
+	PORT_DIPNAME( 0x80, 0x00, "Diagnostic Tests" )      PORT_DIPLOCATION("SW2:!4")  /* Manual states "Always On" */
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, "Loop Tests" )    /* Audio Tones for TEST results */
+
+	/* Since the real inputs are multiplexed, we used this fake port
+	   to read the 2nd player controls when the screen is flipped */
+	IN2_FAKE
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( desertdn )
+	IN0_REAL
+
+	PORT_START("IN1")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_COIN1 )
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_START2 )
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_START1 )
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+
+	PORT_START("DSW")
+	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Coinage ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 1C_3C ) )
+	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) )
+	PORT_DIPSETTING(    0x00, "3" )
+	PORT_DIPSETTING(    0x04, "4" )
+	PORT_DIPSETTING(    0x08, "5" )
+	PORT_DIPSETTING(    0x0c, "6" )
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Cabinet ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Cocktail ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unknown ) ) /* Bonus ?? */
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x00, "Timer Speed" )
+	PORT_DIPSETTING(    0x00, "Slow" )
+	PORT_DIPSETTING(    0x40, "Fast" )
+	PORT_DIPNAME( 0x80, 0x00, "Invulnerability (Cheat)")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
 	/* Since the real inputs are multiplexed, we used this fake port
-       to read the 2nd player controls when the screen is flipped */
+	   to read the 2nd player controls when the screen is flipped */
 	IN2_FAKE
 INPUT_PORTS_END
 
@@ -288,73 +391,42 @@ static INPUT_PORTS_START( roundup )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Coinage ) )
+	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Coinage ) )      PORT_DIPLOCATION("SW1:!1,!2")
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_3C ) )
-	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) )        PORT_DIPLOCATION("SW1:!3,!4")
 	PORT_DIPSETTING(    0x00, "2" )
 	PORT_DIPSETTING(    0x04, "3" )
 	PORT_DIPSETTING(    0x08, "4" )
 	PORT_DIPSETTING(    0x0c, "5" )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Cabinet ) )      PORT_DIPLOCATION("SW1:!5")
 	PORT_DIPSETTING(    0x10, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Bonus_Life ) )
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Bonus_Life ) )   PORT_DIPLOCATION("SW1:!6")
 	PORT_DIPSETTING(    0x00, "10000" )
 	PORT_DIPSETTING(    0x20, "30000" )
-	PORT_DIPNAME( 0x40, 0x40, "Gly Boys Wake Up" )
+	PORT_DIPNAME( 0x40, 0x40, "Gly Boys Wake Up" )      PORT_DIPLOCATION("SW1:!7")
 	PORT_DIPSETTING(    0x40, "Slow" )
 	PORT_DIPSETTING(    0x00, "Fast" )
-	PORT_SERVICE( 0x80, IP_ACTIVE_HIGH )
+	PORT_DIPNAME( 0x80, 0x00, "Push Switch Check")      PORT_DIPLOCATION("SW1:!8")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
 	/* Since the real inputs are multiplexed, we used this fake port
-       to read the 2nd player controls when the screen is flipped */
+	   to read the 2nd player controls when the screen is flipped */
 	IN2_FAKE
 INPUT_PORTS_END
 
 
 static INPUT_PORTS_START( fitter )
-	IN0_REAL
+	PORT_INCLUDE(roundup)
 
-	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_COIN1 )
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_START2 )
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_START1 )
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-
-	PORT_START("DSW")
-	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Coinage ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( 1C_3C ) )
-	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) )
-	PORT_DIPSETTING(    0x00, "2" )
-	PORT_DIPSETTING(    0x04, "3" )
-	PORT_DIPSETTING(    0x08, "4" )
-	PORT_DIPSETTING(    0x0c, "5" )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Cabinet ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Upright ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Bonus_Life ) )
-	PORT_DIPSETTING(    0x00, "10000" )
-	PORT_DIPSETTING(    0x20, "30000" )
-	PORT_DIPNAME( 0x40, 0x40, "Gly Boys Wake Up" )
-	PORT_DIPSETTING(    0x40, "Slow" )
-	PORT_DIPSETTING(    0x00, "Fast" )
-	PORT_DIPNAME( 0x80, 0x00, "Invulnerability (Cheat)")
+	PORT_MODIFY("DSW")
+	PORT_DIPNAME( 0x80, 0x00, "Invulnerability (Cheat)")    PORT_DIPLOCATION("SW1:!8")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
-
-	/* Since the real inputs are multiplexed, we used this fake port
-       to read the 2nd player controls when the screen is flipped */
-	IN2_FAKE
 INPUT_PORTS_END
 
 
@@ -373,32 +445,32 @@ static INPUT_PORTS_START( intrepid )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x01, 0x01, "Invulnerability (Cheat)")
+	PORT_DIPNAME( 0x01, 0x01, "Invulnerability (Cheat)")    PORT_DIPLOCATION("SW1:!1")
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Demo_Sounds ) )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Demo_Sounds ) )  PORT_DIPLOCATION("SW1:!2")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Cabinet ) )      PORT_DIPLOCATION("SW1:!3")
 	PORT_DIPSETTING(    0x04, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Difficulty ) )   PORT_DIPLOCATION("SW1:!4")
 	PORT_DIPSETTING(    0x08, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hard ) )
-	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Bonus_Life ) )
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Bonus_Life ) )   PORT_DIPLOCATION("SW1:!5")
 	PORT_DIPSETTING(    0x00, "10000" )
 	PORT_DIPSETTING(    0x10, "30000" )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Lives ) )        PORT_DIPLOCATION("SW1:!6")
 	PORT_DIPSETTING(    0x20, "3" )
 	PORT_DIPSETTING(    0x00, "5" )
-	PORT_DIPNAME( 0xc0, 0x40, DEF_STR( Coinage ) )
+	PORT_DIPNAME( 0xc0, 0x40, DEF_STR( Coinage ) )      PORT_DIPLOCATION("SW1:!7,!8")
 	PORT_DIPSETTING(    0x80, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
 
 	/* Since the real inputs are multiplexed, we used this fake port
-       to read the 2nd player controls when the screen is flipped */
+	   to read the 2nd player controls when the screen is flipped */
 	IN2_FAKE
 INPUT_PORTS_END
 
@@ -417,31 +489,31 @@ static INPUT_PORTS_START( dockman )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Coinage ) )
+	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Coinage ) )      PORT_DIPLOCATION("SW1:!1,!2")
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_3C ) )
-	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) )        PORT_DIPLOCATION("SW1:!3,!4")
 	PORT_DIPSETTING(    0x00, "2" )
 	PORT_DIPSETTING(    0x04, "3" )
 	PORT_DIPSETTING(    0x08, "4" )
 	PORT_DIPSETTING(    0x0c, "5" )
-	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Bonus_Life ) )
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Bonus_Life ) )   PORT_DIPLOCATION("SW1:!5")
 	PORT_DIPSETTING(    0x00, "10000" )
 	PORT_DIPSETTING(    0x10, "30000" )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Cabinet ) )      PORT_DIPLOCATION("SW1:!6")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )	/* not used? */
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )      PORT_DIPLOCATION("SW1:!7")  /* not used? */
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) )	/* not used? */
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) )      PORT_DIPLOCATION("SW1:!8")  /* not used? */
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
 	/* Since the real inputs are multiplexed, we used this fake port
-       to read the 2nd player controls when the screen is flipped */
+	   to read the 2nd player controls when the screen is flipped */
 	IN2_FAKE
 INPUT_PORTS_END
 
@@ -472,10 +544,10 @@ static INPUT_PORTS_START( suprmous )
 	PORT_DIPNAME( 0x18, 0x00, DEF_STR( Lives ) )  /* The game reads these together */
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x08, "5" )
-  //PORT_DIPSETTING(    0x10, "5" )
-  //PORT_DIPSETTING(    0x18, "5" )
+	//PORT_DIPSETTING(    0x10, "5" )
+	//PORT_DIPSETTING(    0x18, "5" )
 	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Bonus_Life ) )
-	PORT_DIPSETTING(    0x10, "5000" )
+	PORT_DIPSETTING(    0x20, "5000" )
 	PORT_DIPSETTING(    0x00, "10000" )
 	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Cabinet ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
@@ -485,7 +557,7 @@ static INPUT_PORTS_START( suprmous )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
 	/* Since the real inputs are multiplexed, we used this fake port
-       to read the 2nd player controls when the screen is flipped */
+	   to read the 2nd player controls when the screen is flipped */
 	IN2_FAKE
 INPUT_PORTS_END
 
@@ -531,17 +603,17 @@ static INPUT_PORTS_START( rtriv )
 	PORT_DIPSETTING(    0x20, "Number of Wrong Answer" )
 	PORT_DIPSETTING(    0x00, "Number of Good Answer for Bonus Question" )
 	PORT_DIPNAME( 0xc0, 0x40, "Gaming Option Number" )
-	PORT_DIPSETTING(    0x00, "2" ) PORT_CONDITION("DSW", 0x20, PORTCOND_EQUALS, 0x20)
-	PORT_DIPSETTING(    0x40, "3" ) PORT_CONDITION("DSW", 0x20, PORTCOND_EQUALS, 0x20)
-	PORT_DIPSETTING(    0x80, "4" ) PORT_CONDITION("DSW", 0x20, PORTCOND_EQUALS, 0x20)
-	PORT_DIPSETTING(    0xc0, "5" ) PORT_CONDITION("DSW", 0x20, PORTCOND_EQUALS, 0x20)
-	PORT_DIPSETTING(    0x00, "4" ) PORT_CONDITION("DSW", 0x20, PORTCOND_NOTEQUALS, 0x20)
-	PORT_DIPSETTING(    0x40, "5" ) PORT_CONDITION("DSW", 0x20, PORTCOND_NOTEQUALS, 0x20)
-	PORT_DIPSETTING(    0x80, "6" ) PORT_CONDITION("DSW", 0x20, PORTCOND_NOTEQUALS, 0x20)
-	PORT_DIPSETTING(    0xc0, "7" ) PORT_CONDITION("DSW", 0x20, PORTCOND_NOTEQUALS, 0x20)
+	PORT_DIPSETTING(    0x00, "2" ) PORT_CONDITION("DSW", 0x20, EQUALS, 0x20)
+	PORT_DIPSETTING(    0x40, "3" ) PORT_CONDITION("DSW", 0x20, EQUALS, 0x20)
+	PORT_DIPSETTING(    0x80, "4" ) PORT_CONDITION("DSW", 0x20, EQUALS, 0x20)
+	PORT_DIPSETTING(    0xc0, "5" ) PORT_CONDITION("DSW", 0x20, EQUALS, 0x20)
+	PORT_DIPSETTING(    0x00, "4" ) PORT_CONDITION("DSW", 0x20, NOTEQUALS, 0x20)
+	PORT_DIPSETTING(    0x40, "5" ) PORT_CONDITION("DSW", 0x20, NOTEQUALS, 0x20)
+	PORT_DIPSETTING(    0x80, "6" ) PORT_CONDITION("DSW", 0x20, NOTEQUALS, 0x20)
+	PORT_DIPSETTING(    0xc0, "7" ) PORT_CONDITION("DSW", 0x20, NOTEQUALS, 0x20)
 
 	/* Since the real inputs are multiplexed, we used this fake port
-       to read the 2nd player controls when the screen is flipped */
+	   to read the 2nd player controls when the screen is flipped */
 	PORT_START("IN2")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(2)
@@ -624,36 +696,37 @@ static const ay8910_interface ay8910_config =
 {
 	AY8910_LEGACY_OUTPUT,
 	AY8910_DEFAULT_LOADS,
-	DEVCB_MEMORY_HANDLER("audiocpu", PROGRAM, soundlatch_r),
+	DEVCB_DRIVER_MEMBER(driver_device, soundlatch_byte_r),
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL
 };
 
+INTERRUPT_GEN_MEMBER(thepit_state::vblank_irq)
+{
+	if(m_nmi_mask)
+		device.execute().set_input_line(INPUT_LINE_NMI, PULSE_LINE);
+}
 
 static MACHINE_CONFIG_START( thepit, thepit_state )
 
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, PIXEL_CLOCK/2)     /* 3.072 MHz */
 	MCFG_CPU_PROGRAM_MAP(thepit_main_map)
-	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", thepit_state,  vblank_irq)
 
 	MCFG_CPU_ADD("audiocpu", Z80, SOUND_CLOCK/4)     /* 2.5 MHz */
 	MCFG_CPU_PROGRAM_MAP(audio_map)
 	MCFG_CPU_IO_MAP(audio_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", thepit_state,  irq0_line_hold)
 
 	/* video hardware */
 	MCFG_GFXDECODE(thepit)
 	MCFG_PALETTE_LENGTH(32+8)
 
 	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
-	MCFG_SCREEN_UPDATE(thepit)
-
-	MCFG_PALETTE_INIT(thepit)
-	MCFG_VIDEO_START(thepit)
+	MCFG_SCREEN_UPDATE_DRIVER(thepit_state, screen_update_thepit)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -666,6 +739,18 @@ static MACHINE_CONFIG_START( thepit, thepit_state )
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 MACHINE_CONFIG_END
 
+static MACHINE_CONFIG_DERIVED( desertdn, thepit )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(desertdan_main_map)
+
+	/* video hardware */
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_DRIVER(thepit_state, screen_update_desertdan)
+
+	MCFG_GFXDECODE(intrepid)
+MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( intrepid, thepit )
 
@@ -683,7 +768,7 @@ static MACHINE_CONFIG_DERIVED( suprmous, intrepid )
 	/* basic machine hardware */
 
 	/* video hardware */
-	MCFG_PALETTE_INIT(suprmous)
+	MCFG_PALETTE_INIT_OVERRIDE(thepit_state,suprmous)
 	MCFG_GFXDECODE(suprmous)
 MACHINE_CONFIG_END
 
@@ -814,22 +899,43 @@ ROM_END
 
 ROM_START( fitterbl )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "bl-ic38.bin",  0x0000, 0x1000, CRC(805c6974) SHA1(b1a41df746a347df6f47578fc59a7393e5195ada) )
-	ROM_LOAD( "bl-ic39.bin",  0x1000, 0x1000, CRC(37bf554b) SHA1(773279fb21c56221d5f29fd31c2149e68dcf3909) )
-	ROM_LOAD( "bl-ic40.bin",  0x2000, 0x1000, CRC(c5f7156e) SHA1(3702a0eb4c395217a8f761133dba7871a96b7f38) )
-	ROM_LOAD( "bl-ic41.bin",  0x3000, 0x1000, CRC(a67d5bda) SHA1(86d1628d4f0bcd3c3099f99ab92b3ac758ffec71) )
-	ROM_LOAD( "bl-ic33.bin",  0x4000, 0x1000, CRC(1f3c78ee) SHA1(961b6ba8d08ddcbeda52b98a2f181f37beed5fb1) )
+	ROM_LOAD( "ic38(__bootleg).bin",  0x0000, 0x1000, CRC(805c6974) SHA1(b1a41df746a347df6f47578fc59a7393e5195ada) )
+	ROM_LOAD( "roundup.u39",          0x1000, 0x1000, CRC(37bf554b) SHA1(773279fb21c56221d5f29fd31c2149e68dcf3909) )
+	ROM_LOAD( "ic40(__bootleg).bin",  0x2000, 0x1000, CRC(c5f7156e) SHA1(3702a0eb4c395217a8f761133dba7871a96b7f38) )
+	ROM_LOAD( "ic41(__bootleg).bin",  0x3000, 0x1000, CRC(a67d5bda) SHA1(86d1628d4f0bcd3c3099f99ab92b3ac758ffec71) )
+	ROM_LOAD( "ic33(__bootleg).bin",  0x4000, 0x1000, CRC(1f3c78ee) SHA1(961b6ba8d08ddcbeda52b98a2f181f37beed5fb1) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )
-	ROM_LOAD( "ic30.bin",     0x0000, 0x0800, CRC(1b18faee) SHA1(b4002e2fdaa6bb966da4faa46ac56751a3841f5f) )
-	ROM_LOAD( "ic31.bin",     0x0800, 0x0800, CRC(76cf4394) SHA1(5dc13bd5fc92ce4ce12bab60576292a6028891c3) )
+	ROM_LOAD( "ic30(__bootleg).bin",  0x0000, 0x0800, CRC(1b18faee) SHA1(b4002e2fdaa6bb966da4faa46ac56751a3841f5f) )
+	ROM_LOAD( "ic31(__bootleg).bin",  0x0800, 0x0800, CRC(76cf4394) SHA1(5dc13bd5fc92ce4ce12bab60576292a6028891c3) )
 
 	ROM_REGION( 0x1800, "gfx1", 0 ) /* chars and sprites */
-	ROM_LOAD( "ic9.bin",      0x0000, 0x0800, CRC(394676a2) SHA1(5bd26d717e25b7c192af8173db9ae18371dbcfbe) )
+	ROM_LOAD( "ic9(__bootleg).bin",   0x0000, 0x0800, CRC(394676a2) SHA1(5bd26d717e25b7c192af8173db9ae18371dbcfbe) )
 	ROM_LOAD( "ic10.bin",     0x1000, 0x0800, CRC(a38d708d) SHA1(6632392cece34332a2a4427ec14d95f201319c67) )
 
 	ROM_REGION( 0x0020, "proms", 0 )
 	ROM_LOAD( "roundup.clr",  0x0000, 0x0020, CRC(a758b567) SHA1(d188c90dba10fe3abaae92488786b555b35218c5) )
+ROM_END
+
+ROM_START( ttfitter ) /* originally dumped with "roundup.uxx" labels - changed to "ttfitter.uxx" to lessen confusion between parent */
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "ttfitter.u38", 0x0000, 0x1000, CRC(2ccd60d4) SHA1(2eb4f72e371578a0eda54a75074c0a0c3ccfefea) )
+	ROM_LOAD( "roundup.u39",  0x1000, 0x1000, CRC(37bf554b) SHA1(773279fb21c56221d5f29fd31c2149e68dcf3909) ) // ttfitter.u39
+	ROM_LOAD( "ttfitter.u40", 0x2000, 0x1000, CRC(572e2157) SHA1(030ad888d7fc9b61df6749592934d55de449de8c) )
+	ROM_LOAD( "roundup.u41",  0x3000, 0x1000, CRC(1c5ed660) SHA1(6729ecb8072b1ea0bd8557fd0b484d086b94c4b1) ) // ttfitter.u41
+	ROM_LOAD( "ttfitter.u33", 0x4000, 0x1000, CRC(d6fc9d0c) SHA1(558cad013b4adee226eb1ddf4ee5860a381197b1) )
+
+	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_LOAD( "ttfitter.u30", 0x0000, 0x0800, CRC(4055b5ca) SHA1(abf8f9e830b1190fb87896e1fb3adca8f9e18df1) )
+	ROM_LOAD( "ttfitter.u31", 0x0800, 0x0800, CRC(c9d8c1cc) SHA1(66d0840182ede356c53cd1f930ea8abf86094ab7) )
+
+	ROM_REGION( 0x1800, "gfx1", 0 ) /* chars and sprites */
+	ROM_LOAD( "ttfitter.u9",  0x0000, 0x0800, CRC(a6799a37) SHA1(7864cb255bff976630b6e03b1683f7d3ccd0a80f) )
+	ROM_LOAD( "ttfitter.u8",  0x1000, 0x0800, CRC(a8256dfe) SHA1(b3dfb915ba4367c8c73a8cc6fb02d98ec148f5a1) )
+
+	ROM_REGION( 0x0020, "proms", 0 )
+	ROM_LOAD( "roundup.clr",  0x0000, 0x0020, CRC(a758b567) SHA1(d188c90dba10fe3abaae92488786b555b35218c5) ) // ttfitter.clr
+
 ROM_END
 
 ROM_START( intrepid )
@@ -870,6 +976,26 @@ ROM_START( intrepid2 )
 
 	ROM_REGION( 0x0020, "proms", 0 )
 	ROM_LOAD( "ic3.prm",      0x0000, 0x0020, CRC(927ff40a) SHA1(3d699d981851989e9190505b0dede5202d688f2b) )
+ROM_END
+
+ROM_START( intrepidb )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "ic38.bin",       0x0000, 0x1000, CRC(b23e632a) SHA1(c0ccc958a99f35f25a1853f618f3e008ce0247a7) )
+	ROM_LOAD( "ic39.bin",       0x1000, 0x1000, CRC(fd75b90e) SHA1(33d2a3c10be2266760a8341a4238a8734fc9c4c8) )
+	ROM_LOAD( "ic40.bin",       0x2000, 0x1000, CRC(86a9b6de) SHA1(458f8019ac0ca192e74bbc908c8d326d561a0b30) )
+	ROM_LOAD( "ic41.bin",       0x3000, 0x1000, CRC(fb6373c2) SHA1(235b7735cc68ec89b6f32b37d01d7ead21d13f64) )
+	ROM_LOAD( "ic33.bin",       0x4000, 0x1000, CRC(7c868725) SHA1(dca370c835fdd0564d42ecca69b9ad2600b1ce31) )
+
+	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_LOAD( "ic22.bin",       0x0000, 0x0800, CRC(f85ead07) SHA1(72479a9b49dd9c629480a2ce72bdd09fbb12b25d) )
+	ROM_LOAD( "ic23.bin",       0x0800, 0x0800, CRC(9eb6c61b) SHA1(a168fa634b6909c2ea484c2bbaa5afee2a5fe616) )
+
+	ROM_REGION( 0x2000, "gfx1", 0 ) /* chars and sprites */
+	ROM_LOAD( "ic9.9",        0x0000, 0x1000, CRC(8c70d18d) SHA1(785099c947ee1fe19196dfb02752cc849640fe21) )
+	ROM_LOAD( "ic8.8",        0x1000, 0x1000, CRC(04d067d3) SHA1(aeb763e658cd3d0bd849cdae6af55cb1008b2143) )
+
+	ROM_REGION( 0x0020, "proms", 0 )
+	ROM_LOAD( "82s123.ic4",      0x0000, 0x0020, CRC(aa1f7f5e) SHA1(311dd17aa11490a1173c76223e4ccccf8ea29850) )
 ROM_END
 
 ROM_START( zaryavos )
@@ -958,19 +1084,19 @@ ROM_END
 
 ROM_START( funnymou )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "suprmous.x1",  0x0000, 0x1000, CRC(ad72b467) SHA1(98c79424bc98f2f1af79a04dabdd3985a71d761c) )
-	ROM_LOAD( "suprmous.x2",  0x1000, 0x1000, CRC(53f5be5e) SHA1(9ed0a04fb19f93336fa3a9882c6842062d841201) )
-	ROM_LOAD( "suprmous.x3",  0x2000, 0x1000, CRC(b5b8d34d) SHA1(e0edcdb7f070061f6f86991e22c0ea0808d4fbe4) )
-	ROM_LOAD( "suprmous.x4",  0x3000, 0x1000, CRC(603333df) SHA1(04723fbd912e3d8fabf88643742c3553f4bb603b) )
-	ROM_LOAD( "suprmous.x5",  0x4000, 0x1000, CRC(2ef9cbf1) SHA1(02323499ddcf4dcbbe432e2dbf5d305e5f9e15ad) )
+	ROM_LOAD( "fm.1",         0x0000, 0x1000, CRC(ad72b467) SHA1(98c79424bc98f2f1af79a04dabdd3985a71d761c) )
+	ROM_LOAD( "fm.2",         0x1000, 0x1000, CRC(53f5be5e) SHA1(9ed0a04fb19f93336fa3a9882c6842062d841201) )
+	ROM_LOAD( "fm.3",         0x2000, 0x1000, CRC(b5b8d34d) SHA1(e0edcdb7f070061f6f86991e22c0ea0808d4fbe4) )
+	ROM_LOAD( "fm.4",         0x3000, 0x1000, CRC(603333df) SHA1(04723fbd912e3d8fabf88643742c3553f4bb603b) )
+	ROM_LOAD( "fm.5",         0x4000, 0x1000, CRC(2ef9cbf1) SHA1(02323499ddcf4dcbbe432e2dbf5d305e5f9e15ad) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )
-	ROM_LOAD( "sm.6",         0x0000, 0x1000, CRC(fba71785) SHA1(56537a64a1e6cffedb8a6bd77e3edfa8aca94822) )
+	ROM_LOAD( "fm.6",         0x0000, 0x1000, CRC(fba71785) SHA1(56537a64a1e6cffedb8a6bd77e3edfa8aca94822) )
 
 	ROM_REGION( 0x3000, "gfx1", 0 ) /* chars and sprites */
-	ROM_LOAD( "suprmous.x8",  0x0000, 0x1000, CRC(dbef9db8) SHA1(2bb070603f79e4acb7821cfa61ea1b4aed6d8e1f) )
-	ROM_LOAD( "suprmous.x9",  0x1000, 0x1000, CRC(700d996e) SHA1(31884ec80b5eb70dc8e96712b5541754997b0ca8) )
-	ROM_LOAD( "suprmous.x7",  0x2000, 0x1000, CRC(e9295071) SHA1(6034b7bc86bf070464af82bf1b9a55da81e864d9) )
+	ROM_LOAD( "fm.8",         0x0000, 0x1000, CRC(dbef9db8) SHA1(2bb070603f79e4acb7821cfa61ea1b4aed6d8e1f) )
+	ROM_LOAD( "fm.9",         0x1000, 0x1000, CRC(700d996e) SHA1(31884ec80b5eb70dc8e96712b5541754997b0ca8) )
+	ROM_LOAD( "fm.7",         0x2000, 0x1000, CRC(e9295071) SHA1(6034b7bc86bf070464af82bf1b9a55da81e864d9) )
 
 	ROM_REGION( 0x0040, "proms", 0 )
 	ROM_LOAD( "smouse2.clr",  0x0000, 0x0020, CRC(8c295553) SHA1(7b43a4f023a163c233f6d9cf13fa4beee95d19d6) )
@@ -1012,7 +1138,7 @@ ROM_START( rtriv )
 	ROM_REGION( 0x2000, "gfx1", 0 ) /* chars and sprites */
 	ROM_LOAD( "ngames8.8",    0x1000, 0x1000, BAD_DUMP CRC(f7644e1d) SHA1(d58d0d5739906b602f4c08a2fb9a16c32fcc245b) )
 	ROM_LOAD( "ngames9.9",    0x0000, 0x1000, CRC(db553afc) SHA1(e7561ca0b2a4543c41bf41c96d17784b299ab367) )
-	ROM_RELOAD(				  0x1000, 0x1000 ) // reload it until the other rom is re-dumped
+	ROM_RELOAD(               0x1000, 0x1000 ) // reload it until the other rom is re-dumped
 
 	ROM_REGION( 0x40000, "user1", 0 ) /* Question roms */
 	ROM_LOAD( "rtriv-1f.d0",  0x00000, 0x8000, CRC(84787af0) SHA1(5c1c74128af2b2d62ae9ba730da500e818b3dbd8) )
@@ -1028,32 +1154,53 @@ ROM_START( rtriv )
 	ROM_LOAD( "rtriv.ic3",    0x0000, 0x0020, CRC(927ff40a) SHA1(3d699d981851989e9190505b0dede5202d688f2b) )
 ROM_END
 
+ROM_START( desertdn )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "rs5.bin",  0x0000, 0x1000, CRC(3a48f53e) SHA1(e568442e47c116982c40555368f6432f609b54e6) )
+	ROM_LOAD( "rs6.bin",  0x1000, 0x1000, CRC(3b6125e9) SHA1(5cbfdc2b84b89d0ab9edcc9cefbf5caab237f197) )
+	ROM_LOAD( "rs7.bin",  0x2000, 0x1000, CRC(2f793ca4) SHA1(8e489a61860d52a37e4e22b12ca647f1866648a7) )
+	ROM_LOAD( "rs8.bin",  0x3000, 0x1000, CRC(52674db3) SHA1(47c8c358205b0b8dde52eb684ffa08294d622f7d) )
+	ROM_LOAD( "rs2.bin",  0x4000, 0x1000, CRC(d0b78243) SHA1(9080f9c93b33057587863672715f64e0e6b36d5f) )
+	ROM_LOAD( "rs3.bin",  0x5000, 0x1000, CRC(54a0d133) SHA1(119769b2c6c9c4b368a3146456c7392bf045840e) )
+	ROM_LOAD( "rs4.bin",  0x6000, 0x1000, CRC(72d79d62) SHA1(0d35053ad7c0f3942dfac6175e96cadf629c802f) )
+
+	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_LOAD( "rs9.bin",  0x0000, 0x1000, CRC(6daf40ca) SHA1(968faf09bdbb2c55c9164b665ad1e091d5eca2fc) )
+	ROM_LOAD( "rs10.bin", 0x1000, 0x1000, CRC(f4fc2c53) SHA1(2eb3991db30083ac942e19bf545aa11476535a91) )
+
+	ROM_REGION( 0x2000, "gfx1", 0 ) /* chars and sprites */
+	ROM_LOAD( "rs0.bin",  0x0000, 0x1000, CRC(8eb856e8) SHA1(8d94b21662855a1cbd94fa6a3c14ec89ac0128fa) )
+	ROM_LOAD( "rs1.bin",  0x1000, 0x1000, CRC(c051b090) SHA1(7280831c99a3f5a1d4af707bddf5b25a5000cabd) )
+
+	ROM_REGION( 0x0020, "proms", 0 )
+	ROM_LOAD( "mb7051.8j",   0x0000, 0x0020, CRC(a14111f4) SHA1(cc103d91ca01390a68c8a211409f23d8af713296) ) /* BPROM is a Harris M3-7603-5 (82S123N compatible) */
+ROM_END
+
 /*
     Romar Triv questions read handler
 */
 
 
-static READ8_HANDLER( rtriv_question_r )
+READ8_MEMBER(thepit_state::rtriv_question_r)
 {
-	thepit_state *state = space->machine().driver_data<thepit_state>();
 	// Set-up the remap table for every 16 bytes
 	if((offset & 0xc00) == 0x800)
 	{
-		state->m_remap_address[offset & 0x0f] = ((offset & 0xf0) >> 4) ^ 0x0f;
+		m_remap_address[offset & 0x0f] = ((offset & 0xf0) >> 4) ^ 0x0f;
 	}
 	// Select which rom to read and the high 5 bits of address
 	else if((offset & 0xc00) == 0x400)
 	{
-		state->m_question_rom = (offset & 0x70) >> 4;
-		state->m_question_address = ((offset & 0x80) << 3) | ((offset & 0x0f) << 11);
+		m_question_rom = (offset & 0x70) >> 4;
+		m_question_address = ((offset & 0x80) << 3) | ((offset & 0x0f) << 11);
 	}
 	// Read the actual byte from question roms
 	else if((offset & 0xc00) == 0xc00)
 	{
-		UINT8 *ROM = space->machine().region("user1")->base();
+		UINT8 *ROM = memregion("user1")->base();
 		int real_address;
 
-		real_address = (0x8000 * state->m_question_rom) | state->m_question_address | (offset & 0x3f0) | state->m_remap_address[offset & 0x0f];
+		real_address = (0x8000 * m_question_rom) | m_question_address | (offset & 0x3f0) | m_remap_address[offset & 0x0f];
 
 		return ROM[real_address];
 	}
@@ -1061,26 +1208,29 @@ static READ8_HANDLER( rtriv_question_r )
 	return 0; // the value read from the configuration reads is discarded
 }
 
-static DRIVER_INIT( rtriv )
+DRIVER_INIT_MEMBER(thepit_state,rtriv)
 {
 	// Set-up the weirdest questions read ever done
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x4000, 0x4fff, FUNC(rtriv_question_r));
+	m_maincpu->space(AS_PROGRAM).install_read_handler(0x4000, 0x4fff, read8_delegate(FUNC(thepit_state::rtriv_question_r),this));
 }
 
 
-GAME( 1981, roundup,  0,        thepit,   roundup,  0,     ROT90, "Taito Corporation (Amenip/Centuri license)", "Round-Up", 0 )
-GAME( 1981, fitter,   roundup,  thepit,   fitter,   0,     ROT90, "Taito Corporation", "Fitter", 0 )
-GAME( 1981, fitterbl, roundup,  thepit,   fitter,   0,     ROT90, "bootleg", "Fitter (bootleg)", 0 )
-GAME( 1982, thepit,   0,        thepit,   thepit,   0,     ROT90, "Zilec Electronics", "The Pit", 0 ) // AW == Andy Walker
-GAME( 1982, thepitu1, thepit,   thepit,   thepit,   0,     ROT90, "Zilec Electronics (Centuri license)", "The Pit (US, set 1)", 0 )
-GAME( 1982, thepitu2, thepit,   thepit,   thepit,   0,     ROT90, "Zilec Electronics (Centuri license)", "The Pit (US, set 2)", 0 ) // Bally PCB
-GAME( 1982, thepitj,  thepit,   thepit,   thepit,   0,     ROT90, "Zilec Electronics (Taito license)", "The Pit (Japan)", 0 )
-GAME( 1982, dockman,  0,        intrepid, dockman,  0,     ROT90, "Taito Corporation", "Dock Man", 0 )
-GAME( 1982, portman,  dockman,  intrepid, dockman,  0,     ROT90, "Taito Corporation (Nova Games Ltd. license)", "Port Man", 0 )
-GAME( 1982, suprmous, 0,        suprmous, suprmous, 0,     ROT90, "Taito Corporation", "Super Mouse", 0 )
-GAME( 1982, funnymou, suprmous, suprmous, suprmous, 0,     ROT90, "bootleg? (Chuo Co. Ltd)", "Funny Mouse", 0 )
-GAME( 1982, machomou, 0,        suprmous, suprmous, 0,     ROT90, "Techstar", "Macho Mouse", 0 )
-GAME( 1983, intrepid, 0,        intrepid, intrepid, 0,     ROT90, "Nova Games Ltd.", "Intrepid (set 1)", 0 )
-GAME( 1983, intrepid2,intrepid, intrepid, intrepid, 0,     ROT90, "Nova Games Ltd.", "Intrepid (set 2)", 0 )
-GAME( 1984, zaryavos, 0,        intrepid, intrepid, 0,     ROT90, "Nova Games of Canada", "Zarya Vostoka", GAME_NOT_WORKING )
-GAME( 198?, rtriv,    0,        intrepid, rtriv,    rtriv, ROT90, "Romar", "Romar Triv", GAME_WRONG_COLORS )
+GAME( 1981, roundup,  0,        thepit,   roundup,  driver_device, 0,     ROT90, "Taito Corporation (Amenip/Centuri license)",  "Round-Up", 0 )
+GAME( 1981, fitter,   roundup,  thepit,   fitter,   driver_device, 0,     ROT90, "Taito Corporation",                           "Fitter", 0 )
+GAME( 1981, fitterbl, roundup,  thepit,   fitter,   driver_device, 0,     ROT90, "bootleg",                                     "Fitter (bootleg of Round-Up)", 0 )
+GAME( 1981, ttfitter, roundup,  thepit,   fitter,   driver_device, 0,     ROT90, "Taito Corporation",                           "T.T. Fitter (Japan)", 0 )
+GAME( 1982, thepit,   0,        thepit,   thepit,   driver_device, 0,     ROT90, "Zilec Electronics",                           "The Pit", 0 ) // AW == Andy Walker
+GAME( 1982, thepitu1, thepit,   thepit,   thepit,   driver_device, 0,     ROT90, "Zilec Electronics (Centuri license)",         "The Pit (US set 1)", 0 )
+GAME( 1982, thepitu2, thepit,   thepit,   thepit,   driver_device, 0,     ROT90, "Zilec Electronics (Centuri license)",         "The Pit (US set 2)", 0 ) // Bally PCB
+GAME( 1982, thepitj,  thepit,   thepit,   thepit,   driver_device, 0,     ROT90, "Zilec Electronics (Taito license)",           "The Pit (Japan)", 0 )
+GAME( 1982, dockman,  0,        intrepid, dockman,  driver_device, 0,     ROT90, "Taito Corporation",                           "Dock Man", 0 )
+GAME( 1982, portman,  dockman,  intrepid, dockman,  driver_device, 0,     ROT90, "Taito Corporation (Nova Games Ltd. license)", "Port Man", 0 )
+GAME( 1982, suprmous, 0,        suprmous, suprmous, driver_device, 0,     ROT90, "Taito Corporation",                           "Super Mouse", 0 )
+GAME( 1982, funnymou, suprmous, suprmous, suprmous, driver_device, 0,     ROT90, "Taito Corporation (Chuo Co. Ltd license)",    "Funny Mouse (Japan)", 0 ) // Taito PCB
+GAME( 1982, machomou, 0,        suprmous, suprmous, driver_device, 0,     ROT90, "Techstar",                                    "Macho Mouse", 0 )
+GAME( 1982, desertdn, 0,        desertdn, desertdn, driver_device, 0,     ROT0,  "Video Optics",                                "Desert Dan", 0 )
+GAME( 1983, intrepid, 0,        intrepid, intrepid, driver_device, 0,     ROT90, "Nova Games Ltd.",                             "Intrepid (set 1)", 0 )
+GAME( 1983, intrepid2,intrepid, intrepid, intrepid, driver_device, 0,     ROT90, "Nova Games Ltd.",                             "Intrepid (set 2)", 0 )
+GAME( 1984, intrepidb,intrepid, intrepid, intrepid, driver_device, 0,     ROT90, "bootleg (Elsys)",                             "Intrepid (bootleg)", 0 )
+GAME( 1984, zaryavos, 0,        intrepid, intrepid, driver_device, 0,     ROT90, "Nova Games of Canada",                        "Zarya Vostoka", GAME_NOT_WORKING )
+GAME( 198?, rtriv,    0,        intrepid, rtriv,    thepit_state,  rtriv, ROT90, "Romar",                                       "Romar Triv", GAME_WRONG_COLORS )

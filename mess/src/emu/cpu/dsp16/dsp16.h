@@ -13,15 +13,6 @@
 
 
 //**************************************************************************
-//  INTERFACE CONFIGURATION MACROS
-//**************************************************************************
-
-//#define MCFG_DSP16_CONFIG(_config)
-//  dsp16_device::static_set_config(*device, _config);
-
-
-
-//**************************************************************************
 //  TYPE DEFINITIONS
 //**************************************************************************
 
@@ -51,8 +42,6 @@ protected:
 	virtual const address_space_config *memory_space_config(address_spacenum spacenum = AS_0) const;
 
 	// device_state_interface overrides
-	virtual void state_import(const device_state_entry &entry);
-	virtual void state_export(const device_state_entry &entry);
 	virtual void state_string_export(const device_state_entry &entry, astring &string);
 
 	// device_disasm_interface overrides
@@ -62,24 +51,94 @@ protected:
 
 	// address spaces
 	const address_space_config m_program_config;
+	const address_space_config m_data_config;
 
 	// CPU registers
+	// ROM Address Arithmetic Unit (XAAU)  (page 2-4)
+	UINT16 m_i;     // 12 bits
 	UINT16 m_pc;
+	UINT16 m_pt;
+	UINT16 m_pr;
+	UINT16 m_pi;
 
-    // internal stuff
+	// RAM Address Arithmetic Unit (YAAU)  (page 2-6)
+	UINT16 m_j;     // Signed
+	UINT16 m_k;     // Signed
+	UINT16 m_rb;
+	UINT16 m_re;
+	UINT16 m_r0;
+	UINT16 m_r1;
+	UINT16 m_r2;
+	UINT16 m_r3;
+
+	// Data Arithmetic Unit (DAU)  (page 2-6)
+	UINT16 m_x;
+	UINT32 m_y;
+	UINT32 m_p;
+	UINT64 m_a0;    // 36 bits
+	UINT64 m_a1;    // 36 bits
+	UINT8 m_auc;    // 6 bits
+	UINT16 m_psw;
+	UINT8 m_c0;
+	UINT8 m_c1;
+	UINT8 m_c2;
+
+	// Serial and parallel interfaces (TODO: More here  (page 2-13))
+	UINT16 m_sioc;
+	UINT16 m_srta;
+	UINT16 m_sdx;
+	UINT16 m_pioc;
+	UINT16 m_pdx0;  // pdx0 & pdx1 refer to the same physical register (page 6-1)
+	UINT16 m_pdx1;  // but we keep them seperate for logic's sake.
+
+	// internal stuff
 	UINT16 m_ppc;
 
+	// This CPU core handles the cache as more of a loop than 15 seperate memory elements.
+	// It's a bit of a hack, but it's easier this way (for now).
+	UINT16 m_cacheStart;
+	UINT16 m_cacheEnd;
+	UINT16 m_cacheRedoNextPC;
+	UINT16 m_cacheIterations;
+	static const UINT16 CACHE_INVALID = 0xffff;
+
 	// memory access
-	inline UINT32 program_read(UINT32 addr);
-	inline void program_write(UINT32 addr, UINT32 data);
-	inline UINT32 opcode_read();
+	inline UINT32 data_read(const UINT16& addr);
+	inline void data_write(const UINT16& addr, const UINT16& data);
+	inline UINT32 opcode_read(const UINT8 pcOffset=0);
 
 	// address spaces
-    address_space* m_program;
-    direct_read_data* m_direct;
+	address_space* m_program;
+	address_space* m_data;
+	direct_read_data* m_direct;
 
 	// other internal states
-    int m_icount;
+	int m_icount;
+
+	// operations
+	void execute_one(const UINT16& op, UINT8& cycles, UINT8& pcAdvance);
+
+	// table decoders
+	void* registerFromRImmediateField(const UINT8& R);
+	void* registerFromRTable(const UINT8& R);
+	UINT16* registerFromYFieldUpper(const UINT8& Y);
+
+	// execution
+	void executeF1Field(const UINT8& F1, const UINT8& D, const UINT8& S);
+	void executeYFieldPost(const UINT8& Y);
+	void executeZFieldPartOne(const UINT8& Z, UINT16* rN);
+	void executeZFieldPartTwo(const UINT8& Z, UINT16* rN);
+
+	// helpers
+	void* addressYL();
+	void writeRegister(void* reg, const UINT16& value);
+	bool conditionTest(const UINT8& CON);
+
+	// flags
+	bool lmi();
+	bool leq();
+	bool llv();
+	bool lmv();
 };
 
 
@@ -93,7 +152,35 @@ extern const device_type DSP16;
 
 enum
 {
-	DSP16_PC
+	DSP16_I,        // ROM Address Arithmetic Unit (XAAU)
+	DSP16_PC,
+	DSP16_PT,
+	DSP16_PR,
+	DSP16_PI,
+	DSP16_J,        // RAM Address Arithmetic Unit (YAAU)
+	DSP16_K,
+	DSP16_RB,
+	DSP16_RE,
+	DSP16_R0,
+	DSP16_R1,
+	DSP16_R2,
+	DSP16_R3,
+	DSP16_X,        // Data Arithmetic Unit (DAU)
+	DSP16_Y,
+	DSP16_P,
+	DSP16_A0,
+	DSP16_A1,
+	DSP16_AUC,
+	DSP16_PSW,
+	DSP16_C0,
+	DSP16_C1,
+	DSP16_C2,
+	DSP16_SIOC,
+	DSP16_SRTA,
+	DSP16_SDX,
+	DSP16_PIOC,
+	DSP16_PDX0,
+	DSP16_PDX1
 };
 
 

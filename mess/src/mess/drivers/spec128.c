@@ -103,7 +103,7 @@ xx/xx/2001  KS -    TS-2068 sound fixed.
                 70908 cycles for each frame.
             Remapped some Spectrum+ keys.
                 Pressing F3 to reset was seting 0xf7 on keyboard
-                input port. Problem occured for snapshots of
+                input port. Problem occurred for snapshots of
                 some programms where it was readed as pressing
                 key 4 (which is exit in Tapecopy by R. Dannhoefer
                 for example).
@@ -169,40 +169,37 @@ static const ay8910_interface spectrum_ay_interface =
 /****************************************************************************************************/
 /* Spectrum 128 specific functions */
 
-static WRITE8_HANDLER(spectrum_128_port_7ffd_w)
+WRITE8_MEMBER(spectrum_state::spectrum_128_port_7ffd_w)
 {
-	spectrum_state *state = space->machine().driver_data<spectrum_state>();
-
-   /* D0-D2: RAM page located at 0x0c000-0x0ffff */
-   /* D3 - Screen select (screen 0 in ram page 5, screen 1 in ram page 7 */
-   /* D4 - ROM select - which rom paged into 0x0000-0x03fff */
-   /* D5 - Disable paging */
+	/* D0-D2: RAM page located at 0x0c000-0x0ffff */
+	/* D3 - Screen select (screen 0 in ram page 5, screen 1 in ram page 7 */
+	/* D4 - ROM select - which rom paged into 0x0000-0x03fff */
+	/* D5 - Disable paging */
 
 	/* disable paging? */
-	if (state->m_port_7ffd_data & 0x20)
+	if (m_port_7ffd_data & 0x20)
 			return;
 
 	/* store new state */
-	state->m_port_7ffd_data = data;
+	m_port_7ffd_data = data;
 
 	/* update memory */
-	spectrum_128_update_memory(space->machine());
+	spectrum_128_update_memory();
 }
 
-void spectrum_128_update_memory(running_machine &machine)
+void spectrum_state::spectrum_128_update_memory()
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	UINT8 *messram = ram_get_ptr(machine.device(RAM_TAG));
+	UINT8 *messram = m_ram->pointer();
 	unsigned char *ChosenROM;
 	int ROMSelection;
 
-	if (state->m_port_7ffd_data & 8)
+	if (m_port_7ffd_data & 8)
 	{
-		state->m_screen_location = messram + (7<<14);
+		m_screen_location = messram + (7<<14);
 	}
 	else
 	{
-		state->m_screen_location = messram + (5<<14);
+		m_screen_location = messram + (5<<14);
 	}
 
 	/* select ram at 0x0c000-0x0ffff */
@@ -210,82 +207,80 @@ void spectrum_128_update_memory(running_machine &machine)
 		int ram_page;
 		unsigned char *ram_data;
 
-		ram_page = state->m_port_7ffd_data & 0x07;
+		ram_page = m_port_7ffd_data & 0x07;
 		ram_data = messram + (ram_page<<14);
 
-		memory_set_bankptr(machine, "bank4", ram_data);
+		membank("bank4")->set_base(ram_data);
 	}
 
 	/* ROM switching */
-	ROMSelection = ((state->m_port_7ffd_data>>4) & 0x01);
+	ROMSelection = ((m_port_7ffd_data>>4) & 0x01);
 
 	/* rom 0 is 128K rom, rom 1 is 48 BASIC */
 
-	ChosenROM = machine.region("maincpu")->base() + 0x010000 + (ROMSelection<<14);
+	ChosenROM = memregion("maincpu")->base() + 0x010000 + (ROMSelection<<14);
 
-	memory_set_bankptr(machine, "bank1", ChosenROM);
+	membank("bank1")->set_base(ChosenROM);
 }
 
-static  READ8_HANDLER ( spectrum_128_ula_r )
+READ8_MEMBER( spectrum_state::spectrum_128_ula_r )
 {
-	spectrum_state *state = space->machine().driver_data<spectrum_state>();
-	int vpos = space->machine().primary_screen->vpos();
+	int vpos = machine().primary_screen->vpos();
 
-	return vpos<193 ? state->m_screen_location[0x1800|(vpos&0xf8)<<2]:0xff;
+	return vpos<193 ? m_screen_location[0x1800|(vpos&0xf8)<<2]:0xff;
 }
 
-static ADDRESS_MAP_START (spectrum_128_io, AS_IO, 8)
+static ADDRESS_MAP_START (spectrum_128_io, AS_IO, 8, spectrum_state )
 	AM_RANGE(0x0000, 0x0000) AM_READWRITE(spectrum_port_fe_r,spectrum_port_fe_w) AM_MIRROR(0xfffe) AM_MASK(0xffff)
 	AM_RANGE(0x001f, 0x001f) AM_READ(spectrum_port_1f_r) AM_MIRROR(0xff00)
 	AM_RANGE(0x007f, 0x007f) AM_READ(spectrum_port_7f_r) AM_MIRROR(0xff00)
 	AM_RANGE(0x00df, 0x00df) AM_READ(spectrum_port_df_r) AM_MIRROR(0xff00)
 	AM_RANGE(0x4000, 0x4000) AM_WRITE(spectrum_128_port_7ffd_w) AM_MIRROR(0x3ffd)
-	AM_RANGE(0x8000, 0x8000) AM_DEVWRITE("ay8912", ay8910_data_w) AM_MIRROR(0x3ffd)
-	AM_RANGE(0xc000, 0xc000) AM_DEVREADWRITE("ay8912", ay8910_r, ay8910_address_w) AM_MIRROR(0x3ffd)
+	AM_RANGE(0x8000, 0x8000) AM_DEVWRITE("ay8912", ay8910_device, data_w) AM_MIRROR(0x3ffd)
+	AM_RANGE(0xc000, 0xc000) AM_DEVREADWRITE("ay8912", ay8910_device, data_r, address_w) AM_MIRROR(0x3ffd)
 	AM_RANGE(0x0001, 0x0001) AM_READ(spectrum_128_ula_r) AM_MIRROR(0xfffe)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START (spectrum_128_mem, AS_PROGRAM, 8)
-	AM_RANGE( 0x0000, 0x3fff) AM_RAMBANK("bank1")
+static ADDRESS_MAP_START (spectrum_128_mem, AS_PROGRAM, 8, spectrum_state )
+	AM_RANGE( 0x0000, 0x3fff) AM_ROMBANK("bank1") // don't use RAMBANK here otherwise programs can erase the ROM(!)
 	AM_RANGE( 0x4000, 0x7fff) AM_RAMBANK("bank2")
 	AM_RANGE( 0x8000, 0xbfff) AM_RAMBANK("bank3")
 	AM_RANGE( 0xc000, 0xffff) AM_RAMBANK("bank4")
 ADDRESS_MAP_END
 
-static MACHINE_RESET( spectrum_128 )
+MACHINE_RESET_MEMBER(spectrum_state,spectrum_128)
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	UINT8 *messram = ram_get_ptr(machine.device(RAM_TAG));
+	UINT8 *messram = m_ram->pointer();
 
 	memset(messram,0,128*1024);
 	/* 0x0000-0x3fff always holds ROM */
 
 	/* Bank 5 is always in 0x4000 - 0x7fff */
-	memory_set_bankptr(machine, "bank2", messram + (5<<14));
+	membank("bank2")->set_base(messram + (5<<14));
 
 	/* Bank 2 is always in 0x8000 - 0xbfff */
-	memory_set_bankptr(machine, "bank3", messram + (2<<14));
+	membank("bank3")->set_base(messram + (2<<14));
 
-	MACHINE_RESET_CALL(spectrum);
+	MACHINE_RESET_CALL_MEMBER(spectrum);
 
 	/* set initial ram config */
-	state->m_port_7ffd_data = 0;
-	state->m_port_1ffd_data = -1;
-	spectrum_128_update_memory(machine);
+	m_port_7ffd_data = 0;
+	m_port_1ffd_data = -1;
+	spectrum_128_update_memory();
 }
 
 /* F4 Character Displayer */
 static const gfx_layout spectrum_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	96,					/* 96 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	96,                 /* 96 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( spec128 )
@@ -295,18 +290,24 @@ GFXDECODE_END
 
 MACHINE_CONFIG_DERIVED( spectrum_128, spectrum )
 
-	MCFG_CPU_MODIFY("maincpu")
+	MCFG_DEVICE_REMOVE("maincpu")
+
+	MCFG_CPU_ADD("maincpu", Z80, X1_128_SINCLAIR / 5)
 	MCFG_CPU_PROGRAM_MAP(spectrum_128_mem)
 	MCFG_CPU_IO_MAP(spectrum_128_io)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", spectrum_state,  spec_interrupt)
+	MCFG_QUANTUM_TIME(attotime::from_hz(60))
 
-	MCFG_MACHINE_RESET( spectrum_128 )
+
+	MCFG_MACHINE_RESET_OVERRIDE(spectrum_state, spectrum_128 )
 
 	/* video hardware */
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_PALETTE_LENGTH(16)
-	MCFG_PALETTE_INIT( spectrum )
-	MCFG_SCREEN_REFRESH_RATE(50.021)
-	MCFG_VIDEO_START( spectrum_128 )
+	MCFG_PALETTE_INIT_OVERRIDE(spectrum_state, spectrum )
+	MCFG_SCREEN_RAW_PARAMS(X1_128_SINCLAIR / 2.5f, 456, 0, 352,  311, 0, 296)
+
+	MCFG_VIDEO_START_OVERRIDE(spectrum_state, spectrum_128 )
 	MCFG_GFXDECODE(spec128)
 
 	/* sound hardware */
@@ -378,7 +379,7 @@ ROM_START(hc2000)
 ROM_END
 
 /*    YEAR  NAME      PARENT    COMPAT  MACHINE     INPUT       INIT    COMPANY     FULLNAME */
-COMP( 1986, spec128,  0,	   0,		spectrum_128,	spec_plus,	0,	"Sinclair Research Ltd", "ZX Spectrum 128" , 0 )
-COMP( 1986, specpls2, spec128, 0,		spectrum_128,	spec_plus,	0,	"Amstrad plc",           "ZX Spectrum +2" , 0 )
-COMP( 1991, hc128,    spec128, 0,		spectrum_128,	spec_plus,	0,	"ICE-Felix",			 "HC-128" , 0 )
-COMP( 1992, hc2000,   spec128, 0,		spectrum_128,	spec_plus,	0,	"ICE-Felix",			 "HC-2000" , GAME_NOT_WORKING )
+COMP( 1986, spec128,  0,       0,       spectrum_128,   spec_plus, driver_device,   0,  "Sinclair Research Ltd", "ZX Spectrum 128" , 0 )
+COMP( 1986, specpls2, spec128, 0,       spectrum_128,   spec_plus, driver_device,   0,  "Amstrad plc",           "ZX Spectrum +2" , 0 )
+COMP( 1991, hc128,    spec128, 0,       spectrum_128,   spec_plus, driver_device,   0,  "ICE-Felix",             "HC-128" , 0 )
+COMP( 1992, hc2000,   spec128, 0,       spectrum_128,   spec_plus, driver_device,   0,  "ICE-Felix",             "HC-2000" , GAME_NOT_WORKING )

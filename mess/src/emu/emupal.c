@@ -18,9 +18,9 @@
     CONSTANTS
 ***************************************************************************/
 
-#define PEN_BRIGHTNESS_BITS		8
-#define MAX_PEN_BRIGHTNESS		(4 << PEN_BRIGHTNESS_BITS)
-#define MAX_SHADOW_PRESETS		4
+#define PEN_BRIGHTNESS_BITS     8
+#define MAX_PEN_BRIGHTNESS      (4 << PEN_BRIGHTNESS_BITS)
+#define MAX_SHADOW_PRESETS      4
 
 
 
@@ -29,36 +29,33 @@
 ***************************************************************************/
 
 /* information about a shadow table */
-typedef struct _shadow_table_data shadow_table_data;
-struct _shadow_table_data
+struct shadow_table_data
 {
-	UINT32 *			base;				/* pointer to the base of the table */
-	INT16				dr;					/* delta red value */
-	INT16				dg;					/* delta green value */
-	INT16				db;					/* delta blue value */
-	UINT8				noclip;				/* clip? */
+	UINT32 *            base;               /* pointer to the base of the table */
+	INT16               dr;                 /* delta red value */
+	INT16               dg;                 /* delta green value */
+	INT16               db;                 /* delta blue value */
+	UINT8               noclip;             /* clip? */
 };
 
 
-/* typedef struct _palette_private palette_private; */
-struct _palette_private
+struct palette_private
 {
-	bitmap_format		format;				/* format assumed for palette data */
+	bitmap_format       format;             /* format assumed for palette data */
 
-	UINT32				shadow_group;		/* index of the shadow group, or 0 if none */
-	UINT32				hilight_group;		/* index of the hilight group, or 0 if none */
+	UINT32              shadow_group;       /* index of the shadow group, or 0 if none */
+	UINT32              hilight_group;      /* index of the hilight group, or 0 if none */
 
-	pen_t				black_pen;			/* precomputed black pen value */
-	pen_t				white_pen;			/* precomputed white pen value */
+	pen_t               black_pen;          /* precomputed black pen value */
+	pen_t               white_pen;          /* precomputed white pen value */
 
-	shadow_table_data	shadow_table[MAX_SHADOW_PRESETS]; /* array of shadow table data */
+	shadow_table_data   shadow_table[MAX_SHADOW_PRESETS]; /* array of shadow table data */
 
-	pen_t *				save_pen;			/* pens for save/restore */
-	float *				save_bright;		/* brightness for save/restore */
+	pen_t *             save_pen;           /* pens for save/restore */
+	float *             save_bright;        /* brightness for save/restore */
 };
 
 
-/* typedef struct _colortable_t colortable_t; */
 class colortable_t
 {
 public:
@@ -67,13 +64,13 @@ public:
 
 	running_machine &machine() const { return m_machine; }
 
-	UINT32				entries;			/* number of entries */
-	UINT32				palentries;			/* number of palette entries */
-	UINT16 *			raw;				/* raw data about each entry */
-	rgb_t *				palette;			/* palette entries */
+	UINT32              entries;            /* number of entries */
+	UINT32              palentries;         /* number of palette entries */
+	UINT16 *            raw;                /* raw data about each entry */
+	rgb_t *             palette;            /* palette entries */
 
 private:
-	running_machine &	m_machine;			/* associated machine */
+	running_machine &   m_machine;          /* associated machine */
 };
 
 
@@ -119,19 +116,21 @@ void palette_init(running_machine &machine)
 	/* determine the color mode */
 	switch (format)
 	{
-		case BITMAP_FORMAT_INDEXED16:
-		case BITMAP_FORMAT_RGB15:
+		case BITMAP_FORMAT_IND16:
 		case BITMAP_FORMAT_RGB32:
 			/* indexed and RGB modes are fine for everything */
 			break;
 
 		case BITMAP_FORMAT_INVALID:
 			/* invalid format means no palette - or at least it should */
-			assert(machine.total_colors() == 0);
+			/* Do not assert for now, palette manager should be added  */
+			/* in order to make possible adding of palette items per   */
+			/* device otherwise we need to set total colors per driver */
+			//assert(machine.total_colors() == 0);
 			return;
 
 		default:
-			fatalerror("Unsupported screen bitmap format!");
+			fatalerror("Unsupported screen bitmap format!\n");
 			break;
 	}
 
@@ -148,8 +147,8 @@ void palette_init(running_machine &machine)
 		numcolors = palette_get_num_colors(machine.palette);
 		palette->save_pen = auto_alloc_array(machine, pen_t, numcolors);
 		palette->save_bright = auto_alloc_array(machine, float, numcolors);
-		state_save_register_global_pointer(machine, palette->save_pen, numcolors);
-		state_save_register_global_pointer(machine, palette->save_bright, numcolors);
+		machine.save().save_pointer(NAME(palette->save_pen), numcolors);
+		machine.save().save_pointer(NAME(palette->save_bright), numcolors);
 		machine.save().register_presave(save_prepost_delegate(FUNC(palette_presave), &machine));
 		machine.save().register_postload(save_prepost_delegate(FUNC(palette_postload), &machine));
 	}
@@ -265,7 +264,7 @@ void palette_set_shadow_dRGB32(running_machine &machine, int mode, int dr, int d
 	int i;
 
 	/* only applies to RGB direct modes */
-	assert(palette->format != BITMAP_FORMAT_INDEXED16);
+	assert(palette->format != BITMAP_FORMAT_IND16);
 	assert(stable->base != NULL);
 
 	/* clamp the deltas (why?) */
@@ -338,13 +337,13 @@ colortable_t *colortable_alloc(running_machine &machine, UINT32 palettesize)
 	ctable->raw = auto_alloc_array(machine, UINT16, ctable->entries);
 	for (index = 0; index < ctable->entries; index++)
 		ctable->raw[index] = index % ctable->palentries;
-	state_save_register_global_pointer(machine, ctable->raw, ctable->entries);
+	machine.save().save_pointer(NAME(ctable->raw), ctable->entries);
 
 	/* allocate the palette */
 	ctable->palette = auto_alloc_array(machine, rgb_t, ctable->palentries);
 	for (index = 0; index < ctable->palentries; index++)
 		ctable->palette[index] = MAKE_ARGB(0x80,0xff,0xff,0xff);
-	state_save_register_global_pointer(machine, ctable->palette, ctable->palentries);
+	machine.save().save_pointer(NAME(ctable->palette), ctable->palentries);
 
 	return ctable;
 }
@@ -432,19 +431,19 @@ rgb_t colortable_palette_get_color(colortable_t *ctable, UINT32 entry)
     color
 -------------------------------------------------*/
 
-UINT32 colortable_get_transpen_mask(colortable_t *ctable, const gfx_element *gfx, int color, int transcolor)
+UINT32 colortable_get_transpen_mask(colortable_t *ctable, gfx_element *gfx, int color, int transcolor)
 {
-	UINT32 entry = gfx->color_base + (color % gfx->total_colors) * gfx->color_granularity;
+	UINT32 entry = gfx->colorbase() + (color % gfx->colors()) * gfx->granularity();
 	UINT32 mask = 0;
 	UINT32 count, bit;
 
 	/* make sure we are in range */
 	assert(ctable != NULL);
 	assert(entry < ctable->entries);
-	assert(gfx->color_depth <= 32);
+	assert(gfx->depth() <= 32);
 
 	/* either gfx->color_depth entries or as many as we can get up until the end */
-	count = MIN(gfx->color_depth, ctable->entries - entry);
+	count = MIN(gfx->depth(), ctable->entries - entry);
 
 	/* set a bit anywhere the transcolor matches */
 	for (bit = 0; bit < count; bit++)
@@ -463,18 +462,18 @@ UINT32 colortable_get_transpen_mask(colortable_t *ctable, const gfx_element *gfx
     (each group maps to a gfx color)
 -------------------------------------------------*/
 
-void colortable_configure_tilemap_groups(colortable_t *ctable, tilemap_t *tmap, const gfx_element *gfx, int transcolor)
+void colortable_configure_tilemap_groups(colortable_t *ctable, tilemap_t *tmap, gfx_element *gfx, int transcolor)
 {
 	int color;
 
 	assert(ctable != NULL);
 	assert(gfx != NULL);
 	assert(tmap != NULL);
-	assert(gfx->total_colors <= TILEMAP_NUM_GROUPS);
+	assert(gfx->colors() <= TILEMAP_NUM_GROUPS);
 
 	/* iterate over all colors in the tilemap */
-	for (color = 0; color < gfx->total_colors; color++)
-		tilemap_set_transmask(tmap, color, colortable_get_transpen_mask(ctable, gfx, color, transcolor), 0);
+	for (color = 0; color < gfx->colors(); color++)
+		tmap->set_transmask(color, colortable_get_transpen_mask(ctable, gfx, color, transcolor), 0);
 }
 
 
@@ -611,19 +610,13 @@ static void allocate_palette(running_machine &machine, palette_private *palette)
 	switch (palette->format)
 	{
 		/* 16-bit paletteized case */
-		case BITMAP_FORMAT_INDEXED16:
+		case BITMAP_FORMAT_IND16:
 			palette->black_pen = palette_get_black_entry(machine.palette);
 			palette->white_pen = palette_get_white_entry(machine.palette);
 			if (palette->black_pen >= 65536)
 				palette->black_pen = 0;
 			if (palette->white_pen >= 65536)
 				palette->white_pen = 65536;
-			break;
-
-		/* 15-bit direct case */
-		case BITMAP_FORMAT_RGB15:
-			palette->black_pen = rgb_to_rgb15(MAKE_RGB(0x00,0x00,0x00));
-			palette->white_pen = rgb_to_rgb15(MAKE_RGB(0xff,0xff,0xff));
 			break;
 
 		/* 32-bit direct case */
@@ -654,15 +647,11 @@ static void allocate_color_tables(running_machine &machine, palette_private *pal
 	/* allocate memory for the pen table */
 	switch (palette->format)
 	{
-		case BITMAP_FORMAT_INDEXED16:
+		case BITMAP_FORMAT_IND16:
 			/* create a dummy 1:1 mapping */
 			machine.pens = pentable = auto_alloc_array(machine, pen_t, total_colors + 2);
 			for (i = 0; i < total_colors + 2; i++)
 				pentable[i] = i;
-			break;
-
-		case BITMAP_FORMAT_RGB15:
-			machine.pens = palette_entry_list_adjusted_rgb15(machine.palette);
 			break;
 
 		case BITMAP_FORMAT_RGB32:
@@ -690,7 +679,7 @@ static void allocate_shadow_tables(running_machine &machine, palette_private *pa
 		int i;
 
 		/* palettized mode gets a single 64k table in slots 0 and 2 */
-		if (palette->format == BITMAP_FORMAT_INDEXED16)
+		if (palette->format == BITMAP_FORMAT_IND16)
 		{
 			palette->shadow_table[0].base = palette->shadow_table[2].base = table;
 			for (i = 0; i < 65536; i++)
@@ -713,7 +702,7 @@ static void allocate_shadow_tables(running_machine &machine, palette_private *pa
 		int i;
 
 		/* palettized mode gets a single 64k table in slots 1 and 3 */
-		if (palette->format == BITMAP_FORMAT_INDEXED16)
+		if (palette->format == BITMAP_FORMAT_IND16)
 		{
 			palette->shadow_table[1].base = palette->shadow_table[3].base = table;
 			for (i = 0; i < 65536; i++)
@@ -747,7 +736,7 @@ static void configure_rgb_shadows(running_machine &machine, int mode, float fact
 	int i;
 
 	/* only applies to RGB direct modes */
-	assert(palette->format != BITMAP_FORMAT_INDEXED16);
+	assert(palette->format != BITMAP_FORMAT_IND16);
 	assert(stable->base != NULL);
 
 	/* regenerate the table */

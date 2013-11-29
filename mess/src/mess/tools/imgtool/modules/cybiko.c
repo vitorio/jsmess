@@ -10,22 +10,19 @@
 
 #include <zlib.h>
 
-typedef struct _cybiko_file_system cybiko_file_system;
-struct _cybiko_file_system
+struct cybiko_file_system
 {
 	imgtool_stream *stream;
 	UINT32 page_count, page_size, block_count_boot, block_count_file;
 	UINT16 write_count;
 };
 
-typedef struct _cybiko_iter cybiko_iter;
-struct _cybiko_iter
+struct cybiko_iter
 {
 	UINT16 block;
 };
 
-typedef struct _cfs_file cfs_file;
-struct _cfs_file
+struct cfs_file
 {
 	char name[64]; // name of the file
 	UINT32 date;   // date/time of the file (seconds since 1900/01/01)
@@ -40,7 +37,7 @@ enum
 	BLOCK_TYPE_FILE
 };
 
-#define	MAX_PAGE_SIZE (264 * 2)
+#define MAX_PAGE_SIZE (264 * 2)
 
 #define INVALID_FILE_ID  0xFFFF
 

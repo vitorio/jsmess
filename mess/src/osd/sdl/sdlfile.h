@@ -26,11 +26,12 @@ enum
 //  TYPE DEFINITIONS
 //============================================================
 
-struct _osd_file
+struct osd_file
 {
-	int	handle;
-	int	type;
-	char	filename[1];
+	int handle;
+	int socket;
+	int type;
+	char    filename[1];
 };
 
 //============================================================

@@ -16,13 +16,13 @@ David Widel d_widel@hotmail.com
 #include "includes/pacman.h"
 
 
-static void acitya_decrypt_rom_8(running_machine &machine)
+void pacman_state::acitya_decrypt_rom_8()
 {
 	int oldbyte,inverted_oldbyte,newbyte;
 	int mem;
 	UINT8 *RAM;
 
-	RAM = machine.region("maincpu")->base();
+	RAM = memregion("maincpu")->base();
 
 
 	for (mem=0;mem<0x4000;mem++)
@@ -31,9 +31,8 @@ static void acitya_decrypt_rom_8(running_machine &machine)
 		inverted_oldbyte = ~oldbyte;
 
 		/*  Note: D2 is inverted and connected to D1, D5 is inverted and
-            connected to D0.  The other six data bits are converted by a
-            PAL10H8 driven by the counter. */
-		newbyte = 0;
+		    connected to D0.  The other six data bits are converted by a
+		    PAL10H8 driven by the counter. */
 
 		/* Direct inversion */
 		newbyte  = (inverted_oldbyte & 0x80) >> 2;
@@ -52,13 +51,13 @@ static void acitya_decrypt_rom_8(running_machine &machine)
 }
 
 
-static void acitya_decrypt_rom_9(running_machine &machine)
+void pacman_state::acitya_decrypt_rom_9()
 {
 	int oldbyte,inverted_oldbyte,newbyte;
 	int mem;
 	UINT8 *RAM;
 
-	RAM = machine.region("maincpu")->base();
+	RAM = memregion("maincpu")->base();
 
 	for (mem=0;mem<0x4000;mem++)
 	{
@@ -66,9 +65,8 @@ static void acitya_decrypt_rom_9(running_machine &machine)
 		inverted_oldbyte = ~oldbyte;
 
 		/*  Note: D2 is inverted and connected to D1, D5 is inverted and
-            connected to D0.  The other six data bits are converted by a
-            PAL10H8 driven by the counter. */
-		newbyte = 0;
+		    connected to D0.  The other six data bits are converted by a
+		    PAL10H8 driven by the counter. */
 
 		/* Direct inversion */
 		newbyte  = (inverted_oldbyte & 0x80) >> 0;
@@ -85,13 +83,13 @@ static void acitya_decrypt_rom_9(running_machine &machine)
 	return;
 }
 
-static void acitya_decrypt_rom_A(running_machine &machine)
+void pacman_state::acitya_decrypt_rom_A()
 {
 	int oldbyte,inverted_oldbyte,newbyte;
 	int mem;
 	UINT8 *RAM;
 
-	RAM = machine.region("maincpu")->base();
+	RAM = memregion("maincpu")->base();
 
 	for (mem=0;mem<0x4000;mem++)
 	{
@@ -99,9 +97,8 @@ static void acitya_decrypt_rom_A(running_machine &machine)
 		inverted_oldbyte = ~oldbyte;
 
 		/*  Note: D2 is inverted and connected to D1, D5 is inverted and
-            connected to D0.  The other six data bits are converted by a
-            PAL10H8 driven by the counter. */
-		newbyte = 0;
+		    connected to D0.  The other six data bits are converted by a
+		    PAL10H8 driven by the counter. */
 
 		newbyte  = (inverted_oldbyte & 0x80) >> 2;
 		newbyte |= (inverted_oldbyte & 0x40) >> 2;
@@ -118,13 +115,13 @@ static void acitya_decrypt_rom_A(running_machine &machine)
 	return;
 }
 
-static void acitya_decrypt_rom_B(running_machine &machine)
+void pacman_state::acitya_decrypt_rom_B()
 {
 	int oldbyte,inverted_oldbyte,newbyte;
 	int mem;
 	UINT8 *RAM;
 
-	RAM = machine.region("maincpu")->base();
+	RAM = memregion("maincpu")->base();
 
 	for (mem=0;mem<0x4000;mem++)
 	{
@@ -132,9 +129,8 @@ static void acitya_decrypt_rom_B(running_machine &machine)
 		inverted_oldbyte = ~oldbyte;
 
 		/*  Note: D2 is inverted and connected to D1, D5 is inverted and
-            connected to D0.  The other six data bits are converted by a
-            PAL10H8 driven by the counter. */
-		newbyte = 0;
+		    connected to D0.  The other six data bits are converted by a
+		    PAL10H8 driven by the counter. */
 
 		/* Direct inversion */
 		newbyte  = (inverted_oldbyte & 0x80) >> 0;
@@ -154,26 +150,25 @@ static void acitya_decrypt_rom_B(running_machine &machine)
 }
 
 
-READ8_HANDLER( acitya_decrypt_rom )
+READ8_MEMBER(pacman_state::acitya_decrypt_rom )
 {
-	pacman_state *state = space->machine().driver_data<pacman_state>();
 	if (offset & 0x01)
 	{
-		state->m_counter = (state->m_counter - 1) & 0x0F;
+		m_counter = (m_counter - 1) & 0x0F;
 	}
 	else
 	{
-		state->m_counter = (state->m_counter + 1) & 0x0F;
+		m_counter = (m_counter + 1) & 0x0F;
 	}
 
-	switch(state->m_counter)
+	switch(m_counter)
 	{
-		case 0x08:	memory_set_bank (space->machine(), "bank1", 0);		break;
-		case 0x09:	memory_set_bank (space->machine(), "bank1", 1);		break;
-		case 0x0A:	memory_set_bank (space->machine(), "bank1", 2);		break;
-		case 0x0B:	memory_set_bank (space->machine(), "bank1", 3);		break;
+		case 0x08:  membank ("bank1")->set_entry (0);        break;
+		case 0x09:  membank ("bank1")->set_entry (1);        break;
+		case 0x0A:  membank ("bank1")->set_entry (2);        break;
+		case 0x0B:  membank ("bank1")->set_entry (3);        break;
 		default:
-			logerror("Invalid counter = %02X\n",state->m_counter);
+			logerror("Invalid counter = %02X\n",m_counter);
 			break;
 	}
 
@@ -181,29 +176,27 @@ READ8_HANDLER( acitya_decrypt_rom )
 }
 
 
-MACHINE_START( acitya )
+MACHINE_START_MEMBER(pacman_state,acitya)
 {
-	pacman_state *state = machine.driver_data<pacman_state>();
-	UINT8 *RAM = machine.region("maincpu")->base();
+	UINT8 *RAM = memregion("maincpu")->base();
 
 	/* While the PAL supports up to 16 decryption methods, only four
-        are actually used in the PAL.  Therefore, we'll take a little
-        memory overhead and decrypt the ROMs using each method in advance. */
-	acitya_decrypt_rom_8(machine);
-	acitya_decrypt_rom_9(machine);
-	acitya_decrypt_rom_A(machine);
-	acitya_decrypt_rom_B(machine);
+	    are actually used in the PAL.  Therefore, we'll take a little
+	    memory overhead and decrypt the ROMs using each method in advance. */
+	acitya_decrypt_rom_8();
+	acitya_decrypt_rom_9();
+	acitya_decrypt_rom_A();
+	acitya_decrypt_rom_B();
 
-	memory_configure_bank(machine, "bank1", 0, 4, &RAM[0x10000], 0x4000);
+	membank("bank1")->configure_entries(0, 4, &RAM[0x10000], 0x4000);
 
-	state_save_register_global(machine, state->m_counter);
+	save_item(NAME(m_counter));
 }
 
 
-MACHINE_RESET( acitya )
+MACHINE_RESET_MEMBER(pacman_state,acitya)
 {
-	pacman_state *state = machine.driver_data<pacman_state>();
 	/* The initial state of the counter is 0x0B */
-	state->m_counter = 0x0B;
-	memory_set_bank(machine, "bank1", 3);
+	m_counter = 0x0B;
+	membank("bank1")->set_entry(3);
 }

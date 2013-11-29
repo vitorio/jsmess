@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Sandro Ronco
 /*****************************************************************************
  *
  * includes/ti89.h
@@ -14,20 +16,38 @@ class ti68k_state : public driver_device
 public:
 	ti68k_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, "maincpu"),
-		  m_flash(*this, "flash")
+			m_maincpu(*this, "maincpu"),
+			m_flash(*this, "flash"),
+			m_io_bit0(*this, "BIT0"),
+			m_io_bit1(*this, "BIT1"),
+			m_io_bit2(*this, "BIT2"),
+			m_io_bit3(*this, "BIT3"),
+			m_io_bit4(*this, "BIT4"),
+			m_io_bit5(*this, "BIT5"),
+			m_io_bit6(*this, "BIT6"),
+			m_io_bit7(*this, "BIT7")
 		{ }
 
 	required_device<cpu_device> m_maincpu;
 	required_device<sharp_unk128mbit_device> m_flash;
+	required_ioport m_io_bit0;
+	required_ioport m_io_bit1;
+	required_ioport m_io_bit2;
+	required_ioport m_io_bit3;
+	required_ioport m_io_bit4;
+	required_ioport m_io_bit5;
+	required_ioport m_io_bit6;
+	required_ioport m_io_bit7;
 
 	// hardware versions
-	enum { m_HW1=1, m_HW2, m_HW3, m_HW4 };
+	enum { HW1=1, HW2, HW3, HW4 };
 
 	// HW specifications
 	UINT8 m_hw_version;
 	bool m_flash_mem;
 	UINT32 m_initial_pc;
+
+	UINT16 *m_rom_base;
 
 	// keyboard
 	UINT16 m_kb_mask;
@@ -51,7 +71,7 @@ public:
 
 	virtual void machine_start();
 	virtual void machine_reset();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	UINT8 keypad_r (running_machine &machine);
 	DECLARE_WRITE16_MEMBER ( ti68k_io_w );
@@ -61,6 +81,9 @@ public:
 	DECLARE_WRITE16_MEMBER ( flash_w );
 	DECLARE_READ16_MEMBER ( flash_r );
 	UINT64 m_timer;
+	virtual void palette_init();
+	DECLARE_INPUT_CHANGED_MEMBER(ti68k_on_key);
+	TIMER_DEVICE_CALLBACK_MEMBER(ti68k_timer_callback);
 };
 
 #endif // TI89_H_

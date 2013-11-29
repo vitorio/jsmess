@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Sandro Ronco
 /*********************************************************************
 
     vg5k_cas.h
@@ -12,4 +14,3 @@
 CASSETTE_FORMATLIST_EXTERN(vg5k_cassette_formats);
 
 #endif /* VG5K_CAS_H */
-

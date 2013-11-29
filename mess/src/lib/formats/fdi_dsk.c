@@ -23,10 +23,10 @@
 
 #define LOG 1
 
-#define MAX_TRACKS	180
+#define MAX_TRACKS  180
 
-#define FLAGS_WRITE_PROTECTED	0x01
-#define FLAGS_INDEX_SYNC		0x02
+#define FLAGS_WRITE_PROTECTED   0x01
+#define FLAGS_INDEX_SYNC        0x02
 
 /* media type */
 enum
@@ -55,21 +55,21 @@ static const int TRACKS_PER_INCH[] = { 48, 67, 96, 100, 135, 192 };
 /* high level track types */
 enum
 {
-	TRACK_BLANK = 0,	/* not supported */
-	TRACK_AMIGA_DD,		/* not supported */
-	TRACK_AMIGA_HD,		/* not supported */
-	TRACK_ST_DD_9,		/* not supported */
-	TRACK_ST_DD_10,		/* not supported */
-	TRACK_PC_DD_8,		/* not supported */
-	TRACK_PC_DD_9,		/* not supported */
-	TRACK_PC_HD_15,		/* not supported */
-	TRACK_IBM_HD_18,	/* not supported */
-	TRACK_IBM_ED_36,	/* not supported */
-	TRACK_CBM_1541,		/* not supported */
-	TRACK_APPLE_DOS_32,	/* not supported */
-	TRACK_APPLE_DOS_33,	/* not supported */
-	TRACK_APPLE_GCR,	/* not supported */
-	TRACK_IBM_SD_10		/* not supported */
+	TRACK_BLANK = 0,    /* not supported */
+	TRACK_AMIGA_DD,     /* not supported */
+	TRACK_AMIGA_HD,     /* not supported */
+	TRACK_ST_DD_9,      /* not supported */
+	TRACK_ST_DD_10,     /* not supported */
+	TRACK_PC_DD_8,      /* not supported */
+	TRACK_PC_DD_9,      /* not supported */
+	TRACK_PC_HD_15,     /* not supported */
+	TRACK_IBM_HD_18,    /* not supported */
+	TRACK_IBM_ED_36,    /* not supported */
+	TRACK_CBM_1541,     /* not supported */
+	TRACK_APPLE_DOS_32, /* not supported */
+	TRACK_APPLE_DOS_33, /* not supported */
+	TRACK_APPLE_GCR,    /* not supported */
+	TRACK_IBM_SD_10     /* not supported */
 };
 
 //static const int SECTORS_PER_TRACK[] = { 0, 11, 22, 9, 10, 8, 9, 15, 18, 36, -1, -1, -1, -1, 10 };
@@ -81,9 +81,9 @@ enum
 struct fdidsk_tag
 {
 	int version;
-	int heads;								/* number of physical heads */
-	int tracks;								/* number of physical tracks */
-	UINT32 track_offset[MAX_TRACKS];		/* offset within data for each track */
+	int heads;                              /* number of physical heads */
+	int tracks;                             /* number of physical tracks */
+	UINT32 track_offset[MAX_TRACKS];        /* offset within data for each track */
 	UINT8 track_type[MAX_TRACKS];
 };
 
@@ -128,7 +128,7 @@ struct fdi_pulse_track_header
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE struct fdidsk_tag *get_tag(floppy_image *floppy)
+INLINE struct fdidsk_tag *get_tag(floppy_image_legacy *floppy)
 {
 	return (fdidsk_tag *)floppy_tag(floppy);
 }
@@ -137,57 +137,57 @@ INLINE struct fdidsk_tag *get_tag(floppy_image *floppy)
     IMPLEMENTATION
 ***************************************************************************/
 
-static int fdi_get_heads_per_disk(floppy_image *floppy)
+static int fdi_get_heads_per_disk(floppy_image_legacy *floppy)
 {
 	return get_tag(floppy)->heads;
 }
 
-static int fdi_get_tracks_per_disk(floppy_image *floppy)
+static int fdi_get_tracks_per_disk(floppy_image_legacy *floppy)
 {
 	return get_tag(floppy)->tracks;
 }
 
-static int fdi_get_sectors_per_track(floppy_image *floppy, int head, int track)
+static int fdi_get_sectors_per_track(floppy_image_legacy *floppy, int head, int track)
 {
 	return 0;
 }
 
-static floperr_t fdi_get_sector_length(floppy_image *floppy, int head, int track, int sector, UINT32 *sector_length)
+static floperr_t fdi_get_sector_length(floppy_image_legacy *floppy, int head, int track, int sector, UINT32 *sector_length)
 {
 	return FLOPPY_ERROR_SUCCESS;
 }
 /*
-static UINT32 fdi_get_sector_offset(floppy_image* floppy, int head, int track, int sector)
+static UINT32 fdi_get_sector_offset(floppy_image_legacy* floppy, int head, int track, int sector)
 {
     return 0;
 }
 */
-static floperr_t fdi_get_indexed_sector_info(floppy_image *floppy, int head, int track, int sector_index, int *cylinder, int *side, int *sector, UINT32 *sector_length, unsigned long *flags)
+static floperr_t fdi_get_indexed_sector_info(floppy_image_legacy *floppy, int head, int track, int sector_index, int *cylinder, int *side, int *sector, UINT32 *sector_length, unsigned long *flags)
 {
 	return FLOPPY_ERROR_UNSUPPORTED;
 }
 
-static floperr_t fdi_read_track(floppy_image *floppy, int head, int track, UINT64 offset, void *buffer, size_t buflen)
+static floperr_t fdi_read_track(floppy_image_legacy *floppy, int head, int track, UINT64 offset, void *buffer, size_t buflen)
 {
 	return FLOPPY_ERROR_UNSUPPORTED;
 }
 
-static floperr_t fdi_read_sector(floppy_image *floppy, int head, int track, int sector, void *buffer, size_t buflen)
+static floperr_t fdi_read_sector(floppy_image_legacy *floppy, int head, int track, int sector, void *buffer, size_t buflen)
 {
 	return FLOPPY_ERROR_UNSUPPORTED;
 }
 
-static floperr_t fdi_read_indexed_sector(floppy_image *floppy, int head, int track, int sector, void *buffer, size_t buffer_len)
+static floperr_t fdi_read_indexed_sector(floppy_image_legacy *floppy, int head, int track, int sector, void *buffer, size_t buffer_len)
 {
 	return FLOPPY_ERROR_UNSUPPORTED;
 }
 
-static floperr_t fdi_write_sector(floppy_image *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
+static floperr_t fdi_write_sector(floppy_image_legacy *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
 {
 	return FLOPPY_ERROR_UNSUPPORTED;
 }
 
-static floperr_t fdi_write_indexed_sector(floppy_image *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
+static floperr_t fdi_write_indexed_sector(floppy_image_legacy *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
 {
 	return FLOPPY_ERROR_UNSUPPORTED;
 }
@@ -261,7 +261,7 @@ FLOPPY_CONSTRUCT( fdi_dsk_construct )
 		UINT8 type = header.track[track].type;
 		int size = header.track[track].size * 256;
 
-		if (LOG) LOG_FORMATS("FDI track %u type %02x size %u offset %u\n", track, type, size, offset);
+		if (LOG) LOG_FORMATS("FDI track %d type %02x size %d offset %d\n", track, type, size, offset);
 
 		tag->track_offset[track] = offset;
 		tag->track_type[track] = type;

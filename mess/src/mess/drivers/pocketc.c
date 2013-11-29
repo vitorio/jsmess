@@ -13,6 +13,7 @@
 #include "includes/pc1350.h"
 #include "includes/pc1403.h"
 #include "machine/ram.h"
+#include "drivlgcy.h"
 
 /* pc1430 no peek poke operations! */
 
@@ -80,93 +81,93 @@
 /* special keys
    red c-ce and reset; warm boot, program NOT lost*/
 
-static ADDRESS_MAP_START( pc1401_mem , AS_PROGRAM, 8)
+static ADDRESS_MAP_START( pc1401_mem , AS_PROGRAM, 8, pc1401_state )
 	AM_RANGE( 0x0000, 0x1fff) AM_ROM
 	AM_RANGE( 0x3800, 0x47ff) AM_RAM
-	AM_RANGE( 0x6000, 0x67ff) AM_READWRITE( pc1401_lcd_read, pc1401_lcd_write ) AM_MIRROR(0x1000)
+	AM_RANGE( 0x6000, 0x67ff) AM_READWRITE(pc1401_lcd_read, pc1401_lcd_write ) AM_MIRROR(0x1000)
 	AM_RANGE( 0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc1402_mem , AS_PROGRAM, 8)
+static ADDRESS_MAP_START( pc1402_mem , AS_PROGRAM, 8, pc1401_state )
 	AM_RANGE( 0x0000, 0x1fff) AM_ROM
 	AM_RANGE( 0x2000, 0x47ff) AM_RAM
-	AM_RANGE( 0x6000, 0x67ff) AM_READWRITE( pc1401_lcd_read, pc1401_lcd_write ) AM_MIRROR(0x1000)
+	AM_RANGE( 0x6000, 0x67ff) AM_READWRITE(pc1401_lcd_read, pc1401_lcd_write ) AM_MIRROR(0x1000)
 	AM_RANGE( 0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc1250_mem , AS_PROGRAM, 8)
+static ADDRESS_MAP_START( pc1250_mem , AS_PROGRAM, 8, pc1251_state )
 	AM_RANGE( 0x0000, 0x1fff) AM_ROM
 	AM_RANGE( 0x4000, 0x7fff) AM_ROM
 	AM_RANGE( 0xc000, 0xc7ff) AM_RAM // 2KB RAM
-	AM_RANGE( 0xf800, 0xf8ff) AM_READWRITE( pc1251_lcd_read, pc1251_lcd_write)
+	AM_RANGE( 0xf800, 0xf8ff) AM_READWRITE(pc1251_lcd_read, pc1251_lcd_write)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc1251_mem , AS_PROGRAM, 8)
+static ADDRESS_MAP_START( pc1251_mem , AS_PROGRAM, 8, pc1251_state )
 	AM_RANGE( 0x0000, 0x1fff) AM_ROM
 	AM_RANGE( 0x4000, 0x7fff) AM_ROM
 	AM_RANGE( 0xb800, 0xc7ff) AM_RAM // 4KB RAM
-	AM_RANGE( 0xf800, 0xf8ff) AM_READWRITE( pc1251_lcd_read, pc1251_lcd_write)
+	AM_RANGE( 0xf800, 0xf8ff) AM_READWRITE(pc1251_lcd_read, pc1251_lcd_write)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc1255_mem , AS_PROGRAM, 8)
+static ADDRESS_MAP_START( pc1255_mem , AS_PROGRAM, 8, pc1251_state )
 	AM_RANGE( 0x0000, 0x1fff) AM_ROM
 	AM_RANGE( 0x4000, 0x7fff) AM_ROM
 	AM_RANGE( 0xa000, 0xc7ff) AM_RAM // 10KB RAM
-	AM_RANGE( 0xf800, 0xf8ff) AM_READWRITE( pc1251_lcd_read, pc1251_lcd_write)
+	AM_RANGE( 0xf800, 0xf8ff) AM_READWRITE(pc1251_lcd_read, pc1251_lcd_write)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc1260_mem , AS_PROGRAM, 8)
+static ADDRESS_MAP_START( pc1260_mem , AS_PROGRAM, 8, pc1251_state )
 	AM_RANGE( 0x0000, 0x1fff) AM_ROM
-	AM_RANGE( 0x2000, 0x20ff) AM_READWRITE( pc1251_lcd_read, pc1251_lcd_write)
-	//AM_RANGE( 0x2800, 0x28ff) AM_READWRITE( pc1251_lcd_read, pc1251_lcd_write)
+	AM_RANGE( 0x2000, 0x20ff) AM_READWRITE(pc1251_lcd_read, pc1251_lcd_write)
+	//AM_RANGE( 0x2800, 0x28ff) AM_READWRITE(pc1251_lcd_read, pc1251_lcd_write)
 	AM_RANGE( 0x5800, 0x67ff) AM_RAM // 4KB RAM
 	AM_RANGE( 0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc1261_mem , AS_PROGRAM, 8)
+static ADDRESS_MAP_START( pc1261_mem , AS_PROGRAM, 8, pc1251_state )
 	AM_RANGE( 0x0000, 0x1fff) AM_ROM
-	AM_RANGE( 0x2000, 0x20ff) AM_READWRITE( pc1251_lcd_read, pc1251_lcd_write)
-	//AM_RANGE( 0x2800, 0x28ff) AM_READWRITE( pc1251_lcd_read, pc1251_lcd_write)
+	AM_RANGE( 0x2000, 0x20ff) AM_READWRITE(pc1251_lcd_read, pc1251_lcd_write)
+	//AM_RANGE( 0x2800, 0x28ff) AM_READWRITE(pc1251_lcd_read, pc1251_lcd_write)
 	AM_RANGE( 0x4000, 0x67ff) AM_RAM // 10KB RAM
 	AM_RANGE( 0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( pc1350_mem , AS_PROGRAM, 8)
+static ADDRESS_MAP_START( pc1350_mem , AS_PROGRAM, 8, pc1350_state )
 	AM_RANGE( 0x0000, 0x1fff) AM_ROM
-	AM_RANGE( 0x7000, 0x7eff) AM_READWRITE( pc1350_lcd_read, pc1350_lcd_write )
+	AM_RANGE( 0x7000, 0x7eff) AM_READWRITE(pc1350_lcd_read, pc1350_lcd_write )
 	AM_RANGE( 0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc1403_mem , AS_PROGRAM, 8)
+static ADDRESS_MAP_START( pc1403_mem , AS_PROGRAM, 8, pc1403_state )
 	AM_RANGE( 0x0000, 0x1fff) AM_ROM
-	AM_RANGE( 0x3000, 0x30bf) AM_READWRITE( pc1403_lcd_read, pc1403_lcd_write )
-	AM_RANGE( 0x3800, 0x3fff) AM_READWRITE( pc1403_asic_read, pc1403_asic_write )
+	AM_RANGE( 0x3000, 0x30bf) AM_READWRITE(pc1403_lcd_read, pc1403_lcd_write )
+	AM_RANGE( 0x3800, 0x3fff) AM_READWRITE(pc1403_asic_read, pc1403_asic_write )
 	AM_RANGE( 0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE( 0xe000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc1403h_mem , AS_PROGRAM, 8)
+static ADDRESS_MAP_START( pc1403h_mem , AS_PROGRAM, 8, pc1403_state )
 	AM_RANGE( 0x0000, 0x1fff) AM_ROM
-	AM_RANGE( 0x3000, 0x30bf) AM_READWRITE( pc1403_lcd_read, pc1403_lcd_write )
-	AM_RANGE( 0x3800, 0x3fff) AM_READWRITE( pc1403_asic_read, pc1403_asic_write )
+	AM_RANGE( 0x3000, 0x30bf) AM_READWRITE(pc1403_lcd_read, pc1403_lcd_write )
+	AM_RANGE( 0x3800, 0x3fff) AM_READWRITE(pc1403_asic_read, pc1403_asic_write )
 	AM_RANGE( 0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE( 0x8000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 
 #if 0
-static ADDRESS_MAP_START( pc1421_readmem , AS_PROGRAM, 8)
-	AM_RANGE( 0x0000, 0x1fff) AM_READ( SMH_ROM )
-	AM_RANGE( 0x3800, 0x47ff) AM_READ( SMH_RAM )
-	AM_RANGE( 0x8000, 0xffff) AM_READ( SMH_ROM )
+static ADDRESS_MAP_START( pc1421_readmem , AS_PROGRAM, 8, pc1403_state )
+	AM_RANGE( 0x0000, 0x1fff) AM_ROM
+	AM_RANGE( 0x3800, 0x47ff) AM_RAM
+	AM_RANGE( 0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc1421_writemem , AS_PROGRAM, 8)
-	AM_RANGE( 0x0000, 0x1fff) AM_WRITE( SMH_ROM )
-	AM_RANGE( 0x2000, 0x37ff) AM_WRITE( SMH_RAM )
-	AM_RANGE( 0x3800, 0x47ff) AM_WRITE( SMH_RAM )
-	AM_RANGE( 0x8000, 0xffff) AM_WRITE( SMH_ROM )
+static ADDRESS_MAP_START( pc1421_writemem , AS_PROGRAM, 8, pc1403_state )
+	AM_RANGE( 0x0000, 0x1fff) AM_ROM
+	AM_RANGE( 0x2000, 0x37ff) AM_RAM
+	AM_RANGE( 0x3800, 0x47ff) AM_RAM
+	AM_RANGE( 0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 #endif
 
@@ -290,19 +291,19 @@ static INPUT_PORTS_START( pc1401 )
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("BRK   ON") PORT_CODE(KEYCODE_F4)
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Reset") PORT_CODE(KEYCODE_F3)
 	PORT_DIPNAME( 0x04, 0x00,  "Power")
-	PORT_DIPSETTING(	0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("DSW0")
 	PORT_DIPNAME( 0x07, 0x01, "Contrast")
-	PORT_DIPSETTING(	0x00, "0/Low" )
-	PORT_DIPSETTING(	0x01, "1" )
-	PORT_DIPSETTING(	0x02, "2" )
-	PORT_DIPSETTING(	0x03, "3" )
-	PORT_DIPSETTING(	0x04, "4" )
-	PORT_DIPSETTING(	0x05, "5" )
-	PORT_DIPSETTING(	0x06, "6" )
-	PORT_DIPSETTING(	0x07, "7/High" )
+	PORT_DIPSETTING(    0x00, "0/Low" )
+	PORT_DIPSETTING(    0x01, "1" )
+	PORT_DIPSETTING(    0x02, "2" )
+	PORT_DIPSETTING(    0x03, "3" )
+	PORT_DIPSETTING(    0x04, "4" )
+	PORT_DIPSETTING(    0x05, "5" )
+	PORT_DIPSETTING(    0x06, "6" )
+	PORT_DIPSETTING(    0x07, "7/High" )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( pc1403 )
@@ -349,7 +350,7 @@ static INPUT_PORTS_START( pc1403 )
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("SIN   SIN^-1")
 	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("COS   COS^-1")
 	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("TAN   TAN^-1")
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)		/* toggles indicator 3c bit 0 japan? */
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)      /* toggles indicator 3c bit 0 japan? */
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("E     #") PORT_CODE(KEYCODE_E)
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("D     THEN") PORT_CODE(KEYCODE_D)
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("C     GOSUB") PORT_CODE(KEYCODE_C)
@@ -359,7 +360,7 @@ static INPUT_PORTS_START( pc1403 )
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("->DEG ->D.MS")
 	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("LN    e^x    E")
 	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("LOG   10^x   F")
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)		/* tilde? */
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)      /* tilde? */
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("R     $") PORT_CODE(KEYCODE_R)
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("F     GOTO") PORT_CODE(KEYCODE_F)
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("V     RETURN") PORT_CODE(KEYCODE_V)
@@ -369,7 +370,7 @@ static INPUT_PORTS_START( pc1403 )
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("y^x   xROOTy B")
 	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("sqrt  3root  C")
 	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("sqr   tri%   D")
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)		/* yen? */
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)      /* yen? */
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("T     %") PORT_CODE(KEYCODE_T)
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("G     FOR") PORT_CODE(KEYCODE_G)
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("B     DIM") PORT_CODE(KEYCODE_B)
@@ -416,30 +417,30 @@ static INPUT_PORTS_START( pc1403 )
 
 	PORT_START("KEY12")
 	PORT_BIT(0x3f, IP_ACTIVE_HIGH, IPT_UNUSED)
-	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_UNUSED)		/* shift lock */
+	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_UNUSED)      /* shift lock */
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("CAL") PORT_CODE(KEYCODE_F1)
 
 	PORT_START("KEY13")
 	PORT_BIT(0x7f, IP_ACTIVE_HIGH, IPT_UNUSED)
 	PORT_DIPNAME( 0x80, 0x00,  "Power")
-	PORT_DIPSETTING(	0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("EXTRA")
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("BRK   ON") PORT_CODE(KEYCODE_F4)
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Reset") PORT_CODE(KEYCODE_F3)
 
 	PORT_START("DSW0")
-    // normally no contrast control!
+	// normally no contrast control!
 	PORT_DIPNAME( 0x07, 0x01, "Contrast")
-	PORT_DIPSETTING(	0x00, "0/Low" )
-	PORT_DIPSETTING(	0x01, "1" )
-	PORT_DIPSETTING(	0x02, "2" )
-	PORT_DIPSETTING(	0x03, "3" )
-	PORT_DIPSETTING(	0x04, "4" )
-	PORT_DIPSETTING(	0x05, "5" )
-	PORT_DIPSETTING(	0x06, "6" )
-	PORT_DIPSETTING(	0x07, "7/High" )
+	PORT_DIPSETTING(    0x00, "0/Low" )
+	PORT_DIPSETTING(    0x01, "1" )
+	PORT_DIPSETTING(    0x02, "2" )
+	PORT_DIPSETTING(    0x03, "3" )
+	PORT_DIPSETTING(    0x04, "4" )
+	PORT_DIPSETTING(    0x05, "5" )
+	PORT_DIPSETTING(    0x06, "6" )
+	PORT_DIPSETTING(    0x07, "7/High" )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( pc1251 )
@@ -502,7 +503,7 @@ static INPUT_PORTS_START( pc1251 )
 
 	PORT_START("KEY6")
 	PORT_BIT(0x0f, IP_ACTIVE_HIGH, IPT_UNUSED)
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)	/* down? */
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)  /* down? */
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("U     ?") PORT_CODE(KEYCODE_U)
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("J") PORT_CODE(KEYCODE_J)
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("M") PORT_CODE(KEYCODE_M)
@@ -528,21 +529,21 @@ static INPUT_PORTS_START( pc1251 )
 
 	PORT_START("MODE")
 	PORT_DIPNAME( 0x07, 0x00, "Mode")
-	PORT_DIPSETTING(	0x04, DEF_STR(Off) )
-	PORT_DIPSETTING(	0x00, "On/RUN" )
-	PORT_DIPSETTING(	0x02, "On/PRO" )
-	PORT_DIPSETTING(	0x01, "On/RSV" )
+	PORT_DIPSETTING(    0x04, DEF_STR(Off) )
+	PORT_DIPSETTING(    0x00, "On/RUN" )
+	PORT_DIPSETTING(    0x02, "On/PRO" )
+	PORT_DIPSETTING(    0x01, "On/RSV" )
 
 	PORT_START("DSW0")
 	PORT_DIPNAME( 0x07, 0x01, "Contrast")
-	PORT_DIPSETTING(	0x00, "0/Low" )
-	PORT_DIPSETTING(	0x01, "1" )
-	PORT_DIPSETTING(	0x02, "2" )
-	PORT_DIPSETTING(	0x03, "3" )
-	PORT_DIPSETTING(	0x04, "4" )
-	PORT_DIPSETTING(	0x05, "5" )
-	PORT_DIPSETTING(	0x06, "6" )
-	PORT_DIPSETTING(	0x07, "7/High" )
+	PORT_DIPSETTING(    0x00, "0/Low" )
+	PORT_DIPSETTING(    0x01, "1" )
+	PORT_DIPSETTING(    0x02, "2" )
+	PORT_DIPSETTING(    0x03, "3" )
+	PORT_DIPSETTING(    0x04, "4" )
+	PORT_DIPSETTING(    0x05, "5" )
+	PORT_DIPSETTING(    0x06, "6" )
+	PORT_DIPSETTING(    0x07, "7/High" )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( pc1350 )
@@ -553,7 +554,7 @@ static INPUT_PORTS_START( pc1350 )
 	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME(",") PORT_CODE(KEYCODE_COMMA)
 	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("SML") PORT_CODE(KEYCODE_LCONTROL) PORT_CODE(KEYCODE_RCONTROL)
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("DEF") PORT_CODE(KEYCODE_LALT) PORT_CODE(KEYCODE_RALT)
-	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("SHIFT") PORT_CODE(KEYCODE_RSHIFT)	/* are both Shifts connected here? or is Left Shift missing */
+	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("SHIFT") PORT_CODE(KEYCODE_RSHIFT)   /* are both Shifts connected here? or is Left Shift missing */
 
 	PORT_START("KEY1")
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("(     <") PORT_CODE(KEYCODE_OPENBRACE)
@@ -602,7 +603,7 @@ static INPUT_PORTS_START( pc1350 )
 
 	PORT_START("KEY6")
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_UNUSED)
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_UNUSED)		/* 1 ?*/
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_UNUSED)      /* 1 ?*/
 	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("INS") PORT_CODE(KEYCODE_INSERT)
 	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("DEL") PORT_CODE(KEYCODE_DEL)
 	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("N") PORT_CODE(KEYCODE_N)
@@ -611,7 +612,7 @@ static INPUT_PORTS_START( pc1350 )
 
 	PORT_START("KEY7")
 	PORT_BIT(0x03, IP_ACTIVE_HIGH, IPT_UNUSED)
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_UNUSED)		/* 2 ?*/
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_UNUSED)      /* 2 ?*/
 	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("MODE") PORT_CODE(KEYCODE_F1)
 	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("M") PORT_CODE(KEYCODE_M)
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("J") PORT_CODE(KEYCODE_J)
@@ -637,8 +638,8 @@ static INPUT_PORTS_START( pc1350 )
 
 	PORT_START("KEY11")
 	PORT_DIPNAME( 0xc0, 0x00, "Power")
-	PORT_DIPSETTING(	0xc0, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("EXTRA")
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("BRK   ON") PORT_CODE(KEYCODE_F4)
@@ -646,14 +647,14 @@ static INPUT_PORTS_START( pc1350 )
 
 	PORT_START("DSW0")
 	PORT_DIPNAME( 0x07, 0x07, "Contrast")
-	PORT_DIPSETTING(	0x00, "0/Low" )
-	PORT_DIPSETTING(	0x01, "1" )
-	PORT_DIPSETTING(	0x02, "2" )
-	PORT_DIPSETTING(	0x03, "3" )
-	PORT_DIPSETTING(	0x04, "4" )
-	PORT_DIPSETTING(	0x05, "5" )
-	PORT_DIPSETTING(	0x06, "6" )
-	PORT_DIPSETTING(	0x07, "7/High" )
+	PORT_DIPSETTING(    0x00, "0/Low" )
+	PORT_DIPSETTING(    0x01, "1" )
+	PORT_DIPSETTING(    0x02, "2" )
+	PORT_DIPSETTING(    0x03, "3" )
+	PORT_DIPSETTING(    0x04, "4" )
+	PORT_DIPSETTING(    0x05, "5" )
+	PORT_DIPSETTING(    0x06, "6" )
+	PORT_DIPSETTING(    0x07, "7/High" )
 INPUT_PORTS_END
 
 
@@ -709,27 +710,27 @@ GFXDECODE_END
 
 static const sc61860_cpu_core pc1401_config =
 {
-	pc1401_reset, pc1401_brk, NULL,
-	pc1401_ina, pc1401_outa,
-	pc1401_inb, pc1401_outb,
-	pc1401_outc
+	DEVCB_DRIVER_LINE_MEMBER(pc1401_state,pc1401_reset), DEVCB_DRIVER_LINE_MEMBER(pc1401_state,pc1401_brk), DEVCB_NULL,
+	DEVCB_DRIVER_MEMBER(pc1401_state,pc1401_ina), DEVCB_DRIVER_MEMBER(pc1401_state,pc1401_outa),
+	DEVCB_DRIVER_MEMBER(pc1401_state,pc1401_inb), DEVCB_DRIVER_MEMBER(pc1401_state,pc1401_outb),
+	DEVCB_DRIVER_MEMBER(pc1401_state,pc1401_outc)
 };
 
 static MACHINE_CONFIG_FRAGMENT( pocketc )
 	MCFG_QUANTUM_TIME(attotime::from_hz(60))
 
-	MCFG_NVRAM_HANDLER( pc1401 )
+	MCFG_NVRAM_ADD_0FILL("cpu_nvram")
+	MCFG_NVRAM_ADD_0FILL("ram_nvram")
 
 	/*
-       aim: show sharp with keyboard
-       resolution depends on the dots of the lcd
-       (lcd dot displayed as 2x3 pixel)
-       it seems to have 3/4 ratio in the real pc1401 */
+	   aim: show sharp with keyboard
+	   resolution depends on the dots of the lcd
+	   (lcd dot displayed as 2x3 pixel)
+	   it seems to have 3/4 ratio in the real pc1401 */
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", LCD)
-	MCFG_SCREEN_REFRESH_RATE(20)	/* very early and slow lcd */
+	MCFG_SCREEN_REFRESH_RATE(20)    /* very early and slow lcd */
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(594, 273)
 	MCFG_SCREEN_VISIBLE_AREA(0, 594-1, 0, 273-1)
 //  MCFG_SCREEN_SIZE(640, 273)
@@ -750,7 +751,7 @@ static MACHINE_CONFIG_START( pc1401, pc1401_state )
 	MCFG_FRAGMENT_ADD(pocketc)
 
 	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_UPDATE( pc1401 )
+	MCFG_SCREEN_UPDATE_DRIVER(pc1401_state, screen_update_pc1401)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( pc1402, pc1401 )
@@ -760,10 +761,10 @@ MACHINE_CONFIG_END
 
 static const sc61860_cpu_core pc1251_config =
 {
-	NULL, pc1251_brk, NULL,
-	pc1251_ina, pc1251_outa,
-	pc1251_inb, pc1251_outb,
-	pc1251_outc
+	DEVCB_NULL, DEVCB_DRIVER_LINE_MEMBER(pc1251_state,pc1251_brk), DEVCB_NULL,
+	DEVCB_DRIVER_MEMBER(pc1251_state,pc1251_ina), DEVCB_DRIVER_MEMBER(pc1251_state,pc1251_outa),
+	DEVCB_DRIVER_MEMBER(pc1251_state,pc1251_inb), DEVCB_DRIVER_MEMBER(pc1251_state,pc1251_outb),
+	DEVCB_DRIVER_MEMBER(pc1251_state,pc1251_outc)
 };
 
 static MACHINE_CONFIG_START( pc1250, pc1251_state )
@@ -773,13 +774,11 @@ static MACHINE_CONFIG_START( pc1250, pc1251_state )
 
 	MCFG_FRAGMENT_ADD(pocketc)
 
-	MCFG_NVRAM_HANDLER( pc1251 )
-
 	/* video hardware */
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_SIZE(608, 300)
 	MCFG_SCREEN_VISIBLE_AREA(0, 608-1, 0, 300-1)
-	MCFG_SCREEN_UPDATE( pc1251 )
+	MCFG_SCREEN_UPDATE_DRIVER(pc1251_state, screen_update_pc1251)
 	MCFG_GFXDECODE( pc1251 )
 MACHINE_CONFIG_END
 
@@ -793,34 +792,11 @@ static MACHINE_CONFIG_DERIVED( pc1255, pc1250 )
 	MCFG_CPU_PROGRAM_MAP( pc1255_mem)
 MACHINE_CONFIG_END
 
-static NVRAM_HANDLER( pc1260 )
-{
-	device_t *main_cpu = machine.device("maincpu");
-	UINT8 *ram = machine.region("maincpu")->base() + 0x4000;
-	UINT8 *cpu = sc61860_internal_ram(main_cpu);
-
-	if (read_or_write)
-	{
-		file->write(cpu, 96);
-		file->write(ram, 0x2800);
-	}
-	else if (file)
-	{
-		file->read(cpu, 96);
-		file->read(ram, 0x2800);
-	}
-	else
-	{
-		memset(cpu, 0, 96);
-		memset(ram, 0, 0x2800);
-	}
-}
-
 static MACHINE_CONFIG_DERIVED( pc1260, pc1250 )
 	MCFG_CPU_MODIFY( "maincpu" )
 	MCFG_CPU_PROGRAM_MAP( pc1260_mem)
 
-	MCFG_NVRAM_HANDLER( pc1260 )
+	MCFG_MACHINE_START_OVERRIDE(pc1251_state, pc1260 )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( pc1261, pc1260 )
@@ -830,10 +806,10 @@ MACHINE_CONFIG_END
 
 static const sc61860_cpu_core pc1350_config =
 {
-	NULL, pc1350_brk,NULL,
-	pc1350_ina, pc1350_outa,
-	pc1350_inb, pc1350_outb,
-	pc1350_outc
+	DEVCB_NULL, DEVCB_DRIVER_LINE_MEMBER(pc1350_state,pc1350_brk), DEVCB_NULL,
+	DEVCB_DRIVER_MEMBER(pc1350_state,pc1350_ina), DEVCB_DRIVER_MEMBER(pc1350_state,pc1350_outa),
+	DEVCB_DRIVER_MEMBER(pc1350_state,pc1350_inb), DEVCB_DRIVER_MEMBER(pc1350_state,pc1350_outb),
+	DEVCB_DRIVER_MEMBER(pc1350_state,pc1350_outc)
 };
 
 static MACHINE_CONFIG_START( pc1350, pc1350_state )
@@ -843,18 +819,15 @@ static MACHINE_CONFIG_START( pc1350, pc1350_state )
 
 	MCFG_FRAGMENT_ADD( pocketc )
 
-	MCFG_MACHINE_START( pc1350 )
-	MCFG_NVRAM_HANDLER( pc1350 )
-
 	/*
-       aim: show sharp with keyboard
-       resolution depends on the dots of the lcd
-       (lcd dot displayed as 2x2 pixel) */
+	   aim: show sharp with keyboard
+	   resolution depends on the dots of the lcd
+	   (lcd dot displayed as 2x2 pixel) */
 	/* video hardware */
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_SIZE(640, 252)
 	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 252-1)
-	MCFG_SCREEN_UPDATE( pc1350 )
+	MCFG_SCREEN_UPDATE_DRIVER(pc1350_state, screen_update_pc1350)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -864,10 +837,10 @@ MACHINE_CONFIG_END
 
 static const sc61860_cpu_core pc1403_config =
 {
-	NULL, pc1403_brk, NULL,
-	pc1403_ina, pc1403_outa,
-	NULL,NULL,
-	pc1403_outc
+	DEVCB_NULL, DEVCB_DRIVER_LINE_MEMBER(pc1403_state,pc1403_brk), DEVCB_NULL,
+	DEVCB_DRIVER_MEMBER(pc1403_state,pc1403_ina), DEVCB_DRIVER_MEMBER(pc1403_state,pc1403_outa),
+	DEVCB_NULL, DEVCB_NULL,
+	DEVCB_DRIVER_MEMBER(pc1403_state,pc1403_outc)
 };
 
 static MACHINE_CONFIG_START( pc1403, pc1403_state )
@@ -881,21 +854,17 @@ static MACHINE_CONFIG_START( pc1403, pc1403_state )
 	MCFG_CPU_PROGRAM_MAP( pc1403_mem)
 	MCFG_CPU_CONFIG( pc1403_config )
 
-	MCFG_NVRAM_HANDLER( pc1403 )
-
 	/*
-       aim: show sharp with keyboard
-       resolution depends on the dots of the lcd
-       (lcd dot displayed as 2x2 pixel) */
+	   aim: show sharp with keyboard
+	   resolution depends on the dots of the lcd
+	   (lcd dot displayed as 2x2 pixel) */
 	/* video hardware */
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_SIZE(848, 320)
 	MCFG_SCREEN_VISIBLE_AREA(0, 848-1, 0, 320-1)
 //  MCFG_SCREEN_SIZE(848, 361)
 //  MCFG_SCREEN_VISIBLE_AREA(0, 848-1, 0, 361-1)
-	MCFG_SCREEN_UPDATE( pc1403 )
-
-	MCFG_VIDEO_START( pc1403 )
+	MCFG_SCREEN_UPDATE_DRIVER(pc1403_state, screen_update_pc1403)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( pc1403h, pc1403 )
@@ -987,7 +956,7 @@ ROM_END
 
 /* ROM definition */
 ROM_START( pc1450 )
-    ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
 	ROM_LOAD( "cpu-1450.rom", 0x0000, 0x2000, CRC(dead7be5) SHA1(f55ba8cb823eb16b514032e96d2068d028964c1f))
 	ROM_LOAD( "bas-1450.rom", 0x8000, 0x8000, CRC(d207cae9) SHA1(a88ef79bc38ea264165f800e4e386050d4d461b2))
 	ROM_REGION(0x100,"gfx1",ROMREGION_ERASEFF)
@@ -1009,23 +978,23 @@ ROM_END
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE INPUT   INIT         COMPANY     FULLNAME */
 /* cpu sc61860 */
-COMP( 1982, pc1245,	0,	0,	pc1250,	pc1251,	pc1251,	 "Sharp", "Pocket Computer 1245", GAME_NOT_WORKING  | GAME_NO_SOUND )
-COMP( 1982, pc1250,	0,	0,	pc1250,	pc1251,	pc1251,	 "Sharp", "Pocket Computer 1250", GAME_NO_SOUND)
-COMP( 1982, pc1251,	pc1250,	0,	pc1251,	pc1251,	pc1251,	 "Sharp", "Pocket Computer 1251", GAME_NO_SOUND)
-COMP( 1982, pc1255,	pc1250,	0,	pc1255,	pc1251,	pc1251,	 "Sharp", "Pocket Computer 1255", GAME_NO_SOUND)
-COMP( 1983, trs80pc3,   pc1250, 0,	pc1251,	pc1251,	pc1251,	 "Tandy Radio Shack", "TRS-80 Pocket Computer PC-3", GAME_NO_SOUND)
+COMP( 1982, pc1245, 0,  0,  pc1250, pc1251, pc1251_state,   pc1251,  "Sharp", "Pocket Computer 1245", GAME_NOT_WORKING  | GAME_NO_SOUND )
+COMP( 1982, pc1250, 0,  0,  pc1250, pc1251, pc1251_state,   pc1251,  "Sharp", "Pocket Computer 1250", GAME_NO_SOUND)
+COMP( 1982, pc1251, pc1250, 0,  pc1251, pc1251, pc1251_state,   pc1251,  "Sharp", "Pocket Computer 1251", GAME_NO_SOUND)
+COMP( 1982, pc1255, pc1250, 0,  pc1255, pc1251, pc1251_state,   pc1251,  "Sharp", "Pocket Computer 1255", GAME_NO_SOUND)
+COMP( 1983, trs80pc3,   pc1250, 0,  pc1251, pc1251, pc1251_state,   pc1251,  "Tandy Radio Shack", "TRS-80 Pocket Computer PC-3", GAME_NO_SOUND)
 
-COMP( 1982, pc1260,	0,	0,	pc1260,	pc1251,	pc1251,	 "Sharp", "Pocket Computer 1260", GAME_NOT_WORKING  | GAME_NO_SOUND )
-COMP( 1982, pc1261,	pc1260,	0,	pc1261,	pc1251,	pc1251,	 "Sharp", "Pocket Computer 1261/1262", GAME_NOT_WORKING  | GAME_NO_SOUND)
+COMP( 1982, pc1260, 0,  0,  pc1260, pc1251, pc1251_state,   pc1251,  "Sharp", "Pocket Computer 1260", GAME_NOT_WORKING  | GAME_NO_SOUND )
+COMP( 1982, pc1261, pc1260, 0,  pc1261, pc1251, pc1251_state,   pc1251,  "Sharp", "Pocket Computer 1261/1262", GAME_NOT_WORKING  | GAME_NO_SOUND)
 
 /* pc1261/pc1262 */
-COMP( 1984, pc1350,	0,	0,	pc1350,	pc1350,	0,	 "Sharp", "Pocket Computer 1350", GAME_NO_SOUND )
-COMP( 198?, pc1450,	0,	0,	pc1350,	pc1350,	0,	 "Sharp", "Pocket Computer 1450", GAME_NOT_WORKING | GAME_NO_SOUND )
+COMP( 1984, pc1350, 0,  0,  pc1350, pc1350, driver_device,  0,   "Sharp", "Pocket Computer 1350", GAME_NO_SOUND )
+COMP( 198?, pc1450, 0,  0,  pc1350, pc1350, driver_device,  0,   "Sharp", "Pocket Computer 1450", GAME_NOT_WORKING | GAME_NO_SOUND )
 
-COMP( 1983, pc1401,	0,	0,	pc1401,	pc1401,	pc1401,	"Sharp", "Pocket Computer 1401", GAME_NO_SOUND)
-COMP( 1984, pc1402,	pc1401,	0,	pc1402,	pc1401,	pc1401,	 "Sharp", "Pocket Computer 1402", GAME_NO_SOUND)
-COMP( 198?, pc1360,	pc1401,	0,	pc1401,	pc1401,	pc1401,	 "Sharp", "Pocket Computer 1360", GAME_NOT_WORKING | GAME_NO_SOUND )
+COMP( 1983, pc1401, 0,  0,  pc1401, pc1401, pc1401_state,   pc1401, "Sharp", "Pocket Computer 1401", GAME_NO_SOUND)
+COMP( 1984, pc1402, pc1401, 0,  pc1402, pc1401, pc1401_state,   pc1401,  "Sharp", "Pocket Computer 1402", GAME_NO_SOUND)
+COMP( 198?, pc1360, pc1401, 0,  pc1401, pc1401, pc1401_state,   pc1401,  "Sharp", "Pocket Computer 1360", GAME_NOT_WORKING | GAME_NO_SOUND )
 
 /* 72kb rom, 32kb ram, cpu? pc1360 */
-COMP( 1986, pc1403,	0,	0,	pc1403,	pc1403,	pc1403,	 "Sharp", "Pocket Computer 1403", GAME_NOT_WORKING  | GAME_NO_SOUND)
-COMP( 198?, pc1403h,	pc1403,	0,	pc1403h,pc1403, pc1403,	 "Sharp", "Pocket Computer 1403H", GAME_NOT_WORKING  | GAME_NO_SOUND)
+COMP( 1986, pc1403, 0,  0,  pc1403, pc1403, pc1403_state,   pc1403,  "Sharp", "Pocket Computer 1403", GAME_NOT_WORKING  | GAME_NO_SOUND)
+COMP( 198?, pc1403h,    pc1403, 0,  pc1403h,pc1403, pc1403_state, pc1403,    "Sharp", "Pocket Computer 1403H", GAME_NOT_WORKING  | GAME_NO_SOUND)

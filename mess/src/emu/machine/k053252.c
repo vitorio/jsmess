@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Angelo Salese
 /***************************************************************************************************************************
 
     Konami 053252 chip emulation, codenamed "CCU"
@@ -48,6 +50,9 @@ TODO:
 - xexex sets up 0x20 as the VC? default value?
 - xexex layers are offsetted if you try to use the CCU
 - understand how to interpret the back / front porch values, and remove the offset x/y hack
+- dual screen support (for Konami GX types 3/4)
+- viostorm and dbz reads the VCT port, but their usage is a side effect to send an irq ack thru the same port:
+  i.e. first one uses move.b $26001d.l, $26001d.l, second one clr.b
 
 ***************************************************************************************************************************/
 
@@ -55,202 +60,178 @@ TODO:
 #include "emu.h"
 #include "k053252.h"
 
-typedef struct _k053252_state k053252_state;
-struct _k053252_state
+
+const device_type K053252 = &device_creator<k053252_device>;
+
+k053252_device::k053252_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, K053252, "Konami 053252", tag, owner, clock, "k053252", __FILE__),
+		device_video_interface(mconfig, *this)
 {
-	UINT8   regs[16];
-	UINT16  hc,hfp,hbp;
-	UINT16  vc,vfp,vbp;
-	UINT8   vsw,hsw;
-
-	screen_device *screen;
-	devcb_resolved_write_line int1_en;
-	devcb_resolved_write_line int2_en;
-	devcb_resolved_write_line int1_ack;
-	devcb_resolved_write_line int2_ack;
-	//devcb_resolved_write8     int_time;
-	int offsx,offsy;
-};
-
-
-/*****************************************************************************
-    INLINE FUNCTIONS
-*****************************************************************************/
-
-INLINE k053252_state *k053252_get_safe_token( device_t *device )
-{
-	assert(device != NULL);
-	assert(device->type() == K053252);
-
-	return (k053252_state *)downcast<legacy_device_base *>(device)->token();
 }
 
-INLINE const k053252_interface *k053252_get_interface( device_t *device )
-{
-	assert(device != NULL);
-	assert(device->type() == K053252);
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
 
-	return (const k053252_interface *) device->static_config();
+void k053252_device::device_config_complete()
+{
+	// inherit a copy of the static data
+	const k053252_interface *intf = reinterpret_cast<const k053252_interface *>(static_config());
+	if (intf != NULL)
+			*static_cast<k053252_interface *>(this) = *intf;
+
+	// or initialize to defaults if none provided
+	else
+	{
+	memset(&m_int1_en, 0, sizeof(m_int1_en));
+	memset(&m_int2_en, 0, sizeof(m_int2_en));
+	memset(&m_int1_ack, 0, sizeof(m_int1_ack));
+	memset(&m_int2_ack, 0, sizeof(m_int2_ack));
+	//memset(&m_int_time, 0, sizeof(m_int_time));
+	}
 }
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void k053252_device::device_start()
+{
+	save_item(NAME(m_regs));
+	m_int1_en_func.resolve(m_int1_en, *this);
+	m_int2_en_func.resolve(m_int2_en, *this);
+	m_int1_ack_func.resolve(m_int1_ack, *this);
+	m_int2_ack_func.resolve(m_int2_ack, *this);
+	//m_int_time_func.resolve(m_int_time, *this);
+}
+
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void k053252_device::device_reset()
+{
+	int i;
+
+	for (i = 0; i < 16; i++)
+		m_regs[i] = 0;
+
+	m_regs[0x08] = 1; // Xexex apparently does a wrong assignment for VC (sets up the INT enable register instead)
+
+	m_hc=0;
+	m_hfp=0;
+	m_hbp=0;
+	m_vc=0;
+	m_vfp=0;
+	m_vbp=0;
+	m_vsw=0;
+	m_hsw=0;
+}
+
 
 /*****************************************************************************
     DEVICE HANDLERS
 *****************************************************************************/
 
-READ8_DEVICE_HANDLER( k053252_r )
+READ8_MEMBER( k053252_device::read )
 {
-	k053252_state *k053252 = k053252_get_safe_token(device);
-
 	//TODO: debugger_access()
-	popmessage("Warning: k053252 read %02x, contact MAMEdev",offset);
+	switch(offset)
+	{
+		/* VCT read-back (TODO: values not extensively tested) */
+		case 0x0e:
+			return (m_screen->vpos() >> 8) & 1;
+		case 0x0f:
+			return m_screen->vpos() & 0xff;
+		default:
+			//popmessage("Warning: k053252 read %02x, contact MAMEdev",offset);
+			break;
+	}
 
-	return k053252->regs[offset];
+	return m_regs[offset];
 }
 
-static void k053252_res_change( device_t *device )
+void k053252_device::res_change()
 {
-	k053252_state *k053252 = k053252_get_safe_token(device);
-
-	if(k053252->screen != NULL)
+	if(m_hc && m_vc &&
+		m_hbp && m_hfp &&
+		m_vbp && m_vfp &&
+		m_hsw && m_vsw) //safety checks
 	{
-		if(k053252->hc && k053252->vc &&
-		   k053252->hbp && k053252->hfp &&
-		   k053252->vbp && k053252->vfp &&
-		   k053252->hsw && k053252->vsw) //safety checks
-		{
-			rectangle visarea;
-			//(HC+1) - HFP - HBP - 8*(HSW+1)
-			//VC - VFP - VBP - (VSW+1)
-			attoseconds_t refresh = HZ_TO_ATTOSECONDS(device->clock()) * (k053252->hc) * k053252->vc;
+		rectangle visarea;
+		//(HC+1) - HFP - HBP - 8*(HSW+1)
+		//VC - VFP - VBP - (VSW+1)
+		attoseconds_t refresh = HZ_TO_ATTOSECONDS(clock()) * (m_hc) * m_vc;
 
-			//printf("H %d %d %d %d\n",k053252->hc,k053252->hfp,k053252->hbp,k053252->hsw);
-			//printf("V %d %d %d %d\n",k053252->vc,k053252->vfp,k053252->vbp,k053252->vsw);
+		//printf("H %d %d %d %d\n",m_hc,m_hfp,m_hbp,m_hsw);
+		//printf("V %d %d %d %d\n",m_vc,m_vfp,m_vbp,m_vsw);
 
-			visarea.min_x = k053252->offsx;
-			visarea.min_y = k053252->offsy;
-			visarea.max_x = k053252->offsx + k053252->hc - k053252->hfp - k053252->hbp - 8*(k053252->hsw) - 1;
-			visarea.max_y = k053252->offsy + k053252->vc - k053252->vfp - k053252->vbp - (k053252->vsw) - 1;
+		visarea.min_x = m_offsx;
+		visarea.min_y = m_offsy;
+		visarea.max_x = m_offsx + m_hc - m_hfp - m_hbp - 8*(m_hsw) - 1;
+		visarea.max_y = m_offsy + m_vc - m_vfp - m_vbp - (m_vsw) - 1;
 
-			k053252->screen->configure(k053252->hc, k053252->vc, visarea, refresh);
-		}
+		m_screen->configure(m_hc, m_vc, visarea, refresh);
 	}
 }
 
-WRITE8_DEVICE_HANDLER( k053252_w )
+WRITE8_MEMBER( k053252_device::write )
 {
-	k053252_state *k053252 = k053252_get_safe_token(device);
-
-	k053252->regs[offset] = data;
+	m_regs[offset] = data;
 
 	switch(offset)
 	{
 		case 0x00:
 		case 0x01:
-			k053252->hc  = (k053252->regs[1]&0xff);
-			k053252->hc |= ((k053252->regs[0]&0x03)<<8);
-			k053252->hc ++;
-			logerror("%d (%04x) HC set\n",k053252->hc,k053252->hc);
-			k053252_res_change(device);
+			m_hc  = (m_regs[1]&0xff);
+			m_hc |= ((m_regs[0]&0x03)<<8);
+			m_hc ++;
+			logerror("%d (%04x) HC set\n",m_hc,m_hc);
+			res_change();
 			break;
 		case 0x02:
 		case 0x03:
-			k053252->hfp  = (k053252->regs[3]&0xff);
-			k053252->hfp |= ((k053252->regs[2]&0x01)<<8);
-			logerror("%d (%04x) HFP set\n",k053252->hfp,k053252->hfp);
-			k053252_res_change(device);
+			m_hfp  = (m_regs[3]&0xff);
+			m_hfp |= ((m_regs[2]&0x01)<<8);
+			logerror("%d (%04x) HFP set\n",m_hfp,m_hfp);
+			res_change();
 			break;
 		case 0x04:
 		case 0x05:
-			k053252->hbp  = (k053252->regs[5]&0xff);
-			k053252->hbp |= ((k053252->regs[4]&0x01)<<8);
-			logerror("%d (%04x) HBP set\n",k053252->hbp,k053252->hbp);
-			k053252_res_change(device);
+			m_hbp  = (m_regs[5]&0xff);
+			m_hbp |= ((m_regs[4]&0x01)<<8);
+			logerror("%d (%04x) HBP set\n",m_hbp,m_hbp);
+			res_change();
 			break;
-		case 0x06: k053252->int1_en(data); break;
-		case 0x07: k053252->int2_en(data); break;
+		case 0x06: m_int1_en_func(data); break;
+		case 0x07: m_int2_en_func(data); break;
 		case 0x08:
 		case 0x09:
-			k053252->vc  = (k053252->regs[9]&0xff);
-			k053252->vc |= ((k053252->regs[8]&0x01)<<8);
-			logerror("%d (%04x) VC set\n",k053252->vc,k053252->vc);
-			k053252_res_change(device);
+			m_vc  = (m_regs[9]&0xff);
+			m_vc |= ((m_regs[8]&0x01)<<8);
+			logerror("%d (%04x) VC set\n",m_vc,m_vc);
+			res_change();
 			break;
 		case 0x0a:
-			k053252->vfp  = (k053252->regs[0x0a]&0xff);
-			logerror("%d (%04x) VFP set\n",k053252->vfp,k053252->vfp);
-			k053252_res_change(device);
+			m_vfp  = (m_regs[0x0a]&0xff);
+			logerror("%d (%04x) VFP set\n",m_vfp,m_vfp);
+			res_change();
 			break;
 		case 0x0b:
-			k053252->vbp  = (k053252->regs[0x0b]&0xff);
-			logerror("%d (%04x) VBP set\n",k053252->vbp,k053252->vbp);
-			k053252_res_change(device);
+			m_vbp  = (m_regs[0x0b]&0xff);
+			logerror("%d (%04x) VBP set\n",m_vbp,m_vbp);
+			res_change();
 			break;
 		case 0x0c:
-			k053252->vsw  = ((k053252->regs[0x0c]&0xf0) >> 4) + 1;
-			k053252->hsw  = ((k053252->regs[0x0c]&0x0f) >> 0) + 1;
-			logerror("%02x VSW / %02x HSW set\n",k053252->vsw,k053252->hsw);
-			k053252_res_change(device);
+			m_vsw  = ((m_regs[0x0c]&0xf0) >> 4) + 1;
+			m_hsw  = ((m_regs[0x0c]&0x0f) >> 0) + 1;
+			logerror("%02x VSW / %02x HSW set\n",m_vsw,m_hsw);
+			res_change();
 			break;
-		//case 0x0d: k053252->int_time(data); break;
-		case 0x0e: k053252->int1_ack(1); break;
-		case 0x0f: k053252->int2_ack(1); break;
+		//case 0x0d: m_int_time(data); break;
+		case 0x0e: m_int1_ack_func(1); break;
+		case 0x0f: m_int2_ack_func(1); break;
 	}
 }
-
-
-
-/*****************************************************************************
-    DEVICE INTERFACE
-*****************************************************************************/
-
-static DEVICE_START( k053252 )
-{
-	k053252_state *k053252 = k053252_get_safe_token(device);
-	const k053252_interface *intf = k053252_get_interface(device);
-
-	device->save_item(NAME(k053252->regs));
-	k053252->screen = device->machine().device<screen_device>(intf->screen);
-	k053252->int1_en.resolve(intf->int1_en, *device);
-	k053252->int2_en.resolve(intf->int2_en, *device);
-	k053252->int1_ack.resolve(intf->int1_ack, *device);
-	k053252->int2_ack.resolve(intf->int2_ack, *device);
-	//k053252->int_time.resolve(intf->int_time, *device);
-	k053252->offsx = intf->offsx;
-	k053252->offsy = intf->offsy;
-}
-
-static DEVICE_RESET( k053252 )
-{
-	k053252_state *k053252 = k053252_get_safe_token(device);
-	int i;
-
-	for (i = 0; i < 16; i++)
-		k053252->regs[i] = 0;
-
-	k053252->regs[0x08] = 1; // Xexex apparently does a wrong assignment for VC (sets up the INT enable register instead)
-}
-
-
-DEVICE_GET_INFO( k053252 )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:			info->i = sizeof(k053252_state);					break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:					info->start = DEVICE_START_NAME(k053252);		break;
-		case DEVINFO_FCT_STOP:					/* Nothing */									break;
-		case DEVINFO_FCT_RESET:					info->reset = DEVICE_RESET_NAME(k053252);		break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:					strcpy(info->s, "Konami 053252");				break;
-		case DEVINFO_STR_FAMILY:				strcpy(info->s, "Konami Video IC");					break;
-		case DEVINFO_STR_VERSION:				strcpy(info->s, "1.0");							break;
-		case DEVINFO_STR_SOURCE_FILE:			strcpy(info->s, __FILE__);						break;
-		case DEVINFO_STR_CREDITS:				strcpy(info->s, "Copyright MAME Team");			break;
-	}
-}
-
-DEFINE_LEGACY_DEVICE(K053252, k053252);
-

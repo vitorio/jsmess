@@ -11,7 +11,7 @@
 #include "includes/busicom.h"
 
 
-static UINT8 get_bit_selected(UINT32 val,int num)
+UINT8 busicom_state::get_bit_selected(UINT32 val,int num)
 {
 	int i;
 	for(i=0;i<num;i++) {
@@ -19,74 +19,69 @@ static UINT8 get_bit_selected(UINT32 val,int num)
 	}
 	return 0;
 }
-static READ8_HANDLER(keyboard_r)
+READ8_MEMBER(busicom_state::keyboard_r)
 {
-	busicom_state *state = space->machine().driver_data<busicom_state>();
 	static const char *const keynames[] = { "LINE0", "LINE1", "LINE2", "LINE3", "LINE4", "LINE5", "LINE6", "LINE7", "LINE8" , "LINE9"};
-	return input_port_read(space->machine(),keynames[get_bit_selected(state->m_keyboard_shifter & 0x3ff,10)]);
+	return ioport(keynames[get_bit_selected(m_keyboard_shifter & 0x3ff,10)])->read();
 }
 
-static READ8_HANDLER(printer_r)
+READ8_MEMBER(busicom_state::printer_r)
 {
-	busicom_state *state = space->machine().driver_data<busicom_state>();
 	UINT8 retVal = 0;
-	if (state->m_drum_index==0) retVal |= 1;
-	retVal |= input_port_read(space->machine(),"PAPERADV") & 1 ? 8 : 0;
+	if (m_drum_index==0) retVal |= 1;
+	retVal |= ioport("PAPERADV")->read() & 1 ? 8 : 0;
 	return retVal;
 }
 
 
-static WRITE8_HANDLER(shifter_w)
+WRITE8_MEMBER(busicom_state::shifter_w)
 {
-	busicom_state *state = space->machine().driver_data<busicom_state>();
 	if (BIT(data,0)) {
-		state->m_keyboard_shifter <<= 1;
-		state->m_keyboard_shifter |= BIT(data,1);
+		m_keyboard_shifter <<= 1;
+		m_keyboard_shifter |= BIT(data,1);
 	}
 	if (BIT(data,2)) {
-		state->m_printer_shifter <<= 1;
-		state->m_printer_shifter |= BIT(data,1);
+		m_printer_shifter <<= 1;
+		m_printer_shifter |= BIT(data,1);
 	}
 }
 
-static WRITE8_HANDLER(printer_w)
+WRITE8_MEMBER(busicom_state::printer_w)
 {
-	busicom_state *state = space->machine().driver_data<busicom_state>();
 	int i,j;
 	if (BIT(data,0)) {
-		logerror("color : %02x %02x %d\n",BIT(data,0),data,state->m_drum_index);
-		state->m_printer_line_color[10] = 1;
+		logerror("color : %02x %02x %d\n",BIT(data,0),data,m_drum_index);
+		m_printer_line_color[10] = 1;
 
 	}
 	if (BIT(data,1)) {
 		for(i=3;i<18;i++) {
-			if(BIT(state->m_printer_shifter,i)) {
-				state->m_printer_line[10][i-3] = state->m_drum_index + 1;
+			if(BIT(m_printer_shifter,i)) {
+				m_printer_line[10][i-3] = m_drum_index + 1;
 			}
 		}
-		if(BIT(state->m_printer_shifter,0)) {
-			state->m_printer_line[10][15] = state->m_drum_index + 13 + 1;
+		if(BIT(m_printer_shifter,0)) {
+			m_printer_line[10][15] = m_drum_index + 13 + 1;
 		}
-		if(BIT(state->m_printer_shifter,1)) {
-			state->m_printer_line[10][16] = state->m_drum_index + 26 + 1;
+		if(BIT(m_printer_shifter,1)) {
+			m_printer_line[10][16] = m_drum_index + 26 + 1;
 		}
 	}
 	if (BIT(data,3)) {
-
 		for(j=0;j<10;j++) {
 			for(i=0;i<17;i++) {
-				state->m_printer_line[j][i] = state->m_printer_line[j+1][i];
-				state->m_printer_line_color[j] = state->m_printer_line_color[j+1];
+				m_printer_line[j][i] = m_printer_line[j+1][i];
+				m_printer_line_color[j] = m_printer_line_color[j+1];
 			}
 		}
 		for(i=0;i<17;i++) {
-			state->m_printer_line[10][i] = 0;
+			m_printer_line[10][i] = 0;
 		}
-		state->m_printer_line_color[10] = 0;
+		m_printer_line_color[10] = 0;
 
 	}
 }
-static WRITE8_HANDLER(status_w)
+WRITE8_MEMBER(busicom_state::status_w)
 {
 #if 0
 	UINT8 mem_lamp = BIT(data,0);
@@ -96,21 +91,21 @@ static WRITE8_HANDLER(status_w)
 	//logerror("status %c %c %c\n",mem_lamp ? 'M':'x',over_lamp ? 'O':'x',minus_lamp ? '-':'x');
 }
 
-static WRITE8_HANDLER(printer_ctrl_w)
+WRITE8_MEMBER(busicom_state::printer_ctrl_w)
 {
 }
 
-static ADDRESS_MAP_START(busicom_rom, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(busicom_rom, AS_PROGRAM, 8, busicom_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x04FF) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(busicom_mem, AS_DATA, 8)
+static ADDRESS_MAP_START(busicom_mem, AS_DATA, 8, busicom_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x07F) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( busicom_io , AS_IO, 8)
+static ADDRESS_MAP_START( busicom_io , AS_IO, 8, busicom_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x00, 0x00) AM_WRITE(shifter_w) // ROM0 I/O
 	AM_RANGE(0x01, 0x01) AM_READWRITE(keyboard_r,printer_ctrl_w) // ROM1 I/O
@@ -182,32 +177,30 @@ static INPUT_PORTS_START( busicom )
 INPUT_PORTS_END
 
 
-static TIMER_DEVICE_CALLBACK(timer_callback)
+TIMER_DEVICE_CALLBACK_MEMBER(busicom_state::timer_callback)
 {
-	busicom_state *state = timer.machine().driver_data<busicom_state>();
-	state->m_timer ^=1;
-	if (state->m_timer==1) state->m_drum_index++;
-	if (state->m_drum_index==13) state->m_drum_index=0;
-	i4004_set_test(timer.machine().device("maincpu"),state->m_timer);
+	m_timer ^=1;
+	if (m_timer==1) m_drum_index++;
+	if (m_drum_index==13) m_drum_index=0;
+	m_maincpu->set_test(m_timer);
 
 }
 
-static MACHINE_START(busicom)
+void busicom_state::machine_start()
 {
 }
 
-static MACHINE_RESET(busicom)
+void busicom_state::machine_reset()
 {
-	busicom_state *state = machine.driver_data<busicom_state>();
 	int i,j;
-	state->m_drum_index =0;
-	state->m_keyboard_shifter = 0;
-	state->m_printer_shifter = 0;
+	m_drum_index =0;
+	m_keyboard_shifter = 0;
+	m_printer_shifter = 0;
 
 	for(i=0;i<17;i++) {
 		for(j=0;j<11;j++) {
-			state->m_printer_line[j][i] = 0;
-			state->m_printer_line_color[j] = 0;
+			m_printer_line[j][i] = 0;
+			m_printer_line_color[j] = 0;
 		}
 	}
 
@@ -216,30 +209,25 @@ static MACHINE_RESET(busicom)
 static const char layout_busicom [] = "busicom";
 
 static MACHINE_CONFIG_START( busicom, busicom_state )
-    /* basic machine hardware */
-    MCFG_CPU_ADD("maincpu",I4004, 750000)
-    MCFG_CPU_PROGRAM_MAP(busicom_rom)
-    MCFG_CPU_DATA_MAP(busicom_mem)
-    MCFG_CPU_IO_MAP(busicom_io)
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu",I4004, 750000)
+	MCFG_CPU_PROGRAM_MAP(busicom_rom)
+	MCFG_CPU_DATA_MAP(busicom_mem)
+	MCFG_CPU_IO_MAP(busicom_io)
 
-    MCFG_MACHINE_RESET(busicom)
-	MCFG_MACHINE_START(busicom)
 
-    /* video hardware */
-    MCFG_SCREEN_ADD("screen", RASTER)
-    MCFG_SCREEN_REFRESH_RATE(50)
-    MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-    MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-    MCFG_SCREEN_SIZE(40*17, 44*11)
-    MCFG_SCREEN_VISIBLE_AREA(0, 40*17-1, 0, 44*11-1)
-	MCFG_SCREEN_UPDATE(busicom)
+	/* video hardware */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(50)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
+	MCFG_SCREEN_SIZE(40*17, 44*11)
+	MCFG_SCREEN_VISIBLE_AREA(0, 40*17-1, 0, 44*11-1)
+	MCFG_SCREEN_UPDATE_DRIVER(busicom_state, screen_update_busicom)
 
-    MCFG_PALETTE_LENGTH(16)
-    MCFG_PALETTE_INIT(busicom)
+	MCFG_PALETTE_LENGTH(16)
 
-	MCFG_VIDEO_START(busicom)
 
-	MCFG_TIMER_ADD_PERIODIC("busicom_timer", timer_callback, attotime::from_msec(28*2))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("busicom_timer", busicom_state, timer_callback, attotime::from_msec(28*2))
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -255,5 +243,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1974, busicom,  0,       0,	busicom,	busicom,	 0,  "Business Computer Corporation",   "Busicom 141-PF",		GAME_NOT_WORKING | GAME_NO_SOUND)
-
+COMP( 1974, busicom,  0,       0,   busicom,    busicom, driver_device,  0,  "Business Computer Corporation",   "Busicom 141-PF",       GAME_NOT_WORKING | GAME_NO_SOUND)

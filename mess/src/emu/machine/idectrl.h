@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:smf
 /***************************************************************************
 
     idectrl.h
@@ -14,76 +16,103 @@
 #ifndef __IDECTRL_H__
 #define __IDECTRL_H__
 
-#include "devlegcy.h"
-
-#include "harddisk.h"
-
-
-/***************************************************************************
-    TYPE DEFINITIONS
-***************************************************************************/
-
-typedef struct _ide_config ide_config;
-struct _ide_config
-{
-	void	(*interrupt)(device_t *device, int state);
-	const char *master;		/* name of master region (defaults to device tag) */
-	const char *slave;		/* name of slave region (defaults to NULL) */
-	const char *bmcpu;		/* name of bus master CPU */
-	UINT32 bmspace;			/* address space of bus master transfer */
-};
-
-
+#include "ataintf.h"
 
 /***************************************************************************
     DEVICE CONFIGURATION MACROS
 ***************************************************************************/
 
-#define MCFG_IDE_CONTROLLER_ADD(_tag, _callback) \
+#define MCFG_IDE_CONTROLLER_ADD(_tag, _slotintf, _master, _slave, _fixed) \
 	MCFG_DEVICE_ADD(_tag, IDE_CONTROLLER, 0) \
-	MCFG_DEVICE_CONFIG_DATAPTR(ide_config, interrupt, _callback)
+	MCFG_ATA_SLOT_ADD(_tag ":0", _slotintf, _master, _fixed) \
+	MCFG_ATA_SLOT_ADD(_tag ":1", _slotintf, _slave, _fixed) \
+	MCFG_DEVICE_MODIFY(_tag)
 
-#define MCFG_IDE_CONTROLLER_REGIONS(_master, _slave) \
-	MCFG_DEVICE_CONFIG_DATAPTR(ide_config, master, _master) \
-	MCFG_DEVICE_CONFIG_DATAPTR(ide_config, master, _slave)
+class ide_controller_device : public ata_interface_device
+{
+public:
+	ide_controller_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	ide_controller_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source);
 
-#define MCFG_IDE_BUS_MASTER_SPACE(_cpu, _space) \
-	MCFG_DEVICE_CONFIG_DATAPTR(ide_config, bmcpu, _cpu) \
-	MCFG_DEVICE_CONFIG_DATA32(ide_config, bmspace, AS_##_space)
+	virtual DECLARE_READ16_MEMBER(read_cs0);
+	virtual DECLARE_READ16_MEMBER(read_cs1);
+	virtual DECLARE_WRITE16_MEMBER(write_cs0);
+	virtual DECLARE_WRITE16_MEMBER(write_cs1);
+};
 
-
-
-/***************************************************************************
-    FUNCTION PROTOTYPES
-***************************************************************************/
-
-UINT8 *ide_get_features(device_t *device);
-
-void ide_set_master_password(device_t *device, const UINT8 *password);
-void ide_set_user_password(device_t *device, const UINT8 *password);
-
-void ide_set_gnet_readlock(device_t *device, const UINT8 onoff);
-
-int ide_bus_r(device_t *config, int select, int offset);
-void ide_bus_w(device_t *config, int select, int offset, int data);
-
-UINT32 ide_controller_r(device_t *config, int reg, int size);
-void ide_controller_w(device_t *config, int reg, int size, UINT32 data);
-
-READ32_DEVICE_HANDLER( ide_controller32_r );
-WRITE32_DEVICE_HANDLER( ide_controller32_w );
-READ32_DEVICE_HANDLER( ide_controller32_pcmcia_r );
-WRITE32_DEVICE_HANDLER( ide_controller32_pcmcia_w );
-READ32_DEVICE_HANDLER( ide_bus_master32_r );
-WRITE32_DEVICE_HANDLER( ide_bus_master32_w );
-
-READ16_DEVICE_HANDLER( ide_controller16_r );
-WRITE16_DEVICE_HANDLER( ide_controller16_w );
+extern const device_type IDE_CONTROLLER;
 
 
-/* ----- device interface ----- */
+#define MCFG_IDE_CONTROLLER_32_ADD(_tag, _slotintf, _master, _slave, _fixed) \
+	MCFG_DEVICE_ADD(_tag, IDE_CONTROLLER_32, 0) \
+	MCFG_ATA_SLOT_ADD(_tag ":0", _slotintf, _master, _fixed) \
+	MCFG_ATA_SLOT_ADD(_tag ":1", _slotintf, _slave, _fixed) \
+	MCFG_DEVICE_MODIFY(_tag)
 
-DECLARE_LEGACY_DEVICE(IDE_CONTROLLER, ide_controller);
+class ide_controller_32_device : public ide_controller_device
+{
+public:
+	ide_controller_32_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	ide_controller_32_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source);
+
+	virtual DECLARE_READ32_MEMBER(read_cs0);
+	virtual DECLARE_READ32_MEMBER(read_cs1);
+	virtual DECLARE_WRITE32_MEMBER(write_cs0);
+	virtual DECLARE_WRITE32_MEMBER(write_cs1);
+
+private:
+	using ide_controller_device::read_cs0;
+	using ide_controller_device::read_cs1;
+	using ide_controller_device::write_cs0;
+	using ide_controller_device::write_cs1;
+};
+
+extern const device_type IDE_CONTROLLER_32;
 
 
-#endif	/* __IDECTRL_H__ */
+#define MCFG_BUS_MASTER_IDE_CONTROLLER_ADD(_tag, _slotintf, _master, _slave, _fixed) \
+	MCFG_DEVICE_ADD(_tag, BUS_MASTER_IDE_CONTROLLER, 0) \
+	MCFG_ATA_SLOT_ADD(_tag ":0", _slotintf, _master, _fixed) \
+	MCFG_ATA_SLOT_ADD(_tag ":1", _slotintf, _slave, _fixed) \
+	MCFG_DEVICE_MODIFY(_tag)
+
+#define MCFG_BUS_MASTER_IDE_CONTROLLER_SPACE(bmcpu, bmspace) \
+	bus_master_ide_controller_device::set_bus_master_space(*device, bmcpu, bmspace);
+
+class bus_master_ide_controller_device : public ide_controller_32_device
+{
+public:
+	bus_master_ide_controller_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	static void set_bus_master_space(device_t &device, const char *bmcpu, UINT32 bmspace) {bus_master_ide_controller_device &ide = downcast<bus_master_ide_controller_device &>(device); ide.m_bmcpu = bmcpu; ide.m_bmspace = bmspace; }
+
+	DECLARE_READ32_MEMBER( bmdma_r );
+	DECLARE_WRITE32_MEMBER( bmdma_w );
+
+protected:
+	virtual void device_start();
+
+	virtual void set_irq(int state);
+	virtual void set_dmarq(int state);
+
+private:
+	void execute_dma();
+
+	const char *m_bmcpu;
+	UINT32 m_bmspace;
+	address_space * m_dma_space;
+	UINT8 m_dma_address_xor;
+
+	offs_t m_dma_address;
+	UINT32 m_dma_bytes_left;
+	offs_t m_dma_descriptor;
+	UINT8 m_dma_last_buffer;
+	UINT8 m_bus_master_command;
+	UINT8 m_bus_master_status;
+	UINT32 m_bus_master_descriptor;
+	int m_irq;
+	int m_dmarq;
+};
+
+extern const device_type BUS_MASTER_IDE_CONTROLLER;
+
+#endif  /* __IDECTRL_H__ */

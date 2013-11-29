@@ -23,7 +23,7 @@
 
 ***************************************************************************/
 
-static void palette_init_common( running_machine &machine, const UINT8 *color_prom, void (*get_rgb_data)(const UINT8 *, int, int *, int *, int *) )
+void kingofb_state::palette_init_common( const UINT8 *color_prom, void (kingofb_state::*get_rgb_data)(const UINT8 *, int, int *, int *, int *) )
 {
 	static const int resistances[4] = { 1500, 750, 360, 180 };
 	static const int resistances_fg[1] = { 51 };
@@ -37,13 +37,13 @@ static void palette_init_common( running_machine &machine, const UINT8 *color_pr
 						1, resistances_fg, gweights_fg, 0, 0,
 						1, resistances_fg, bweights_fg, 0, 0);
 
-				   compute_resistor_weights(0, 255, scale,
+					compute_resistor_weights(0, 255, scale,
 						4, resistances, rweights, 470, 0,
 						4, resistances, gweights, 470, 0,
 						4, resistances, bweights, 470, 0);
 
 	/* allocate the colortable */
-	machine.colortable = colortable_alloc(machine, 0x108);
+	machine().colortable = colortable_alloc(machine(), 0x108);
 
 	for (i = 0; i < 0x100; i++)
 	{
@@ -51,7 +51,7 @@ static void palette_init_common( running_machine &machine, const UINT8 *color_pr
 		int bit0, bit1, bit2, bit3;
 		int r, g, b;
 
-		get_rgb_data(color_prom, i, &r_data, &g_data, &b_data);
+		(this->*get_rgb_data)(color_prom, i, &r_data, &g_data, &b_data);
 
 		/* red component */
 		bit0 = (r_data >> 0) & 0x01;
@@ -74,7 +74,7 @@ static void palette_init_common( running_machine &machine, const UINT8 *color_pr
 		bit3 = (b_data >> 3) & 0x01;
 		b = combine_4_weights(bweights, bit0, bit1, bit2, bit3);
 
-		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine().colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* the foreground chars directly map to primary colors */
@@ -91,21 +91,21 @@ static void palette_init_common( running_machine &machine, const UINT8 *color_pr
 		/* blue component */
 		b = (((i - 0x100) >> 0) & 0x01) * bweights_fg[0];
 
-		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine().colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	for (i = 0; i < 0x100; i++)
-		colortable_entry_set_value(machine.colortable, i, i);
+		colortable_entry_set_value(machine().colortable, i, i);
 
 	for (i = 0x101; i < 0x110; i += 2)
 	{
 		UINT16 ctabentry = ((i - 0x101) >> 1) | 0x100;
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine().colortable, i, ctabentry);
 	}
 }
 
 
-static void kingofb_get_rgb_data( const UINT8 *color_prom, int i, int *r_data, int *g_data, int *b_data )
+void kingofb_state::kingofb_get_rgb_data( const UINT8 *color_prom, int i, int *r_data, int *g_data, int *b_data )
 {
 	*r_data = color_prom[i + 0x000] & 0x0f;
 	*g_data = color_prom[i + 0x100] & 0x0f;
@@ -113,7 +113,7 @@ static void kingofb_get_rgb_data( const UINT8 *color_prom, int i, int *r_data, i
 }
 
 
-static void ringking_get_rgb_data( const UINT8 *color_prom, int i, int *r_data, int *g_data, int *b_data )
+void kingofb_state::ringking_get_rgb_data( const UINT8 *color_prom, int i, int *r_data, int *g_data, int *b_data )
 {
 	*r_data = (color_prom[i + 0x000] >> 4) & 0x0f;
 	*g_data = (color_prom[i + 0x000] >> 0) & 0x0f;
@@ -121,100 +121,93 @@ static void ringking_get_rgb_data( const UINT8 *color_prom, int i, int *r_data, 
 }
 
 
-PALETTE_INIT( kingofb )
+PALETTE_INIT_MEMBER(kingofb_state,kingofb)
 {
-	palette_init_common(machine, color_prom, kingofb_get_rgb_data);
+	const UINT8 *color_prom = memregion("proms")->base();
+	palette_init_common(color_prom, &kingofb_state::kingofb_get_rgb_data);
 }
 
-PALETTE_INIT( ringking )
+PALETTE_INIT_MEMBER(kingofb_state,ringking)
 {
-	palette_init_common(machine, color_prom, ringking_get_rgb_data);
+	const UINT8 *color_prom = memregion("proms")->base();
+	palette_init_common(color_prom, &kingofb_state::ringking_get_rgb_data);
 }
 
-WRITE8_HANDLER( kingofb_videoram_w )
+WRITE8_MEMBER(kingofb_state::kingofb_videoram_w)
 {
-	kingofb_state *state = space->machine().driver_data<kingofb_state>();
-	state->m_videoram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
+	m_videoram[offset] = data;
+	m_bg_tilemap->mark_tile_dirty(offset);
 }
 
-WRITE8_HANDLER( kingofb_colorram_w )
+WRITE8_MEMBER(kingofb_state::kingofb_colorram_w)
 {
-	kingofb_state *state = space->machine().driver_data<kingofb_state>();
-	state->m_colorram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
+	m_colorram[offset] = data;
+	m_bg_tilemap->mark_tile_dirty(offset);
 }
 
-WRITE8_HANDLER( kingofb_videoram2_w )
+WRITE8_MEMBER(kingofb_state::kingofb_videoram2_w)
 {
-	kingofb_state *state = space->machine().driver_data<kingofb_state>();
-	state->m_videoram2[offset] = data;
-	tilemap_mark_tile_dirty(state->m_fg_tilemap, offset);
+	m_videoram2[offset] = data;
+	m_fg_tilemap->mark_tile_dirty(offset);
 }
 
-WRITE8_HANDLER( kingofb_colorram2_w )
+WRITE8_MEMBER(kingofb_state::kingofb_colorram2_w)
 {
-	kingofb_state *state = space->machine().driver_data<kingofb_state>();
-	state->m_colorram2[offset] = data;
-	tilemap_mark_tile_dirty(state->m_fg_tilemap, offset);
+	m_colorram2[offset] = data;
+	m_fg_tilemap->mark_tile_dirty(offset);
 }
 
-WRITE8_HANDLER( kingofb_f800_w )
+WRITE8_MEMBER(kingofb_state::kingofb_f800_w)
 {
-	kingofb_state *state = space->machine().driver_data<kingofb_state>();
-	state->m_nmi_enable = data & 0x20;
+	m_nmi_enable = data & 0x20;
 
-	if (state->m_palette_bank != ((data & 0x18) >> 3))
+	if (m_palette_bank != ((data & 0x18) >> 3))
 	{
-		state->m_palette_bank = (data & 0x18) >> 3;
-		tilemap_mark_all_tiles_dirty(state->m_bg_tilemap);
+		m_palette_bank = (data & 0x18) >> 3;
+		m_bg_tilemap->mark_all_dirty();
 	}
 
-	if (flip_screen_get(space->machine()) != (data & 0x80))
+	if (flip_screen() != (data & 0x80))
 	{
-		flip_screen_set(space->machine(), data & 0x80);
-		tilemap_mark_all_tiles_dirty_all(space->machine());
+		flip_screen_set(data & 0x80);
+		machine().tilemap().mark_all_dirty();
 	}
 }
 
-static TILE_GET_INFO( get_bg_tile_info )
+TILE_GET_INFO_MEMBER(kingofb_state::get_bg_tile_info)
 {
-	kingofb_state *state = machine.driver_data<kingofb_state>();
-	int attr = state->m_colorram[tile_index];
+	int attr = m_colorram[tile_index];
 	int bank = ((attr & 0x04) >> 2) + 2;
-	int code = (tile_index / 16) ? state->m_videoram[tile_index] + ((attr & 0x03) << 8) : 0;
-	int color = ((attr & 0x70) >> 4) + 8 * state->m_palette_bank;
+	int code = (tile_index / 16) ? m_videoram[tile_index] + ((attr & 0x03) << 8) : 0;
+	int color = ((attr & 0x70) >> 4) + 8 * m_palette_bank;
 
-	SET_TILE_INFO(bank, code, color, 0);
+	SET_TILE_INFO_MEMBER(bank, code, color, 0);
 }
 
-static TILE_GET_INFO( get_fg_tile_info )
+TILE_GET_INFO_MEMBER(kingofb_state::get_fg_tile_info)
 {
-	kingofb_state *state = machine.driver_data<kingofb_state>();
-	int attr = state->m_colorram2[tile_index];
+	int attr = m_colorram2[tile_index];
 	int bank = (attr & 0x02) >> 1;
-	int code = state->m_videoram2[tile_index] + ((attr & 0x01) << 8);
+	int code = m_videoram2[tile_index] + ((attr & 0x01) << 8);
 	int color = (attr & 0x38) >> 3;
 
-	SET_TILE_INFO(bank, code, color, 0);
+	SET_TILE_INFO_MEMBER(bank, code, color, 0);
 }
 
-VIDEO_START( kingofb )
+VIDEO_START_MEMBER(kingofb_state,kingofb)
 {
-	kingofb_state *state = machine.driver_data<kingofb_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_cols_flip_y, 16, 16, 16, 16);
-	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_cols_flip_y,  8,  8, 32, 32);
+	m_bg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(kingofb_state::get_bg_tile_info),this), TILEMAP_SCAN_COLS_FLIP_Y, 16, 16, 16, 16);
+	m_fg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(kingofb_state::get_fg_tile_info),this), TILEMAP_SCAN_COLS_FLIP_Y,  8,  8, 32, 32);
 
-	tilemap_set_transparent_pen(state->m_fg_tilemap, 0);
+	m_fg_tilemap->set_transparent_pen(0);
 }
 
-static void kingofb_draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
+void kingofb_state::kingofb_draw_sprites(bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	kingofb_state *state = machine.driver_data<kingofb_state>();
-	UINT8 *spriteram = state->m_spriteram;
+	UINT8 *spriteram = m_spriteram;
 	int offs;
 
-	for (offs = 0; offs < state->m_spriteram_size; offs += 4)
+	for (offs = 0; offs < m_spriteram.bytes(); offs += 4)
 	{
 		int roffs, bank, code, color, flipx, flipy, sx, sy;
 
@@ -225,13 +218,13 @@ static void kingofb_draw_sprites(running_machine &machine, bitmap_t *bitmap, con
 
 		bank = (spriteram[roffs + 3] & 0x04) >> 2;
 		code = spriteram[roffs + 2] + ((spriteram[roffs + 3] & 0x03) << 8);
-		color = ((spriteram[roffs + 3] & 0x70) >> 4) + 8 * state->m_palette_bank;
+		color = ((spriteram[roffs + 3] & 0x70) >> 4) + 8 * m_palette_bank;
 		flipx = 0;
 		flipy = spriteram[roffs + 3] & 0x80;
 		sx = spriteram[roffs + 1];
 		sy = spriteram[roffs];
 
-		if (flip_screen_get(machine))
+		if (flip_screen())
 		{
 			sx = 240 - sx;
 			sy = 240 - sy;
@@ -239,61 +232,56 @@ static void kingofb_draw_sprites(running_machine &machine, bitmap_t *bitmap, con
 			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap, cliprect, machine.gfx[2 + bank],
+		drawgfx_transpen(bitmap, cliprect, machine().gfx[2 + bank],
 			code, color,
 			flipx, flipy,
 			sx, sy, 0);
 	}
 }
 
-SCREEN_UPDATE( kingofb )
+UINT32 kingofb_state::screen_update_kingofb(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	kingofb_state *state = screen->machine().driver_data<kingofb_state>();
-
-	tilemap_set_scrolly(state->m_bg_tilemap, 0, -(*state->m_scroll_y));
-	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
-	kingofb_draw_sprites(screen->machine(), bitmap, cliprect);
-	tilemap_draw(bitmap, cliprect, state->m_fg_tilemap, 0, 0);
+	m_bg_tilemap->set_scrolly(0, -(*m_scroll_y));
+	m_bg_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+	kingofb_draw_sprites(bitmap, cliprect);
+	m_fg_tilemap->draw(screen, bitmap, cliprect, 0, 0);
 	return 0;
 }
 
 /* Ring King */
 
-static TILE_GET_INFO( ringking_get_bg_tile_info )
+TILE_GET_INFO_MEMBER(kingofb_state::ringking_get_bg_tile_info)
 {
-	kingofb_state *state = machine.driver_data<kingofb_state>();
-	int code = (tile_index / 16) ? state->m_videoram[tile_index] : 0;
-	int color = ((state->m_colorram[tile_index] & 0x70) >> 4) + 8 * state->m_palette_bank;
+	int code = (tile_index / 16) ? m_videoram[tile_index] : 0;
+	int color = ((m_colorram[tile_index] & 0x70) >> 4) + 8 * m_palette_bank;
 
-	SET_TILE_INFO(4, code, color, 0);
+	SET_TILE_INFO_MEMBER(4, code, color, 0);
 }
 
-VIDEO_START( ringking )
+VIDEO_START_MEMBER(kingofb_state,ringking)
 {
-	kingofb_state *state = machine.driver_data<kingofb_state>();
-	state->m_bg_tilemap = tilemap_create(machine, ringking_get_bg_tile_info, tilemap_scan_cols_flip_y, 16, 16, 16, 16);
-	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_cols_flip_y, 8, 8, 32, 32);
+	m_bg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(kingofb_state::ringking_get_bg_tile_info),this), TILEMAP_SCAN_COLS_FLIP_Y, 16, 16, 16, 16);
+	m_fg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(kingofb_state::get_fg_tile_info),this), TILEMAP_SCAN_COLS_FLIP_Y, 8, 8, 32, 32);
 
-	tilemap_set_transparent_pen(state->m_fg_tilemap, 0);
+	m_fg_tilemap->set_transparent_pen(0);
 }
 
-static void ringking_draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
+void kingofb_state::ringking_draw_sprites( bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
-	kingofb_state *state = machine.driver_data<kingofb_state>();
-	UINT8 *spriteram = state->m_spriteram;
+	UINT8 *spriteram = m_spriteram;
 	int offs;
 
-	for (offs = 0; offs < state->m_spriteram_size; offs += 4)
+	for (offs = 0; offs < m_spriteram.bytes(); offs += 4)
 	{
 		int bank = (spriteram[offs + 1] & 0x04) >> 2;
 		int code = spriteram[offs + 3] + ((spriteram[offs + 1] & 0x03) << 8);
-		int color = ((spriteram[offs + 1] & 0x70) >> 4) + 8 * state->m_palette_bank;
+		int color = ((spriteram[offs + 1] & 0x70) >> 4) + 8 * m_palette_bank;
 		int flipx = 0;
 		int flipy = (spriteram[offs + 1] & 0x80) ? 0 : 1;
 		int sx = spriteram[offs + 2];
 		int sy = spriteram[offs];
 
-		if (flip_screen_get(machine))
+		if (flip_screen())
 		{
 			sx = 240 - sx;
 			sy = 240 - sy;
@@ -301,20 +289,18 @@ static void ringking_draw_sprites( running_machine &machine, bitmap_t *bitmap, c
 			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap, cliprect, machine.gfx[2 + bank],
+		drawgfx_transpen(bitmap, cliprect, machine().gfx[2 + bank],
 			code, color,
 			flipx, flipy,
 			sx, sy, 0);
 	}
 }
 
-SCREEN_UPDATE( ringking )
+UINT32 kingofb_state::screen_update_ringking(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	kingofb_state *state = screen->machine().driver_data<kingofb_state>();
-
-	tilemap_set_scrolly(state->m_bg_tilemap, 0, -(*state->m_scroll_y));
-	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
-	ringking_draw_sprites(screen->machine(), bitmap, cliprect);
-	tilemap_draw(bitmap, cliprect, state->m_fg_tilemap, 0, 0);
+	m_bg_tilemap->set_scrolly(0, -(*m_scroll_y));
+	m_bg_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+	ringking_draw_sprites(bitmap, cliprect);
+	m_fg_tilemap->draw(screen, bitmap, cliprect, 0, 0);
 	return 0;
 }

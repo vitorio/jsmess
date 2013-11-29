@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     speaker.c
 
     Speaker output sound device.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -41,18 +12,26 @@
 #include "emuopts.h"
 #include "osdepend.h"
 #include "config.h"
-#include "profiler.h"
 #include "sound/wavwrite.h"
 
 
 
-/***************************************************************************
-    DEBUGGING
-***************************************************************************/
+//**************************************************************************
+//  DEBUGGING
+//**************************************************************************
 
-#define VERBOSE			(0)
+#define VERBOSE         (0)
 
-#define VPRINTF(x)		do { if (VERBOSE) mame_printf_debug x; } while (0)
+#define VPRINTF(x)      do { if (VERBOSE) mame_printf_debug x; } while (0)
+
+
+
+//**************************************************************************
+//  GLOBAL VARIABLES
+//**************************************************************************
+
+// device type definition
+const device_type SPEAKER = &device_creator<speaker_device>;
 
 
 
@@ -60,25 +39,21 @@
 //  LIVE SPEAKER DEVICE
 //**************************************************************************
 
-// device type definition
-const device_type SPEAKER = &device_creator<speaker_device>;
-
 //-------------------------------------------------
 //  speaker_device - constructor
 //-------------------------------------------------
 
 speaker_device::speaker_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, SPEAKER, "Speaker", tag, owner, clock),
-	  device_sound_interface(mconfig, *this),
-	  m_x(0.0),
-	  m_y(0.0),
-	  m_z(0.0),
-	  m_mixer_stream(NULL)
+	: device_t(mconfig, SPEAKER, "Speaker", tag, owner, clock, "speaker", __FILE__),
+		device_mixer_interface(mconfig, *this),
+		m_x(0.0),
+		m_y(0.0),
+		m_z(0.0)
 #ifdef MAME_DEBUG
 	,
-	  m_max_sample(0),
-	  m_clipped_samples(0),
-	  m_total_samples(0)
+		m_max_sample(0),
+		m_clipped_samples(0),
+		m_total_samples(0)
 #endif
 {
 }
@@ -109,57 +84,6 @@ void speaker_device::static_set_position(device_t &device, double x, double y, d
 	speaker.m_x = x;
 	speaker.m_y = y;
 	speaker.m_z = z;
-}
-
-
-//-------------------------------------------------
-//  device_start - perform device-specific
-//  startup
-//-------------------------------------------------
-
-void speaker_device::device_start()
-{
-	// no inputs? that's weird
-	if (m_auto_allocated_inputs == 0)
-	{
-		logerror("Warning: speaker \"%s\" has no inputs\n", tag());
-		return;
-	}
-
-	// allocate the mixer stream
-	m_mixer_stream = machine().sound().stream_alloc(*this, m_auto_allocated_inputs, 1, machine().sample_rate());
-}
-
-
-//-------------------------------------------------
-//  device_post_load - after we load a save state
-//  be sure to update the mixer stream's output
-//  sample rate
-//-------------------------------------------------
-
-void speaker_device::device_post_load()
-{
-	m_mixer_stream->set_sample_rate(machine().sample_rate());
-}
-
-
-//-------------------------------------------------
-//  mixer_update - mix all inputs to one output
-//-------------------------------------------------
-
-void speaker_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
-{
-	VPRINTF(("Mixer_update(%d)\n", samples));
-
-	// loop over samples
-	for (int pos = 0; pos < samples; pos++)
-	{
-		// add up all the inputs
-		INT32 sample = inputs[0][pos];
-		for (int inp = 1; inp < m_auto_allocated_inputs; inp++)
-			sample += inputs[inp][pos];
-		outputs[0][pos] = sample;
-	}
 }
 
 
@@ -223,4 +147,14 @@ void speaker_device::mix(INT32 *leftmix, INT32 *rightmix, int &samples_this_upda
 			for (int sample = 0; sample < samples_this_update; sample++)
 				rightmix[sample] += stream_buf[sample];
 	}
+}
+
+
+//-------------------------------------------------
+//  device_start - handle device startup
+//-------------------------------------------------
+
+void speaker_device::device_start()
+{
+	// dummy save to make device.c happy
 }

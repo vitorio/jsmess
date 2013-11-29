@@ -27,7 +27,6 @@
             E0-FF (R) = Read Controller data, A1=0 -> read controller 1, A1=1 -> read controller 2
 
     - Modified paddle handler, now it is handled as on a real ColecoVision
-    - Added support for a Driving Controller (Expansion Module #2), enabled via category
     - Added support for a Roller Controller (Trackball), enabled via category
     - Added support for two Super Action Controller, enabled via category
 
@@ -68,12 +67,12 @@
 
 READ8_MEMBER( coleco_state::paddle_1_r )
 {
-	return coleco_paddle1_read(machine(), m_joy_mode, m_joy_status[0]);
+	return m_joy_d7_state[0] | coleco_paddle_read(machine(), 0, m_joy_mode, m_joy_analog_state[0]);
 }
 
 READ8_MEMBER( coleco_state::paddle_2_r )
 {
-	return coleco_paddle2_read(machine(), m_joy_mode, m_joy_status[1]);
+	return m_joy_d7_state[1] | coleco_paddle_read(machine(), 1, m_joy_mode, m_joy_analog_state[1]);
 }
 
 WRITE8_MEMBER( coleco_state::paddle_off_w )
@@ -97,10 +96,10 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( coleco_io_map, AS_IO, 8, coleco_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x80, 0x80) AM_MIRROR(0x1f) AM_WRITE(paddle_off_w)
-	AM_RANGE(0xa0, 0xa0) AM_MIRROR(0x1e) AM_READWRITE_LEGACY(TMS9928A_vram_r, TMS9928A_vram_w)
-	AM_RANGE(0xa1, 0xa1) AM_MIRROR(0x1e) AM_READWRITE_LEGACY(TMS9928A_register_r, TMS9928A_register_w)
+	AM_RANGE(0xa0, 0xa0) AM_MIRROR(0x1e) AM_DEVREADWRITE("tms9928a", tms9928a_device, vram_read, vram_write)
+	AM_RANGE(0xa1, 0xa1) AM_MIRROR(0x1e) AM_DEVREADWRITE("tms9928a", tms9928a_device, register_read, register_write)
 	AM_RANGE(0xc0, 0xc0) AM_MIRROR(0x1f) AM_WRITE(paddle_on_w)
-	AM_RANGE(0xe0, 0xe0) AM_MIRROR(0x1f) AM_DEVWRITE_LEGACY("sn76489a", sn76496_w)
+	AM_RANGE(0xe0, 0xe0) AM_MIRROR(0x1f) AM_DEVWRITE("sn76489a", sn76489a_device, write)
 	AM_RANGE(0xe0, 0xe0) AM_MIRROR(0x1d) AM_READ(paddle_1_r)
 	AM_RANGE(0xe2, 0xe2) AM_MIRROR(0x1d) AM_READ(paddle_2_r)
 ADDRESS_MAP_END
@@ -114,10 +113,10 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( czz50_io_map, AS_IO, 8, coleco_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x80, 0x80) AM_MIRROR(0x1f) AM_WRITE(paddle_off_w)
-	AM_RANGE(0xa0, 0xa0) AM_MIRROR(0x1e) AM_READWRITE_LEGACY(TMS9928A_vram_r, TMS9928A_vram_w)
-	AM_RANGE(0xa1, 0xa1) AM_MIRROR(0x1e) AM_READWRITE_LEGACY(TMS9928A_register_r, TMS9928A_register_w)
+	AM_RANGE(0xa0, 0xa0) AM_MIRROR(0x1e) AM_DEVREADWRITE("tms9928a", tms9928a_device, vram_read, vram_write)
+	AM_RANGE(0xa1, 0xa1) AM_MIRROR(0x1e) AM_DEVREADWRITE("tms9928a", tms9928a_device, register_read, register_write)
 	AM_RANGE(0xc0, 0xc0) AM_MIRROR(0x1f) AM_WRITE(paddle_on_w)
-	AM_RANGE(0xe0, 0xe0) AM_MIRROR(0x1f) AM_DEVWRITE_LEGACY("sn76489a", sn76496_w)
+	AM_RANGE(0xe0, 0xe0) AM_MIRROR(0x1f) AM_DEVWRITE("sn76489a", sn76489a_device, write)
 	AM_RANGE(0xe0, 0xe0) AM_MIRROR(0x1d) AM_READ(paddle_1_r)
 	AM_RANGE(0xe2, 0xe2) AM_MIRROR(0x1d) AM_READ(paddle_2_r)
 ADDRESS_MAP_END
@@ -125,7 +124,7 @@ ADDRESS_MAP_END
 /* Input Ports */
 
 static INPUT_PORTS_START( czz50 )
-	PORT_START("KEYPAD1")
+	PORT_START("STD_KEYPAD1")
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("0") PORT_CODE(KEYCODE_0_PAD) PORT_CHAR('0')
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("1") PORT_CODE(KEYCODE_1_PAD) PORT_CHAR('1')
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("2") PORT_CODE(KEYCODE_2_PAD) PORT_CHAR('2')
@@ -137,11 +136,11 @@ static INPUT_PORTS_START( czz50 )
 	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("8") PORT_CODE(KEYCODE_8_PAD) PORT_CHAR('8')
 	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("9") PORT_CODE(KEYCODE_9_PAD) PORT_CHAR('9')
 	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("#") PORT_CODE(KEYCODE_MINUS_PAD) PORT_CHAR('#')
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME(".") PORT_CODE(KEYCODE_PLUS_PAD) PORT_CHAR('.')
+	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("*") PORT_CODE(KEYCODE_PLUS_PAD) PORT_CHAR('*')
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0xb000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("JOY1")
+	PORT_START("STD_JOY1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_PLAYER(1)
@@ -149,13 +148,13 @@ static INPUT_PORTS_START( czz50 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0xb0, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("KEYPAD2")
+	PORT_START("STD_KEYPAD2")
 	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x0f00, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
 	PORT_BIT( 0xb000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("JOY2")
+	PORT_START("STD_JOY2")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_PLAYER(2)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(2)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_PLAYER(2)
@@ -164,70 +163,120 @@ static INPUT_PORTS_START( czz50 )
 	PORT_BIT( 0xb0, IP_ACTIVE_LOW, IPT_UNKNOWN )
 INPUT_PORTS_END
 
-/***************************************************************************
+/* Interrupts */
 
-  The interrupts come from the vdp. The vdp (tms9928a) interrupt can go up
-  and down; the Coleco only uses nmi interrupts (which is just a pulse). They
-  are edge-triggered: as soon as the vdp interrupt line goes up, an interrupt
-  is generated. Nothing happens when the line stays up or goes down.
-
-  To emulate this correctly, we set a callback in the tms9928a (they
-  can occur mid-frame). At every frame we call the TMS9928A_interrupt
-  because the vdp needs to know when the end-of-frame occurs, but we don't
-  return an interrupt.
-
-***************************************************************************/
-
-static INTERRUPT_GEN( coleco_interrupt )
+WRITE_LINE_MEMBER(coleco_state::coleco_vdp_interrupt)
 {
-    TMS9928A_interrupt(device->machine());
+	// NMI on rising edge
+	if (state && !m_last_nmi_state)
+		m_maincpu->set_input_line(INPUT_LINE_NMI, PULSE_LINE);
+
+	m_last_nmi_state = state;
 }
 
-static void coleco_vdp_interrupt(running_machine &machine, int state)
+TIMER_CALLBACK_MEMBER(coleco_state::paddle_d7reset_callback)
 {
-	coleco_state *drvstate = machine.driver_data<coleco_state>();
+	m_joy_d7_state[param] = 0;
+	m_joy_analog_state[param] = 0;
+}
 
-    // only if it goes up
-	if (state && !drvstate->m_last_state)
+TIMER_CALLBACK_MEMBER(coleco_state::paddle_irqreset_callback)
+{
+	m_joy_irq_state[param] = 0;
+
+	if (!m_joy_irq_state[param ^ 1])
+		m_maincpu->set_input_line(INPUT_LINE_IRQ0, CLEAR_LINE);
+}
+
+TIMER_CALLBACK_MEMBER(coleco_state::paddle_pulse_callback)
+{
+	if (m_joy_analog_reload[param])
 	{
-		drvstate->m_maincpu->set_input_line(INPUT_LINE_NMI, PULSE_LINE);
-	}
+		m_joy_analog_state[param] = m_joy_analog_reload[param];
 
-	drvstate->m_last_state = state;
+		// on movement, controller port d7 is set for a short period and an irq is fired on d7 rising edge
+		m_joy_d7_state[param] = 0x80;
+		m_joy_d7_timer[param]->adjust(attotime::from_usec(500), param); // TODO: measure duration
+
+		// irq on rising edge, PULSE_LINE is not supported in this case, so clear it manually
+		m_maincpu->set_input_line(INPUT_LINE_IRQ0, ASSERT_LINE);
+		m_joy_irq_timer[param]->adjust(attotime::from_usec(11), param); // TODO: measure duration
+		m_joy_irq_state[param] = 1;
+
+		// reload timer
+		m_joy_pulse_timer[param]->adjust(m_joy_pulse_reload[param], param);
+	}
 }
 
-static TIMER_DEVICE_CALLBACK( paddle_callback )
+TIMER_DEVICE_CALLBACK_MEMBER(coleco_state::paddle_update_callback)
 {
-	coleco_state *state = timer.machine().driver_data<coleco_state>();
+	// arbitrary timer for reading analog controls
+	coleco_scan_paddles(machine(), &m_joy_analog_reload[0], &m_joy_analog_reload[1]);
 
-	coleco_scan_paddles(timer.machine(), &state->m_joy_status[0], &state->m_joy_status[1]);
+	for (int port = 0; port < 2; port++)
+	{
+		if (m_joy_analog_reload[port])
+		{
+			const int sensitivity = 500;
+			int ipt = m_joy_analog_reload[port];
+			if (ipt & 0x80) ipt = 0x100 - ipt;
+			attotime freq = attotime::from_msec(sensitivity / ipt);
 
-    if (state->m_joy_status[0] || state->m_joy_status[1])
-		state->m_maincpu->set_input_line(INPUT_LINE_IRQ0, HOLD_LINE);
+			// change pulse intervals relative to spinner/trackball speed
+			m_joy_pulse_reload[port] = freq;
+			m_joy_pulse_timer[port]->adjust(min(freq, m_joy_pulse_timer[port]->remaining()), port);
+		}
+	}
 }
 
 /* Machine Initialization */
 
-static const TMS9928a_interface tms9928a_interface =
+static TMS9928A_INTERFACE(coleco_tms9928a_interface)
 {
-	TMS99x8A,
 	0x4000,
-	0, 0,
-	coleco_vdp_interrupt
+	DEVCB_DRIVER_LINE_MEMBER(coleco_state,coleco_vdp_interrupt)
 };
+
+
+//-------------------------------------------------
+//  sn76496_config psg_intf
+//-------------------------------------------------
+
+static const sn76496_config psg_intf =
+{
+	DEVCB_NULL
+};
+
 
 void coleco_state::machine_start()
 {
-	TMS9928A_configure(&tms9928a_interface);
+	// init paddles
+	for (int port = 0; port < 2; port++)
+	{
+		m_joy_pulse_timer[port] = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(coleco_state::paddle_pulse_callback),this));
+		m_joy_d7_timer[port] = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(coleco_state::paddle_d7reset_callback),this));
+		m_joy_irq_timer[port] = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(coleco_state::paddle_irqreset_callback),this));
+
+		m_joy_irq_state[port] = 0;
+		m_joy_d7_state[port] = 0;
+		m_joy_analog_state[port] = 0;
+	}
+
+	save_item(NAME(m_joy_mode));
+	save_item(NAME(m_last_nmi_state));
+	save_item(NAME(m_joy_irq_state));
+	save_item(NAME(m_joy_d7_state));
+	save_item(NAME(m_joy_analog_state));
+	save_item(NAME(m_joy_analog_reload));
 }
 
 void coleco_state::machine_reset()
 {
-	m_last_state = 0;
+	m_last_nmi_state = 0;
 
 	m_maincpu->set_input_line_vector(INPUT_LINE_IRQ0, 0xff);
 
-	memset(&machine().region(Z80_TAG)->base()[0x6000], 0xff, 0x400);	// initialize RAM
+	memset(&memregion(Z80_TAG)->base()[0x6000], 0xff, 0x400);   // initialize RAM
 }
 
 //static int coleco_cart_verify(const UINT8 *cartdata, size_t size)
@@ -243,9 +292,9 @@ void coleco_state::machine_reset()
 //  return retval;
 //}
 
-static DEVICE_IMAGE_LOAD( czz50_cart )
+DEVICE_IMAGE_LOAD_MEMBER( coleco_state,czz50_cart )
 {
-	UINT8 *ptr = image.device().machine().region(Z80_TAG)->base() + 0x8000;
+	UINT8 *ptr = memregion(Z80_TAG)->base() + 0x8000;
 	UINT32 size;
 
 	if (image.software_entry() == NULL)
@@ -266,21 +315,20 @@ static DEVICE_IMAGE_LOAD( czz50_cart )
 
 static MACHINE_CONFIG_START( coleco, coleco_state )
 	// basic machine hardware
-	MCFG_CPU_ADD(Z80_TAG, Z80, XTAL_7_15909MHz/2)	// 3.579545 MHz
+	MCFG_CPU_ADD(Z80_TAG, Z80, XTAL_7_15909MHz/2)   // 3.579545 MHz
 	MCFG_CPU_PROGRAM_MAP(coleco_map)
 	MCFG_CPU_IO_MAP(coleco_io_map)
-	MCFG_CPU_VBLANK_INT("screen", coleco_interrupt)
 
 	// video hardware
-	MCFG_FRAGMENT_ADD(tms9928a)
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_REFRESH_RATE((float)XTAL_10_738635MHz/2/342/262)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
+	MCFG_TMS9928A_ADD( "tms9928a", TMS9928A, coleco_tms9928a_interface )
+	MCFG_TMS9928A_SCREEN_ADD_NTSC( "screen" )
+	MCFG_SCREEN_UPDATE_DEVICE( "tms9928a", tms9928a_device, screen_update )
 
 	// sound hardware
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("sn76489a", SN76489A, XTAL_7_15909MHz/2)	/* 3.579545 MHz */
+	MCFG_SOUND_ADD("sn76489a", SN76489A, XTAL_7_15909MHz/2) /* 3.579545 MHz */
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
+	MCFG_SOUND_CONFIG(psg_intf)
 
 	/* cartridge */
 	MCFG_CARTSLOT_ADD("cart")
@@ -291,43 +339,46 @@ static MACHINE_CONFIG_START( coleco, coleco_state )
 	/* software lists */
 	MCFG_SOFTWARE_LIST_ADD("cart_list","coleco")
 
-	MCFG_TIMER_ADD_PERIODIC("paddle_timer", paddle_callback, attotime::from_msec(20))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("paddle_timer", coleco_state, paddle_update_callback, attotime::from_msec(20))
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( czz50, coleco_state )
 	// basic machine hardware
-	MCFG_CPU_ADD(Z80_TAG, Z80, XTAL_7_15909MHz/2)	// ???
+	MCFG_CPU_ADD(Z80_TAG, Z80, XTAL_7_15909MHz/2)   // ???
 	MCFG_CPU_PROGRAM_MAP(czz50_map)
 	MCFG_CPU_IO_MAP(czz50_io_map)
-	MCFG_CPU_VBLANK_INT("screen", coleco_interrupt)
 
 	// video hardware
-	MCFG_FRAGMENT_ADD(tms9928a)
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_REFRESH_RATE((float)XTAL_10_738635MHz/2/342/262)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
+	MCFG_TMS9928A_ADD( "tms9928a", TMS9928A, coleco_tms9928a_interface )
+	MCFG_TMS9928A_SCREEN_ADD_NTSC( "screen" )
+	MCFG_SCREEN_UPDATE_DEVICE( "tms9928a", tms9928a_device, screen_update )
 
 	// sound hardware
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("sn76489a", SN76489A, XTAL_7_15909MHz/2)	// ???
+	MCFG_SOUND_ADD("sn76489a", SN76489A, XTAL_7_15909MHz/2) // ???
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
+	MCFG_SOUND_CONFIG(psg_intf)
 
 	/* cartridge */
 	MCFG_CARTSLOT_ADD("cart")
 	MCFG_CARTSLOT_EXTENSION_LIST("rom,col,bin")
 	MCFG_CARTSLOT_NOT_MANDATORY
-	MCFG_CARTSLOT_LOAD(czz50_cart)
+	MCFG_CARTSLOT_LOAD(coleco_state,czz50_cart)
 	MCFG_CARTSLOT_INTERFACE("coleco_cart")
 
 	/* software lists */
 	MCFG_SOFTWARE_LIST_ADD("cart_list","coleco")
 
-	MCFG_TIMER_ADD_PERIODIC("paddle_timer", paddle_callback, attotime::from_msec(20))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("paddle_timer", coleco_state, paddle_update_callback, attotime::from_msec(20))
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( dina, czz50 )
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_REFRESH_RATE((float)XTAL_10_738635MHz/2/342/313)
+	MCFG_DEVICE_REMOVE("tms9928a")
+	MCFG_DEVICE_REMOVE("screen")
+
+	MCFG_TMS9928A_ADD( "tms9928a", TMS9929A, coleco_tms9928a_interface )
+	MCFG_TMS9928A_SCREEN_ADD_PAL( "screen" )
+	MCFG_SCREEN_UPDATE_DEVICE( "tms9928a", tms9928a_device, screen_update )
 MACHINE_CONFIG_END
 
 /* ROMs */
@@ -364,9 +415,9 @@ ROM_END
 /* System Drivers */
 
 //    YEAR  NAME      PARENT    COMPAT  MACHINE   INPUT     INIT     COMPANY             FULLNAME                            FLAGS
-CONS( 1982, coleco,   0,        0,      coleco,   coleco,   0,       "Coleco",           "ColecoVision",                     0 )
-CONS( 1982, colecoa,  coleco,   0,      coleco,   coleco,   0,       "Coleco",           "ColecoVision (Thick Characters)",  0 )
-CONS( 1983, colecob,  coleco,   0,      coleco,   coleco,   0,       "Spectravideo",     "SVI-603 Coleco Game Adapter",      0 )
-CONS( 1986, czz50,    0,   coleco,      czz50,	  czz50,    0,       "Bit Corporation",  "Chuang Zao Zhe 50",                0 )
-CONS( 1988, dina,     czz50,    0,      dina,	  czz50,    0,       "Telegames",        "Dina",                             0 )
-CONS( 1988, prsarcde, czz50,    0,      czz50,    czz50,    0,       "Telegames",        "Personal Arcade",                  0 )
+CONS( 1982, coleco,   0,        0,      coleco,   coleco, driver_device,   0,       "Coleco",           "ColecoVision",                     0 )
+CONS( 1982, colecoa,  coleco,   0,      coleco,   coleco, driver_device,   0,       "Coleco",           "ColecoVision (Thick Characters)",  0 )
+CONS( 1983, colecob,  coleco,   0,      coleco,   coleco, driver_device,   0,       "Spectravideo",     "SVI-603 Coleco Game Adapter",      0 )
+CONS( 1986, czz50,    0,        coleco, czz50,    czz50,  driver_device,   0,       "Bit Corporation",  "Chuang Zao Zhe 50",                0 )
+CONS( 1988, dina,     czz50,    0,      dina,     czz50,  driver_device,   0,       "Telegames",        "Dina",                             0 )
+CONS( 1988, prsarcde, czz50,    0,      czz50,    czz50,  driver_device,   0,       "Telegames",        "Personal Arcade",                  0 )

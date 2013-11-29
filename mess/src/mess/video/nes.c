@@ -7,46 +7,21 @@
 ***************************************************************************/
 
 #include "emu.h"
-#include "video/ppu2c0x.h"
 #include "includes/nes.h"
-#include "machine/nes_mmc.h"
 
-static void nes_vh_reset( running_machine &machine )
+void nes_state::video_reset()
 {
-	nes_state *state = machine.driver_data<nes_state>();
-	ppu2c0x_set_vidaccess_callback(machine.device("ppu"), nes_ppu_vidaccess);
-
-	if (state->m_four_screen_vram)
-		set_nt_mirroring(machine, PPU_MIRROR_4SCREEN);
-	else
-	{
-		switch (state->m_hard_mirroring)
-		{
-			case PPU_MIRROR_HORZ:
-			case PPU_MIRROR_VERT:
-			case PPU_MIRROR_HIGH:
-			case PPU_MIRROR_LOW:
-				set_nt_mirroring(machine, state->m_hard_mirroring);
-				break;
-			default:
-				set_nt_mirroring(machine, PPU_MIRROR_NONE);
-				break;
-		}
-	}
+	m_ppu->set_vidaccess_callback(ppu2c0x_vidaccess_delegate(FUNC(nes_state::nes_ppu_vidaccess),this));
 }
 
-VIDEO_START( nes )
+void nes_state::video_start()
 {
-	nes_state *state = machine.driver_data<nes_state>();
-
-	state->m_last_frame_flip =  0;
-
-	machine.add_notifier(MACHINE_NOTIFY_RESET, machine_notify_delegate(FUNC(nes_vh_reset),&machine));
+	m_last_frame_flip =  0;
 }
 
-PALETTE_INIT( nes )
+void nes_state::palette_init()
 {
-	ppu2c0x_init_palette(machine, 0);
+	m_ppu->init_palette(machine(), 0);
 }
 
 
@@ -56,32 +31,30 @@ PALETTE_INIT( nes )
 
 ***************************************************************************/
 
-SCREEN_UPDATE( nes )
+UINT32 nes_state::screen_update_nes(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	nes_state *state = screen->machine().driver_data<nes_state>();
-
 	/* render the ppu */
-	ppu2c0x_render(state->m_ppu, bitmap, 0, 0, 0, 0);
+	m_ppu->render(bitmap, 0, 0, 0, 0);
 
 	/* if this is a disk system game, check for the flip-disk key */
-	if (state->m_disk_expansion && state->m_pcb_id == NO_BOARD)
+	if (m_disk_expansion && m_cartslot && !m_cartslot->m_cart)
 	{
 		// latch this input so it doesn't go at warp speed
-		if ((input_port_read(screen->machine(), "FLIPDISK") & 0x01) && (!state->m_last_frame_flip))
+		if ((ioport("FLIPDISK")->read() & 0x01) && (!m_last_frame_flip))
 		{
-			state->m_last_frame_flip = 1;
-			state->m_fds_current_side++;
-			if (state->m_fds_current_side > state->m_fds_sides)
-				state->m_fds_current_side = 0;
+			m_last_frame_flip = 1;
+			m_fds_current_side++;
+			if (m_fds_current_side > m_fds_sides)
+				m_fds_current_side = 0;
 
-			if (state->m_fds_current_side == 0)
+			if (m_fds_current_side == 0)
 				popmessage("No disk inserted.");
 			else
-				popmessage("Disk set to side %d", state->m_fds_current_side);
+				popmessage("Disk set to side %d", m_fds_current_side);
 		}
 
-		if (!(input_port_read(screen->machine(), "FLIPDISK") & 0x01))
-			state->m_last_frame_flip = 0;
+		if (!(ioport("FLIPDISK")->read() & 0x01))
+			m_last_frame_flip = 0;
 	}
 	return 0;
 }

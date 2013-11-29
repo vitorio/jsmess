@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Miodrag Milanovic, Robbbert
 /***************************************************************************
 
         MITS Altair 8800b Turnkey
@@ -15,7 +17,6 @@
         M - Modify memory
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i8085/i8085.h"
@@ -28,17 +29,21 @@ class altair_state : public driver_device
 public:
 	altair_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-	m_maincpu(*this, "maincpu")
-	{ }
+	m_maincpu(*this, "maincpu"),
+	m_terminal(*this, TERMINAL_TAG),
+	m_ram(*this, "ram"){ }
 
 	required_device<cpu_device> m_maincpu;
+	required_device<generic_terminal_device> m_terminal;
 	DECLARE_READ8_MEMBER(sio_status_r);
 	DECLARE_READ8_MEMBER(sio_data_r);
 	DECLARE_READ8_MEMBER(sio_key_status_r);
 	DECLARE_WRITE8_MEMBER(sio_command_w);
 	DECLARE_WRITE8_MEMBER(kbd_put);
 	UINT8 m_term_data;
-	UINT8* m_ram;
+	required_shared_ptr<UINT8> m_ram;
+	virtual void machine_reset();
+	DECLARE_QUICKLOAD_LOAD_MEMBER(altair);
 };
 
 
@@ -50,7 +55,6 @@ READ8_MEMBER(altair_state::sio_status_r)
 
 WRITE8_MEMBER(altair_state::sio_command_w)
 {
-
 }
 
 READ8_MEMBER(altair_state::sio_data_r)
@@ -67,7 +71,7 @@ READ8_MEMBER(altair_state::sio_key_status_r)
 
 static ADDRESS_MAP_START(altair_mem, AS_PROGRAM, 8, altair_state)
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE( 0x0000, 0xfcff ) AM_RAM AM_BASE(m_ram)
+	AM_RANGE( 0x0000, 0xfcff ) AM_RAM AM_SHARE("ram")
 	AM_RANGE( 0xfd00, 0xfdff ) AM_ROM
 	AM_RANGE( 0xff00, 0xffff ) AM_ROM
 ADDRESS_MAP_END
@@ -76,7 +80,7 @@ static ADDRESS_MAP_START(altair_io, AS_IO, 8, altair_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x00, 0x00 ) AM_READ(sio_key_status_r)
-	AM_RANGE( 0x01, 0x01 ) AM_MIRROR(0x10) AM_READ(sio_data_r) AM_DEVWRITE_LEGACY(TERMINAL_TAG, terminal_write)
+	AM_RANGE( 0x01, 0x01 ) AM_MIRROR(0x10) AM_READ(sio_data_r) AM_DEVWRITE(TERMINAL_TAG, generic_terminal_device, write)
 	AM_RANGE( 0x10, 0x10 ) AM_READWRITE(sio_status_r,sio_command_w)
 ADDRESS_MAP_END
 
@@ -85,15 +89,14 @@ static INPUT_PORTS_START( altair )
 INPUT_PORTS_END
 
 
-QUICKLOAD_LOAD(altair)
+QUICKLOAD_LOAD_MEMBER( altair_state,altair)
 {
-	altair_state *state = image.device().machine().driver_data<altair_state>();
 	int quick_length;
 	int read_;
 	quick_length = image.length();
 	if (quick_length >= 0xfd00)
 		return IMAGE_INIT_FAIL;
-	read_ = image.fread(state->m_ram, quick_length);
+	read_ = image.fread(m_ram, quick_length);
 	if (read_ != quick_length)
 		return IMAGE_INIT_FAIL;
 
@@ -101,13 +104,12 @@ QUICKLOAD_LOAD(altair)
 }
 
 
-static MACHINE_RESET(altair)
+void altair_state::machine_reset()
 {
-	altair_state *state = machine.driver_data<altair_state>();
 	// Set startup addess done by turn-key
-	cpu_set_reg(machine.device("maincpu"), I8085_PC, 0xFD00);
+	m_maincpu->set_state_int(I8085_PC, 0xFD00);
 
-	state->m_term_data = 0;
+	m_term_data = 0;
 }
 
 WRITE8_MEMBER( altair_state::kbd_put )
@@ -126,14 +128,12 @@ static MACHINE_CONFIG_START( altair, altair_state )
 	MCFG_CPU_PROGRAM_MAP(altair_mem)
 	MCFG_CPU_IO_MAP(altair_io)
 
-	MCFG_MACHINE_RESET(altair)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 
 	/* quickload */
-	MCFG_QUICKLOAD_ADD("quickload", altair, "bin", 0)
+	MCFG_QUICKLOAD_ADD("quickload", altair_state, altair, "bin", 0)
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -146,5 +146,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT     COMPANY   FULLNAME       FLAGS */
-COMP( 1975, al8800bt,  0,       0,	altair, 	altair, 	 0,   "MITS",   "Altair 8800bt", GAME_NOT_WORKING | GAME_NO_SOUND_HW)
-
+COMP( 1975, al8800bt,  0,       0,  altair,     altair, driver_device,   0,   "MITS",   "Altair 8800bt", GAME_NOT_WORKING | GAME_NO_SOUND_HW)

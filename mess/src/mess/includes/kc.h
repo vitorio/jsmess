@@ -1,3 +1,5 @@
+// license:?
+// copyright-holders:Kevin Thacker,Sandro Ronco
 /*****************************************************************************
  *
  * includes/kc.h
@@ -7,14 +9,39 @@
 #ifndef KC_H_
 #define KC_H_
 
+/* Devices */
+#include "imagedev/cassette.h"
+#include "machine/ram.h"
+
+// Components
+#include "cpu/z80/z80.h"
 #include "cpu/z80/z80daisy.h"
 #include "machine/z80ctc.h"
 #include "machine/z80pio.h"
-#include "imagedev/snapquik.h"
-#include "machine/upd765.h"
+#include "machine/ram.h"
+#include "machine/kc_keyb.h"
+#include "machine/rescap.h"
+#include "cpu/z80/z80daisy.h"
+#include "sound/speaker.h"
+#include "sound/wave.h"
 
-#define KC85_4_CLOCK 1750000
-#define KC85_3_CLOCK 1750000
+// Devices
+#include "imagedev/cassette.h"
+#include "imagedev/snapquik.h"
+
+// Formats
+#include "formats/kc_cas.h"
+
+// Expansions
+#include "bus/kc/kc.h"
+#include "bus/kc/ram.h"
+#include "bus/kc/rom.h"
+#include "bus/kc/d002.h"
+#include "bus/kc/d004.h"
+
+// from service manual
+#define KC85_3_CLOCK 1751938
+#define KC85_4_CLOCK 1773447
 
 #define KC85_4_SCREEN_PIXEL_RAM_SIZE 0x04000
 #define KC85_4_SCREEN_COLOUR_RAM_SIZE 0x04000
@@ -23,154 +50,140 @@
 #define KC85_SCREEN_WIDTH 320
 #define KC85_SCREEN_HEIGHT 256
 
-/* number of keycodes that can be stored in queue */
-#define KC_KEYCODE_QUEUE_LENGTH 256
-
-#define KC_KEYBOARD_NUM_LINES	9
-
-typedef struct kc_keyboard
-{
-	/* list of stored keys */
-	unsigned char keycodes[KC_KEYCODE_QUEUE_LENGTH];
-	/* index of start of list */
-	int head;
-	/* index of end of list */
-	int tail;
-
-	/* transmitting state */
-	int transmit_state;
-
-	/* number of pulses remaining to be transmitted */
-	int	transmit_pulse_count_remaining;
-	/* count of pulses transmitted so far */
-	int transmit_pulse_count;
-
-	/* pulses to transmit */
-	unsigned char transmit_buffer[32];
-} kc_keyboard;
+// cassette input polling frequency
+#define KC_CASSETTE_TIMER_FREQUENCY attotime::from_hz(44100)
 
 
 class kc_state : public driver_device
 {
 public:
 	kc_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+			m_maincpu(*this, "maincpu"),
+			m_z80pio(*this, "z80pio"),
+			m_z80ctc(*this, "z80ctc"),
+			m_ram(*this, RAM_TAG),
+			m_speaker(*this, "speaker"),
+			m_cassette(*this, "cassette")
+	{ }
 
-	int m_kc85_pio_data[2];
-	device_t *m_kc85_z80pio;
-	unsigned char m_kc85_disc_hw_input_gate;
-	unsigned char *m_kc85_module_rom;
-	emu_timer *m_cassette_timer;
-	int m_cassette_motor_state;
-	unsigned char m_ardy;
-	int m_previous_keyboard[KC_KEYBOARD_NUM_LINES-1];
-	unsigned char m_brdy;
-	kc_keyboard m_keyboard_data;
-	int m_kc85_84_data;
-	int m_kc85_86_data;
-	int m_kc85_50hz_state;
-	int m_kc85_15khz_state;
-	int m_kc85_15khz_count;
-	int m_kc85_blink_state;
-	unsigned char *m_kc85_4_display_video_ram;
-	unsigned char *m_kc85_4_video_ram;
-	const struct kc85_module *m_modules[256>>2];
+	required_device<cpu_device> m_maincpu;
+	required_device<z80pio_device> m_z80pio;
+	required_device<z80ctc_device> m_z80ctc;
+	required_device<ram_device> m_ram;
+	required_device<speaker_sound_device> m_speaker;
+	required_device<cassette_image_device> m_cassette;
+
+	// defined in machine/kc.c
+	virtual void machine_start();
+	virtual void machine_reset();
+
+	// modules read/write
+	DECLARE_READ8_MEMBER ( expansion_read );
+	DECLARE_WRITE8_MEMBER( expansion_write );
+	DECLARE_READ8_MEMBER ( expansion_4000_r );
+	DECLARE_WRITE8_MEMBER( expansion_4000_w );
+	DECLARE_READ8_MEMBER ( expansion_8000_r );
+	DECLARE_WRITE8_MEMBER( expansion_8000_w );
+	DECLARE_READ8_MEMBER ( expansion_c000_r );
+	DECLARE_WRITE8_MEMBER( expansion_c000_w );
+	DECLARE_READ8_MEMBER ( expansion_e000_r );
+	DECLARE_WRITE8_MEMBER( expansion_e000_w );
+	DECLARE_READ8_MEMBER ( expansion_io_read );
+	DECLARE_WRITE8_MEMBER( expansion_io_write );
+
+	// bankswitch
+	virtual void update_0x00000();
+	virtual void update_0x04000();
+	virtual void update_0x08000();
+	virtual void update_0x0c000();
+	virtual void update_0x0e000();
+
+	// PIO callback
+	DECLARE_READ8_MEMBER( pio_porta_r );
+	DECLARE_READ8_MEMBER( pio_portb_r );
+	DECLARE_WRITE_LINE_MEMBER( pio_ardy_cb);
+	DECLARE_WRITE_LINE_MEMBER( pio_brdy_cb);
+	DECLARE_WRITE8_MEMBER( pio_porta_w );
+	DECLARE_WRITE8_MEMBER( pio_portb_w );
+
+	// CTC callback
+	DECLARE_WRITE_LINE_MEMBER( ctc_zc0_callback );
+	DECLARE_WRITE_LINE_MEMBER( ctc_zc1_callback );
+	DECLARE_WRITE_LINE_MEMBER( ctc_zc2_callback );
+
+	// keyboard
+	DECLARE_WRITE_LINE_MEMBER( keyboard_cb );
+
+	// cassette
+	void update_cassette(int state);
+	void cassette_set_motor(int motor_state);
+
+	// speaker
+	void speaker_update();
+
+	// defined in video/kc.c
+	virtual void video_start();
+	virtual UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	DECLARE_WRITE_LINE_MEMBER( video_toggle_blink_state );
+	void video_draw_8_pixels(bitmap_ind16 &bitmap, int x, int y, UINT8 colour_byte, UINT8 gfx_byte);
+
+	// driver state
+	UINT8 *             m_ram_base;
+	UINT8 *             m_video_ram;
+	int                 m_pio_data[2];
+	int                 m_high_resolution;
+	UINT8               m_ardy;
+	UINT8               m_brdy;
+	int                 m_kc85_blink_state;
+	int                 m_k0_line;
+	int                 m_k1_line;
+	UINT8               m_speaker_level;
+
+	// cassette
+	emu_timer *         m_cassette_timer;
+	emu_timer *         m_cassette_oneshot_timer;
+	int                 m_astb;
+	int                 m_cassette_in;
+
+	kcexp_slot_device * m_expansions[3];
+	DECLARE_PALETTE_INIT(kc85);
+	TIMER_CALLBACK_MEMBER(kc_cassette_oneshot_timer);
+	TIMER_CALLBACK_MEMBER(kc_cassette_timer_callback);
+	TIMER_DEVICE_CALLBACK_MEMBER(kc_scanline);
+
+	DECLARE_QUICKLOAD_LOAD_MEMBER( kc );
 };
 
 
-/*----------- defined in video/kc.c -----------*/
+class kc85_4_state : public kc_state
+{
+public:
+	kc85_4_state(const machine_config &mconfig, device_type type, const char *tag)
+		: kc_state(mconfig, type, tag)
+		{ }
 
-extern PALETTE_INIT( kc85 );
+	// defined in machine/kc.c
+	virtual void machine_reset();
 
-void kc85_video_set_blink_state(running_machine &machine, int data);
+	virtual void update_0x04000();
+	virtual void update_0x08000();
+	virtual void update_0x0c000();
 
-VIDEO_START( kc85_3 );
-VIDEO_START( kc85_4 );
-SCREEN_UPDATE( kc85_3 );
-SCREEN_UPDATE( kc85_4 );
+	DECLARE_READ8_MEMBER( kc85_4_86_r );
+	DECLARE_READ8_MEMBER( kc85_4_84_r );
+	DECLARE_WRITE8_MEMBER( kc85_4_86_w );
+	DECLARE_WRITE8_MEMBER( kc85_4_84_w );
 
-/* select video ram to display */
-void kc85_4_video_ram_select_bank(running_machine &machine, int bank);
-/* select video ram which is visible in address space */
-unsigned char *kc85_4_get_video_ram_base(running_machine &machine, int bank, int colour);
+	// defined in video/kc.c
+	virtual void video_start();
+	virtual UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void video_control_w(int data);
 
-
-/*----------- defined in machine/kc.c -----------*/
-
-extern const upd765_interface kc_fdc_interface;
-QUICKLOAD_LOAD( kc );
-
-MACHINE_START( kc85 );
-MACHINE_RESET( kc85_3 );
-MACHINE_RESET( kc85_4 );
-MACHINE_RESET( kc85_4d );
-
-/* cassette */
-READ8_HANDLER(kc85_4_84_r);
-WRITE8_HANDLER(kc85_4_84_w);
-
-READ8_HANDLER(kc85_4_86_r);
-WRITE8_HANDLER(kc85_4_86_w);
-
-READ8_HANDLER(kc85_unmapped_r);
-
-READ8_HANDLER(kc85_pio_data_r);
-
-WRITE8_HANDLER(kc85_4_pio_data_w);
-WRITE8_HANDLER(kc85_3_pio_data_w);
-
-READ8_HANDLER(kc85_pio_control_r);
-WRITE8_HANDLER(kc85_pio_control_w);
-
-READ8_DEVICE_HANDLER(kc85_ctc_r);
-WRITE8_DEVICE_HANDLER(kc85_ctc_w);
-
-extern const z80pio_interface kc85_pio_intf;
-extern const z80ctc_interface kc85_ctc_intf;
-
-
-/*** MODULE SYSTEM ***/
-/* read from xx80 port */
-READ8_HANDLER(kc85_module_r);
-/* write to xx80 port */
-WRITE8_HANDLER(kc85_module_w);
-
-
-/*** DISC INTERFACE **/
-
-/* IO_FLOPPY device */
-
-/* used to setup machine */
-
-#define KC_DISC_INTERFACE_PORT_R \
-	{0x0f0, 0x0f3, kc85_disc_interface_ram_r},
-
-#define KC_DISC_INTERFACE_PORT_W \
-	{0x0f0, 0x0f3, kc85_disc_interface_ram_w}, \
-	{0x0f4, 0x0f4, kc85_disc_interface_latch_w},
-
-#define KC_DISC_INTERFACE_ROM
-
-
-
-/* these are internal to the disc interface */
-
-/* disc hardware internal i/o */
-READ8_DEVICE_HANDLER(kc85_disk_hw_ctc_r);
-/* disc hardware internal i/o */
-WRITE8_DEVICE_HANDLER(kc85_disk_hw_ctc_w);
-/* 4-bit input latch: DMA Data Request, FDC Int, FDD Ready.. */
-READ8_HANDLER(kc85_disc_hw_input_gate_r);
-/* output port to set UPD765 terminal count input */
-WRITE8_HANDLER(kc85_disc_hw_terminal_count_w);
-
-/* these are used by the kc85 to control the disc interface */
-/* xxf4 - latch used to reset cpu in disc interface */
-WRITE8_HANDLER(kc85_disc_interface_latch_w);
-/* xxf0-xxf3 write to kc85 disc interface ram */
-WRITE8_HANDLER(kc85_disc_interface_ram_w);
-/* xxf0-xxf3 read from kc85 disc interface ram */
-READ8_HANDLER(kc85_disc_interface_ram_r);
-
+	// driver state
+	UINT8               m_port_84_data;
+	UINT8               m_port_86_data;
+	UINT8 *             m_display_video_ram;
+};
 
 #endif /* KC_H_ */

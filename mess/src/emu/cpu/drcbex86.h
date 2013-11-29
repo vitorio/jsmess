@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     drcbex86.h
 
     32-bit x86 back-end for the universal machine language.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -79,12 +50,12 @@ private:
 		// parameter types
 		enum be_parameter_type
 		{
-			PTYPE_NONE = 0,						// invalid
-			PTYPE_IMMEDIATE,					// immediate; value = sign-extended to 64 bits
-			PTYPE_INT_REGISTER,					// integer register; value = 0-REG_MAX
-			PTYPE_FLOAT_REGISTER,				// floating point register; value = 0-REG_MAX
-			PTYPE_VECTOR_REGISTER,				// vector register; value = 0-REG_MAX
-			PTYPE_MEMORY,						// memory; value = pointer to memory
+			PTYPE_NONE = 0,                     // invalid
+			PTYPE_IMMEDIATE,                    // immediate; value = sign-extended to 64 bits
+			PTYPE_INT_REGISTER,                 // integer register; value = 0-REG_MAX
+			PTYPE_FLOAT_REGISTER,               // floating point register; value = 0-REG_MAX
+			PTYPE_VECTOR_REGISTER,              // vector register; value = 0-REG_MAX
+			PTYPE_MEMORY,                       // memory; value = pointer to memory
 			PTYPE_MAX
 		};
 
@@ -111,9 +82,9 @@ private:
 		// getters
 		be_parameter_type type() const { return m_type; }
 		UINT64 immediate() const { assert(m_type == PTYPE_IMMEDIATE); return m_value; }
-		int ireg() const { assert(m_type == PTYPE_INT_REGISTER); assert(m_value >= 0 && m_value < x86emit::REG_MAX); return m_value; }
-		int freg() const { assert(m_type == PTYPE_FLOAT_REGISTER); assert(m_value >= 0 && m_value < x86emit::REG_MAX); return m_value; }
-		int vreg() const { assert(m_type == PTYPE_VECTOR_REGISTER); assert(m_value >= 0 && m_value < x86emit::REG_MAX); return m_value; }
+		int ireg() const { assert(m_type == PTYPE_INT_REGISTER); assert(m_value < x86emit::REG_MAX); return m_value; }
+		int freg() const { assert(m_type == PTYPE_FLOAT_REGISTER); assert(m_value < x86emit::REG_MAX); return m_value; }
+		int vreg() const { assert(m_type == PTYPE_VECTOR_REGISTER); assert(m_value < x86emit::REG_MAX); return m_value; }
 		void *memory(UINT32 offset = 0) const { assert(m_type == PTYPE_MEMORY); return reinterpret_cast<void *>(m_value + offset); }
 
 		// type queries
@@ -136,8 +107,8 @@ private:
 		be_parameter(be_parameter_type type, be_parameter_value value) : m_type(type), m_value(value) { }
 
 		// internals
-		be_parameter_type	m_type;				// parameter type
-		be_parameter_value	m_value;			// parameter value
+		be_parameter_type   m_type;             // parameter type
+		be_parameter_value  m_value;            // parameter value
 	};
 
 	// helpers
@@ -325,46 +296,46 @@ private:
 	static int ddivs(UINT64 &dstlo, UINT64 &dsthi, INT64 src1, INT64 src2);
 
 	// internal state
-	drc_hash_table			m_hash;					// hash table state
-	drc_map_variables		m_map;					// code map
-	drc_label_list			m_labels;				// label list
-	x86log_context *		m_log;					// logging
-	bool					m_logged_common;		// logged common code already?
-	bool					m_sse3;					// do we have SSE3 support?
+	drc_hash_table          m_hash;                 // hash table state
+	drc_map_variables       m_map;                  // code map
+	drc_label_list          m_labels;               // label list
+	x86log_context *        m_log;                  // logging
+	bool                    m_logged_common;        // logged common code already?
+	bool                    m_sse3;                 // do we have SSE3 support?
 
-	x86_entry_point_func	m_entry;				// entry point
-	x86code *				m_exit;					// exit point
-	x86code *				m_nocode;				// nocode handler
-	x86code *				m_save;					// save handler
-	x86code *				m_restore;				// restore handler
+	x86_entry_point_func    m_entry;                // entry point
+	x86code *               m_exit;                 // exit point
+	x86code *               m_nocode;               // nocode handler
+	x86code *               m_save;                 // save handler
+	x86code *               m_restore;              // restore handler
 
-	UINT32 *				m_reglo[x86emit::REG_MAX];// pointer to low part of data for each register
-	UINT32 *				m_reghi[x86emit::REG_MAX];// pointer to high part of data for each register
-	UINT8					m_last_lower_reg;		// last register we stored a lower from
-	x86code *				m_last_lower_pc;		// PC after instruction where we last stored a lower register
-	UINT32 *				m_last_lower_addr;		// address where we last stored an lower register
-	UINT8					m_last_upper_reg;		// last register we stored an upper from
-	x86code *				m_last_upper_pc;		// PC after instruction where we last stored an upper register
-	UINT32 *				m_last_upper_addr;		// address where we last stored an upper register
-	double					m_fptemp;				// temporary storage for floating point
+	UINT32 *                m_reglo[x86emit::REG_MAX];// pointer to low part of data for each register
+	UINT32 *                m_reghi[x86emit::REG_MAX];// pointer to high part of data for each register
+	UINT8                   m_last_lower_reg;       // last register we stored a lower from
+	x86code *               m_last_lower_pc;        // PC after instruction where we last stored a lower register
+	UINT32 *                m_last_lower_addr;      // address where we last stored an lower register
+	UINT8                   m_last_upper_reg;       // last register we stored an upper from
+	x86code *               m_last_upper_pc;        // PC after instruction where we last stored an upper register
+	UINT32 *                m_last_upper_addr;      // address where we last stored an upper register
+	double                  m_fptemp;               // temporary storage for floating point
 
-	UINT16					m_fpumode;				// saved FPU mode
-	UINT16					m_fmodesave;			// temporary location for saving
+	UINT16                  m_fpumode;              // saved FPU mode
+	UINT16                  m_fmodesave;            // temporary location for saving
 
-	void *					m_stacksave;			// saved stack pointer
-	void *					m_hashstacksave;		// saved stack pointer for hashjmp
-	UINT64					m_reslo;				// extended low result
-	UINT64					m_reshi;				// extended high result
+	void *                  m_stacksave;            // saved stack pointer
+	void *                  m_hashstacksave;        // saved stack pointer for hashjmp
+	UINT64                  m_reslo;                // extended low result
+	UINT64                  m_reshi;                // extended high result
 
-	drc_label_fixup_delegate m_fixup_label;			// precomputed delegate for fixups
-	drc_oob_delegate		m_fixup_exception;		// precomputed delegate for exception fixups
+	drc_label_fixup_delegate m_fixup_label;         // precomputed delegate for fixups
+	drc_oob_delegate        m_fixup_exception;      // precomputed delegate for exception fixups
 
 	// globals
 	typedef void (drcbe_x86::*opcode_generate_func)(x86code *&dst, const uml::instruction &inst);
 	struct opcode_table_entry
 	{
-		uml::opcode_t			opcode;				// opcode in question
-		opcode_generate_func	func;				// function pointer to the work
+		uml::opcode_t           opcode;             // opcode in question
+		opcode_generate_func    func;               // function pointer to the work
 	};
 	static const opcode_table_entry s_opcode_table_source[];
 	static opcode_generate_func s_opcode_table[uml::OP_MAX];

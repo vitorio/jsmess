@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Sandro Ronco
 /***************************************************************************
 
     Philips VG-5000mu
@@ -45,7 +47,6 @@
 
 ****************************************************************************/
 
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
@@ -63,24 +64,25 @@ class vg5k_state : public driver_device
 public:
 	vg5k_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, "maincpu"),
-		  m_ef9345(*this, "ef9345"),
-		  m_dac(*this, "dac"),
-		  m_printer(*this, "printer"),
-		  m_cassette(*this, CASSETTE_TAG)
+			m_maincpu(*this, "maincpu"),
+			m_ef9345(*this, "ef9345"),
+			m_dac(*this, "dac"),
+			m_printer(*this, "printer"),
+			m_cassette(*this, "cassette"),
+			m_ram(*this, RAM_TAG)
 		{ }
 
 	required_device<cpu_device> m_maincpu;
 	required_device<ef9345_device> m_ef9345;
-	required_device<device_t> m_dac;
+	required_device<dac_device> m_dac;
 	required_device<printer_image_device> m_printer;
 	required_device<cassette_image_device> m_cassette;
+	required_device<ram_device> m_ram;
 
 	offs_t m_ef9345_offset;
 
 	virtual void machine_start();
 	virtual void machine_reset();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
 
 	DECLARE_READ8_MEMBER( printer_r );
 	DECLARE_WRITE8_MEMBER( printer_w );
@@ -89,6 +91,10 @@ public:
 	DECLARE_WRITE8_MEMBER ( ef9345_io_w );
 	DECLARE_READ8_MEMBER ( cassette_r );
 	DECLARE_WRITE8_MEMBER ( cassette_w );
+	DECLARE_DRIVER_INIT(vg5k);
+	TIMER_CALLBACK_MEMBER(z80_irq_clear);
+	TIMER_DEVICE_CALLBACK_MEMBER(z80_irq);
+	TIMER_DEVICE_CALLBACK_MEMBER(vg5k_scanline);
 };
 
 
@@ -132,7 +138,7 @@ READ8_MEMBER ( vg5k_state::cassette_r )
 
 WRITE8_MEMBER ( vg5k_state::cassette_w )
 {
-	dac_data_w(m_dac, data <<2);
+	m_dac->write_unsigned8(data <<2);
 
 	if (data == 0x03)
 		m_cassette->output(+1);
@@ -275,30 +281,28 @@ static INPUT_PORTS_START( vg5k )
 INPUT_PORTS_END
 
 
-static TIMER_CALLBACK( z80_irq_clear )
+TIMER_CALLBACK_MEMBER(vg5k_state::z80_irq_clear)
 {
-	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
+	m_maincpu->set_input_line(0, CLEAR_LINE);
 }
 
 
-static TIMER_DEVICE_CALLBACK( z80_irq )
+TIMER_DEVICE_CALLBACK_MEMBER(vg5k_state::z80_irq)
 {
-	cputag_set_input_line(timer.machine(), "maincpu", 0, ASSERT_LINE);
+	m_maincpu->set_input_line(0, ASSERT_LINE);
 
-	timer.machine().scheduler().timer_set(attotime::from_usec(100), FUNC(z80_irq_clear));
+	machine().scheduler().timer_set(attotime::from_usec(100), timer_expired_delegate(FUNC(vg5k_state::z80_irq_clear),this));
 }
 
-static TIMER_DEVICE_CALLBACK( vg5k_scanline )
+TIMER_DEVICE_CALLBACK_MEMBER(vg5k_state::vg5k_scanline)
 {
-	vg5k_state *vg5k = timer.machine().driver_data<vg5k_state>();
-
-	vg5k->m_ef9345->update_scanline((UINT16)param);
+	m_ef9345->update_scanline((UINT16)param);
 }
 
 
 void vg5k_state::machine_start()
 {
-	state_save_register_global(machine(), m_ef9345_offset);
+	save_item(NAME(m_ef9345_offset));
 }
 
 void vg5k_state::machine_reset()
@@ -306,34 +310,27 @@ void vg5k_state::machine_reset()
 	m_ef9345_offset = 0;
 }
 
-bool vg5k_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
-{
-	m_ef9345->video_update(&bitmap, &cliprect);
-
-	return 0;
-}
-
 /* F4 Character Displayer */
 static const gfx_layout vg5k_charlayout =
 {
-	8, 16,					/* 8 x 16 characters */
-	256,					/* 256 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 16,                  /* 8 x 16 characters */
+	256,                    /* 256 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 7, 6, 5, 4, 3, 2, 1, 0 },
 	/* y offsets */
 	{ 0, 8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8, 8*8, 9*8, 10*8, 11*8, 12*8, 13*8, 14*8, 15*8 },
-	8*16					/* every char takes 16 bytes */
+	8*16                    /* every char takes 16 bytes */
 };
 
 static GFXDECODE_START( vg5k )
 	GFXDECODE_ENTRY( "ef9345", 0x2000, vg5k_charlayout, 0, 4 )
 GFXDECODE_END
 
-static DRIVER_INIT( vg5k )
+DRIVER_INIT_MEMBER(vg5k_state,vg5k)
 {
-	UINT8 *FNT = machine.region("ef9345")->base();
+	UINT8 *FNT = memregion("ef9345")->base();
 	UINT16 a,b,c,d,dest=0x2000;
 
 	/* Unscramble the chargen rom as the format is too complex for gfxdecode to handle unaided */
@@ -345,25 +342,20 @@ static DRIVER_INIT( vg5k )
 
 
 	/* install expansion memory*/
-	address_space *program = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	UINT8 *ram = ram_get_ptr(machine.device(RAM_TAG));
-	UINT16 ram_size = ram_get_size(machine.device(RAM_TAG));
+	address_space &program = m_maincpu->space(AS_PROGRAM);
+	UINT8 *ram = m_ram->pointer();
+	UINT16 ram_size = m_ram->size();
 
 	if (ram_size > 0x4000)
-		program->install_ram(0x8000, 0x3fff + ram_size, ram);
+		program.install_ram(0x8000, 0x3fff + ram_size, ram);
 }
 
 
-static const ef9345_interface vg5k_ef9345_config =
-{
-	"screen"			/* screen we are acting on */
-};
-
 static const struct CassetteOptions vg5k_cassette_options =
 {
-	1,		/* channels */
-	16,		/* bits per sample */
-	44100	/* sample frequency */
+	1,      /* channels */
+	16,     /* bits per sample */
+	44100   /* sample frequency */
 };
 
 static const cassette_interface vg5k_cassette_interface =
@@ -383,17 +375,17 @@ static MACHINE_CONFIG_START( vg5k, vg5k_state )
 	MCFG_CPU_PROGRAM_MAP(vg5k_mem)
 	MCFG_CPU_IO_MAP(vg5k_io)
 
-	MCFG_TIMER_ADD_SCANLINE("vg5k_scanline", vg5k_scanline, "screen", 0, 10)
+	MCFG_TIMER_DRIVER_ADD_SCANLINE("vg5k_scanline", vg5k_state, vg5k_scanline, "screen", 0, 10)
 
-	MCFG_TIMER_ADD_PERIODIC("irq_timer", z80_irq, attotime::from_msec(20))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("irq_timer", vg5k_state, z80_irq, attotime::from_msec(20))
 
-	MCFG_EF9345_ADD("ef9345", vg5k_ef9345_config)
+	MCFG_EF9345_ADD("ef9345", "screen")
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DEVICE("ef9345", ef9345_device, screen_update)
 	MCFG_SCREEN_SIZE(336, 300)
 	MCFG_SCREEN_VISIBLE_AREA(00, 336-1, 00, 270-1)
 
@@ -406,10 +398,10 @@ static MACHINE_CONFIG_START( vg5k, vg5k_state )
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	/* cassette */
-	MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
 	MCFG_SOUND_ROUTE(0, "mono", 0.25)
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, vg5k_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", vg5k_cassette_interface )
 
 	/* printer */
 	MCFG_PRINTER_ADD("printer")
@@ -427,16 +419,16 @@ MACHINE_CONFIG_END
 ROM_START( vg5k )
 	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
 	ROM_SYSTEM_BIOS(0, "v11", "BASIC v1.1")
-	ROMX_LOAD( "vg5k11.bin",  0x0000, 0x4000, CRC(a6998ff8) SHA1(881ba594be0a721a999378312aea0c3c1c7b2b58), ROM_BIOS(1) )			// dumped from a Radiola VG-5000
+	ROMX_LOAD( "vg5k11.bin",  0x0000, 0x4000, CRC(a6998ff8) SHA1(881ba594be0a721a999378312aea0c3c1c7b2b58), ROM_BIOS(1) )           // dumped from a Radiola VG-5000
 	ROM_SYSTEM_BIOS(1, "v11a", "BASIC v1.1 (alt)")
-	ROMX_LOAD( "vg5k11a.bin", 0x0000, 0x4000, BAD_DUMP CRC(a6f4a0ea) SHA1(58eccce33cc21fc17bc83921018f531b8001eda3), ROM_BIOS(2) )	// from dcvg5k
+	ROMX_LOAD( "vg5k11a.bin", 0x0000, 0x4000, BAD_DUMP CRC(a6f4a0ea) SHA1(58eccce33cc21fc17bc83921018f531b8001eda3), ROM_BIOS(2) )  // from dcvg5k
 	ROM_SYSTEM_BIOS(2, "v10", "BASIC v1.0")
 	ROMX_LOAD( "vg5k10.bin", 0x0000, 0x4000, BAD_DUMP CRC(57983260) SHA1(5ad1787a6a597b5c3eedb7c3704b649faa9be4ca), ROM_BIOS(3) )
 
 	ROM_REGION( 0x4000, "ef9345", 0 )
-	ROM_LOAD( "charset.rom", 0x0000, 0x2000, BAD_DUMP CRC(b2f49eb3) SHA1(d0ef530be33bfc296314e7152302d95fdf9520fc) )			// from dcvg5k
+	ROM_LOAD( "charset.rom", 0x0000, 0x2000, BAD_DUMP CRC(b2f49eb3) SHA1(d0ef530be33bfc296314e7152302d95fdf9520fc) )            // from dcvg5k
 ROM_END
 
 /* Driver */
 /*    YEAR  NAME    PARENT  COMPAT  MACHINE  INPUT  INIT   COMPANY     FULLNAME   FLAGS */
-COMP( 1984, vg5k,   0,      0,      vg5k,    vg5k,  vg5k, "Philips",  "VG-5000", GAME_SUPPORTS_SAVE | GAME_NOT_WORKING )
+COMP( 1984, vg5k,   0,      0,      vg5k,    vg5k, vg5k_state,  vg5k, "Philips",  "VG-5000", GAME_SUPPORTS_SAVE | GAME_NOT_WORKING )

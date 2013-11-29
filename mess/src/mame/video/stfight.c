@@ -30,53 +30,54 @@
 
  */
 
-PALETTE_INIT( stfight )
+void stfight_state::palette_init()
 {
+	const UINT8 *color_prom = memregion("proms")->base();
 	int i;
 
 	/* allocate the colortable */
-	machine.colortable = colortable_alloc(machine, 0x100);
+	machine().colortable = colortable_alloc(machine(), 0x100);
 
 	/* text uses colors 0xc0-0xcf */
 	for (i = 0; i < 0x40; i++)
 	{
 		UINT8 ctabentry = (color_prom[i] & 0x0f) | 0xc0;
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine().colortable, i, ctabentry);
 	}
 
 	/* fg uses colors 0x40-0x7f */
 	for (i = 0x40; i < 0x140; i++)
 	{
 		UINT8 ctabentry = (color_prom[i + 0x1c0] & 0x0f) | ((color_prom[i + 0x0c0] & 0x03) << 4) | 0x40;
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine().colortable, i, ctabentry);
 	}
 
 	/* bg uses colors 0-0x3f */
 	for (i = 0x140; i < 0x240; i++)
 	{
 		UINT8 ctabentry = (color_prom[i + 0x2c0] & 0x0f) | ((color_prom[i + 0x1c0] & 0x03) << 4);
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine().colortable, i, ctabentry);
 	}
 
 	/* bg uses colors 0x80-0xbf */
 	for (i = 0x240; i < 0x340; i++)
 	{
 		UINT8 ctabentry = (color_prom[i + 0x3c0] & 0x0f) | ((color_prom[i + 0x2c0] & 0x03) << 4) | 0x80;
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine().colortable, i, ctabentry);
 	}
 }
 
 
-static void set_pens(running_machine &machine)
+void stfight_state::set_pens()
 {
 	int i;
 
 	for (i = 0; i < 0x100; i++)
 	{
-		UINT16 data = machine.generic.paletteram.u8[i] | (machine.generic.paletteram2.u8[i] << 8);
+		UINT16 data = m_generic_paletteram_8[i] | (m_generic_paletteram2_8[i] << 8);
 		rgb_t color = MAKE_RGB(pal4bit(data >> 4), pal4bit(data >> 0), pal4bit(data >> 8));
 
-		colortable_palette_set_color(machine.colortable, i, color);
+		colortable_palette_set_color(machine().colortable, i, color);
 	}
 }
 
@@ -87,28 +88,28 @@ static void set_pens(running_machine &machine)
 
 ***************************************************************************/
 
-static TILEMAP_MAPPER( fg_scan )
+TILEMAP_MAPPER_MEMBER(stfight_state::fg_scan)
 {
 	/* logical (col,row) -> memory offset */
 	return (col & 0x0f) + ((row & 0x0f) << 4) + ((col & 0x70) << 4) + ((row & 0xf0) << 7);
 }
 
-static TILE_GET_INFO( get_fg_tile_info )
+TILE_GET_INFO_MEMBER(stfight_state::get_fg_tile_info)
 {
-	UINT8   *fgMap = machine.region("gfx5")->base();
+	UINT8   *fgMap = memregion("gfx5")->base();
 	int attr,tile_base;
 
 	attr = fgMap[0x8000+tile_index];
 	tile_base = ((attr & 0x80) << 2) | ((attr & 0x20) << 3);
 
-	SET_TILE_INFO(
+	SET_TILE_INFO_MEMBER(
 			1,
 			tile_base + fgMap[tile_index],
 			attr & 0x07,
 			0);
 }
 
-static TILEMAP_MAPPER( bg_scan )
+TILEMAP_MAPPER_MEMBER(stfight_state::bg_scan)
 {
 	/* logical (col,row) -> memory offset */
 	return ((col & 0x0e) >> 1) + ((row & 0x0f) << 3) + ((col & 0x70) << 3) +
@@ -116,35 +117,49 @@ static TILEMAP_MAPPER( bg_scan )
 			((row & 0x60) << 8);
 }
 
-static TILE_GET_INFO( get_bg_tile_info )
+TILE_GET_INFO_MEMBER(stfight_state::get_bg_tile_info)
 {
-	UINT8   *bgMap = machine.region("gfx6")->base();
+	UINT8   *bgMap = memregion("gfx6")->base();
 	int attr,tile_bank,tile_base;
 
 	attr = bgMap[0x8000+tile_index];
 	tile_bank = (attr & 0x20) >> 5;
 	tile_base = (attr & 0x80) << 1;
 
-	SET_TILE_INFO(
+	SET_TILE_INFO_MEMBER(
 			2+tile_bank,
 			tile_base + bgMap[tile_index],
 			attr & 0x07,
 			0);
 }
 
-static TILE_GET_INFO( get_tx_tile_info )
+TILE_GET_INFO_MEMBER(stfight_state::get_tx_tile_info)
 {
-	stfight_state *state = machine.driver_data<stfight_state>();
-	UINT8 attr = state->m_text_attr_ram[tile_index];
+	UINT8 attr = m_text_attr_ram[tile_index];
 	int color = attr & 0x0f;
 
-	tileinfo->group = color;
+	tileinfo.group = color;
 
-	SET_TILE_INFO(
+	SET_TILE_INFO_MEMBER(
 			0,
-			state->m_text_char_ram[tile_index] + ((attr & 0x80) << 1),
+			m_text_char_ram[tile_index] + ((attr & 0x80) << 1),
 			attr & 0x0f,
 			TILE_FLIPYX((attr & 0x60) >> 5));
+}
+
+TILE_GET_INFO_MEMBER(stfight_state::get_cshooter_tx_tile_info)
+{
+	UINT8 tile = m_tx_vram[tile_index*2];
+	UINT8 attr = m_tx_vram[tile_index*2+1];
+	int color = attr & 0x0f;
+
+	tileinfo.group = color;
+
+	SET_TILE_INFO_MEMBER(
+			0,
+			(tile << 1) | ((attr & 0x20) >> 5),
+			attr & 0x0f,
+			/*TILE_FLIPYX((attr & 0x60) >> 5)*/0);
 }
 
 
@@ -154,15 +169,24 @@ static TILE_GET_INFO( get_tx_tile_info )
 
 ***************************************************************************/
 
-VIDEO_START( stfight )
+VIDEO_START_MEMBER(stfight_state,stfight)
 {
-	stfight_state *state = machine.driver_data<stfight_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info,bg_scan,     16,16,128,256);
-	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info,fg_scan,16,16,128,256);
-	state->m_tx_tilemap = tilemap_create(machine, get_tx_tile_info,tilemap_scan_rows, 8,8,32,32);
+	m_bg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(stfight_state::get_bg_tile_info),this),tilemap_mapper_delegate(FUNC(stfight_state::bg_scan),this),16,16,128,256);
+	m_fg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(stfight_state::get_fg_tile_info),this),tilemap_mapper_delegate(FUNC(stfight_state::fg_scan),this),16,16,128,256);
+	m_tx_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(stfight_state::get_tx_tile_info),this),TILEMAP_SCAN_ROWS, 8,8,32,32);
 
-	tilemap_set_transparent_pen(state->m_fg_tilemap,0x0f);
-	colortable_configure_tilemap_groups(machine.colortable, state->m_tx_tilemap, machine.gfx[0], 0xcf);
+	m_fg_tilemap->set_transparent_pen(0x0f);
+	colortable_configure_tilemap_groups(machine().colortable, m_tx_tilemap, machine().gfx[0], 0xcf);
+}
+
+VIDEO_START_MEMBER(stfight_state,cshooter)
+{
+	m_bg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(stfight_state::get_bg_tile_info),this),tilemap_mapper_delegate(FUNC(stfight_state::bg_scan),this),16,16,128,256);
+	m_fg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(stfight_state::get_fg_tile_info),this),tilemap_mapper_delegate(FUNC(stfight_state::fg_scan),this),16,16,128,256);
+	m_tx_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(stfight_state::get_cshooter_tx_tile_info),this),TILEMAP_SCAN_ROWS, 8,8,32,32);
+
+	m_fg_tilemap->set_transparent_pen(0x0f);
+	colortable_configure_tilemap_groups(machine().colortable, m_tx_tilemap, machine().gfx[0], 0xcf);
 }
 
 
@@ -173,67 +197,70 @@ VIDEO_START( stfight )
 
 ***************************************************************************/
 
-WRITE8_HANDLER( stfight_text_char_w )
+WRITE8_MEMBER(stfight_state::stfight_text_char_w)
 {
-	stfight_state *state = space->machine().driver_data<stfight_state>();
-	state->m_text_char_ram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_tx_tilemap,offset);
+	m_text_char_ram[offset] = data;
+	m_tx_tilemap->mark_tile_dirty(offset);
 }
 
-WRITE8_HANDLER( stfight_text_attr_w )
+WRITE8_MEMBER(stfight_state::stfight_text_attr_w)
 {
-	stfight_state *state = space->machine().driver_data<stfight_state>();
-	state->m_text_attr_ram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_tx_tilemap,offset);
+	m_text_attr_ram[offset] = data;
+	m_tx_tilemap->mark_tile_dirty(offset);
 }
 
-WRITE8_HANDLER( stfight_sprite_bank_w )
+WRITE8_MEMBER(stfight_state::cshooter_text_w)
 {
-	stfight_state *state = space->machine().driver_data<stfight_state>();
-	state->m_sprite_base = ( ( data & 0x04 ) << 7 ) |
-				          ( ( data & 0x01 ) << 8 );
+	m_tx_vram[offset] = data;
+	m_tx_tilemap->mark_tile_dirty(offset/2);
 }
 
-WRITE8_HANDLER( stfight_vh_latch_w )
+
+WRITE8_MEMBER(stfight_state::stfight_sprite_bank_w)
 {
-	stfight_state *state = space->machine().driver_data<stfight_state>();
+	m_sprite_base = ( ( data & 0x04 ) << 7 ) |
+							( ( data & 0x01 ) << 8 );
+}
+
+WRITE8_MEMBER(stfight_state::stfight_vh_latch_w)
+{
 	int scroll;
 
 
-	state->m_vh_latch_ram[offset] = data;
+	m_vh_latch_ram[offset] = data;
 
 	switch( offset )
 	{
 		case 0x00:
 		case 0x01:
-			scroll = (state->m_vh_latch_ram[1] << 8) | state->m_vh_latch_ram[0];
-			tilemap_set_scrollx(state->m_fg_tilemap,0,scroll);
+			scroll = (m_vh_latch_ram[1] << 8) | m_vh_latch_ram[0];
+			m_fg_tilemap->set_scrollx(0,scroll);
 			break;
 
 		case 0x02:
 		case 0x03:
-			scroll = (state->m_vh_latch_ram[3] << 8) | state->m_vh_latch_ram[2];
-			tilemap_set_scrolly(state->m_fg_tilemap,0,scroll);
+			scroll = (m_vh_latch_ram[3] << 8) | m_vh_latch_ram[2];
+			m_fg_tilemap->set_scrolly(0,scroll);
 			break;
 
 		case 0x04:
 		case 0x05:
-			scroll = (state->m_vh_latch_ram[5] << 8) | state->m_vh_latch_ram[4];
-			tilemap_set_scrollx(state->m_bg_tilemap,0,scroll);
+			scroll = (m_vh_latch_ram[5] << 8) | m_vh_latch_ram[4];
+			m_bg_tilemap->set_scrollx(0,scroll);
 			break;
 
 		case 0x06:
 		case 0x08:
-			scroll = (state->m_vh_latch_ram[8] << 8) | state->m_vh_latch_ram[6];
-			tilemap_set_scrolly(state->m_bg_tilemap,0,scroll);
+			scroll = (m_vh_latch_ram[8] << 8) | m_vh_latch_ram[6];
+			m_bg_tilemap->set_scrolly(0,scroll);
 			break;
 
 		case 0x07:
-			tilemap_set_enable(state->m_tx_tilemap,data & 0x80);
+			m_tx_tilemap->enable(data & 0x80);
 			/* 0x40 = sprites */
-			tilemap_set_enable(state->m_bg_tilemap,data & 0x20);
-			tilemap_set_enable(state->m_fg_tilemap,data & 0x10);
-			flip_screen_set(space->machine(), data & 0x01);
+			m_bg_tilemap->enable(data & 0x20);
+			m_fg_tilemap->enable(data & 0x10);
+			flip_screen_set(data & 0x01);
 			break;
 	}
 }
@@ -244,21 +271,20 @@ WRITE8_HANDLER( stfight_vh_latch_w )
 
 ***************************************************************************/
 
-static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect)
+void stfight_state::draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	stfight_state *state = machine.driver_data<stfight_state>();
 	int offs,sx,sy;
 
 	for (offs = 0;offs < 4096;offs += 32)
 	{
 		int code;
-		int attr = state->m_sprite_ram[offs+1];
+		int attr = m_sprite_ram[offs+1];
 		int flipx = attr & 0x10;
 		int color = attr & 0x0f;
 		int pri = (attr & 0x20) >> 5;
 
-		sy = state->m_sprite_ram[offs+2];
-		sx = state->m_sprite_ram[offs+3];
+		sy = m_sprite_ram[offs+2];
+		sx = m_sprite_ram[offs+3];
 
 		// non-active sprites have zero y coordinate value
 		if( sy > 0 )
@@ -268,45 +294,88 @@ static void draw_sprites(running_machine &machine, bitmap_t *bitmap, const recta
 			if( sx >= 0xf0 )
 			{
 				if (attr & 0x80)
-				    sx -= 0x100;
+					sx -= 0x100;
 			}
 
-			if (flip_screen_get(machine))
+			if (flip_screen())
 			{
 				sx = 240 - sx;
 				sy = 240 - sy;
 				flipx = !flipx;
 			}
 
-			code = state->m_sprite_base + state->m_sprite_ram[offs];
+			code = m_sprite_base + m_sprite_ram[offs];
 
-			pdrawgfx_transpen(bitmap,cliprect,machine.gfx[4],
-				     code,
-					 color,
-					 flipx,flip_screen_get(machine),
-					 sx,sy,
-				     machine.priority_bitmap,
-					 pri ? 0x02 : 0,0x0f);
+			pdrawgfx_transpen(bitmap,cliprect,machine().gfx[4],
+						code,
+						color,
+						flipx,flip_screen(),
+						sx,sy,
+						screen.priority(),
+						pri ? 0x02 : 0,0x0f);
 		}
 	}
 }
 
 
-SCREEN_UPDATE( stfight )
+UINT32 stfight_state::screen_update_stfight(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	stfight_state *state = screen->machine().driver_data<stfight_state>();
-	set_pens(screen->machine());
+	set_pens();
 
-	bitmap_fill(screen->machine().priority_bitmap,cliprect,0);
+	screen.priority().fill(0, cliprect);
 
-	bitmap_fill(bitmap,cliprect,0);	/* in case state->m_bg_tilemap is disabled */
-	tilemap_draw(bitmap,cliprect,state->m_bg_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,state->m_fg_tilemap,0,1);
+	bitmap.fill(0, cliprect);   /* in case m_bg_tilemap is disabled */
+	m_bg_tilemap->draw(screen, bitmap, cliprect, 0,0);
+	m_fg_tilemap->draw(screen, bitmap, cliprect, 0,1);
 
 	/* Draw sprites (may be obscured by foreground layer) */
-	if (state->m_vh_latch_ram[0x07] & 0x40)
-		draw_sprites(screen->machine(), bitmap,cliprect);
+	if (m_vh_latch_ram[0x07] & 0x40)
+		draw_sprites(screen,bitmap,cliprect);
 
-	tilemap_draw(bitmap,cliprect,state->m_tx_tilemap,0,0);
+	m_tx_tilemap->draw(screen, bitmap, cliprect, 0,0);
+	return 0;
+}
+
+void stfight_state::cshooter_draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+{
+	for (int i = m_sprite_ram.bytes() - 4; i >= 0 ; i -= 4)
+	{
+		if (m_sprite_ram[i+1]&0x80)
+			continue;
+
+		int attr = m_sprite_ram[i+1];
+		int flipx = attr & 0x10;
+		int color = attr & 0x0f;
+		int pri = (attr & 0x20) >> 5;
+
+		/* BCD debug code, to be removed in the end */
+		UINT8 tile_low = (m_sprite_ram[i]&0x0f);
+		UINT8 tile_high = ((m_sprite_ram[i]&0xf0)>>4);
+
+		tile_low += (tile_low > 0x9) ? 0x37 : 0x30;
+		tile_high += (tile_high > 0x9) ? 0x37 : 0x30;
+
+		pdrawgfx_transpen(bitmap,cliprect,machine().gfx[0], tile_high << 1, color, flipx, 0, m_sprite_ram[i+3],m_sprite_ram[i+2],screen.priority(),pri ? 0x02 : 0,0x00);
+		pdrawgfx_transpen(bitmap,cliprect,machine().gfx[0], tile_high << 1, color, flipx, 0, m_sprite_ram[i+3]+8,m_sprite_ram[i+2],screen.priority(),pri ? 0x02 : 0,0x00);
+		pdrawgfx_transpen(bitmap,cliprect,machine().gfx[0], tile_low << 1, color, flipx, 0, m_sprite_ram[i+3]+8,m_sprite_ram[i+2]+8,screen.priority(),pri ? 0x02 : 0,0x00);
+		pdrawgfx_transpen(bitmap,cliprect,machine().gfx[0], tile_low << 1, color, flipx, 0, m_sprite_ram[i+3],m_sprite_ram[i+2]+8,screen.priority(),pri ? 0x02 : 0,0x00);
+	}
+}
+
+UINT32 stfight_state::screen_update_cshooter(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+{
+	set_pens();
+
+	screen.priority().fill(0, cliprect);
+
+	bitmap.fill(0, cliprect);   /* in case m_bg_tilemap is disabled */
+	m_bg_tilemap->draw(screen, bitmap, cliprect, 0,0);
+	m_fg_tilemap->draw(screen, bitmap, cliprect, 0,1);
+
+	/* Draw sprites (may be obscured by foreground layer) */
+//  if (m_vh_latch_ram[0x07] & 0x40)
+		cshooter_draw_sprites(screen,bitmap,cliprect);
+
+	m_tx_tilemap->draw(screen, bitmap, cliprect, 0,0);
 	return 0;
 }

@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /*
 
     Telmac 2000E
@@ -79,7 +81,7 @@ WRITE8_MEMBER( tmc2000e_state::keyboard_latch_w )
 static ADDRESS_MAP_START( tmc2000e_map, AS_PROGRAM, 8, tmc2000e_state )
 	AM_RANGE(0x0000, 0x1fff) AM_RAM
 	AM_RANGE(0xc000, 0xdfff) AM_ROM
-	AM_RANGE(0xfc00, 0xffff) AM_WRITEONLY AM_BASE(m_colorram)
+	AM_RANGE(0xfc00, 0xffff) AM_WRITEONLY AM_SHARE("colorram")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( tmc2000e_io_map, AS_IO, 8, tmc2000e_state )
@@ -95,7 +97,87 @@ ADDRESS_MAP_END
 /* Input Ports */
 
 static INPUT_PORTS_START( tmc2000e )
-	PORT_START("DSW0")	// System Configuration DIPs
+	PORT_START("Y0")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD )
+
+	PORT_START("Y1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD )
+
+	PORT_START("Y2")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD )
+
+	PORT_START("Y3")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD )
+
+	PORT_START("Y4")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD )
+
+	PORT_START("Y5")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD )
+
+	PORT_START("Y6")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD )
+
+	PORT_START("Y7")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD )
+
+	PORT_START("DSW0")  // System Configuration DIPs
 	PORT_DIPNAME( 0x80, 0x00, "Keyboard Type" )
 	PORT_DIPSETTING(    0x00, "ASCII" )
 	PORT_DIPSETTING(    0x80, "Matrix" )
@@ -130,47 +212,21 @@ READ_LINE_MEMBER( tmc2000e_state::gdata_r )
 	return BIT(m_color, 0);
 }
 
-static CDP1864_INTERFACE( tmc2000e_cdp1864_intf )
-{
-	CDP1802_TAG,
-	SCREEN_TAG,
-	CDP1864_INTERLACED,
-	DEVCB_DRIVER_LINE_MEMBER(tmc2000e_state, rdata_r),
-	DEVCB_DRIVER_LINE_MEMBER(tmc2000e_state, bdata_r),
-	DEVCB_DRIVER_LINE_MEMBER(tmc2000e_state, gdata_r),
-	DEVCB_CPU_INPUT_LINE(CDP1802_TAG, COSMAC_INPUT_LINE_INT),
-	DEVCB_CPU_INPUT_LINE(CDP1802_TAG, COSMAC_INPUT_LINE_DMAOUT),
-	DEVCB_CPU_INPUT_LINE(CDP1802_TAG, COSMAC_INPUT_LINE_EF1),
-	DEVCB_NULL,
-	RES_K(2.2),	// unverified
-	RES_K(1),	// unverified
-	RES_K(5.1),	// unverified
-	RES_K(4.7)	// unverified
-};
-
-bool tmc2000e_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
-{
-	m_cti->update_screen(&bitmap, &cliprect);
-
-	return 0;
-}
-
 /* CDP1802 Interface */
 
 READ_LINE_MEMBER( tmc2000e_state::clear_r )
 {
-	return BIT(input_port_read(machine(), "RUN"), 0);
+	return BIT(m_run->read(), 0);
 }
 
 READ_LINE_MEMBER( tmc2000e_state::ef2_r )
 {
-	return (m_cassette)->input() < 0;
+	return m_cassette->input() < 0;
 }
 
 READ_LINE_MEMBER( tmc2000e_state::ef3_r )
 {
-	static const char *const keynames[] = { "IN0", "IN1", "IN2", "IN3", "IN4", "IN5", "IN6", "IN7" };
-	UINT8 data = ~input_port_read(machine(), keynames[m_keylatch / 8]);
+	UINT8 data = ~(m_key_row[m_keylatch / 8])->read();
 
 	return BIT(data, m_keylatch % 8);
 }
@@ -217,11 +273,17 @@ static COSMAC_INTERFACE( tmc2000e_config )
 
 void tmc2000e_state::machine_start()
 {
-	/* allocate color RAM */
-	m_colorram = auto_alloc_array(machine(), UINT8, TMC2000E_COLORRAM_SIZE);
+	// find keyboard rows
+	m_key_row[0] = m_y0;
+	m_key_row[1] = m_y1;
+	m_key_row[2] = m_y2;
+	m_key_row[3] = m_y3;
+	m_key_row[4] = m_y4;
+	m_key_row[5] = m_y5;
+	m_key_row[6] = m_y6;
+	m_key_row[7] = m_y7;
 
 	/* register for state saving */
-	save_pointer(NAME(m_colorram), TMC2000E_COLORRAM_SIZE);
 	save_item(NAME(m_cdp1864_efx));
 	save_item(NAME(m_keylatch));
 }
@@ -244,41 +306,25 @@ static const cassette_interface tmc2000_cassette_interface =
 	NULL
 };
 
-static const floppy_interface tmc2000e_floppy_interface =
-{
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	FLOPPY_STANDARD_5_25_DSDD,
-	FLOPPY_OPTIONS_NAME(default),
-	NULL,
-	NULL
-};
-
 static MACHINE_CONFIG_START( tmc2000e, tmc2000e_state )
 	// basic system hardware
-	MCFG_CPU_ADD(CDP1802_TAG, COSMAC, XTAL_1_75MHz)
+	MCFG_CPU_ADD(CDP1802_TAG, CDP1802, XTAL_1_75MHz)
 	MCFG_CPU_PROGRAM_MAP(tmc2000e_map)
 	MCFG_CPU_IO_MAP(tmc2000e_io_map)
 	MCFG_CPU_CONFIG(tmc2000e_config)
 
 	// video hardware
 	MCFG_CDP1864_SCREEN_ADD(SCREEN_TAG, XTAL_1_75MHz)
-
-	MCFG_PALETTE_LENGTH(8)
+	MCFG_SCREEN_UPDATE_DEVICE(CDP1864_TAG, cdp1864_device, screen_update)
 
 	// sound hardware
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_CDP1864_ADD(CDP1864_TAG, XTAL_1_75MHz, tmc2000e_cdp1864_intf)
+	MCFG_CDP1864_ADD(CDP1864_TAG, SCREEN_TAG, XTAL_1_75MHz, GND, INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_INT), INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_DMAOUT), INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_EF1), NULL, READLINE(tmc2000e_state, rdata_r), READLINE(tmc2000e_state, bdata_r), READLINE(tmc2000e_state, gdata_r))
+	MCFG_CDP1864_CHROMINANCE(RES_K(2.2), RES_K(1), RES_K(5.1), RES_K(4.7)) // unverified
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	/* devices */
-	MCFG_PRINTER_ADD("printer")
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, tmc2000_cassette_interface)
-
-	MCFG_FLOPPY_2_DRIVES_ADD(tmc2000e_floppy_interface)
+	MCFG_CASSETTE_ADD("cassette", tmc2000_cassette_interface)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -297,4 +343,4 @@ ROM_START( tmc2000e )
 ROM_END
 
 //    YEAR  NAME      PARENT   COMPAT   MACHINE   INPUT     INIT    COMPANY        FULLNAME
-COMP( 1980, tmc2000e, 0,       0,	    tmc2000e, tmc2000e, 0,		"Telercas Oy", "Telmac 2000E", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+COMP( 1980, tmc2000e, 0,       0,       tmc2000e, tmc2000e, driver_device, 0,       "Telercas Oy", "Telmac 2000E", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )

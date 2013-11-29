@@ -8,44 +8,39 @@ Atari Canyon Bomber video emulation
 #include "includes/canyon.h"
 
 
-WRITE8_HANDLER( canyon_videoram_w )
+WRITE8_MEMBER(canyon_state::canyon_videoram_w)
 {
-	canyon_state *state = space->machine().driver_data<canyon_state>();
-	state->m_videoram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
+	m_videoram[offset] = data;
+	m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 
-static TILE_GET_INFO( get_bg_tile_info )
+TILE_GET_INFO_MEMBER(canyon_state::get_bg_tile_info)
 {
-	canyon_state *state = machine.driver_data<canyon_state>();
-	UINT8 code = state->m_videoram[tile_index];
+	UINT8 code = m_videoram[tile_index];
 
-	SET_TILE_INFO(0, code & 0x3f, code >> 7, 0);
+	SET_TILE_INFO_MEMBER(0, code & 0x3f, code >> 7, 0);
 }
 
 
-VIDEO_START( canyon )
+void canyon_state::video_start()
 {
-	canyon_state *state = machine.driver_data<canyon_state>();
-
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	m_bg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(canyon_state::get_bg_tile_info),this), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
 }
 
 
-static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle* cliprect )
+void canyon_state::draw_sprites( bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
-	canyon_state *state = machine.driver_data<canyon_state>();
 	int i;
 
 	for (i = 0; i < 2; i++)
 	{
-		int x = state->m_videoram[0x3d0 + 2 * i + 0x1];
-		int y = state->m_videoram[0x3d0 + 2 * i + 0x8];
-		int c = state->m_videoram[0x3d0 + 2 * i + 0x9];
+		int x = m_videoram[0x3d0 + 2 * i + 0x1];
+		int y = m_videoram[0x3d0 + 2 * i + 0x8];
+		int c = m_videoram[0x3d0 + 2 * i + 0x9];
 
 		drawgfx_transpen(bitmap, cliprect,
-			machine.gfx[1],
+			machine().gfx[1],
 			c >> 3,
 			i,
 			!(c & 0x80), 0,
@@ -55,45 +50,33 @@ static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rect
 }
 
 
-static void draw_bombs( running_machine &machine, bitmap_t *bitmap, const rectangle* cliprect )
+void canyon_state::draw_bombs( bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
-	canyon_state *state = machine.driver_data<canyon_state>();
 	int i;
 
 	for (i = 0; i < 2; i++)
 	{
-		int sx = 254 - state->m_videoram[0x3d0 + 2 * i + 0x5];
-		int sy = 246 - state->m_videoram[0x3d0 + 2 * i + 0xc];
+		int sx = 254 - m_videoram[0x3d0 + 2 * i + 0x5];
+		int sy = 246 - m_videoram[0x3d0 + 2 * i + 0xc];
 
-		rectangle rect;
+		rectangle rect(sx, sx + 1, sy, sy + 1);
+		rect &= cliprect;
 
-		rect.min_x = sx;
-		rect.min_y = sy;
-		rect.max_x = sx + 1;
-		rect.max_y = sy + 1;
-
-		if (rect.min_x < cliprect->min_x) rect.min_x = cliprect->min_x;
-		if (rect.min_y < cliprect->min_y) rect.min_y = cliprect->min_y;
-		if (rect.max_x > cliprect->max_x) rect.max_x = cliprect->max_x;
-		if (rect.max_y > cliprect->max_y) rect.max_y = cliprect->max_y;
-
-		bitmap_fill(bitmap, &rect, 1 + 2 * i);
+		bitmap.fill(1 + 2 * i, rect);
 	}
 }
 
 
-SCREEN_UPDATE( canyon )
+UINT32 canyon_state::screen_update_canyon(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	canyon_state *state = screen->machine().driver_data<canyon_state>();
+	m_bg_tilemap->draw(screen, bitmap, cliprect, 0, 0);
 
-	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
+	draw_sprites(bitmap, cliprect);
 
-	draw_sprites(screen->machine(), bitmap, cliprect);
-
-	draw_bombs(screen->machine(), bitmap, cliprect);
+	draw_bombs(bitmap, cliprect);
 
 	/* watchdog is disabled during service mode */
-	watchdog_enable(screen->machine(), !(input_port_read(screen->machine(), "IN2") & 0x10));
+	machine().watchdog_enable(!(ioport("IN2")->read() & 0x10));
 
 	return 0;
 }

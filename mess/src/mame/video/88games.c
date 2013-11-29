@@ -1,5 +1,4 @@
 #include "emu.h"
-#include "video/konicdev.h"
 #include "includes/88games.h"
 
 
@@ -28,7 +27,7 @@ void _88games_sprite_callback( running_machine &machine, int *code, int *color, 
 {
 	_88games_state *state = machine.driver_data<_88games_state>();
 
-	*priority = (*color & 0x20) >> 5;	/* ??? */
+	*priority = (*color & 0x20) >> 5;   /* ??? */
 	*color = state->m_sprite_colorbase + (*color & 0x0f);
 }
 
@@ -54,29 +53,27 @@ void _88games_zoom_callback( running_machine &machine, int *code, int *color, in
 
 ***************************************************************************/
 
-SCREEN_UPDATE( 88games )
+UINT32 _88games_state::screen_update_88games(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	_88games_state *state = screen->machine().driver_data<_88games_state>();
+	m_k052109->tilemap_update();
 
-	k052109_tilemap_update(state->m_k052109);
-
-	if (state->m_k88games_priority)
+	if (m_k88games_priority)
 	{
-		k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 0, TILEMAP_DRAW_OPAQUE, 0);	// tile 0
-		k051960_sprites_draw(state->m_k051960, bitmap,cliprect, 1, 1);
-		k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 2, 0, 0);	// tile 2
-		k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 1, 0, 0);	// tile 1
-		k051960_sprites_draw(state->m_k051960, bitmap, cliprect, 0, 0);
-		k051316_zoom_draw(state->m_k051316, bitmap, cliprect, 0, 0);
+		m_k052109->tilemap_draw(screen, bitmap, cliprect, 0, TILEMAP_DRAW_OPAQUE, 0);   // tile 0
+		m_k051960->k051960_sprites_draw(bitmap, cliprect, screen.priority(), 1, 1);
+		m_k052109->tilemap_draw(screen, bitmap, cliprect, 2, 0, 0); // tile 2
+		m_k052109->tilemap_draw(screen, bitmap, cliprect, 1, 0, 0); // tile 1
+		m_k051960->k051960_sprites_draw(bitmap, cliprect, screen.priority(), 0, 0);
+		m_k051316->zoom_draw(screen, bitmap, cliprect, 0, 0);
 	}
 	else
 	{
-		k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 2, TILEMAP_DRAW_OPAQUE, 0);	// tile 2
-		k051316_zoom_draw(state->m_k051316, bitmap, cliprect, 0, 0);
-		k051960_sprites_draw(state->m_k051960, bitmap, cliprect, 0, 0);
-		k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 1, 0, 0);	// tile 1
-		k051960_sprites_draw(state->m_k051960, bitmap, cliprect, 1, 1);
-		k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 0, 0, 0);	// tile 0
+		m_k052109->tilemap_draw(screen, bitmap, cliprect, 2, TILEMAP_DRAW_OPAQUE, 0);   // tile 2
+		m_k051316->zoom_draw(screen, bitmap, cliprect, 0, 0);
+		m_k051960->k051960_sprites_draw(bitmap, cliprect, screen.priority(), 0, 0);
+		m_k052109->tilemap_draw(screen, bitmap, cliprect, 1, 0, 0); // tile 1
+		m_k051960->k051960_sprites_draw(bitmap, cliprect, screen.priority(), 1, 1);
+		m_k052109->tilemap_draw(screen, bitmap, cliprect, 0, 0, 0); // tile 0
 	}
 
 	return 0;

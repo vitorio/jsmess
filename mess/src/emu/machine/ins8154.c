@@ -2,8 +2,10 @@
 
     National Semiconductor INS8154
 
-    N-Channel 128-by-8 Bit RAM Input/Output (RAM I/O)
+    license: MAME, GPL-2.0+
+    copyright-holders: Dirk Best
 
+    N-Channel 128-by-8 Bit RAM Input/Output (RAM I/O)
 
     TODO: Strobed modes
 
@@ -11,7 +13,6 @@
 
 #include "emu.h"
 #include "ins8154.h"
-#include "devhelpr.h"
 
 
 /***************************************************************************
@@ -43,9 +44,8 @@ const device_type INS8154 = &device_creator<ins8154_device>;
 //-------------------------------------------------
 
 ins8154_device::ins8154_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, INS8154, "INS8154", tag, owner, clock)
+	: device_t(mconfig, INS8154, "INS8154", tag, owner, clock, "ins8154", __FILE__)
 {
-
 }
 
 
@@ -67,11 +67,11 @@ void ins8154_device::device_config_complete()
 	// or initialize to defaults if none provided
 	else
 	{
-    	memset(&m_in_a_cb, 0, sizeof(m_in_a_cb));
-    	memset(&m_in_b_cb, 0, sizeof(m_in_b_cb));
-    	memset(&m_out_a_cb, 0, sizeof(m_out_a_cb));
-    	memset(&m_out_b_cb, 0, sizeof(m_out_b_cb));
-    	memset(&m_out_irq_cb, 0, sizeof(m_out_irq_cb));
+		memset(&m_in_a_cb, 0, sizeof(m_in_a_cb));
+		memset(&m_in_b_cb, 0, sizeof(m_in_b_cb));
+		memset(&m_out_a_cb, 0, sizeof(m_out_a_cb));
+		memset(&m_out_b_cb, 0, sizeof(m_out_b_cb));
+		memset(&m_out_irq_cb, 0, sizeof(m_out_irq_cb));
 	}
 }
 
@@ -116,7 +116,7 @@ void ins8154_device::device_reset()
 }
 
 
-READ8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_r)
+READ8_MEMBER(ins8154_device::ins8154_r)
 {
 	UINT8 val = 0xff;
 
@@ -170,7 +170,7 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_r)
 	return val;
 }
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_porta_w)
+WRITE8_MEMBER(ins8154_device::ins8154_porta_w)
 {
 	m_out_a = data;
 
@@ -181,7 +181,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_porta_w)
 	}
 }
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_portb_w)
+WRITE8_MEMBER(ins8154_device::ins8154_portb_w)
 {
 	m_out_b = data;
 
@@ -192,7 +192,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_portb_w)
 	}
 }
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_w)
+WRITE8_MEMBER(ins8154_device::ins8154_w)
 {
 	if (offset > 0x24)
 	{
@@ -206,11 +206,11 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_w)
 	switch (offset)
 	{
 	case 0x20:
-		ins8154_porta_w(0, data);
+		ins8154_porta_w(space, 0, data);
 		break;
 
 	case 0x21:
-		ins8154_portb_w(0, data);
+		ins8154_portb_w(space, 0, data);
 		break;
 
 	case 0x22:
@@ -246,11 +246,11 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_w)
 			/* Set bit */
 			if (offset < 0x08)
 			{
-				ins8154_porta_w(0, m_out_a |= offset & 0x07);
+				ins8154_porta_w(space, 0, m_out_a |= offset & 0x07);
 			}
 			else
 			{
-				ins8154_portb_w(0, m_out_b |= (offset >> 4) & 0x07);
+				ins8154_portb_w(space, 0, m_out_b |= (offset >> 4) & 0x07);
 			}
 		}
 		else
@@ -258,11 +258,11 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ins8154, ins8154_w)
 			/* Clear bit */
 			if (offset < 0x08)
 			{
-				ins8154_porta_w(0, m_out_a & ~(offset & 0x07));
+				ins8154_porta_w(space, 0, m_out_a & ~(offset & 0x07));
 			}
 			else
 			{
-				ins8154_portb_w(0, m_out_b & ~((offset >> 4) & 0x07));
+				ins8154_portb_w(space, 0, m_out_b & ~((offset >> 4) & 0x07));
 			}
 		}
 

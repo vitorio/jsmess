@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     distate.h
 
     Device state interfaces.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -54,10 +25,10 @@
 // standard state indexes
 enum
 {
-	STATE_GENPC = -1,				// generic program counter (live)
-	STATE_GENPCBASE = -2,			// generic program counter (base of current instruction)
-	STATE_GENSP = -3,				// generic stack pointer
-	STATE_GENFLAGS = -4				// generic flags
+	STATE_GENPC = -1,               // generic program counter (live)
+	STATE_GENPCBASE = -2,           // generic program counter (base of current instruction)
+	STATE_GENSP = -3,               // generic stack pointer
+	STATE_GENFLAGS = -4             // generic flags
 };
 
 
@@ -78,6 +49,7 @@ class device_state_entry
 private:
 	// construction/destruction
 	device_state_entry(int index, const char *symbol, void *dataptr, UINT8 size);
+	device_state_entry(int index);
 
 public:
 	// post-construction modifiers
@@ -96,14 +68,16 @@ public:
 	void *dataptr() const { return m_dataptr.v; }
 	const char *symbol() const { return m_symbol; }
 	bool visible() const { return ((m_flags & DSF_NOSHOW) == 0); }
+	bool divider() const { return m_flags & DSF_DIVIDER; }
 
 protected:
 	// device state flags
-	static const UINT8 DSF_NOSHOW =			0x01;	// don't display this entry in the registers view
-	static const UINT8 DSF_IMPORT =			0x02;	// call the import function after writing new data
-	static const UINT8 DSF_IMPORT_SEXT =	0x04;	// sign-extend the data when writing new data
-	static const UINT8 DSF_EXPORT =			0x08;	// call the export function prior to fetching the data
-	static const UINT8 DSF_CUSTOM_STRING =	0x10;	// set if the format has a custom string
+	static const UINT8 DSF_NOSHOW =         0x01;   // don't display this entry in the registers view
+	static const UINT8 DSF_IMPORT =         0x02;   // call the import function after writing new data
+	static const UINT8 DSF_IMPORT_SEXT =    0x04;   // sign-extend the data when writing new data
+	static const UINT8 DSF_EXPORT =         0x08;   // call the export function prior to fetching the data
+	static const UINT8 DSF_CUSTOM_STRING =  0x10;   // set if the format has a custom string
+	static const UINT8 DSF_DIVIDER       =  0x20;   // set if this is a divider entry
 
 	// helpers
 	bool needs_custom_string() const { return ((m_flags & DSF_CUSTOM_STRING) != 0); }
@@ -120,19 +94,19 @@ protected:
 	void set_value(const char *string) const;
 
 	// statics
-	static const UINT64 k_decimal_divisor[20];		// divisors for outputting decimal values
+	static const UINT64 k_decimal_divisor[20];      // divisors for outputting decimal values
 
 	// public state description
-	device_state_entry *	m_next;					// link to next item
-	UINT32					m_index;				// index by which this item is referred
-	generic_ptr				m_dataptr;				// pointer to where the data lives
-	UINT64					m_datamask;				// mask that applies to the data
-	UINT8					m_datasize;				// size of the data
-	UINT8					m_flags;				// flags for this data
-	astring					m_symbol;				// symbol for display; all lower-case version for expressions
-	astring					m_format;				// supported formats
-	bool					m_default_format;		// true if we are still using default format
-	UINT64					m_sizemask;				// mask derived from the data size
+	device_state_entry *    m_next;                 // link to next item
+	UINT32                  m_index;                // index by which this item is referred
+	generic_ptr             m_dataptr;              // pointer to where the data lives
+	UINT64                  m_datamask;             // mask that applies to the data
+	UINT8                   m_datasize;             // size of the data
+	UINT8                   m_flags;                // flags for this data
+	astring                 m_symbol;               // symbol for display; all lower-case version for expressions
+	astring                 m_format;               // supported formats
+	bool                    m_default_format;       // true if we are still using default format
+	UINT64                  m_sizemask;             // mask derived from the data size
 };
 
 
@@ -151,19 +125,26 @@ public:
 	const device_state_entry *state_first() const { return m_state_list.first(); }
 
 	// state getters
-	UINT64 state(int index);
-	offs_t pc() { return state(STATE_GENPC); }
-	offs_t pcbase() { return state(STATE_GENPCBASE); }
-	offs_t sp() { return state(STATE_GENSP); }
-	UINT64 flags() { return state(STATE_GENFLAGS); }
+	UINT64 state_int(int index);
 	astring &state_string(int index, astring &dest);
 	int state_string_max_length(int index);
+	offs_t pc() { return state_int(STATE_GENPC); }
+	offs_t pcbase() { return state_int(STATE_GENPCBASE); }
+	offs_t sp() { return state_int(STATE_GENSP); }
+	UINT64 flags() { return state_int(STATE_GENFLAGS); }
 
 	// state setters
-	void set_state(int index, UINT64 value);
-	void set_state(int index, const char *string);
+	void set_state_int(int index, UINT64 value);
+	void set_state_string(int index, const char *string);
+	void set_pc(offs_t pc) { set_state_int(STATE_GENPC, pc); }
 
-public:	// protected eventually
+	// deliberately ambiguous functions; if you have the state interface
+	// just use it or pc() and pcbase() directly
+	device_state_interface &state() { return *this; }
+	offs_t safe_pc() { return pc(); }
+	offs_t safe_pcbase() { return pcbase(); }
+
+public: // protected eventually
 
 	// add a new state item
 	template<class _ItemType> device_state_entry &state_add(int index, const char *symbol, _ItemType &data)
@@ -171,6 +152,9 @@ public:	// protected eventually
 		return state_add(index, symbol, &data, sizeof(data));
 	}
 	device_state_entry &state_add(int index, const char *symbol, void *data, UINT8 size);
+
+	// add a new divider entry
+	device_state_entry &state_add_divider(int index);
 
 protected:
 	// derived class overrides
@@ -186,14 +170,17 @@ protected:
 	const device_state_entry *state_find_entry(int index);
 
 	// constants
-	static const int k_fast_state_min = -4;							// range for fast state
-	static const int k_fast_state_max = 256;						// lookups
+	static const int FAST_STATE_MIN = -4;                           // range for fast state
+	static const int FAST_STATE_MAX = 256;                          // lookups
 
 	// state
-	simple_list<device_state_entry>			m_state_list;			// head of state list
-	device_state_entry *					m_fast_state[k_fast_state_max  + 1 - k_fast_state_min];
+	simple_list<device_state_entry>         m_state_list;           // head of state list
+	device_state_entry *                    m_fast_state[FAST_STATE_MAX + 1 - FAST_STATE_MIN];
 																	// fast access to common entries
 };
+
+// iterator
+typedef device_interface_iterator<device_state_interface> state_interface_iterator;
 
 
 
@@ -202,17 +189,25 @@ protected:
 //**************************************************************************
 
 //-------------------------------------------------
-//  device_state - return a pointer to the device
-//  state interface for this device
+//  device_t::safe_pc - return the current PC
+//  or 0 if no state object exists
 //-------------------------------------------------
 
-inline device_state_interface *device_state(device_t *device)
+inline offs_t device_t::safe_pc()
 {
-	device_state_interface *intf;
-	if (!device->interface(intf))
-		throw emu_fatalerror("Device '%s' does not have state interface", device->tag());
-	return intf;
+	return (m_state != NULL) ? m_state->pc() : 0;
 }
 
 
-#endif	/* __DISTATE_H__ */
+//-------------------------------------------------
+//  device_t::safe_pcbase - return the current PC
+//  base or 0 if no state object exists
+//-------------------------------------------------
+
+inline offs_t device_t::safe_pcbase()
+{
+	return (m_state != NULL) ? m_state->pcbase() : 0;
+}
+
+
+#endif  /* __DISTATE_H__ */

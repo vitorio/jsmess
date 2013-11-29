@@ -6,51 +6,59 @@
 #include "rf5c68.h"
 
 
-#define  NUM_CHANNELS    (8)
+// device type definition
+const device_type RF5C68 = &device_creator<rf5c68_device>;
 
 
-typedef struct _pcm_channel pcm_channel;
-struct _pcm_channel
+//**************************************************************************
+//  LIVE DEVICE
+//**************************************************************************
+
+//-------------------------------------------------
+//  rf5c68_device - constructor
+//-------------------------------------------------
+
+rf5c68_device::rf5c68_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, RF5C68, "RF5C68", tag, owner, clock, "rf5c68", __FILE__),
+		device_sound_interface(mconfig, *this),
+		m_stream(NULL),
+		m_cbank(0),
+		m_wbank(0),
+		m_enable(0),
+		m_sample_callback(NULL)
 {
-	UINT8		enable;
-	UINT8		env;
-	UINT8		pan;
-	UINT8		start;
-	UINT32		addr;
-	UINT16		step;
-	UINT16		loopst;
-};
-
-
-typedef struct _rf5c68_state rf5c68_state;
-struct _rf5c68_state
-{
-	sound_stream *		stream;
-	pcm_channel			chan[NUM_CHANNELS];
-	UINT8				cbank;
-	UINT8				wbank;
-	UINT8				enable;
-	UINT8				data[0x10000];
-	void				(*sample_callback)(device_t* device,int channel);
-	device_t* device;
-};
-
-
-INLINE rf5c68_state *get_safe_token(device_t *device)
-{
-	assert(device != NULL);
-	assert(device->type() == RF5C68);
-	return (rf5c68_state *)downcast<legacy_device_base *>(device)->token();
+	memset(m_data, 0, sizeof(UINT8)*0x10000);
 }
 
 
-/************************************************/
-/*    RF5C68 stream update                      */
-/************************************************/
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
 
-static STREAM_UPDATE( rf5c68_update )
+void rf5c68_device::device_start()
 {
-	rf5c68_state *chip = (rf5c68_state *)param;
+	const rf5c68_interface* intf = (const rf5c68_interface*)static_config();
+
+	/* allocate memory for the chip */
+	memset(m_data, 0xff, sizeof(m_data));
+
+	/* allocate the stream */
+	m_stream = stream_alloc(0, 2, clock() / 384);
+
+	/* set up callback */
+	if(intf != NULL)
+		m_sample_callback = intf->sample_end_callback;
+	else
+		m_sample_callback = NULL;
+}
+
+
+//-------------------------------------------------
+//  sound_stream_update - handle a stream update
+//-------------------------------------------------
+
+void rf5c68_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
+{
 	stream_sample_t *left = outputs[0];
 	stream_sample_t *right = outputs[1];
 	int i, j;
@@ -60,13 +68,13 @@ static STREAM_UPDATE( rf5c68_update )
 	memset(right, 0, samples * sizeof(*right));
 
 	/* bail if not enabled */
-	if (!chip->enable)
+	if (!m_enable)
 		return;
 
 	/* loop over channels */
-	for (i = 0; i < NUM_CHANNELS; i++)
+	for (i = 0; i < RF5C68_NUM_CHANNELS; i++)
 	{
-		pcm_channel *chan = &chip->chan[i];
+		rf5c68_pcm_channel *chan = &m_chan[i];
 
 		/* if this channel is active, accumulate samples */
 		if (chan->enable)
@@ -80,18 +88,18 @@ static STREAM_UPDATE( rf5c68_update )
 				int sample;
 
 				/* trigger sample callback */
-				if(chip->sample_callback)
+				if(m_sample_callback)
 				{
 					if(((chan->addr >> 11) & 0xfff) == 0xfff)
-						chip->sample_callback(chip->device,((chan->addr >> 11)/0x2000));
+						m_sample_callback(this, ((chan->addr >> 11)/0x2000));
 				}
 
 				/* fetch the sample and handle looping */
-				sample = chip->data[(chan->addr >> 11) & 0xffff];
+				sample = m_data[(chan->addr >> 11) & 0xffff];
 				if (sample == 0xff)
 				{
 					chan->addr = chan->loopst << 11;
-					sample = chip->data[(chan->addr >> 11) & 0xffff];
+					sample = m_data[(chan->addr >> 11) & 0xffff];
 
 					/* if we loop to a loop point, we're effectively dead */
 					if (sample == 0xff)
@@ -133,157 +141,98 @@ static STREAM_UPDATE( rf5c68_update )
 }
 
 
-/************************************************/
-/*    RF5C68 start                              */
-/************************************************/
+//-------------------------------------------------
+//    RF5C68 write register
+//-------------------------------------------------
 
-static DEVICE_START( rf5c68 )
+READ8_MEMBER( rf5c68_device::rf5c68_r )
 {
-	const rf5c68_interface* intf = (const rf5c68_interface*)device->static_config();
-
-	/* allocate memory for the chip */
-	rf5c68_state *chip = get_safe_token(device);
-
-	/* allocate the stream */
-	chip->stream = device->machine().sound().stream_alloc(*device, 0, 2, device->clock() / 384, chip, rf5c68_update);
-
-	chip->device = device;
-
-	/* set up callback */
-	if(intf != NULL)
-		chip->sample_callback = intf->sample_end_callback;
-	else
-		chip->sample_callback = NULL;
-}
-
-
-/************************************************/
-/*    RF5C68 write register                     */
-/************************************************/
-
-READ8_DEVICE_HANDLER( rf5c68_r )
-{
-	rf5c68_state *chip = get_safe_token(device);
 	UINT8 shift;
 
-	chip->stream->update();
+	m_stream->update();
 	shift = (offset & 1) ? 11 + 8 : 11;
 
-//  printf("%08x\n",(chip->chan[(offset & 0x0e) >> 1].addr));
+//  printf("%08x\n",(m_chan[(offset & 0x0e) >> 1].addr));
 
-	return (chip->chan[(offset & 0x0e) >> 1].addr) >> (shift);
+	return (m_chan[(offset & 0x0e) >> 1].addr) >> (shift);
 }
 
-WRITE8_DEVICE_HANDLER( rf5c68_w )
+WRITE8_MEMBER( rf5c68_device::rf5c68_w )
 {
-	rf5c68_state *chip = get_safe_token(device);
-	pcm_channel *chan = &chip->chan[chip->cbank];
+	rf5c68_pcm_channel *chan = &m_chan[m_cbank];
 	int i;
 
 	/* force the stream to update first */
-	chip->stream->update();
+	m_stream->update();
 
 	/* switch off the address */
 	switch (offset)
 	{
-		case 0x00:	/* envelope */
+		case 0x00:  /* envelope */
 			chan->env = data;
 			break;
 
-		case 0x01:	/* pan */
+		case 0x01:  /* pan */
 			chan->pan = data;
 			break;
 
-		case 0x02:	/* FDL */
+		case 0x02:  /* FDL */
 			chan->step = (chan->step & 0xff00) | (data & 0x00ff);
 			break;
 
-		case 0x03:	/* FDH */
+		case 0x03:  /* FDH */
 			chan->step = (chan->step & 0x00ff) | ((data << 8) & 0xff00);
 			break;
 
-		case 0x04:	/* LSL */
+		case 0x04:  /* LSL */
 			chan->loopst = (chan->loopst & 0xff00) | (data & 0x00ff);
 			break;
 
-		case 0x05:	/* LSH */
+		case 0x05:  /* LSH */
 			chan->loopst = (chan->loopst & 0x00ff) | ((data << 8) & 0xff00);
 			break;
 
-		case 0x06:	/* ST */
+		case 0x06:  /* ST */
 			chan->start = data;
 			if (!chan->enable)
 				chan->addr = chan->start << (8 + 11);
 			break;
 
-		case 0x07:	/* control reg */
-			chip->enable = (data >> 7) & 1;
+		case 0x07:  /* control reg */
+			m_enable = (data >> 7) & 1;
 			if (data & 0x40)
-				chip->cbank = data & 7;
+				m_cbank = data & 7;
 			else
-				chip->wbank = data & 15;
+				m_wbank = data & 15;
 			break;
 
-		case 0x08:	/* channel on/off reg */
+		case 0x08:  /* channel on/off reg */
 			for (i = 0; i < 8; i++)
 			{
-				chip->chan[i].enable = (~data >> i) & 1;
-				if (!chip->chan[i].enable)
-					chip->chan[i].addr = chip->chan[i].start << (8 + 11);
+				m_chan[i].enable = (~data >> i) & 1;
+				if (!m_chan[i].enable)
+					m_chan[i].addr = m_chan[i].start << (8 + 11);
 			}
 			break;
 	}
 }
 
 
-/************************************************/
-/*    RF5C68 read memory                        */
-/************************************************/
+//-------------------------------------------------
+//    RF5C68 read memory
+//-------------------------------------------------
 
-READ8_DEVICE_HANDLER( rf5c68_mem_r )
+READ8_MEMBER( rf5c68_device::rf5c68_mem_r )
 {
-	rf5c68_state *chip = get_safe_token(device);
-	return chip->data[chip->wbank * 0x1000 + offset];
+	return m_data[m_wbank * 0x1000 + offset];
 }
 
 
-/************************************************/
-/*    RF5C68 write memory                       */
-/************************************************/
+//-------------------------------------------------
+//    RF5C68 write memory
+//-------------------------------------------------
 
-WRITE8_DEVICE_HANDLER( rf5c68_mem_w )
+WRITE8_MEMBER( rf5c68_device::rf5c68_mem_w )
 {
-	rf5c68_state *chip = get_safe_token(device);
-	chip->data[chip->wbank * 0x1000 + offset] = data;
+	m_data[m_wbank * 0x1000 + offset] = data;
 }
-
-
-
-/**************************************************************************
- * Generic get_info
- **************************************************************************/
-
-DEVICE_GET_INFO( rf5c68 )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(rf5c68_state);				break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME( rf5c68 );			break;
-		case DEVINFO_FCT_STOP:							/* Nothing */									break;
-		case DEVINFO_FCT_RESET:							/* Nothing */									break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "RF5C68");						break;
-		case DEVINFO_STR_FAMILY:					strcpy(info->s, "Ricoh PCM");					break;
-		case DEVINFO_STR_VERSION:					strcpy(info->s, "1.0");							break;
-		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);						break;
-		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
-	}
-}
-
-/**************** end of file ****************/
-
-DEFINE_LEGACY_SOUND_DEVICE(RF5C68, rf5c68);

@@ -5,37 +5,28 @@
 
     TODO:
 
+    - slot interface for cartridges
     - hand controllers
     - scramble RAM also
     - CAQ tape support
     - memory mapper
     - proper video timings
     - PAL mode
-    - floppy support
+    - floppy support (I/O 0xe6-0xe7 = drive 1, 0xea-0xeb = drive 2)
     - modem
     - "old" version of BASIC ROM
     - Aquarius II
 
 ***************************************************************************/
 
-#include "emu.h"
 #include "includes/aquarius.h"
-#include "cpu/z80/z80.h"
-#include "sound/ay8910.h"
-#include "sound/speaker.h"
-#include "imagedev/flopdrv.h"
-#include "formats/basicdsk.h"
-#include "imagedev/cartslot.h"
-#include "imagedev/cassette.h"
-#include "imagedev/printer.h"
-#include "machine/ram.h"
 
 /***************************************************************************
     CONSTANTS
 ***************************************************************************/
 
-#define XTAL1	8866000
-#define XTAL2	XTAL_7_15909MHz
+#define XTAL1   8866000
+#define XTAL2   XTAL_7_15909MHz
 
 
 /***************************************************************************
@@ -59,10 +50,9 @@
     mark cycle. Control must be returned at that time to the cassette routine
     in order to maintain data integrity.
 */
-static READ8_HANDLER( cassette_r )
+READ8_MEMBER(aquarius_state::cassette_r)
 {
-	cassette_image_device *cassette = space->machine().device<cassette_image_device>(CASSETTE_TAG);
-	return ((cassette)->input() < +0.0) ? 0 : 1;
+	return ((m_cassette)->input() < +0.0) ? 0 : 1;
 }
 
 
@@ -71,13 +61,10 @@ static READ8_HANDLER( cassette_r )
     will appear on audio output. Sound port is a simple one bit I/O and therefore
     it must be toggled at a specific rate under software control.
 */
-static WRITE8_HANDLER( cassette_w )
+WRITE8_MEMBER(aquarius_state::cassette_w)
 {
-	device_t *speaker = space->machine().device(SPEAKER_TAG);
-	cassette_image_device *cassette = space->machine().device<cassette_image_device>(CASSETTE_TAG);
-
-	speaker_level_w(speaker, BIT(data, 0));
-	cassette->output( BIT(data, 0) ? +1.0 : -1.0);
+	m_speaker->level_w(BIT(data, 0));
+	m_cassette->output(BIT(data, 0) ? +1.0 : -1.0);
 }
 
 
@@ -93,10 +80,9 @@ static WRITE8_HANDLER( cassette_w )
         +                             +       +
     +++++                             +++++++++
 */
-static READ8_HANDLER( vsync_r )
+READ8_MEMBER(aquarius_state::vsync_r)
 {
-	screen_device *screen = space->machine().primary_screen;
-	return screen->vblank() ? 0 : 1;
+	return m_screen->vblank() ? 0 : 1;
 }
 
 
@@ -105,7 +91,7 @@ static READ8_HANDLER( vsync_r )
     map with the upper 16K. A 1 in this bit indicates swapping. This bit is reset
     after power up initialization.
 */
-static WRITE8_HANDLER( mapper_w )
+WRITE8_MEMBER(aquarius_state::mapper_w)
 {
 }
 
@@ -115,7 +101,7 @@ static WRITE8_HANDLER( mapper_w )
     to send status from PRNHASK pin at bit D0. A 1 indicates printer is ready,
     0 means not ready.
 */
-static READ8_HANDLER( printer_r )
+READ8_MEMBER(aquarius_state::printer_r)
 {
 	return 1; /* ready */
 }
@@ -127,7 +113,7 @@ static READ8_HANDLER( printer_r )
     baudrate is variable. In BASIC this is a 1200 baud printer port for
     the 40 column thermal printer.
 */
-static WRITE8_HANDLER( printer_w )
+WRITE8_MEMBER(aquarius_state::printer_w)
 {
 }
 
@@ -143,18 +129,18 @@ static WRITE8_HANDLER( printer_w )
     Therefore the keyboard can be scanned by placing a specific scanning
     pattern in (A) or (B) and reading the result returned on rows.
 */
-static READ8_HANDLER( keyboard_r )
+READ8_MEMBER(aquarius_state::keyboard_r)
 {
 	UINT8 result = 0xff;
 
-	if (!BIT(offset,  8)) result &= input_port_read(space->machine(), "ROW0");
-	if (!BIT(offset,  9)) result &= input_port_read(space->machine(), "ROW1");
-	if (!BIT(offset, 10)) result &= input_port_read(space->machine(), "ROW2");
-	if (!BIT(offset, 11)) result &= input_port_read(space->machine(), "ROW3");
-	if (!BIT(offset, 12)) result &= input_port_read(space->machine(), "ROW4");
-	if (!BIT(offset, 13)) result &= input_port_read(space->machine(), "ROW5");
-	if (!BIT(offset, 14)) result &= input_port_read(space->machine(), "ROW6");
-	if (!BIT(offset, 15)) result &= input_port_read(space->machine(), "ROW7");
+	if (!BIT(offset,  8)) result &= m_y0->read();
+	if (!BIT(offset,  9)) result &= m_y1->read();
+	if (!BIT(offset, 10)) result &= m_y2->read();
+	if (!BIT(offset, 11)) result &= m_y3->read();
+	if (!BIT(offset, 12)) result &= m_y4->read();
+	if (!BIT(offset, 13)) result &= m_y5->read();
+	if (!BIT(offset, 14)) result &= m_y6->read();
+	if (!BIT(offset, 15)) result &= m_y7->read();
 
 	return result;
 }
@@ -178,34 +164,15 @@ static READ8_HANDLER( keyboard_r )
     routine. For game cartridge the lock pattern is generated from data in the
     game cartridge itself.
 */
-static WRITE8_HANDLER( scrambler_w )
+WRITE8_MEMBER(aquarius_state::scrambler_w)
 {
-	aquarius_state *state = space->machine().driver_data<aquarius_state>();
-	state->m_scrambler = data;
+	m_scrambler = data;
 }
 
-static READ8_HANDLER( cartridge_r )
+READ8_MEMBER(aquarius_state::cartridge_r)
 {
-	aquarius_state *state = space->machine().driver_data<aquarius_state>();
-	UINT8 *rom = space->machine().region("maincpu")->base() + 0xc000;
-	return rom[offset] ^ state->m_scrambler;
-}
-
-
-/***************************************************************************
-    QUICK DISK DRIVE
-***************************************************************************/
-
-/* note: 0xe6-0xe7 = drive 1, 0xea-0xeb = drive 2 */
-static READ8_HANDLER( floppy_r )
-{
-	logerror("%s: floppy_r[0x%02x]\n", space->machine().describe_context(), offset);
-	return 0xff;
-}
-
-static WRITE8_HANDLER( floppy_w )
-{
-	logerror("%s: floppy_w[0x%02x] (0x%02x)\n", space->machine().describe_context(), offset, data);
+	UINT8 *rom = m_rom->base() + 0xc000;
+	return rom[offset] ^ m_scrambler;
 }
 
 
@@ -213,15 +180,15 @@ static WRITE8_HANDLER( floppy_w )
     DRIVER INIT
 ***************************************************************************/
 
-static DRIVER_INIT( aquarius )
+DRIVER_INIT_MEMBER(aquarius_state,aquarius)
 {
 	/* install expansion memory if available */
-	if (ram_get_size(machine.device(RAM_TAG)) > 0x1000)
+	if (m_ram->size() > 0x1000)
 	{
-		address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+		address_space &space = m_maincpu->space(AS_PROGRAM);
 
-		space->install_readwrite_bank(0x4000, 0x4000 + ram_get_size(machine.device(RAM_TAG)) - 0x1000 - 1, "bank1");
-		memory_set_bankptr(machine, "bank1", ram_get_ptr(machine.device(RAM_TAG)));
+		space.install_readwrite_bank(0x4000, 0x4000 + m_ram->size() - 0x1000 - 1, "bank1");
+		membank("bank1")->set_base(m_ram->pointer());
 	}
 }
 
@@ -230,28 +197,23 @@ static DRIVER_INIT( aquarius )
     ADDRESS MAPS
 ***************************************************************************/
 
-static ADDRESS_MAP_START( aquarius_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( aquarius_mem, AS_PROGRAM, 8, aquarius_state )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(aquarius_videoram_w) AM_BASE_MEMBER(aquarius_state, m_videoram)
-	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(aquarius_colorram_w) AM_BASE_MEMBER(aquarius_state, m_colorram)
+	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(aquarius_videoram_w) AM_SHARE("videoram")
+	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(aquarius_colorram_w) AM_SHARE("colorram")
 	AM_RANGE(0x3800, 0x3fff) AM_RAM
 	AM_RANGE(0x4000, 0xbfff) AM_NOP /* expansion ram */
 	AM_RANGE(0xc000, 0xffff) AM_READ(cartridge_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( aquarius_io, AS_IO, 8 )
+static ADDRESS_MAP_START( aquarius_io, AS_IO, 8, aquarius_state )
 //  AM_RANGE(0x7e, 0x7f) AM_MIRROR(0xff00) AM_READWRITE(modem_r, modem_w)
-	AM_RANGE(0xf6, 0xf6) AM_MIRROR(0xff00) AM_DEVREADWRITE("ay8910", ay8910_r, ay8910_data_w)
-	AM_RANGE(0xf7, 0xf7) AM_MIRROR(0xff00) AM_DEVWRITE("ay8910", ay8910_address_w)
+	AM_RANGE(0xf6, 0xf6) AM_MIRROR(0xff00) AM_DEVREADWRITE("ay8910", ay8910_device, data_r, data_w)
+	AM_RANGE(0xf7, 0xf7) AM_MIRROR(0xff00) AM_DEVWRITE("ay8910", ay8910_device, address_w)
 	AM_RANGE(0xfc, 0xfc) AM_MIRROR(0xff00) AM_READWRITE(cassette_r, cassette_w)
 	AM_RANGE(0xfd, 0xfd) AM_MIRROR(0xff00) AM_READWRITE(vsync_r, mapper_w)
 	AM_RANGE(0xfe, 0xfe) AM_MIRROR(0xff00) AM_READWRITE(printer_r, printer_w)
 	AM_RANGE(0xff, 0xff) AM_MIRROR(0xff00) AM_MASK(0xff00) AM_READWRITE(keyboard_r, scrambler_w)
-ADDRESS_MAP_END
-
-static ADDRESS_MAP_START( aquarius_qd_io, AS_IO, 8 )
-	AM_IMPORT_FROM(aquarius_io)
-	AM_RANGE(0xe0, 0xef) AM_MIRROR(0xff00) AM_READWRITE(floppy_r, floppy_w)
 ADDRESS_MAP_END
 
 
@@ -260,13 +222,13 @@ ADDRESS_MAP_END
 ***************************************************************************/
 
 /* the 'reset' key is directly tied to the reset line of the cpu */
-static INPUT_CHANGED( aquarius_reset )
+INPUT_CHANGED_MEMBER(aquarius_state::aquarius_reset)
 {
-	cputag_set_input_line(field.machine(), "maincpu", INPUT_LINE_RESET, newval ? CLEAR_LINE : ASSERT_LINE);
+	m_maincpu->set_input_line(INPUT_LINE_RESET, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static INPUT_PORTS_START( aquarius )
-	PORT_START("ROW0")
+	PORT_START("Y0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("= +\tNEXT") PORT_CODE(KEYCODE_EQUALS) PORT_CHAR('=') PORT_CHAR('+')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("\xE2\x86\x90 \\") PORT_CODE(KEYCODE_BACKSPACE) PORT_CHAR(8) PORT_CHAR('\\')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME(": *\tPEEK") PORT_CODE(KEYCODE_QUOTE) PORT_CHAR(':') PORT_CHAR('*')
@@ -275,7 +237,7 @@ static INPUT_PORTS_START( aquarius )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME(". >\tVAL") PORT_CODE(KEYCODE_STOP) PORT_CHAR('.') PORT_CHAR('>')
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("ROW1")
+	PORT_START("Y1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("- _\tFOR") PORT_CODE(KEYCODE_MINUS) PORT_CHAR('-') PORT_CHAR('_')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("/ ^") PORT_CODE(KEYCODE_OPENBRACE) PORT_CHAR('/') PORT_CHAR('^')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("0 ?") PORT_CODE(KEYCODE_0) PORT_CHAR('0') PORT_CHAR('?')
@@ -284,7 +246,7 @@ static INPUT_PORTS_START( aquarius )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME(", <\tSTR$") PORT_CODE(KEYCODE_COMMA) PORT_CHAR(',') PORT_CHAR('<')
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("ROW2")
+	PORT_START("Y2")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("9 )\tCOPY") PORT_CODE(KEYCODE_9) PORT_CHAR('9') PORT_CHAR(')')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_O) PORT_CHAR('o') PORT_CHAR('O') PORT_CHAR(15)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("K\tPRESET") PORT_CODE(KEYCODE_K) PORT_CHAR('k') PORT_CHAR('K') PORT_CHAR(11)
@@ -293,7 +255,7 @@ static INPUT_PORTS_START( aquarius )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("J\tPSET") PORT_CODE(KEYCODE_J) PORT_CHAR('j') PORT_CHAR('J') PORT_CHAR(10)
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("ROW3")
+	PORT_START("Y3")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("8 (\tRETURN") PORT_CODE(KEYCODE_8) PORT_CHAR('8') PORT_CHAR('(')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_I) PORT_CHAR('i') PORT_CHAR('I') PORT_CHAR(9)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("7 '\tGOSUB") PORT_CODE(KEYCODE_7) PORT_CHAR('7') PORT_CHAR('\'')
@@ -302,7 +264,7 @@ static INPUT_PORTS_START( aquarius )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("B\tMID$") PORT_CODE(KEYCODE_B) PORT_CHAR('b') PORT_CHAR('B') PORT_CHAR(2)
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("ROW4")
+	PORT_START("Y4")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("6 &\tON") PORT_CODE(KEYCODE_6) PORT_CHAR('6') PORT_CHAR('&')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Y) PORT_CHAR('y') PORT_CHAR('Y') PORT_CHAR(25)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("G\tBELL") PORT_CODE(KEYCODE_G) PORT_CHAR('g') PORT_CHAR('G') PORT_CHAR(7)
@@ -311,7 +273,7 @@ static INPUT_PORTS_START( aquarius )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("F\tDATA") PORT_CODE(KEYCODE_F) PORT_CHAR('f') PORT_CHAR('F') PORT_CHAR(6)
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("ROW5")
+	PORT_START("Y5")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("5 %\tGOTO") PORT_CODE(KEYCODE_5) PORT_CHAR('5') PORT_CHAR('%')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("T\tINPUT") PORT_CODE(KEYCODE_T) PORT_CHAR('t') PORT_CHAR('T') PORT_CHAR(20)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("4 $\tTHEN") PORT_CODE(KEYCODE_4) PORT_CHAR('4') PORT_CHAR('$')
@@ -320,7 +282,7 @@ static INPUT_PORTS_START( aquarius )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("X\tDELINE") PORT_CODE(KEYCODE_X) PORT_CHAR('x') PORT_CHAR('X') PORT_CHAR(24)
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("ROW6")
+	PORT_START("Y6")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("3 #\tIF") PORT_CODE(KEYCODE_3) PORT_CHAR('3') PORT_CHAR('#')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("E\tDIM") PORT_CODE(KEYCODE_E) PORT_CHAR('e') PORT_CHAR('E') PORT_CHAR(5)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("S\tSTPLST") PORT_CODE(KEYCODE_S) PORT_CHAR('s') PORT_CHAR('S') PORT_CHAR(19)
@@ -329,7 +291,7 @@ static INPUT_PORTS_START( aquarius )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("A\tCSAVE") PORT_CODE(KEYCODE_A) PORT_CHAR('a') PORT_CHAR('A') PORT_CHAR(1)
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("ROW7")
+	PORT_START("Y7")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("2 \"\tLIST") PORT_CODE(KEYCODE_2) PORT_CHAR('2') PORT_CHAR('\"')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("W\tREM") PORT_CODE(KEYCODE_W) PORT_CHAR('w') PORT_CHAR('W') PORT_CHAR(23)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("1 !\tRUN") PORT_CODE(KEYCODE_1) PORT_CHAR('1') PORT_CHAR('!')
@@ -339,7 +301,7 @@ static INPUT_PORTS_START( aquarius )
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("RESET")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("RST") PORT_CODE(KEYCODE_F10) PORT_CHANGED(aquarius_reset, 0)
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("RST") PORT_CODE(KEYCODE_F10) PORT_CHANGED_MEMBER(DEVICE_SELF, aquarius_state, aquarius_reset, 0)
 
 	PORT_START("LEFT")
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -399,37 +361,31 @@ static MACHINE_CONFIG_START( aquarius, aquarius_state )
 	MCFG_CPU_ADD("maincpu", Z80, XTAL_3_579545MHz) // ???
 	MCFG_CPU_PROGRAM_MAP(aquarius_mem)
 	MCFG_CPU_IO_MAP(aquarius_io)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", aquarius_state,  irq0_line_hold)
 
-    /* video hardware */
+	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2800))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40 * 8, 25 * 8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 40 * 8 - 1, 0 * 8, 25 * 8 - 1)
-	MCFG_SCREEN_UPDATE( aquarius )
+	MCFG_SCREEN_UPDATE_DRIVER(aquarius_state, screen_update_aquarius)
 
 	MCFG_GFXDECODE( aquarius )
 	MCFG_PALETTE_LENGTH(512)
-	MCFG_PALETTE_INIT( aquarius )
 
-	MCFG_VIDEO_START( aquarius )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	MCFG_SOUND_ADD("ay8910", AY8910, XTAL_3_579545MHz/2) // ??? AY-3-8914
 	MCFG_SOUND_CONFIG(aquarius_ay8910_interface)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	/* printer */
-	MCFG_PRINTER_ADD("printer")
-
 	/* cassette */
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, aquarius_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", aquarius_cassette_interface )
 
 	/* cartridge */
 	MCFG_CARTSLOT_ADD("cart")
@@ -444,34 +400,6 @@ static MACHINE_CONFIG_START( aquarius, aquarius_state )
 
 	/* software lists */
 	MCFG_SOFTWARE_LIST_ADD("cart_list","aquarius")
-MACHINE_CONFIG_END
-
-static FLOPPY_OPTIONS_START(aquarius)
-	/* 128K images, 64K/side */
-FLOPPY_OPTIONS_END
-
-static const floppy_interface aquarius_floppy_interface =
-{
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	FLOPPY_STANDARD_5_25_DSHD,
-	FLOPPY_OPTIONS_NAME(aquarius),
-	NULL,
-	NULL
-};
-
-static MACHINE_CONFIG_DERIVED( aquarius_qd, aquarius )
-
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_IO_MAP(aquarius_qd_io)
-
-	MCFG_DEVICE_REMOVE("cart")
-	MCFG_DEVICE_REMOVE("cart_list")
-
-	MCFG_FLOPPY_2_DRIVES_ADD(aquarius_floppy_interface)
 MACHINE_CONFIG_END
 
 
@@ -497,31 +425,11 @@ ROM_START( aquarius )
 	ROM_LOAD("aq2.u5", 0x000, 0x800, CRC(e117f57c) SHA1(3588c0267c67dfbbda615bcf8dc3d3a5c5bd815a))
 ROM_END
 
-ROM_START( aquarius_qd )
-	ROM_REGION(0x10000, "maincpu", 0)
-
-	/* basic rom */
-	ROM_DEFAULT_BIOS("rev2")
-	ROM_SYSTEM_BIOS(0, "rev1", "Revision 1")
-	ROMX_LOAD("aq1.u2", 0x0000, 0x2000, NO_DUMP, ROM_BIOS(1))
-	ROM_SYSTEM_BIOS(1, "rev2", "Revision 2")
-	ROMX_LOAD("aq2.u2", 0x0000, 0x2000, CRC(a2d15bcf) SHA1(ca6ef55e9ead41453efbf5062d6a60285e9661a6), ROM_BIOS(2))
-
-	/* quickdisk floppy drive */
-	ROM_LOAD("qd1_01.bin", 0xc000, 0x4000, CRC(06dc0ef3) SHA1(94b18c2f3f4baca8f5ab0feb2458c88b1682f8b2))
-	ROM_LOAD("qd1_02.bin", 0xc000, 0x4000, CRC(10fb3dca) SHA1(ea38ce45628c9d9e4e633c7638e8d860a40c3ffa))
-
-	/* charrom */
-	ROM_REGION(0x800, "gfx1", 0)
-	ROM_LOAD("aq2.u5", 0x000, 0x800, CRC(e117f57c) SHA1(3588c0267c67dfbbda615bcf8dc3d3a5c5bd815a))
-ROM_END
-
 
 /***************************************************************************
     GAME DRIVERS
 ***************************************************************************/
 
 /*    YEAR  NAME         PARENT    COMPAT  MACHINE      INPUT     INIT      COMPANY   FULLNAME                         FLAGS */
-COMP( 1983, aquarius,    0,        0,      aquarius,    aquarius, aquarius, "Mattel", "Aquarius (NTSC)",               0 )
-COMP( 1983, aquarius_qd, aquarius, 0,      aquarius_qd, aquarius, aquarius, "Mattel", "Aquarius w/ Quick Disk (NTSC)", 0 )
-//COMP( 1984,   aquariu2,   aquarius,   0,      aquarius,   aquarius,   0,  "Mattel",   "Aquarius II",  GAME_NOT_WORKING )
+COMP( 1983, aquarius,    0,        0,      aquarius,    aquarius, aquarius_state, aquarius, "Mattel", "Aquarius (NTSC)",               0 )
+//COMP( 1984,   aquariu2,   aquarius,   0,      aquarius,   aquarius, driver_device,   0,  "Mattel",   "Aquarius II",  GAME_NOT_WORKING )

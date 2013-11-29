@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Couriersud
 /***************************************************************************
 
     Intel 8257 Programmable DMA Controller emulation
@@ -50,7 +52,7 @@
 #define I8257_INTERFACE(_name) \
 	const i8257_interface (_name) =
 
-#define I8257_NUM_CHANNELS		(4)
+#define I8257_NUM_CHANNELS      (4)
 
 
 /***************************************************************************
@@ -62,17 +64,17 @@
 
 struct i8257_interface
 {
-	devcb_write_line	m_out_hrq_cb;
-	devcb_write_line	m_out_tc_cb;
-	devcb_write_line	m_out_mark_cb;
+	devcb_write_line    m_out_hrq_cb;
+	devcb_write_line    m_out_tc_cb;
+	devcb_write_line    m_out_mark_cb;
 
 	/* accessors to main memory */
-	devcb_read8			m_in_memr_cb; // TODO m_in_memr_cb[I8257_NUM_CHANNELS];
-	devcb_write8		m_out_memw_cb; // TODO m_out_memw_cb[I8257_NUM_CHANNELS];
+	devcb_read8         m_in_memr_cb; // TODO m_in_memr_cb[I8257_NUM_CHANNELS];
+	devcb_write8        m_out_memw_cb; // TODO m_out_memw_cb[I8257_NUM_CHANNELS];
 
 	/* channel accesors */
-	devcb_read8			m_in_ior_cb[I8257_NUM_CHANNELS];
-	devcb_write8		m_out_iow_cb[I8257_NUM_CHANNELS];
+	devcb_read8         m_in_ior_cb[I8257_NUM_CHANNELS];
+	devcb_write8        m_out_iow_cb[I8257_NUM_CHANNELS];
 };
 
 
@@ -80,24 +82,34 @@ struct i8257_interface
 // ======================> i8257_device
 
 class i8257_device :  public device_t,
-                      public i8257_interface
+						public i8257_interface
 {
 public:
-    // construction/destruction
-    i8257_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	// construction/destruction
+	i8257_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
 	/* register access */
-	UINT8 i8257_r(UINT32 offset);
-	void i8257_w(UINT32 offset, UINT8 data);
+	DECLARE_READ8_MEMBER( i8257_r );
+	DECLARE_WRITE8_MEMBER( i8257_w );
+
+	/* hold acknowledge */
+	WRITE_LINE_MEMBER( i8257_hlda_w ) { }
+
+	/* ready */
+	WRITE_LINE_MEMBER( i8257_ready_w ) { }
 
 	/* data request */
+	WRITE_LINE_MEMBER( i8257_drq0_w ) { i8257_drq_w(0, state); }
+	WRITE_LINE_MEMBER( i8257_drq1_w ) { i8257_drq_w(1, state); }
+	WRITE_LINE_MEMBER( i8257_drq2_w ) { i8257_drq_w(2, state); }
+	WRITE_LINE_MEMBER( i8257_drq3_w ) { i8257_drq_w(3, state); }
 	void i8257_drq_w(int channel, int state);
 
 protected:
-    // device-level overrides
-    virtual void device_config_complete();
-    virtual void device_start();
-    virtual void device_reset();
+	// device-level overrides
+	virtual void device_config_complete();
+	virtual void device_start();
+	virtual void device_reset();
 	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 
 private:
@@ -109,13 +121,13 @@ private:
 	void i8257_update_status();
 	void i8257_prepare_msb_flip();
 
-	devcb_resolved_write_line	m_out_hrq_func;
-	devcb_resolved_write_line	m_out_tc_func;
-	devcb_resolved_write_line	m_out_mark_func;
-	devcb_resolved_read8		m_in_memr_func;
-	devcb_resolved_write8		m_out_memw_func;
-	devcb_resolved_read8		m_in_ior_func[I8257_NUM_CHANNELS];
-	devcb_resolved_write8		m_out_iow_func[I8257_NUM_CHANNELS];
+	devcb_resolved_write_line   m_out_hrq_func;
+	devcb_resolved_write_line   m_out_tc_func;
+	devcb_resolved_write_line   m_out_mark_func;
+	devcb_resolved_read8        m_in_memr_func;
+	devcb_resolved_write8       m_out_memw_func;
+	devcb_resolved_read8        m_in_ior_func[I8257_NUM_CHANNELS];
+	devcb_resolved_write8       m_out_iow_func[I8257_NUM_CHANNELS];
 
 	emu_timer *m_timer;
 	emu_timer *m_msbflip_timer;
@@ -139,27 +151,5 @@ private:
 
 // device type definition
 extern const device_type I8257;
-
-
-
-/***************************************************************************
-    PROTOTYPES
-***************************************************************************/
-
-/* register access */
-READ8_DEVICE_HANDLER( i8257_r );
-WRITE8_DEVICE_HANDLER( i8257_w );
-
-/* hold acknowledge */
-WRITE_LINE_DEVICE_HANDLER( i8257_hlda_w );
-
-/* ready */
-WRITE_LINE_DEVICE_HANDLER( i8257_ready_w );
-
-/* data request */
-WRITE_LINE_DEVICE_HANDLER( i8257_drq0_w );
-WRITE_LINE_DEVICE_HANDLER( i8257_drq1_w );
-WRITE_LINE_DEVICE_HANDLER( i8257_drq2_w );
-WRITE_LINE_DEVICE_HANDLER( i8257_drq3_w );
 
 #endif

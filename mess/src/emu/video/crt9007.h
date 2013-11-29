@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     SMC CRT9007 CRT Video Processor and Controller (VPAC) emulation
@@ -70,19 +72,18 @@
 
 struct crt9007_interface
 {
-	const char *m_screen_tag;		/* screen we are acting on */
-	int hpixels_per_column;		/* number of pixels per video memory address */
+	int hpixels_per_column;     /* number of pixels per video memory address */
 
-	devcb_write_line		m_out_int_cb;
-	devcb_write_line		m_out_dmar_cb;
+	devcb_write_line        m_out_int_cb;
+	devcb_write_line        m_out_dmar_cb;
 
-	devcb_write_line		m_out_vs_cb;
-	devcb_write_line		m_out_hs_cb;
+	devcb_write_line        m_out_vs_cb;
+	devcb_write_line        m_out_hs_cb;
 
 	devcb_write_line        m_out_vlt_cb;
-    devcb_write_line        m_out_curs_cb;
-    devcb_write_line        m_out_drb_cb;
-    devcb_write_line        m_out_cblank_cb;
+	devcb_write_line        m_out_curs_cb;
+	devcb_write_line        m_out_drb_cb;
+	devcb_write_line        m_out_cblank_cb;
 
 	devcb_write_line        m_out_slg_cb;
 	devcb_write_line        m_out_sld_cb;
@@ -92,16 +93,17 @@ struct crt9007_interface
 
 // ======================> crt9007_device
 
-class crt9007_device :	public device_t,
+class crt9007_device :  public device_t,
 						public device_memory_interface,
-                        public crt9007_interface
+						public device_video_interface,
+						public crt9007_interface
 {
 public:
-    // construction/destruction
-    crt9007_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	// construction/destruction
+	crt9007_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
-    DECLARE_READ8_MEMBER( read );
-    DECLARE_WRITE8_MEMBER( write );
+	DECLARE_READ8_MEMBER( read );
+	DECLARE_WRITE8_MEMBER( write );
 	DECLARE_WRITE_LINE_MEMBER( ack_w );
 	DECLARE_WRITE_LINE_MEMBER( lpstb_w );
 	DECLARE_READ_LINE_MEMBER( vlt_r );
@@ -110,10 +112,10 @@ public:
 	void set_hpixels_per_column(int hpixels_per_column);
 
 protected:
-    // device-level overrides
+	// device-level overrides
 	virtual void device_config_complete();
-    virtual void device_start();
-    virtual void device_reset();
+	virtual void device_start();
+	virtual void device_reset();
 	virtual void device_clock_changed();
 	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 
@@ -141,18 +143,16 @@ private:
 
 	inline void recompute_parameters();
 
-	devcb_resolved_write_line	m_out_int_func;
-	devcb_resolved_write_line	m_out_dmar_func;
-	devcb_resolved_write_line	m_out_hs_func;
-	devcb_resolved_write_line	m_out_vs_func;
-	devcb_resolved_write_line	m_out_vlt_func;
-	devcb_resolved_write_line	m_out_curs_func;
-	devcb_resolved_write_line	m_out_drb_func;
-	devcb_resolved_write_line	m_out_cblank_func;
-	devcb_resolved_write_line	m_out_slg_func;
-	devcb_resolved_write_line	m_out_sld_func;
-
-	screen_device *m_screen;
+	devcb_resolved_write_line   m_out_int_func;
+	devcb_resolved_write_line   m_out_dmar_func;
+	devcb_resolved_write_line   m_out_hs_func;
+	devcb_resolved_write_line   m_out_vs_func;
+	devcb_resolved_write_line   m_out_vlt_func;
+	devcb_resolved_write_line   m_out_curs_func;
+	devcb_resolved_write_line   m_out_drb_func;
+	devcb_resolved_write_line   m_out_cblank_func;
+	devcb_resolved_write_line   m_out_slg_func;
+	devcb_resolved_write_line   m_out_sld_func;
 
 	// registers
 	UINT8 m_reg[0x3d];
@@ -176,8 +176,8 @@ private:
 	int m_vlt;
 	int m_drb;
 	int m_wben;
-	int m_slg;
-	int m_sld;
+	//int m_slg;
+	//int m_sld;
 	int m_lpstb;
 
 	// DMA
@@ -195,8 +195,8 @@ private:
 	emu_timer *m_drb_timer;
 	emu_timer *m_dma_timer;
 
-    // address space configurations
-	const address_space_config		m_space_config;
+	// address space configurations
+	const address_space_config      m_space_config;
 };
 
 

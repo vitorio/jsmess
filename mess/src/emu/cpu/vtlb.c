@@ -1,12 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     vtlb.c
 
     Generic virtual TLB implementation.
-
-    Copyright Aaron Giles
-    Released for general non-commercial use under the MAME license
-    Visit http://mamedev.org for licensing and usage restrictions.
 
 ***************************************************************************/
 
@@ -19,7 +17,7 @@
     DEBUGGING
 ***************************************************************************/
 
-#define PRINTF_TLB			(0)
+#define PRINTF_TLB          (0)
 
 
 
@@ -28,19 +26,19 @@
 ***************************************************************************/
 
 /* VTLB state */
-struct _vtlb_state
+struct vtlb_state
 {
-	cpu_device *		cpudevice;			/* CPU device */
-	address_spacenum	space;				/* address space */
-	int 				dynamic;			/* number of dynamic entries */
-	int					fixed;				/* number of fixed entries */
-	int					dynindex;			/* index of next dynamic entry */
-	int					pageshift;			/* bits to shift to get page index */
-	int					addrwidth;			/* logical address bus width */
-	offs_t *			live;				/* array of live entries by table index */
-	int *				fixedpages;			/* number of pages each fixed entry covers */
-	vtlb_entry *		table;				/* table of entries by address */
-	vtlb_entry *		save;				/* cache of live table entries for saving */
+	cpu_device *        cpudevice;          /* CPU device */
+	address_spacenum    space;              /* address space */
+	int                 dynamic;            /* number of dynamic entries */
+	int                 fixed;              /* number of fixed entries */
+	int                 dynindex;           /* index of next dynamic entry */
+	int                 pageshift;          /* bits to shift to get page index */
+	int                 addrwidth;          /* logical address bus width */
+	offs_t *            live;               /* array of live entries by table index */
+	int *               fixedpages;         /* number of pages each fixed entry covers */
+	vtlb_entry *        table;              /* table of entries by address */
+	vtlb_entry *        save;               /* cache of live table entries for saving */
 };
 
 
@@ -225,7 +223,41 @@ void vtlb_load(vtlb_state *vtlb, int entrynum, int numpages, offs_t address, vtl
 		vtlb->table[tableindex + pagenum] = value + (pagenum << vtlb->pageshift);
 }
 
+/*-------------------------------------------------
+    vtlb_dynload - load a dynamic VTLB entry
+-------------------------------------------------*/
 
+void vtlb_dynload(vtlb_state *vtlb, UINT32 index, offs_t address, vtlb_entry value)
+{
+	vtlb_entry entry = vtlb->table[index];
+
+	if (vtlb->dynamic == 0)
+	{
+		if (PRINTF_TLB)
+			printf("failed: no dynamic entries\n");
+		return;
+	}
+
+	int liveindex = vtlb->dynindex++ % vtlb->dynamic;
+	/* is entry already live? */
+	if (!(entry & VTLB_FLAG_VALID))
+	{
+		/* if an entry already exists at this index, free it */
+		if (vtlb->live[liveindex] != 0)
+			vtlb->table[vtlb->live[liveindex] - 1] = 0;
+
+		/* claim this new entry */
+		vtlb->live[liveindex] = index + 1;
+	}
+	/* form a new blank entry */
+	entry = (address >> vtlb->pageshift) << vtlb->pageshift;
+	entry |= VTLB_FLAG_VALID | value;
+
+	if (PRINTF_TLB)
+		printf("success (%08X), new entry\n", address);
+
+	vtlb->table[index] = entry;
+}
 
 /***************************************************************************
     FLUSHING

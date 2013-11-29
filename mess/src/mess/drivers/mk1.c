@@ -40,7 +40,6 @@ TODO:
 ******************************************************************************/
 
 #include "emu.h"
-
 #include "cpu/f8/f8.h"
 #include "machine/f3853.h"
 #include "mk1.lh"
@@ -50,135 +49,130 @@ class mk1_state : public driver_device
 {
 public:
 	mk1_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu") { }
 
+	DECLARE_READ8_MEMBER(mk1_f8_r);
+	DECLARE_WRITE8_MEMBER(mk1_f8_w);
 	UINT8 m_f8[2];
 	UINT8 m_led[4];
+	virtual void machine_start();
+	TIMER_DEVICE_CALLBACK_MEMBER(mk1_update_leds);
+	required_device<cpu_device> m_maincpu;
 };
 
 
-#define MAIN_CLOCK	1000000
+#define MAIN_CLOCK  1000000
 
 
-static READ8_HANDLER( mk1_f8_r ) {
-	mk1_state *state = space->machine().driver_data<mk1_state>();
-    UINT8 data = state->m_f8[offset];
+READ8_MEMBER( mk1_state::mk1_f8_r )
+{
+	UINT8 i, data = m_f8[offset];
 
-    if ( offset == 0 ) {
-		if ( data & 1 ) data |= input_port_read(space->machine(), "LINE1");
-		if ( data & 2 ) data |= input_port_read(space->machine(), "LINE2");
-		if ( data & 4 ) data |= input_port_read(space->machine(), "LINE3");
-		if ( data & 8 ) data |= input_port_read(space->machine(), "LINE4");
-		if ( data & 0x10 ) {
-			if ( input_port_read(space->machine(), "LINE1") & 0x10 ) data |= 1;
-			if ( input_port_read(space->machine(), "LINE2") & 0x10 ) data |= 2;
-			if ( input_port_read(space->machine(), "LINE3") & 0x10 ) data |= 4;
-			if ( input_port_read(space->machine(), "LINE4") & 0x10 ) data |= 8;
+	if ( offset == 0 )
+	{
+		if (BIT(data, 0)) data |= ioport("LINE1")->read();
+		if (BIT(data, 1)) data |= ioport("LINE2")->read();
+		if (BIT(data, 2)) data |= ioport("LINE3")->read();
+		if (BIT(data, 3)) data |= ioport("LINE4")->read();
+
+		for (i = 4; i < 8; i++)
+		{
+			if (BIT(data, i))
+			{
+				if (BIT(ioport("LINE1")->read(), i)) data |= 1;
+				if (BIT(ioport("LINE2")->read(), i)) data |= 2;
+				if (BIT(ioport("LINE3")->read(), i)) data |= 4;
+				if (BIT(ioport("LINE4")->read(), i)) data |= 8;
+			}
 		}
-		if ( data & 0x20 ) {
-			if ( input_port_read(space->machine(), "LINE1") & 0x20 ) data |= 1;
-			if ( input_port_read(space->machine(), "LINE2") & 0x20 ) data |= 2;
-			if ( input_port_read(space->machine(), "LINE3") & 0x20 ) data |= 4;
-			if ( input_port_read(space->machine(), "LINE4") & 0x20 ) data |= 8;
-		}
-		if ( data & 0x40 ) {
-			if ( input_port_read(space->machine(), "LINE1") & 0x40 ) data |= 1;
-			if ( input_port_read(space->machine(), "LINE2") & 0x40 ) data |= 2;
-			if ( input_port_read(space->machine(), "LINE3") & 0x40 ) data |= 4;
-			if ( input_port_read(space->machine(), "LINE4") & 0x40 ) data |= 8;
-		}
-		if ( data & 0x80 ) {
-			if ( input_port_read(space->machine(), "LINE1") & 0x80 ) data |= 1;
-			if ( input_port_read(space->machine(), "LINE2") & 0x80 ) data |= 2;
-			if ( input_port_read(space->machine(), "LINE3") & 0x80 ) data |= 4;
-			if ( input_port_read(space->machine(), "LINE4") & 0x80 ) data |= 8;
-		}
-    }
-    return data;
+	}
+	return data;
 }
 
-static WRITE8_HANDLER( mk1_f8_w ) {
-	mk1_state *state = space->machine().driver_data<mk1_state>();
+WRITE8_MEMBER( mk1_state::mk1_f8_w )
+{
 	/* 0 is high and allows also input */
-	state->m_f8[offset] = data;
+	m_f8[offset] = data;
 
-	if ( ! ( state->m_f8[1] & 1 ) ) state->m_led[0] = BITSWAP8( state->m_f8[0],2,1,3,4,5,6,7,0 );
-	if ( ! ( state->m_f8[1] & 2 ) ) state->m_led[1] = BITSWAP8( state->m_f8[0],2,1,3,4,5,6,7,0 );
-	if ( ! ( state->m_f8[1] & 4 ) ) state->m_led[2] = BITSWAP8( state->m_f8[0],2,1,3,4,5,6,7,0 );
-	if ( ! ( state->m_f8[1] & 8 ) ) state->m_led[3] = BITSWAP8( state->m_f8[0],2,1,3,4,5,6,7,0 );
+	if ( ! ( m_f8[1] & 1 ) ) m_led[0] = BITSWAP8( m_f8[0],2,1,3,4,5,6,7,0 );
+	if ( ! ( m_f8[1] & 2 ) ) m_led[1] = BITSWAP8( m_f8[0],2,1,3,4,5,6,7,0 );
+	if ( ! ( m_f8[1] & 4 ) ) m_led[2] = BITSWAP8( m_f8[0],2,1,3,4,5,6,7,0 );
+	if ( ! ( m_f8[1] & 8 ) ) m_led[3] = BITSWAP8( m_f8[0],2,1,3,4,5,6,7,0 );
 }
 
-static ADDRESS_MAP_START( mk1_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mk1_mem, AS_PROGRAM, 8, mk1_state )
 	AM_RANGE( 0x0000, 0x07ff ) AM_ROM
 	AM_RANGE( 0x1800, 0x18ff ) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mk1_io, AS_IO, 8 )
+static ADDRESS_MAP_START( mk1_io, AS_IO, 8, mk1_state )
 	AM_RANGE( 0x0, 0x1 ) AM_READWRITE( mk1_f8_r, mk1_f8_w )
-	AM_RANGE( 0xc, 0xf ) AM_DEVREADWRITE("f3853", f3853_r, f3853_w )
+	AM_RANGE( 0xc, 0xf ) AM_DEVREADWRITE("f3853", f3853_device, f3853_r, f3853_w )
 ADDRESS_MAP_END
 
 
 static INPUT_PORTS_START( mk1 )
-	PORT_START("RESET")	/* 0 */
+	PORT_START("RESET") /* 0 */
 	PORT_DIPNAME ( 0x01, 0x01, "Switch")
 	PORT_DIPSETTING(  0, "L" )
 	PORT_DIPSETTING(  1, "S" )
 
-	PORT_START("LINE1")	/* 1 */
-	PORT_BIT ( 0x0f, 0x0,	 IPT_UNUSED )
+	PORT_START("LINE1") /* 1 */
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("White A    King") PORT_CODE(KEYCODE_A)
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("White B    Queen") PORT_CODE(KEYCODE_B)
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("White C    Bishop") PORT_CODE(KEYCODE_C)
 	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("White D    PLAY") PORT_CODE(KEYCODE_D)
+	PORT_BIT(0x0f, IP_ACTIVE_HIGH, IPT_UNUSED )
 
-	PORT_START("LINE2")	/* 2 */
-	PORT_BIT ( 0x0f, 0x0,	 IPT_UNUSED )
+	PORT_START("LINE2") /* 2 */
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("White E    Knight") PORT_CODE(KEYCODE_E)
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("White F    Castle") PORT_CODE(KEYCODE_F)
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("White G    Pawn") PORT_CODE(KEYCODE_G)
 	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("White H    md") PORT_CODE(KEYCODE_H)
+	PORT_BIT(0x0f, IP_ACTIVE_HIGH, IPT_UNUSED )
 
-	PORT_START("LINE3")	/* 3 */
-	PORT_BIT ( 0x0f, 0x0,	 IPT_UNUSED )
+	PORT_START("LINE3") /* 3 */
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Black 1    King") PORT_CODE(KEYCODE_1)
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Black 2    Queen") PORT_CODE(KEYCODE_2)
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Black 3    Bishop") PORT_CODE(KEYCODE_3)
 	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Black 4    fp") PORT_CODE(KEYCODE_4)
+	PORT_BIT(0x0f, IP_ACTIVE_HIGH, IPT_UNUSED )
 
-	PORT_START("LINE4")	/* 4 */
-	PORT_BIT ( 0x0f, 0x0,	 IPT_UNUSED )
+	PORT_START("LINE4") /* 4 */
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Black 5    Knight") PORT_CODE(KEYCODE_5)
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Black 6    Castle") PORT_CODE(KEYCODE_6)
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Black 7    Pawn") PORT_CODE(KEYCODE_7)
 	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Black 8    ep") PORT_CODE(KEYCODE_8)
+	PORT_BIT(0x0f, IP_ACTIVE_HIGH, IPT_UNUSED )
 INPUT_PORTS_END
 
 
-static TIMER_DEVICE_CALLBACK( mk1_update_leds )
+TIMER_DEVICE_CALLBACK_MEMBER(mk1_state::mk1_update_leds)
 {
-	mk1_state *state = timer.machine().driver_data<mk1_state>();
-	int i;
+	UINT8 i;
 
-	for ( i = 0; i < 4; i++ ) {
-		output_set_digit_value( i, state->m_led[i] >> 1 );
-		output_set_led_value( i, state->m_led[i] & 0x01 );
-		state->m_led[i] = 0;
+	for ( i = 0; i < 4; i++ )
+	{
+		output_set_digit_value( i, m_led[i] >> 1 );
+		output_set_led_value( i, m_led[i] & 0x01 );
+		m_led[i] = 0;
 	}
 }
 
 
-static MACHINE_START( mk1 )
+void mk1_state::machine_start()
 {
 }
 
 
 static void mk1_interrupt( device_t *device, UINT16 addr, int level )
 {
-	device_set_input_line_vector(device->machine().device("maincpu"), F8_INPUT_LINE_INT_REQ, addr );
+	mk1_state *drvstate = device->machine().driver_data<mk1_state>();
+	drvstate->m_maincpu->set_input_line_vector(F8_INPUT_LINE_INT_REQ, addr );
 
-	cputag_set_input_line(device->machine(),"maincpu", F8_INPUT_LINE_INT_REQ, level ? ASSERT_LINE : CLEAR_LINE );
+	drvstate->m_maincpu->set_input_line(F8_INPUT_LINE_INT_REQ, level ? ASSERT_LINE : CLEAR_LINE );
 }
 
 
@@ -195,18 +189,17 @@ static MACHINE_CONFIG_START( mk1, mk1_state )
 	MCFG_CPU_IO_MAP( mk1_io)
 	MCFG_QUANTUM_TIME(attotime::from_hz(60))
 
-	MCFG_MACHINE_START( mk1 )
 
 	MCFG_F3853_ADD( "f3853", MAIN_CLOCK, mk1_config )
 
-    /* video hardware */
+	/* video hardware */
 	MCFG_DEFAULT_LAYOUT( layout_mk1 )
 
-	MCFG_TIMER_ADD_PERIODIC("led_timer", mk1_update_leds, attotime::from_hz(30))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("led_timer", mk1_state, mk1_update_leds, attotime::from_hz(30))
 MACHINE_CONFIG_END
 
 
-ROM_START( mk1 )
+ROM_START( ccmk1 )
 	ROM_REGION(0x10000,"maincpu",0)
 	ROM_LOAD("82c210-1", 0x0000, 0x800, CRC(278f7bf3) SHA1(b384c95ba691d52dfdddd35987a71e9746a46170))
 ROM_END
@@ -219,6 +212,5 @@ ROM_END
 ***************************************************************************/
 
 // seams to be developed by mostek (MK)
-/*     YEAR   NAME  PARENT  COMPAT  MACHINE INPUT   INIT    COMPANY                 FULLNAME */
-CONS( 1979,  mk1,  0,		0,		mk1,	mk1,	0,		"Computer Electronic",  "Chess Champion MK I", GAME_NO_SOUND )
-
+/*    YEAR   NAME  PARENT  COMPAT  MACHINE INPUT   INIT    COMPANY                 FULLNAME */
+CONS( 1979,  ccmk1,  0,      0,      mk1,    mk1, driver_device,    0,   "Computer Electronic", "Chess Champion MK I", GAME_NO_SOUND_HW )

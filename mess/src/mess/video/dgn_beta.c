@@ -83,28 +83,29 @@ the access to the video memory is unclear to me at the moment.
 #include "includes/dgn_beta.h"
 
 /* GCtrl bitmasks, infered from bits of Beta schematic */
-#define GCtrlWI		0x01
-#define GCtrlSWChar	0x02	/* Character set select */
-#define GCtrlHiLo	0x04	/* Hi/Lo res graphics, Hi=1, Lo=0 */
-#define GCtrlChrGfx	0x08	/* Character=1 / Graphics=0 */
-#define GCtrlControl	0x10	/* Control bit, sets direct drive mode */
-#define GCtrlFS		0x20	/* labeled F/S, not yet sure of function Fast or Slow scan ? */
-#define GCtrlAddrLines	0xC0	/* Top two address lines for text mode */
+#define GCtrlWI     0x01
+#define GCtrlSWChar 0x02    /* Character set select */
+#define GCtrlHiLo   0x04    /* Hi/Lo res graphics, Hi=1, Lo=0 */
+#define GCtrlChrGfx 0x08    /* Character=1 / Graphics=0 */
+#define GCtrlControl    0x10    /* Control bit, sets direct drive mode */
+#define GCtrlFS     0x20    /* labeled F/S, not yet sure of function Fast or Slow scan ? */
+#define GCtrlAddrLines  0xC0    /* Top two address lines for text mode */
 
-#define IsTextMode	(state->m_GCtrl & GCtrlChrGfx) ? 1 : 0					// Is this text mode ?
-#define IsGfx16 	((~state->m_GCtrl & GCtrlChrGfx) && (~state->m_GCtrl & GCtrlControl)) ? 1 : 0	// is this 320x256x16bpp mode
-#define IsGfx2		((state->m_GCtrl & GCtrlHiLo) && (~state->m_GCtrl & GCtrlFS)) ? 1 : 0		// Is this a 2 colour mode
-#define SWChar		(state->m_GCtrl & GCtrlSWChar)>>1					// Swchar bit
+#define IsTextMode  (state->m_GCtrl & GCtrlChrGfx) ? 1 : 0                  // Is this text mode ?
+#define IsGfx16     ((~state->m_GCtrl & GCtrlChrGfx) && (~state->m_GCtrl & GCtrlControl)) ? 1 : 0   // is this 320x256x16bpp mode
+#define IsGfx2      ((state->m_GCtrl & GCtrlHiLo) && (~state->m_GCtrl & GCtrlFS)) ? 1 : 0       // Is this a 2 colour mode
+#define SWChar      (state->m_GCtrl & GCtrlSWChar)>>1                   // Swchar bit
 
 static MC6845_UPDATE_ROW( dgnbeta_update_row )
 {
 	dgn_beta_state *state = device->machine().driver_data<dgn_beta_state>();
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
 	UINT8 *videoram = state->m_videoram;
-	UINT16  *p = BITMAP_ADDR16(bitmap, y, 0);
+	UINT32  *p = &bitmap.pix32(y);
 	int i;
 	if(IsTextMode)
 	{
-		UINT8 *chr_gen = device->machine().region("gfx1")->base();
+		UINT8 *chr_gen = state->memregion("gfx1")->base();
 		for ( i = 0; i < x_count; i++ )
 		{
 			UINT32 offset = ( ( ma + i ) | ((state->m_GCtrl & GCtrlAddrLines)<<8)) << 1;
@@ -115,7 +116,7 @@ static MC6845_UPDATE_ROW( dgnbeta_update_row )
 			/* We will extract the colours below, when we have decoded inverse */
 			/* to indicate a double height character */
 			int UnderLine=(attr & 0x40) >> 6; // Underline active
-			int	FlashChar=(attr & 0x80) >> 7; // Flashing char
+			int FlashChar=(attr & 0x80) >> 7; // Flashing char
 
 			// underline is active for character set 0, on character row 9
 			int ULActive=(UnderLine && (ra==9) && ~SWChar);
@@ -137,35 +138,35 @@ static MC6845_UPDATE_ROW( dgnbeta_update_row )
 			/* Invert colours if invert is true */
 			if(!Invert)
 			{
-				fg	= (attr & 0x38) >> 3;
-				bg	= (attr & 0x07);
+				fg  = (attr & 0x38) >> 3;
+				bg  = (attr & 0x07);
 			}
 			else
 			{
-				bg	= (attr & 0x38) >> 3;
-				fg	= (attr & 0x07);
+				bg  = (attr & 0x38) >> 3;
+				fg  = (attr & 0x07);
 			}
 
 
 
 			UINT8 data = chr_gen[ chr * 16 + ra ];
 
-			*p = ( data & 0x80 ) ? fg : bg; p++;
-			*p = ( data & 0x80 ) ? fg : bg; p++;
-			*p = ( data & 0x40 ) ? fg : bg; p++;
-			*p = ( data & 0x40 ) ? fg : bg; p++;
-			*p = ( data & 0x20 ) ? fg : bg; p++;
-			*p = ( data & 0x20 ) ? fg : bg; p++;
-			*p = ( data & 0x10 ) ? fg : bg; p++;
-			*p = ( data & 0x10 ) ? fg : bg; p++;
-			*p = ( data & 0x08 ) ? fg : bg; p++;
-			*p = ( data & 0x08 ) ? fg : bg; p++;
-			*p = ( data & 0x04 ) ? fg : bg; p++;
-			*p = ( data & 0x04 ) ? fg : bg; p++;
-			*p = ( data & 0x02 ) ? fg : bg; p++;
-			*p = ( data & 0x02 ) ? fg : bg; p++;
-			*p = ( data & 0x01 ) ? fg : bg; p++;
-			*p = ( data & 0x01 ) ? fg : bg; p++;
+			*p = palette[( data & 0x80 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x80 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x40 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x40 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x20 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x20 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x10 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x10 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x08 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x08 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x04 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x04 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x02 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x02 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x01 ) ? fg : bg]; p++;
+			*p = palette[( data & 0x01 ) ? fg : bg]; p++;
 		}
 
 	}
@@ -177,7 +178,7 @@ static MC6845_UPDATE_ROW( dgnbeta_update_row )
 
 			UINT8 Lo = videoram[ offset ];
 			UINT8 Hi = videoram[ offset +1 ];
-			UINT16 Word	= (Hi<<8) | Lo;
+			UINT16 Word = (Hi<<8) | Lo;
 			int Red;
 			int Green;
 			int Blue;
@@ -191,23 +192,23 @@ static MC6845_UPDATE_ROW( dgnbeta_update_row )
 			/* palate register */
 			if (IsGfx16)
 			{
-				Intense	=(Lo & 0x0F);
-				Red	=(Lo & 0xF0)>>4;
-				Green	=(Hi & 0x0F);
-				Blue	=(Hi & 0xF0)>>4;
+				Intense =(Lo & 0x0F);
+				Red =(Lo & 0xF0)>>4;
+				Green   =(Hi & 0x0F);
+				Blue    =(Hi & 0xF0)>>4;
 				Colour=((Intense&0x08) | (Red&0x08)>>1) | ((Green&0x08)>>2) | ((Blue&0x08)>>3);
 
 				for (Dot=0;Dot<4;Dot++)
 				{
-					*p = Colour; p++;
-					*p = Colour; p++;
-					*p = Colour; p++;
-					*p = Colour; p++;
+					*p = palette[Colour]; p++;
+					*p = palette[Colour]; p++;
+					*p = palette[Colour]; p++;
+					*p = palette[Colour]; p++;
 
-					Intense	=Intense<<1;
-					Red	=Red<<1;
-					Green	=Green<<1;
-					Blue	=Blue<<1;
+					Intense =Intense<<1;
+					Red =Red<<1;
+					Green   =Green<<1;
+					Blue    =Blue<<1;
 				}
 			}
 			else if (IsGfx2)
@@ -216,7 +217,7 @@ static MC6845_UPDATE_ROW( dgnbeta_update_row )
 				{
 					Colour=state->m_ColourRAM[((Word&0x8000)>>15)];
 
-					*p = Colour; p++;
+					*p = palette[Colour]; p++;
 
 					Hi=(Word&0x8000) >> 15;
 					Word=((Word<<1)&0xFFFE) | Hi;
@@ -227,8 +228,8 @@ static MC6845_UPDATE_ROW( dgnbeta_update_row )
 				for (Dot=0;Dot<8;Dot++)
 				{
 					Colour=state->m_ColourRAM[((Word&0x8000)>>14) | ((Word&0x80)>>7)];
-					*p = Colour; p++;
-					*p = Colour; p++;
+					*p = palette[Colour]; p++;
+					*p = palette[Colour]; p++;
 
 					Hi=(Word&0x8000) >> 15;
 					Word=((Word<<1)&0xFFFE) | Hi;
@@ -239,27 +240,25 @@ static MC6845_UPDATE_ROW( dgnbeta_update_row )
 
 }
 
-static WRITE_LINE_DEVICE_HANDLER( dgnbeta_vsync_changed )
+WRITE_LINE_MEMBER(dgn_beta_state::dgnbeta_vsync_changed)
 {
-	dgn_beta_state *st = device->machine().driver_data<dgn_beta_state>();
-
-	st->m_beta_VSync=state;
-	if (!st->m_beta_VSync)
+	m_beta_VSync=state;
+	if (!m_beta_VSync)
 	{
-		st->m_FlashCount++;
-		if(st->m_FlashCount==10)
+		m_FlashCount++;
+		if(m_FlashCount==10)
 		{
-			st->m_FlashCount=0;			// Reset counter
-			st->m_FlashBit=(!st->m_FlashBit) & 0x01;	// Invert flash bit.
+			m_FlashCount=0;         // Reset counter
+			m_FlashBit=(!m_FlashBit) & 0x01;    // Invert flash bit.
 		}
 	}
 
-	dgn_beta_frame_interrupt(device->machine(), state);
+	dgn_beta_frame_interrupt(state);
 }
 
-const mc6845_interface dgnbeta_crtc6845_interface =
+MC6845_INTERFACE( dgnbeta_crtc6845_interface )
 {
-	"screen",
+	false,
 	16 /*?*/,
 	NULL,
 	dgnbeta_update_row,
@@ -267,7 +266,7 @@ const mc6845_interface dgnbeta_crtc6845_interface =
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_LINE(dgnbeta_vsync_changed),
+	DEVCB_DRIVER_LINE_MEMBER(dgn_beta_state,dgnbeta_vsync_changed),
 	NULL
 };
 
@@ -287,24 +286,14 @@ const mc6845_interface dgnbeta_crtc6845_interface =
 /* 6821-I28, this allows the 6845 to access the full 64K address range, however    */
 /* since the ram data is addressed as a 16bit wide unit, this allows the 6845      */
 /* access to the first 128K or ram.                                                */
-void dgnbeta_vid_set_gctrl(running_machine &machine, int data)
+void dgn_beta_state::dgnbeta_vid_set_gctrl(int data)
 {
-	dgn_beta_state *state = machine.driver_data<dgn_beta_state>();
-	state->m_GCtrl=data;
-}
-
-/* Update video screen, calls either text or graphics update routine as needed */
-SCREEN_UPDATE( dgnbeta )
-{
-	dgn_beta_state *state = screen->machine().driver_data<dgn_beta_state>();
-	state->m_mc6845->update(bitmap, cliprect);
-	return 0;
+	m_GCtrl=data;
 }
 
 
 /* Write handler for colour, pallate ram */
-WRITE8_HANDLER(dgnbeta_colour_ram_w)
+WRITE8_MEMBER(dgn_beta_state::dgnbeta_colour_ram_w)
 {
-	dgn_beta_state *state = space->machine().driver_data<dgn_beta_state>();
-	state->m_ColourRAM[offset]=data&0x0f;			/* Colour ram 4 bit and write only to CPU */
+	m_ColourRAM[offset]=data&0x0f;          /* Colour ram 4 bit and write only to CPU */
 }

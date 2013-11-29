@@ -7,15 +7,16 @@
 
 #include "emu.h"
 
-#include "includes/cbm.h"
 #include "includes/c65.h"
-#include "includes/c64.h"
 #include "cpu/m6502/m4510.h"
-#include "sound/sid6581.h"
+#include "sound/mos6581.h"
 #include "machine/6526cia.h"
-#include "machine/cbmiec.h"
+#include "bus/cbmiec/cbmiec.h"
 #include "machine/ram.h"
 #include "video/vic4567.h"
+#include "imagedev/cassette.h"
+#include "crsshair.h"
+#include "formats/cbm_tap.h"
 
 #define VERBOSE_LEVEL 0
 #define DBG_LOG( MACHINE, N, M, A ) \
@@ -30,6 +31,358 @@
 
 
 
+/***********************************************
+
+    Input Reading - Common Components
+
+***********************************************/
+
+/* These are needed by c64, c65 and c128, each machine has also additional specific
+components in its INTERRUPT_GEN */
+
+/* keyboard lines */
+UINT8 c64_keyline[10];
+
+void cbm_common_init(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_LENGTH(c64_keyline); i++)
+		c64_keyline[i] = 0xff;
+}
+
+static TIMER_CALLBACK( lightpen_tick )
+{
+	if (((machine.root_device().ioport("CTRLSEL")->read() & 0x07) == 0x04) || ((machine.root_device().ioport("CTRLSEL")->read() & 0x07) == 0x06))
+	{
+		/* enable lightpen crosshair */
+		crosshair_set_screen(machine, 0, CROSSHAIR_SCREEN_ALL);
+	}
+	else
+	{
+		/* disable lightpen crosshair */
+		crosshair_set_screen(machine, 0, CROSSHAIR_SCREEN_NONE);
+	}
+}
+
+void cbm_common_interrupt( device_t *device )
+{
+	int value, i;
+	int controller1 = device->machine().root_device().ioport("CTRLSEL")->read() & 0x07;
+	int controller2 = device->machine().root_device().ioport("CTRLSEL")->read() & 0x70;
+	static const char *const c64ports[] = { "ROW0", "ROW1", "ROW2", "ROW3", "ROW4", "ROW5", "ROW6", "ROW7" };
+
+	/* Lines 0-7 : common keyboard */
+	for (i = 0; i < 8; i++)
+	{
+		value = 0xff;
+		value &= ~device->machine().root_device().ioport(c64ports[i])->read();
+
+		/* Shift Lock is mapped on Left Shift */
+		if ((i == 1) && (device->machine().root_device().ioport("SPECIAL")->read() & 0x40))
+			value &= ~0x80;
+
+		c64_keyline[i] = value;
+	}
+
+
+	value = 0xff;
+	switch(controller1)
+	{
+		case 0x00:
+			value &= ~device->machine().root_device().ioport("JOY1_1B")->read();            /* Joy1 Directions + Button 1 */
+			break;
+
+		case 0x01:
+			if (device->machine().root_device().ioport("OTHER")->read() & 0x40)         /* Paddle2 Button */
+				value &= ~0x08;
+			if (device->machine().root_device().ioport("OTHER")->read() & 0x80)         /* Paddle1 Button */
+				value &= ~0x04;
+			break;
+
+		case 0x02:
+			if (device->machine().root_device().ioport("OTHER")->read() & 0x02)         /* Mouse Button Left */
+				value &= ~0x10;
+			if (device->machine().root_device().ioport("OTHER")->read() & 0x01)         /* Mouse Button Right */
+				value &= ~0x01;
+			break;
+
+		case 0x03:
+			value &= ~(device->machine().root_device().ioport("JOY1_2B")->read() & 0x1f);   /* Joy1 Directions + Button 1 */
+			break;
+
+		case 0x04:
+/* was there any input on the lightpen? where is it mapped? */
+//          if (device->machine().root_device().ioport("OTHER")->read() & 0x04)           /* Lightpen Signal */
+//              value &= ?? ;
+			break;
+
+		case 0x07:
+			break;
+
+		default:
+			logerror("Invalid Controller 1 Setting %d\n", controller1);
+			break;
+	}
+
+	c64_keyline[8] = value;
+
+
+	value = 0xff;
+	switch(controller2)
+	{
+		case 0x00:
+			value &= ~device->machine().root_device().ioport("JOY2_1B")->read();            /* Joy2 Directions + Button 1 */
+			break;
+
+		case 0x10:
+			if (device->machine().root_device().ioport("OTHER")->read() & 0x10)         /* Paddle4 Button */
+				value &= ~0x08;
+			if (device->machine().root_device().ioport("OTHER")->read() & 0x20)         /* Paddle3 Button */
+				value &= ~0x04;
+			break;
+
+		case 0x20:
+			if (device->machine().root_device().ioport("OTHER")->read() & 0x02)         /* Mouse Button Left */
+				value &= ~0x10;
+			if (device->machine().root_device().ioport("OTHER")->read() & 0x01)         /* Mouse Button Right */
+				value &= ~0x01;
+			break;
+
+		case 0x30:
+			value &= ~(device->machine().root_device().ioport("JOY2_2B")->read() & 0x1f);   /* Joy2 Directions + Button 1 */
+			break;
+
+		case 0x40:
+/* was there any input on the lightpen? where is it mapped? */
+//          if (device->machine().root_device().ioport("OTHER")->read() & 0x04)           /* Lightpen Signal */
+//              value &= ?? ;
+			break;
+
+		case 0x70:
+			break;
+
+		default:
+			logerror("Invalid Controller 2 Setting %d\n", controller2);
+			break;
+	}
+
+	c64_keyline[9] = value;
+
+//  vic2_frame_interrupt does nothing so this is not necessary
+//  vic2_frame_interrupt (device);
+
+	/* check if lightpen has been chosen as input: if so, enable crosshair */
+	device->machine().scheduler().timer_set(attotime::zero, FUNC(lightpen_tick));
+
+	set_led_status (device->machine(), 1, device->machine().root_device().ioport("SPECIAL")->read() & 0x40 ? 1 : 0);        /* Shift Lock */
+	set_led_status (device->machine(), 0, device->machine().root_device().ioport("CTRLSEL")->read() & 0x80 ? 1 : 0);        /* Joystick Swap */
+}
+
+
+/***********************************************
+
+    CIA Common Handlers
+
+***********************************************/
+
+/* These are shared by c64, c65 and c128. c65 and c128 also have additional specific
+components (to select/read additional keyboard lines) */
+
+/*
+ *  CIA 0 - Port A
+ * bits 7-0 keyboard line select
+ * bits 7,6: paddle select( 01 port a, 10 port b)
+ * bit 4: joystick a fire button
+ * bits 3,2: Paddles port a fire button
+ * bits 3-0: joystick a direction
+ *
+ *  CIA 0 - Port B
+ * bits 7-0: keyboard raw values
+ * bit 4: joystick b fire button, lightpen select
+ * bits 3,2: paddle b fire buttons (left,right)
+ * bits 3-0: joystick b direction
+ *
+ * flag cassette read input, serial request in
+ * irq to irq connected
+ */
+
+UINT8 cbm_common_cia0_port_a_r( device_t *device, UINT8 output_b )
+{
+	UINT8 value = 0xff;
+
+	if (!(output_b & 0x80))
+	{
+		UINT8 t = 0xff;
+		if (!(c64_keyline[7] & 0x80)) t &= ~0x80;
+		if (!(c64_keyline[6] & 0x80)) t &= ~0x40;
+		if (!(c64_keyline[5] & 0x80)) t &= ~0x20;
+		if (!(c64_keyline[4] & 0x80)) t &= ~0x10;
+		if (!(c64_keyline[3] & 0x80)) t &= ~0x08;
+		if (!(c64_keyline[2] & 0x80)) t &= ~0x04;
+		if (!(c64_keyline[1] & 0x80)) t &= ~0x02;
+		if (!(c64_keyline[0] & 0x80)) t &= ~0x01;
+		value &= t;
+	}
+
+	if (!(output_b & 0x40))
+	{
+		UINT8 t = 0xff;
+		if (!(c64_keyline[7] & 0x40)) t &= ~0x80;
+		if (!(c64_keyline[6] & 0x40)) t &= ~0x40;
+		if (!(c64_keyline[5] & 0x40)) t &= ~0x20;
+		if (!(c64_keyline[4] & 0x40)) t &= ~0x10;
+		if (!(c64_keyline[3] & 0x40)) t &= ~0x08;
+		if (!(c64_keyline[2] & 0x40)) t &= ~0x04;
+		if (!(c64_keyline[1] & 0x40)) t &= ~0x02;
+		if (!(c64_keyline[0] & 0x40)) t &= ~0x01;
+		value &= t;
+	}
+
+	if (!(output_b & 0x20))
+	{
+		UINT8 t = 0xff;
+		if (!(c64_keyline[7] & 0x20)) t &= ~0x80;
+		if (!(c64_keyline[6] & 0x20)) t &= ~0x40;
+		if (!(c64_keyline[5] & 0x20)) t &= ~0x20;
+		if (!(c64_keyline[4] & 0x20)) t &= ~0x10;
+		if (!(c64_keyline[3] & 0x20)) t &= ~0x08;
+		if (!(c64_keyline[2] & 0x20)) t &= ~0x04;
+		if (!(c64_keyline[1] & 0x20)) t &= ~0x02;
+		if (!(c64_keyline[0] & 0x20)) t &= ~0x01;
+		value &= t;
+	}
+
+	if (!(output_b & 0x10))
+	{
+		UINT8 t = 0xff;
+		if (!(c64_keyline[7] & 0x10)) t &= ~0x80;
+		if (!(c64_keyline[6] & 0x10)) t &= ~0x40;
+		if (!(c64_keyline[5] & 0x10)) t &= ~0x20;
+		if (!(c64_keyline[4] & 0x10)) t &= ~0x10;
+		if (!(c64_keyline[3] & 0x10)) t &= ~0x08;
+		if (!(c64_keyline[2] & 0x10)) t &= ~0x04;
+		if (!(c64_keyline[1] & 0x10)) t &= ~0x02;
+		if (!(c64_keyline[0] & 0x10)) t &= ~0x01;
+		value &= t;
+	}
+
+	if (!(output_b & 0x08))
+	{
+		UINT8 t = 0xff;
+		if (!(c64_keyline[7] & 0x08)) t &= ~0x80;
+		if (!(c64_keyline[6] & 0x08)) t &= ~0x40;
+		if (!(c64_keyline[5] & 0x08)) t &= ~0x20;
+		if (!(c64_keyline[4] & 0x08)) t &= ~0x10;
+		if (!(c64_keyline[3] & 0x08)) t &= ~0x08;
+		if (!(c64_keyline[2] & 0x08)) t &= ~0x04;
+		if (!(c64_keyline[1] & 0x08)) t &= ~0x02;
+		if (!(c64_keyline[0] & 0x08)) t &= ~0x01;
+		value &= t;
+	}
+
+	if (!(output_b & 0x04))
+	{
+		UINT8 t = 0xff;
+		if (!(c64_keyline[7] & 0x04)) t &= ~0x80;
+		if (!(c64_keyline[6] & 0x04)) t &= ~0x40;
+		if (!(c64_keyline[5] & 0x04)) t &= ~0x20;
+		if (!(c64_keyline[4] & 0x04)) t &= ~0x10;
+		if (!(c64_keyline[3] & 0x04)) t &= ~0x08;
+		if (!(c64_keyline[2] & 0x04)) t &= ~0x04;
+		if (!(c64_keyline[1] & 0x04)) t &= ~0x02;
+		if (!(c64_keyline[0] & 0x04)) t &= ~0x01;
+		value &= t;
+	}
+
+	if (!(output_b & 0x02))
+	{
+		UINT8 t = 0xff;
+		if (!(c64_keyline[7] & 0x02)) t &= ~0x80;
+		if (!(c64_keyline[6] & 0x02)) t &= ~0x40;
+		if (!(c64_keyline[5] & 0x02)) t &= ~0x20;
+		if (!(c64_keyline[4] & 0x02)) t &= ~0x10;
+		if (!(c64_keyline[3] & 0x02)) t &= ~0x08;
+		if (!(c64_keyline[2] & 0x02)) t &= ~0x04;
+		if (!(c64_keyline[1] & 0x02)) t &= ~0x02;
+		if (!(c64_keyline[0] & 0x02)) t &= ~0x01;
+		value &= t;
+	}
+
+	if (!(output_b & 0x01))
+	{
+		UINT8 t = 0xff;
+		if (!(c64_keyline[7] & 0x01)) t &= ~0x80;
+		if (!(c64_keyline[6] & 0x01)) t &= ~0x40;
+		if (!(c64_keyline[5] & 0x01)) t &= ~0x20;
+		if (!(c64_keyline[4] & 0x01)) t &= ~0x10;
+		if (!(c64_keyline[3] & 0x01)) t &= ~0x08;
+		if (!(c64_keyline[2] & 0x01)) t &= ~0x04;
+		if (!(c64_keyline[1] & 0x01)) t &= ~0x02;
+		if (!(c64_keyline[0] & 0x01)) t &= ~0x01;
+		value &= t;
+	}
+
+	if ( device->machine().root_device().ioport("CTRLSEL")->read() & 0x80 )
+		value &= c64_keyline[8];
+	else
+		value &= c64_keyline[9];
+
+	return value;
+}
+
+UINT8 cbm_common_cia0_port_b_r( device_t *device, UINT8 output_a )
+{
+	UINT8 value = 0xff;
+
+	if (!(output_a & 0x80)) value &= c64_keyline[7];
+	if (!(output_a & 0x40)) value &= c64_keyline[6];
+	if (!(output_a & 0x20)) value &= c64_keyline[5];
+	if (!(output_a & 0x10)) value &= c64_keyline[4];
+	if (!(output_a & 0x08)) value &= c64_keyline[3];
+	if (!(output_a & 0x04)) value &= c64_keyline[2];
+	if (!(output_a & 0x02)) value &= c64_keyline[1];
+	if (!(output_a & 0x01)) value &= c64_keyline[0];
+
+	if ( device->machine().root_device().ioport("CTRLSEL")->read() & 0x80 )
+		value &= c64_keyline[9];
+	else
+		value &= c64_keyline[8];
+
+	return value;
+}
+
+
+/***********************************************
+
+    CBM Cartridges
+
+***********************************************/
+
+
+/*  All the cartridge specific code has been moved
+    to machine/ drivers. Once more informations
+    surface about the cart expansions for systems
+    in c65.c, c128.c, cbmb.c and pet.c, the shared
+    code could be refactored to have here the
+    common functions                                */
+
+
+
+/***********************************************
+
+    CBM Datasette Tapes
+
+***********************************************/
+
+const cassette_interface cbm_cassette_interface =
+{
+	cbm_cassette_formats,
+	NULL,
+	(cassette_state) (CASSETTE_STOPPED | CASSETTE_MOTOR_DISABLED | CASSETTE_SPEAKER_ENABLED),
+	NULL,
+	NULL
+};
 
 
 /*UINT8 *c65_basic; */
@@ -39,17 +392,13 @@
 /*UINT8 *c65_graphics; */
 
 
-static void c65_nmi( running_machine &machine )
+void c65_state::c65_nmi(  )
 {
-	c65_state *state = machine.driver_data<c65_state>();
-	device_t *cia_1 = machine.device("cia_1");
-	int cia1irq = mos6526_irq_r(cia_1);
-
-	if (state->m_nmilevel != (input_port_read(machine, "SPECIAL") & 0x80) || cia1irq)	/* KEY_RESTORE */
+	if (m_nmilevel != (ioport("SPECIAL")->read() & 0x80) || m_cia1_irq)   /* KEY_RESTORE */
 	{
-		cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, (input_port_read(machine, "SPECIAL") & 0x80) || cia1irq);
+		m_maincpu->set_input_line(INPUT_LINE_NMI, (ioport("SPECIAL")->read() & 0x80) || m_cia1_irq);
 
-		state->m_nmilevel = (input_port_read(machine, "SPECIAL") & 0x80) || cia1irq;
+		m_nmilevel = (ioport("SPECIAL")->read() & 0x80) || m_cia1_irq;
 	}
 }
 
@@ -70,91 +419,61 @@ static void c65_nmi( running_machine &machine )
  *  see machine/cbm.c
  */
 
-static READ8_DEVICE_HANDLER( c65_cia0_port_a_r )
+READ8_MEMBER(c65_state::c65_cia0_port_a_r)
 {
-	UINT8 cia0portb = mos6526_pb_r(device->machine().device("cia_0"), 0);
+	UINT8 cia0portb = machine().device<mos6526_device>("cia_0")->pb_r(space, 0);
 
-	return cbm_common_cia0_port_a_r(device, cia0portb);
+	return cbm_common_cia0_port_a_r(machine().device("cia_0"), cia0portb);
 }
 
-static READ8_DEVICE_HANDLER( c65_cia0_port_b_r )
+READ8_MEMBER(c65_state::c65_cia0_port_b_r)
 {
-	c65_state *state = device->machine().driver_data<c65_state>();
 	UINT8 value = 0xff;
-	UINT8 cia0porta = mos6526_pa_r(device->machine().device("cia_0"), 0);
+	UINT8 cia0porta = machine().device<mos6526_device>("cia_0")->pa_r(space, 0);
 
-	value &= cbm_common_cia0_port_b_r(device, cia0porta);
+	value &= cbm_common_cia0_port_b_r(machine().device("cia_0"), cia0porta);
 
-	if (!(state->m_6511_port & 0x02))
-		value &= state->m_keyline;
+	if (!(m_6511_port & 0x02))
+		value &= m_keyline;
 
 	return value;
 }
 
-static WRITE8_DEVICE_HANDLER( c65_cia0_port_b_w )
+WRITE8_MEMBER(c65_state::c65_cia0_port_b_w)
 {
 //  was there lightpen support in c65 video chip?
-//  device_t *vic3 = device->machine().device("vic3");
-//  vic3_lightpen_write(vic3, data & 0x10);
+//  vic3_device *vic3 = machine().device<vic3_device>("vic3");
+//  vic3->lightpen_write(data & 0x10);
 }
 
-static void c65_irq( running_machine &machine, int level )
+void c65_state::c65_irq( int level )
 {
-	c65_state *state = machine.driver_data<c65_state>();
-	if (level != state->m_old_level)
+	if (level != m_old_level)
 	{
-		DBG_LOG(machine, 3, "mos6510", ("irq %s\n", level ? "start" : "end"));
-		cputag_set_input_line(machine, "maincpu", M6510_IRQ_LINE, level);
-		state->m_old_level = level;
+		DBG_LOG(machine(), 3, "mos4510", ("irq %s\n", level ? "start" : "end"));
+		m_maincpu->set_input_line(M4510_IRQ_LINE, level);
+		m_old_level = level;
 	}
 }
 
 /* is this correct for c65 as well as c64? */
-static void c65_cia0_interrupt( device_t *device, int level )
+WRITE_LINE_MEMBER(c65_state::c65_cia0_interrupt)
 {
-	c65_state *state = device->machine().driver_data<c65_state>();
-	c65_irq (device->machine(), level || state->m_vicirq);
+	m_cia0_irq = state;
+	c65_irq(state || m_vicirq);
 }
 
 /* is this correct for c65 as well as c64? */
-void c65_vic_interrupt( running_machine &machine, int level )
+WRITE_LINE_MEMBER(c65_state::c65_vic_interrupt)
 {
-	c65_state *state = machine.driver_data<c65_state>();
-	device_t *cia_0 = machine.device("cia_0");
 #if 1
-	if (level != state->m_vicirq)
+	if (state != m_vicirq)
 	{
-		c65_irq (machine, level || mos6526_irq_r(cia_0));
-		state->m_vicirq = level;
+		c65_irq (state || m_cia0_irq);
+		m_vicirq = state;
 	}
 #endif
 }
-
-const mos6526_interface c65_ntsc_cia0 =
-{
-	60,
-	DEVCB_LINE(c65_cia0_interrupt),
-	DEVCB_NULL,	/* pc_func */
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_HANDLER(c65_cia0_port_a_r),
-	DEVCB_NULL,
-	DEVCB_HANDLER(c65_cia0_port_b_r),
-	DEVCB_HANDLER(c65_cia0_port_b_w)
-};
-
-const mos6526_interface c65_pal_cia0 =
-{
-	50,
-	DEVCB_LINE(c65_cia0_interrupt),
-	DEVCB_NULL,	/* pc_func */
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_HANDLER(c65_cia0_port_a_r),
-	DEVCB_NULL,
-	DEVCB_HANDLER(c65_cia0_port_b_r),
-	DEVCB_HANDLER(c65_cia0_port_b_w)
-};
 
 /*
  * CIA 1 - Port A
@@ -179,62 +498,35 @@ const mos6526_interface c65_pal_cia0 =
  * flag restore key or rs232 received data input
  * irq to nmi connected ?
  */
-static READ8_DEVICE_HANDLER( c65_cia1_port_a_r )
+READ8_MEMBER(c65_state::c65_cia1_port_a_r)
 {
-	c65_state *state = device->machine().driver_data<c65_state>();
 	UINT8 value = 0xff;
 
-	if (!state->m_iec->clk_r())
+	if (!m_iec->clk_r())
 		value &= ~0x40;
 
-	if (!state->m_iec->data_r())
+	if (!m_iec->data_r())
 		value &= ~0x80;
 
 	return value;
 }
 
-static WRITE8_DEVICE_HANDLER( c65_cia1_port_a_w )
+WRITE8_MEMBER(c65_state::c65_cia1_port_a_w)
 {
-	c65_state *state = device->machine().driver_data<c65_state>();
 	static const int helper[4] = {0xc000, 0x8000, 0x4000, 0x0000};
 
-	state->m_iec->atn_w(!BIT(data, 3));
-	state->m_iec->clk_w(!BIT(data, 4));
-	state->m_iec->data_w(!BIT(data, 5));
+	m_iec->atn_w(!BIT(data, 3));
+	m_iec->clk_w(!BIT(data, 4));
+	m_iec->data_w(!BIT(data, 5));
 
-	state->m_vicaddr = state->m_memory + helper[data & 0x03];
+	m_vicaddr = m_memory + helper[data & 0x03];
 }
 
-static WRITE_LINE_DEVICE_HANDLER( c65_cia1_interrupt )
+WRITE_LINE_MEMBER(c65_state::c65_cia1_interrupt)
 {
-	c65_nmi(device->machine());
+	m_cia1_irq = state;
+	c65_nmi();
 }
-
-const mos6526_interface c65_ntsc_cia1 =
-{
-	60,
-	DEVCB_LINE(c65_cia1_interrupt),
-	DEVCB_NULL,	/* pc_func */
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_HANDLER(c65_cia1_port_a_r),
-	DEVCB_HANDLER(c65_cia1_port_a_w),
-	DEVCB_NULL,
-	DEVCB_NULL
-};
-
-const mos6526_interface c65_pal_cia1 =
-{
-	50,
-	DEVCB_LINE(c65_cia1_interrupt),
-	DEVCB_NULL,	/* pc_func */
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_HANDLER(c65_cia1_port_a_r),
-	DEVCB_HANDLER(c65_cia1_port_a_w),
-	DEVCB_NULL,
-	DEVCB_NULL
-};
 
 /***********************************************
 
@@ -245,24 +537,22 @@ const mos6526_interface c65_pal_cia1 =
 /* processor has only 1 mega address space !? */
 /* and system 8 megabyte */
 /* dma controller and bankswitch hardware ?*/
-static READ8_HANDLER( c65_read_mem )
+READ8_MEMBER( c65_state::c65_read_mem )
 {
-	c65_state *state = space->machine().driver_data<c65_state>();
 	UINT8 result;
 	if (offset <= 0x0ffff)
-		result = state->m_memory[offset];
+		result = m_memory[offset];
 	else
-		result = space->read_byte(offset);
+		result = space.read_byte(offset);
 	return result;
 }
 
-static WRITE8_HANDLER( c65_write_mem )
+WRITE8_MEMBER( c65_state::c65_write_mem )
 {
-	c65_state *state = space->machine().driver_data<c65_state>();
 	if (offset <= 0x0ffff)
-		state->m_memory[offset] = data;
+		m_memory[offset] = data;
 	else
-		space->write_byte(offset, data);
+		space.write_byte(offset, data);
 }
 
 /* dma chip at 0xd700
@@ -290,25 +580,24 @@ static WRITE8_HANDLER( c65_write_mem )
    version 2:
    cmd 0x30 used for this
 */
-static void c65_dma_port_w( running_machine &machine, int offset, int value )
+void c65_state::c65_dma_port_w( int offset, int value )
 {
-	c65_state *state = machine.driver_data<c65_state>();
 	PAIR pair, src, dst, len;
 	UINT8 cmd, fill;
 	int i;
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space &space = m_maincpu->space(AS_PROGRAM);
 
 	switch (offset & 3)
 	{
 	case 2:
 	case 1:
-		state->m_dma.data[offset & 3] = value;
+		m_dma.data[offset & 3] = value;
 		break;
 	case 0:
 		pair.b.h3 = 0;
-		pair.b.h2 = state->m_dma.data[2];
-		pair.b.h = state->m_dma.data[1];
-		pair.b.l = state->m_dma.data[0]=value;
+		pair.b.h2 = m_dma.data[2];
+		pair.b.h = m_dma.data[1];
+		pair.b.l = m_dma.data[0]=value;
 		cmd = c65_read_mem(space, pair.d++);
 		len.w.h = 0;
 		len.b.l = c65_read_mem(space, pair.d++);
@@ -325,14 +614,14 @@ static void c65_dma_port_w( running_machine &machine, int offset, int value )
 		switch (cmd)
 		{
 		case 0:
-			if (src.d == 0x3ffff) state->m_dump_dma = 1;
-			if (state->m_dump_dma)
-				DBG_LOG(space->machine(), 1,"dma copy job",
+			if (src.d == 0x3ffff) m_dump_dma = 1;
+			if (m_dump_dma)
+				DBG_LOG(space.machine(), 1,"dma copy job",
 						("len:%.4x src:%.6x dst:%.6x sub:%.2x modrm:%.2x\n",
-						 len.w.l, src.d, dst.d, c65_read_mem(space, pair.d),
-						 c65_read_mem(space, pair.d + 1) ) );
-			if ((state->m_dma.version == 1)
-				 && ( (src.d&0x400000) || (dst.d & 0x400000)))
+							len.w.l, src.d, dst.d, c65_read_mem(space, pair.d),
+							c65_read_mem(space, pair.d + 1) ) );
+			if ((m_dma.version == 1)
+					&& ( (src.d&0x400000) || (dst.d & 0x400000)))
 			{
 				if (!(src.d & 0x400000))
 				{
@@ -361,61 +650,60 @@ static void c65_dma_port_w( running_machine &machine, int offset, int value )
 			}
 			break;
 		case 3:
-			DBG_LOG(space->machine(), 3,"dma fill job",
+			DBG_LOG(space.machine(), 3,"dma fill job",
 					("len:%.4x value:%.2x dst:%.6x sub:%.2x modrm:%.2x\n",
-					 len.w.l, fill, dst.d, c65_read_mem(space, pair.d),
-					 c65_read_mem(space, pair.d + 1)));
+						len.w.l, fill, dst.d, c65_read_mem(space, pair.d),
+						c65_read_mem(space, pair.d + 1)));
 				for (i = 0; i < len.w.l; i++)
 					c65_write_mem(space, dst.d++, fill);
 				break;
 		case 0x30:
-			DBG_LOG(space->machine(), 1,"dma copy down",
+			DBG_LOG(space.machine(), 1,"dma copy down",
 					("len:%.4x src:%.6x dst:%.6x sub:%.2x modrm:%.2x\n",
-					 len.w.l, src.d, dst.d, c65_read_mem(space, pair.d),
-					 c65_read_mem(space, pair.d + 1) ) );
+						len.w.l, src.d, dst.d, c65_read_mem(space, pair.d),
+						c65_read_mem(space, pair.d + 1) ) );
 			for (i = 0; i < len.w.l; i++)
 				c65_write_mem(space, dst.d--,c65_read_mem(space, src.d--));
 			break;
 		default:
-			DBG_LOG(space->machine(), 1,"dma job",
+			DBG_LOG(space.machine(), 1,"dma job",
 					("cmd:%.2x len:%.4x src:%.6x dst:%.6x sub:%.2x modrm:%.2x\n",
-					 cmd,len.w.l, src.d, dst.d, c65_read_mem(space, pair.d),
-					 c65_read_mem(space, pair.d + 1)));
+						cmd,len.w.l, src.d, dst.d, c65_read_mem(space, pair.d),
+						c65_read_mem(space, pair.d + 1)));
 		}
 		break;
 	default:
-		DBG_LOG(space->machine(), 1, "dma chip write", ("%.3x %.2x\n", offset, value));
+		DBG_LOG(space.machine(), 1, "dma chip write", ("%.3x %.2x\n", offset, value));
 		break;
 	}
 }
 
-static int c65_dma_port_r( running_machine &machine, int offset )
+int c65_state::c65_dma_port_r( int offset )
 {
 	/* offset 3 bit 7 in progress ? */
-	DBG_LOG(machine, 2, "dma chip read", ("%.3x\n", offset));
-    return 0x7f;
+	DBG_LOG(machine(), 2, "dma chip read", ("%.3x\n", offset));
+	return 0x7f;
 }
 
-static void c65_6511_port_w( running_machine &machine, int offset, int value )
+void c65_state::c65_6511_port_w( int offset, int value )
 {
-	c65_state *state = machine.driver_data<c65_state>();
 	if (offset == 7)
 	{
-		state->m_6511_port = value;
+		m_6511_port = value;
 	}
-	DBG_LOG(machine, 2, "r6511 write", ("%.2x %.2x\n", offset, value));
+	DBG_LOG(machine(), 2, "r6511 write", ("%.2x %.2x\n", offset, value));
 }
 
-static int c65_6511_port_r( running_machine &machine, int offset )
+int c65_state::c65_6511_port_r( int offset )
 {
 	int data = 0xff;
 
 	if (offset == 7)
 	{
-		if (input_port_read(machine, "SPECIAL") & 0x20)
+		if (ioport("SPECIAL")->read() & 0x20)
 			data &= ~1;
 	}
-	DBG_LOG(machine, 2, "r6511 read", ("%.2x\n", offset));
+	DBG_LOG(machine(), 2, "r6511 read", ("%.2x\n", offset));
 
 	return data;
 }
@@ -517,44 +805,42 @@ $21cb3
 #define FDC_CMD_MOTOR_SPIN_UP 0x10
 
 #if 0
-static void c65_fdc_state(void)
+void c65_state::c65_fdc_state(void)
 {
-	c65_state *state = machine.driver_data<c65_state>();
-	switch (state->m_fdc.state)
+	switch (m_fdc.state)
 	{
 	case FDC_CMD_MOTOR_SPIN_UP:
-		if (machine.time() - state->m_fdc.time)
+		if (machine().time() - m_fdc.time)
 		{
-			state->m_fdc.state = 0;
-			state->m_fdc.status &= ~FDC_BUSY;
+			m_fdc.state = 0;
+			m_fdc.status &= ~FDC_BUSY;
 		}
 		break;
 	}
 }
 #endif
 
-static void c65_fdc_w( running_machine &machine, int offset, int data )
+void c65_state::c65_fdc_w( int offset, int data )
 {
-	c65_state *state = machine.driver_data<c65_state>();
-	DBG_LOG(machine, 1, "fdc write", ("%.5x %.2x %.2x\n", cpu_get_pc(machine.device("maincpu")), offset, data));
+	DBG_LOG(machine(), 1, "fdc write", ("%.5x %.2x %.2x\n", machine().device("maincpu")->safe_pc(), offset, data));
 	switch (offset & 0xf)
 	{
 	case 0:
-		state->m_fdc.reg[0] = data;
+		m_fdc.reg[0] = data;
 		break;
 	case 1:
-		state->m_fdc.reg[1] = data;
+		m_fdc.reg[1] = data;
 		switch (data & 0xf9)
 		{
 		case 0x20: // wait for motor spin up
-			state->m_fdc.status &= ~(FDC_IRQ|FDC_LOST|FDC_CRC|FDC_RNF);
-			state->m_fdc.status |= FDC_BUSY;
-			state->m_fdc.time = machine.time();
-			state->m_fdc.state = FDC_CMD_MOTOR_SPIN_UP;
+			m_fdc.status &= ~(FDC_IRQ|FDC_LOST|FDC_CRC|FDC_RNF);
+			m_fdc.status |= FDC_BUSY;
+			m_fdc.time = machine().time();
+			m_fdc.state = FDC_CMD_MOTOR_SPIN_UP;
 			break;
 		case 0: // cancel
-			state->m_fdc.status &= ~(FDC_BUSY);
-			state->m_fdc.state = 0;
+			m_fdc.status &= ~(FDC_BUSY);
+			m_fdc.state = 0;
 			break;
 		case 0x80: // buffered write
 		case 0x40: // buffered read
@@ -567,61 +853,60 @@ static void c65_fdc_w( running_machine &machine, int offset, int data )
 	case 2: case 3: // read only
 		break;
 	case 4:
-		state->m_fdc.reg[offset & 0xf] = data;
-		state->m_fdc.track = data;
+		m_fdc.reg[offset & 0xf] = data;
+		m_fdc.track = data;
 		break;
 	case 5:
-		state->m_fdc.reg[offset & 0xf] = data;
-		state->m_fdc.sector = data;
+		m_fdc.reg[offset & 0xf] = data;
+		m_fdc.sector = data;
 		break;
 	case 6:
-		state->m_fdc.reg[offset & 0xf] = data;
-		state->m_fdc.head = data;
+		m_fdc.reg[offset & 0xf] = data;
+		m_fdc.head = data;
 		break;
 	case 7:
-		state->m_fdc.buffer[state->m_fdc.cpu_pos++] = data;
+		m_fdc.buffer[m_fdc.cpu_pos++] = data;
 		break;
 	default:
-		state->m_fdc.reg[offset & 0xf] = data;
+		m_fdc.reg[offset & 0xf] = data;
 		break;
 	}
 }
 
-static int c65_fdc_r( running_machine &machine, int offset )
+int c65_state::c65_fdc_r( int offset )
 {
-	c65_state *state = machine.driver_data<c65_state>();
 	UINT8 data = 0;
 	switch (offset & 0xf)
 	{
 	case 0:
-		data = state->m_fdc.reg[0];
+		data = m_fdc.reg[0];
 		break;
 	case 1:
-		data = state->m_fdc.reg[1];
+		data = m_fdc.reg[1];
 		break;
 	case 2:
-		data = state->m_fdc.status;
+		data = m_fdc.status;
 		break;
 	case 3:
-		data = state->m_fdc.status >> 8;
+		data = m_fdc.status >> 8;
 		break;
 	case 4:
-		data = state->m_fdc.track;
+		data = m_fdc.track;
 		break;
 	case 5:
-		data = state->m_fdc.sector;
+		data = m_fdc.sector;
 		break;
 	case 6:
-		data = state->m_fdc.head;
+		data = m_fdc.head;
 		break;
 	case 7:
-		data = state->m_fdc.buffer[state->m_fdc.cpu_pos++];
+		data = m_fdc.buffer[m_fdc.cpu_pos++];
 		break;
 	default:
-		data = state->m_fdc.reg[offset & 0xf];
+		data = m_fdc.reg[offset & 0xf];
 		break;
 	}
-	DBG_LOG(machine, 1, "fdc read", ("%.5x %.2x %.2x\n", cpu_get_pc(machine.device("maincpu")), offset, data));
+	DBG_LOG(machine(), 1, "fdc read", ("%.5x %.2x %.2x\n", machine().device("maincpu")->safe_pc(), offset, data));
 	return data;
 }
 
@@ -641,117 +926,115 @@ static int c65_fdc_r( running_machine &machine, int offset )
    write 0:ff
 */
 
-static READ8_HANDLER( c65_ram_expansion_r )
+READ8_MEMBER( c65_state::c65_ram_expansion_r )
 {
-	c65_state *state = space->machine().driver_data<c65_state>();
 	UINT8 data = 0xff;
-	if (ram_get_size(space->machine().device(RAM_TAG)) > (128 * 1024))
-		data = state->m_expansion_ram.reg;
+	if (m_ram->size() > (128 * 1024))
+		data = m_expansion_ram.reg;
 	return data;
 }
 
-static WRITE8_HANDLER( c65_ram_expansion_w )
+WRITE8_MEMBER( c65_state::c65_ram_expansion_w )
 {
-	c65_state *state = space->machine().driver_data<c65_state>();
 	offs_t expansion_ram_begin;
 	offs_t expansion_ram_end;
 
-	if (ram_get_size(space->machine().device(RAM_TAG)) > (128 * 1024))
+	if (m_ram->size() > (128 * 1024))
 	{
-		state->m_expansion_ram.reg = data;
+		m_expansion_ram.reg = data;
 
 		expansion_ram_begin = 0x80000;
-		expansion_ram_end = 0x80000 + (ram_get_size(space->machine().device(RAM_TAG)) - 128*1024) - 1;
+		expansion_ram_end = 0x80000 + (m_ram->size() - 128*1024) - 1;
 
 		if (data == 0x00) {
-			space->install_readwrite_bank(expansion_ram_begin, expansion_ram_end,"bank16");
-			memory_set_bankptr(space->machine(), "bank16", ram_get_ptr(space->machine().device(RAM_TAG)) + 128*1024);
+			space.install_readwrite_bank(expansion_ram_begin, expansion_ram_end,"bank16");
+			membank("bank16")->set_base(m_ram->pointer() + 128*1024);
 		} else {
-			space->nop_readwrite(expansion_ram_begin, expansion_ram_end);
+			space.nop_readwrite(expansion_ram_begin, expansion_ram_end);
 		}
 	}
 }
 
-static WRITE8_HANDLER( c65_write_io )
+WRITE8_MEMBER( c65_state::c65_write_io )
 {
-	device_t *sid_0 = space->machine().device("sid_r");
-	device_t *sid_1 = space->machine().device("sid_l");
-	device_t *vic3 = space->machine().device("vic3");
+	mos6581_device *sid_0 = machine().device<mos6581_device>("sid_r");
+	mos6581_device *sid_1 = machine().device<mos6581_device>("sid_l");
+	vic3_device *vic3 = machine().device<vic3_device>("vic3");
 
 	switch (offset & 0xf00)
 	{
 	case 0x000:
 		if (offset < 0x80)
-			vic3_port_w(vic3, offset & 0x7f, data);
+			vic3->port_w(space, offset & 0x7f, data);
 		else if (offset < 0xa0)
-			c65_fdc_w(space->machine(), offset&0x1f,data);
+			c65_fdc_w(offset & 0x1f, data);
 		else
 		{
-			c65_ram_expansion_w(space, offset&0x1f, data);
+			c65_ram_expansion_w(space, offset & 0x1f, data, mem_mask);
 			/*ram expansion crtl optional */
 		}
 		break;
 	case 0x100:
 	case 0x200:
 	case 0x300:
-		vic3_palette_w(vic3, offset - 0x100, data);
+		vic3->palette_w(space, offset - 0x100, data);
 		break;
 	case 0x400:
 		if (offset<0x420) /* maybe 0x20 */
-			sid6581_w(sid_0, offset & 0x3f, data);
+			sid_0->write(space, offset & 0x3f, data);
 		else if (offset<0x440)
-			sid6581_w(sid_1, offset & 0x3f, data);
+			sid_1->write(space, offset & 0x3f, data);
 		else
-			DBG_LOG(space->machine(), 1, "io write", ("%.3x %.2x\n", offset, data));
+			DBG_LOG(machine(), 1, "io write", ("%.3x %.2x\n", offset, data));
 		break;
 	case 0x500:
-		DBG_LOG(space->machine(), 1, "io write", ("%.3x %.2x\n", offset, data));
+		DBG_LOG(machine(), 1, "io write", ("%.3x %.2x\n", offset, data));
 		break;
 	case 0x600:
-		c65_6511_port_w(space->machine(), offset&0xff,data);
+		c65_6511_port_w(offset & 0xff,data);
 		break;
 	case 0x700:
-		c65_dma_port_w(space->machine(), offset&0xff, data);
+		c65_dma_port_w(offset & 0xff, data);
 		break;
 	}
 }
 
-static WRITE8_HANDLER( c65_write_io_dc00 )
+WRITE8_MEMBER( c65_state::c65_write_io_dc00 )
 {
-	device_t *cia_0 = space->machine().device("cia_0");
-	device_t *cia_1 = space->machine().device("cia_1");
+	device_t *cia_0 = machine().device("cia_0");
+	device_t *cia_1 = machine().device("cia_1");
 
 	switch (offset & 0xf00)
 	{
 	case 0x000:
-		mos6526_w(cia_0, offset, data);
+		mos6526_w(cia_0, space, offset, data);
 		break;
 	case 0x100:
-		mos6526_w(cia_1, offset, data);
+		mos6526_w(cia_1, space, offset, data);
 		break;
 	case 0x200:
 	case 0x300:
-		DBG_LOG(space->machine(), 1, "io write", ("%.3x %.2x\n", offset+0xc00, data));
+		DBG_LOG(machine(), 1, "io write", ("%.3x %.2x\n", offset+0xc00, data));
 		break;
 	}
 }
 
-static READ8_HANDLER( c65_read_io )
+READ8_MEMBER( c65_state::c65_read_io )
 {
-	device_t *sid_0 = space->machine().device("sid_r");
-	device_t *sid_1 = space->machine().device("sid_l");
-	device_t *vic3 = space->machine().device("vic3");
+	mos6581_device *sid_0 = machine().device<mos6581_device>("sid_r");
+	mos6581_device *sid_1 = machine().device<mos6581_device>("sid_l");
+	vic3_device *vic3 = machine().device<vic3_device>("vic3");
 
 	switch (offset & 0xf00)
 	{
 	case 0x000:
 		if (offset < 0x80)
-			return vic3_port_r(vic3, offset & 0x7f);
+			return vic3->port_r(space, offset & 0x7f);
 		if (offset < 0xa0)
-			return c65_fdc_r(space->machine(), offset&0x1f);
+			return c65_fdc_r(offset & 0x1f);
 		else
 		{
-			return c65_ram_expansion_r(space, offset&0x1f);
+			return c65_ram_expansion_r(space, offset & 0x1f, mem_mask);
 			/*return; ram expansion crtl optional */
 		}
 		break;
@@ -759,40 +1042,40 @@ static READ8_HANDLER( c65_read_io )
 	case 0x200:
 	case 0x300:
 	/* read only !? */
-		DBG_LOG(space->machine(), 1, "io read", ("%.3x\n", offset));
+		DBG_LOG(machine(), 1, "io read", ("%.3x\n", offset));
 		break;
 	case 0x400:
 		if (offset < 0x420)
-			return sid6581_r(sid_0, offset & 0x3f);
+			return sid_0->read(space, offset & 0x3f);
 		if (offset < 0x440)
-			return sid6581_r(sid_1, offset & 0x3f);
-		DBG_LOG(space->machine(), 1, "io read", ("%.3x\n", offset));
+			return sid_1->read(space, offset & 0x3f);
+		DBG_LOG(machine(), 1, "io read", ("%.3x\n", offset));
 		break;
 	case 0x500:
-		DBG_LOG(space->machine(), 1, "io read", ("%.3x\n", offset));
+		DBG_LOG(machine(), 1, "io read", ("%.3x\n", offset));
 		break;
 	case 0x600:
-		return c65_6511_port_r(space->machine(), offset&0xff);
+		return c65_6511_port_r(offset&0xff);
 	case 0x700:
-		return c65_dma_port_r(space->machine(), offset&0xff);
+		return c65_dma_port_r(offset&0xff);
 	}
 	return 0xff;
 }
 
-static READ8_HANDLER( c65_read_io_dc00 )
+READ8_MEMBER( c65_state::c65_read_io_dc00 )
 {
-	device_t *cia_0 = space->machine().device("cia_0");
-	device_t *cia_1 = space->machine().device("cia_1");
+	device_t *cia_0 = machine().device("cia_0");
+	device_t *cia_1 = machine().device("cia_1");
 
 	switch (offset & 0x300)
 	{
 	case 0x000:
-		return mos6526_r(cia_0, offset);
+		return mos6526_r(cia_0, space, offset);
 	case 0x100:
-		return mos6526_r(cia_1, offset);
+		return mos6526_r(cia_1, space, offset);
 	case 0x200:
 	case 0x300:
-		DBG_LOG(space->machine(), 1, "io read", ("%.3x\n", offset+0xc00));
+		DBG_LOG(machine(), 1, "io read", ("%.3x\n", offset+0xc00));
 		break;
 	}
 	return 0xff;
@@ -808,151 +1091,148 @@ d02f:
 /* bit 1 external sync enable (genlock)
    bit 2 palette enable
    bit 6 vic3 c65 character set */
-void c65_bankswitch_interface( running_machine &machine, int value )
+WRITE8_MEMBER(c65_state::c65_bankswitch_interface)
 {
-	c65_state *state = machine.driver_data<c65_state>();
-	DBG_LOG(machine, 2, "c65 bankswitch", ("%.2x\n",value));
+	DBG_LOG(machine(), 2, "c65 bankswitch", ("%.2x\n",data));
 
-	if (state->m_io_on)
+	if (m_io_on)
 	{
-		if (value & 1)
+		if (data & 1)
 		{
-			memory_set_bankptr(machine, "bank8", state->m_colorram + 0x400);
-			memory_set_bankptr(machine, "bank9", state->m_colorram + 0x400);
-			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x0dc00, 0x0dfff, "bank8");
-			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_write_bank(0x0dc00, 0x0dfff, "bank9");
+			membank("bank8")->set_base(m_colorram + 0x400);
+			membank("bank9")->set_base(m_colorram + 0x400);
+			m_maincpu->space(AS_PROGRAM).install_read_bank(0x0dc00, 0x0dfff, "bank8");
+			m_maincpu->space(AS_PROGRAM).install_write_bank(0x0dc00, 0x0dfff, "bank9");
 		}
 		else
 		{
-			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x0dc00, 0x0dfff, FUNC(c65_read_io_dc00));
-			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x0dc00, 0x0dfff, FUNC(c65_write_io_dc00));
+			m_maincpu->space(AS_PROGRAM).install_read_handler(0x0dc00, 0x0dfff, read8_delegate(FUNC(c65_state::c65_read_io_dc00),this));
+			m_maincpu->space(AS_PROGRAM).install_write_handler(0x0dc00, 0x0dfff, write8_delegate(FUNC(c65_state::c65_write_io_dc00),this));
 		}
 	}
 
-	state->m_io_dc00_on = !(value & 1);
+	m_io_dc00_on = !(data & 1);
 #if 0
 	/* cartridge roms !?*/
-	if (value & 0x08)
-		memory_set_bankptr(machine, "bank1", state->m_roml);
+	if (data & 0x08)
+		membank("bank1")->set_base(m_roml);
 	else
-		memory_set_bankptr(machine, "bank1", state->m_memory + 0x8000);
+		membank("bank1")->set_base(m_memory + 0x8000);
 
-	if (value & 0x10)
-		memory_set_bankptr(machine, "bank2", state->m_basic);
+	if (data & 0x10)
+		membank("bank2")->set_base(m_basic);
 	else
-		memory_set_bankptr(machine, "bank2", state->m_memory + 0xa000);
+		membank("bank2")->set_base(m_memory + 0xa000);
 #endif
-	if ((state->m_old_value^value) & 0x20)
+	if ((m_old_value^data) & 0x20)
 	{
 	/* bankswitching faulty when doing actual page */
-		if (value & 0x20)
-			memory_set_bankptr(machine, "bank3", state->m_interface);
+		if (data & 0x20)
+			membank("bank3")->set_base(m_basic);
 		else
-			memory_set_bankptr(machine, "bank3", state->m_memory + 0xc000);
+			membank("bank3")->set_base(m_memory + 0xc000);
 	}
-	state->m_charset_select = value & 0x40;
+	m_charset_select = data & 0x40;
 #if 0
 	/* cartridge roms !?*/
-	if (value & 0x80)
-		memory_set_bankptr(machine, "bank8", state->m_kernal);
+	if (data & 0x80)
+		membank("bank8")->set_base(m_kernal);
 	else
-		memory_set_bankptr(machine, "bank6", state->m_memory + 0xe000);
+		membank("bank6")->set_base(m_memory + 0xe000);
 #endif
-	state->m_old_value = value;
+	m_old_value = data;
 }
 
-void c65_bankswitch( running_machine &machine )
+void c65_state::c65_bankswitch(  )
 {
-	c65_state *state = machine.driver_data<c65_state>();
 	int data, loram, hiram, charen;
 
-	data = m4510_get_port(machine.device<legacy_cpu_device>("maincpu"));
-	if (data == state->m_old_data)
+	data = 0x00; // machine().device<m4510_device>("maincpu")->get_port();
+	if (data == m_old_data)
 		return;
 
-	DBG_LOG(machine, 1, "bankswitch", ("%d\n", data & 7));
+	DBG_LOG(machine(), 1, "bankswitch", ("%d\n", data & 7));
 	loram = (data & 1) ? 1 : 0;
 	hiram = (data & 2) ? 1 : 0;
 	charen = (data & 4) ? 1 : 0;
 
-	if ((!state->m_game && state->m_exrom) || (loram && hiram && !state->m_exrom))
-		memory_set_bankptr(machine, "bank1", state->m_roml);
+	if ((!m_game && m_exrom) || (loram && hiram && !m_exrom))
+		membank("bank1")->set_base(m_roml);
 	else
-		memory_set_bankptr(machine, "bank1", state->m_memory + 0x8000);
+		membank("bank1")->set_base(m_memory + 0x8000);
 
-	if ((!state->m_game && state->m_exrom && hiram) || (!state->m_exrom))
-		memory_set_bankptr(machine, "bank2", state->m_romh);
+	if ((!m_game && m_exrom && hiram) || (!m_exrom))
+		membank("bank2")->set_base(m_romh);
 	else if (loram && hiram)
-		memory_set_bankptr(machine, "bank2", state->m_basic);
+		membank("bank2")->set_base(m_basic);
 	else
-		memory_set_bankptr(machine, "bank2", state->m_memory + 0xa000);
+		membank("bank2")->set_base(m_memory + 0xa000);
 
-	if ((!state->m_game && state->m_exrom) || (charen && (loram || hiram)))
+	if ((!m_game && m_exrom) || (charen && (loram || hiram)))
 	{
-		state->m_io_on = 1;
-		memory_set_bankptr(machine, "bank6", state->m_colorram);
-		memory_set_bankptr(machine, "bank7", state->m_colorram);
+		m_io_on = 1;
+		membank("bank6")->set_base(m_colorram);
+		membank("bank7")->set_base(m_colorram);
 
-		if (state->m_io_dc00_on)
+		if (m_io_dc00_on)
 		{
-			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x0dc00, 0x0dfff, FUNC(c65_read_io_dc00));
-			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x0dc00, 0x0dfff, FUNC(c65_write_io_dc00));
+			m_maincpu->space(AS_PROGRAM).install_read_handler(0x0dc00, 0x0dfff, read8_delegate(FUNC(c65_state::c65_read_io_dc00),this));
+			m_maincpu->space(AS_PROGRAM).install_write_handler(0x0dc00, 0x0dfff, write8_delegate(FUNC(c65_state::c65_write_io_dc00),this));
 		}
 		else
 		{
-			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x0dc00, 0x0dfff, "bank8");
-			machine.device("maincpu")->memory().space(AS_PROGRAM)->install_write_bank(0x0dc00, 0x0dfff, "bank9");
-			memory_set_bankptr(machine, "bank8", state->m_colorram + 0x400);
-			memory_set_bankptr(machine, "bank9", state->m_colorram + 0x400);
+			m_maincpu->space(AS_PROGRAM).install_read_bank(0x0dc00, 0x0dfff, "bank8");
+			m_maincpu->space(AS_PROGRAM).install_write_bank(0x0dc00, 0x0dfff, "bank9");
+			membank("bank8")->set_base(m_colorram + 0x400);
+			membank("bank9")->set_base(m_colorram + 0x400);
 		}
-		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x0d000, 0x0d7ff, FUNC(c65_read_io));
-		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x0d000, 0x0d7ff, FUNC(c65_write_io));
+		m_maincpu->space(AS_PROGRAM).install_read_handler(0x0d000, 0x0d7ff, read8_delegate(FUNC(c65_state::c65_read_io),this));
+		m_maincpu->space(AS_PROGRAM).install_write_handler(0x0d000, 0x0d7ff, write8_delegate(FUNC(c65_state::c65_write_io),this));
 	}
 	else
 	{
-		state->m_io_on = 0;
-		memory_set_bankptr(machine, "bank5", state->m_memory + 0xd000);
-		memory_set_bankptr(machine, "bank7", state->m_memory + 0xd800);
-		memory_set_bankptr(machine, "bank9", state->m_memory + 0xdc00);
+		m_io_on = 0;
+		membank("bank5")->set_base(m_memory + 0xd000);
+		membank("bank7")->set_base(m_memory + 0xd800);
+		membank("bank9")->set_base(m_memory + 0xdc00);
 		if (!charen && (loram || hiram))
 		{
-			memory_set_bankptr(machine, "bank4", state->m_chargen);
-			memory_set_bankptr(machine, "bank6", state->m_chargen + 0x800);
-			memory_set_bankptr(machine, "bank8", state->m_chargen + 0xc00);
+			membank("bank4")->set_base(m_chargen);
+			membank("bank6")->set_base(m_chargen + 0x800);
+			membank("bank8")->set_base(m_chargen + 0xc00);
 		}
 		else
 		{
-			memory_set_bankptr(machine, "bank4", state->m_memory + 0xd000);
-			memory_set_bankptr(machine, "bank6", state->m_memory + 0xd800);
-			memory_set_bankptr(machine, "bank8", state->m_memory + 0xdc00);
+			membank("bank4")->set_base(m_memory + 0xd000);
+			membank("bank6")->set_base(m_memory + 0xd800);
+			membank("bank8")->set_base(m_memory + 0xdc00);
 		}
-		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x0d000, 0x0d7ff, "bank4");
-		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_write_bank(0x0d000, 0x0d7ff, "bank5");
+		m_maincpu->space(AS_PROGRAM).install_read_bank(0x0d000, 0x0d7ff, "bank4");
+		m_maincpu->space(AS_PROGRAM).install_write_bank(0x0d000, 0x0d7ff, "bank5");
 	}
 
-	if (!state->m_game && state->m_exrom)
+	if (!m_game && m_exrom)
 	{
-		memory_set_bankptr(machine, "bank10", state->m_romh);
+		membank("bank10")->set_base(m_romh);
 	}
 	else
 	{
 		if (hiram)
 		{
-			memory_set_bankptr(machine, "bank10", state->m_kernal);
+			membank("bank10")->set_base(m_kernal);
 		}
 		else
 		{
-			memory_set_bankptr(machine, "bank10", state->m_memory + 0xe000);
+			membank("bank10")->set_base(m_memory + 0xe000);
 		}
 	}
-	state->m_old_data = data;
+	m_old_data = data;
 }
 
 #ifdef UNUSED_FUNCTION
-void c65_colorram_write( running_machine &machine, int offset, int value )
+void c65_state::c65_colorram_write( int offset, int value )
 {
-	c65_state *state = machine.driver_data<c65_state>();
-	state->m_colorram[offset & 0x7ff] = value | 0xf0;
+	m_colorram[offset & 0x7ff] = value | 0xf0;
 }
 #endif
 
@@ -961,110 +1241,103 @@ void c65_colorram_write( running_machine &machine, int offset, int value )
  * a15 and a14 portlines
  * 0x1000-0x1fff, 0x9000-0x9fff char rom
  */
-int c65_dma_read( running_machine &machine, int offset )
+READ8_MEMBER(c65_state::c65_dma_read)
 {
-	c65_state *state = machine.driver_data<c65_state>();
-	if (!state->m_game && state->m_exrom)
+	if (!m_game && m_exrom)
 	{
 		if (offset < 0x3000)
-			return state->m_memory[offset];
-		return state->m_romh[offset & 0x1fff];
+			return m_memory[offset];
+		return m_romh[offset & 0x1fff];
 	}
-	if ((state->m_vicaddr == state->m_memory) || (state->m_vicaddr == state->m_memory + 0x8000))
+	if ((m_vicaddr == m_memory) || (m_vicaddr == m_memory + 0x8000))
 	{
 		if (offset < 0x1000)
-			return state->m_vicaddr[offset & 0x3fff];
+			return m_vicaddr[offset & 0x3fff];
 		if (offset < 0x2000) {
-			if (state->m_charset_select)
-				return state->m_chargen[offset & 0xfff];
+			if (m_charset_select)
+				return m_chargen[offset & 0xfff];
 			else
-				return state->m_chargen[offset & 0xfff];
+				return m_chargen[offset & 0xfff];
 		}
-		return state->m_vicaddr[offset & 0x3fff];
+		return m_vicaddr[offset & 0x3fff];
 	}
-	return state->m_vicaddr[offset & 0x3fff];
+	return m_vicaddr[offset & 0x3fff];
 }
 
-int c65_dma_read_color( running_machine &machine, int offset )
+READ8_MEMBER(c65_state::c65_dma_read_color)
 {
-	c65_state *state = machine.driver_data<c65_state>();
-	if (state->m_c64mode)
-		return state->m_colorram[offset & 0x3ff] & 0xf;
-	return state->m_colorram[offset & 0x7ff];
+	if (m_c64mode)
+		return m_colorram[offset & 0x3ff] & 0xf;
+	return m_colorram[offset & 0x7ff];
 }
 
-static void c65_common_driver_init( running_machine &machine )
+void c65_state::c65_common_driver_init(  )
 {
-	c65_state *state = machine.driver_data<c65_state>();
-	state->m_memory = auto_alloc_array_clear(machine, UINT8, 0x10000);
-	memory_set_bankptr(machine, "bank11", state->m_memory + 0x00000);
-	memory_set_bankptr(machine, "bank12", state->m_memory + 0x08000);
-	memory_set_bankptr(machine, "bank13", state->m_memory + 0x0a000);
-	memory_set_bankptr(machine, "bank14", state->m_memory + 0x0c000);
-	memory_set_bankptr(machine, "bank15", state->m_memory + 0x0e000);
+	m_memory = auto_alloc_array_clear(machine(), UINT8, 0x10000);
+	membank("bank11")->set_base(m_memory + 0x00000);
+	membank("bank12")->set_base(m_memory + 0x08000);
+	membank("bank13")->set_base(m_memory + 0x0a000);
+	membank("bank14")->set_base(m_memory + 0x0c000);
+	membank("bank15")->set_base(m_memory + 0x0e000);
 
 	cbm_common_init();
-	state->m_keyline = 0xff;
+	m_keyline = 0xff;
 
-	state->m_pal = 0;
-	state->m_charset_select = 0;
-	state->m_6511_port = 0xff;
-	state->m_vicirq = 0;
-	state->m_old_data = -1;
+	m_pal = 0;
+	m_charset_select = 0;
+	m_6511_port = 0xff;
+	m_vicirq = 0;
+	m_old_data = -1;
 
 	/* C65 had no datasette port */
-	state->m_tape_on = 0;
-	state->m_game = 1;
-	state->m_exrom = 1;
+	m_tape_on = 0;
+	m_game = 1;
+	m_exrom = 1;
 
-	/*memset(state->m_memory + 0x40000, 0, 0x800000 - 0x40000); */
+	/*memset(m_memory + 0x40000, 0, 0x800000 - 0x40000); */
 }
 
-DRIVER_INIT( c65 )
+DRIVER_INIT_MEMBER(c65_state,c65)
 {
-	c65_state *state = machine.driver_data<c65_state>();
-	state->m_dma.version = 2;
-	c65_common_driver_init(machine);
+	m_dma.version = 2;
+	c65_common_driver_init();
 }
 
-DRIVER_INIT( c65pal )
+DRIVER_INIT_MEMBER(c65_state,c65pal)
 {
-	c65_state *state = machine.driver_data<c65_state>();
-	state->m_dma.version = 1;
-	c65_common_driver_init(machine);
-	state->m_pal = 1;
+	m_dma.version = 1;
+	c65_common_driver_init();
+	m_pal = 1;
 }
 
-MACHINE_START( c65 )
+MACHINE_START_MEMBER(c65_state,c65)
 {
-	c65_state *state = machine.driver_data<c65_state>();
 	/* clear upper memory */
-	memset(ram_get_ptr(machine.device(RAM_TAG)) + 128*1024, 0xff, ram_get_size(machine.device(RAM_TAG)) -  128*1024);
+	memset(m_ram->pointer() + 128*1024, 0xff, m_ram->size() -  128*1024);
 
 //removed   cbm_drive_0_config (SERIAL, 10);
 //removed   cbm_drive_1_config (SERIAL, 11);
-	state->m_vicaddr = state->m_memory;
+	m_vicaddr = m_memory;
 
-	state->m_c64mode = 0;
+	m_c64mode = 0;
 
-	c65_bankswitch_interface(machine, 0xff);
-	c65_bankswitch (machine);
+	c65_bankswitch_interface(m_maincpu->space(AS_PROGRAM),0,0xff);
+	c65_bankswitch();
 }
 
 
-INTERRUPT_GEN( c65_frame_interrupt )
+INTERRUPT_GEN_MEMBER(c65_state::c65_frame_interrupt)
 {
-	c65_state *state = device->machine().driver_data<c65_state>();
 	int value;
 
-	c65_nmi(device->machine());
+	c65_nmi();
 
 	/* common keys input ports */
-	cbm_common_interrupt(device);
+	cbm_common_interrupt(&device);
 
 	/* c65 specific: function keys input ports */
 	value = 0xff;
 
-	value &= ~input_port_read(device->machine(), "FUNCT");
-	state->m_keyline = value;
+	value &= ~ioport("FUNCT")->read();
+	m_keyline = value;
 }

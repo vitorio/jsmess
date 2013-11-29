@@ -1,15 +1,25 @@
+#include "sound/2203intf.h"
 
 class mexico86_state : public driver_device
 {
 public:
 	mexico86_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_objectram(*this, "objectram"),
+		m_protection_ram(*this, "protection_ram"),
+		m_videoram(*this, "videoram"),
+		m_maincpu(*this, "maincpu"),
+		m_audiocpu(*this, "audiocpu"),
+		m_subcpu(*this, "sub"),
+		m_mcu(*this, "mcu"),
+		m_ymsnd(*this, "ymsnd")
+	{
+	}
 
 	/* memory pointers */
-	UINT8 *     m_protection_ram;
-	UINT8 *     m_videoram;
-	UINT8 *     m_objectram;
-	size_t      m_objectram_size;
+	required_shared_ptr<UINT8> m_objectram;
+	required_shared_ptr<UINT8> m_protection_ram;
+	required_shared_ptr<UINT8> m_videoram;
 
 	/* video-related */
 	int      m_charbank;
@@ -30,34 +40,32 @@ public:
 	int      m_coin_last;
 
 	/* devices */
-	device_t *m_maincpu;
-	device_t *m_audiocpu;
-	device_t *m_subcpu;
-	device_t *m_mcu;
+	required_device<cpu_device> m_maincpu;
+	required_device<cpu_device> m_audiocpu;
+	optional_device<cpu_device> m_subcpu;
+	optional_device<cpu_device> m_mcu;
+	required_device<ym2203_device> m_ymsnd;
 
 	/* queue */
 	UINT8 m_queue[64];
 	int m_qfront;
 	int m_qstate;
+	DECLARE_WRITE8_MEMBER(mexico86_sub_output_w);
+	DECLARE_WRITE8_MEMBER(mexico86_f008_w);
+	DECLARE_READ8_MEMBER(mexico86_68705_port_a_r);
+	DECLARE_WRITE8_MEMBER(mexico86_68705_port_a_w);
+	DECLARE_WRITE8_MEMBER(mexico86_68705_ddr_a_w);
+	DECLARE_READ8_MEMBER(mexico86_68705_port_b_r);
+	DECLARE_WRITE8_MEMBER(mexico86_68705_port_b_w);
+	DECLARE_WRITE8_MEMBER(mexico86_68705_ddr_b_w);
+	DECLARE_WRITE8_MEMBER(mexico86_bankswitch_w);
+	DECLARE_READ8_MEMBER(kiki_ym2203_r);
+	virtual void machine_start();
+	virtual void machine_reset();
+	UINT32 screen_update_mexico86(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	UINT32 screen_update_kikikai(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	INTERRUPT_GEN_MEMBER(kikikai_interrupt);
+	INTERRUPT_GEN_MEMBER(mexico86_m68705_interrupt);
+	void mcu_simulate(  );
+	void kiki_clogic(int address, int latch);
 };
-
-
-/*----------- defined in machine/mexico86.c -----------*/
-
-WRITE8_HANDLER( mexico86_f008_w );
-INTERRUPT_GEN( kikikai_interrupt );
-INTERRUPT_GEN( mexico86_m68705_interrupt );
-READ8_HANDLER( mexico86_68705_port_a_r );
-WRITE8_HANDLER( mexico86_68705_port_a_w );
-WRITE8_HANDLER( mexico86_68705_ddr_a_w );
-READ8_HANDLER( mexico86_68705_port_b_r );
-WRITE8_HANDLER( mexico86_68705_port_b_w );
-WRITE8_HANDLER( mexico86_68705_ddr_b_w );
-
-
-/*----------- defined in video/mexico86.c -----------*/
-
-WRITE8_HANDLER( mexico86_bankswitch_w );
-
-SCREEN_UPDATE( mexico86 );
-SCREEN_UPDATE( kikikai );

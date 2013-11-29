@@ -5,8 +5,8 @@
 #if 0
 static const char copyright_notice[] =
 "MUSASHI\n"
-"Version 4.70 (2010-11-06)\n"
-"A portable Motorola M680x0 processor emulation engine.\n"
+"Version 4.95 (2012-02-19)\n"
+"A portable Motorola M68xxx/CPU32/ColdFire processor emulation engine.\n"
 "Copyright Karl Stenerud.  All rights reserved.\n"
 "\n"
 "This code may be freely used for non-commercial purpooses as long as this\n"
@@ -17,7 +17,7 @@ static const char copyright_notice[] =
 "(Karl Stenerud).\n"
 "\n"
 "The latest version of this code can be obtained at:\n"
-"http://kstenerud.cjb.net or http://mamedev.org\n"
+"http://kstenerud.cjb.net or http://mamedev.org/\n"
 ;
 #endif
 
@@ -34,16 +34,15 @@ static const char copyright_notice[] =
 
 #include "emu.h"
 #include "debugger.h"
-#include <setjmp.h>
 #include "m68kcpu.h"
 #include "m68kops.h"
-#include "m68kfpu.c"
 
+#include "m68kfpu.c"
 #include "m68kmmu.h"
 
-extern void m68040_fpu_op0(m68ki_cpu_core *m68k);
-extern void m68040_fpu_op1(m68ki_cpu_core *m68k);
-extern void m68881_mmu_ops(m68ki_cpu_core *m68k);
+extern void m68040_fpu_op0(m68000_base_device *m68k);
+extern void m68040_fpu_op1(m68000_base_device *m68k);
+extern void m68881_mmu_ops(m68000_base_device *m68k);
 
 /* ======================================================================== */
 /* ================================= DATA ================================= */
@@ -89,393 +88,539 @@ const UINT32 m68ki_shift_32_table[65] =
 /* Number of clock cycles to use for exception processing.
  * I used 4 for any vectors that are undocumented for processing times.
  */
-const UINT8 m68ki_exception_cycle_table[5][256] =
+const UINT8 m68ki_exception_cycle_table[7][256] =
 {
 	{ /* 000 */
-		 40, /*  0: Reset - Initial Stack Pointer                      */
-		  4, /*  1: Reset - Initial Program Counter                    */
-		 50, /*  2: Bus Error                             (unemulated) */
-		 50, /*  3: Address Error                         (unemulated) */
-		 34, /*  4: Illegal Instruction                                */
-		 38, /*  5: Divide by Zero                                     */
-		 40, /*  6: CHK                                                */
-		 34, /*  7: TRAPV                                              */
-		 34, /*  8: Privilege Violation                                */
-		 34, /*  9: Trace                                              */
-		  4, /* 10: 1010                                               */
-		  4, /* 11: 1111                                               */
-		  4, /* 12: RESERVED                                           */
-		  4, /* 13: Coprocessor Protocol Violation        (unemulated) */
-		  4, /* 14: Format Error                                       */
-		 44, /* 15: Uninitialized Interrupt                            */
-		  4, /* 16: RESERVED                                           */
-		  4, /* 17: RESERVED                                           */
-		  4, /* 18: RESERVED                                           */
-		  4, /* 19: RESERVED                                           */
-		  4, /* 20: RESERVED                                           */
-		  4, /* 21: RESERVED                                           */
-		  4, /* 22: RESERVED                                           */
-		  4, /* 23: RESERVED                                           */
-		 44, /* 24: Spurious Interrupt                                 */
-		 44, /* 25: Level 1 Interrupt Autovector                       */
-		 44, /* 26: Level 2 Interrupt Autovector                       */
-		 44, /* 27: Level 3 Interrupt Autovector                       */
-		 44, /* 28: Level 4 Interrupt Autovector                       */
-		 44, /* 29: Level 5 Interrupt Autovector                       */
-		 44, /* 30: Level 6 Interrupt Autovector                       */
-		 44, /* 31: Level 7 Interrupt Autovector                       */
-		 34, /* 32: TRAP #0                                            */
-		 34, /* 33: TRAP #1                                            */
-		 34, /* 34: TRAP #2                                            */
-		 34, /* 35: TRAP #3                                            */
-		 34, /* 36: TRAP #4                                            */
-		 34, /* 37: TRAP #5                                            */
-		 34, /* 38: TRAP #6                                            */
-		 34, /* 39: TRAP #7                                            */
-		 34, /* 40: TRAP #8                                            */
-		 34, /* 41: TRAP #9                                            */
-		 34, /* 42: TRAP #10                                           */
-		 34, /* 43: TRAP #11                                           */
-		 34, /* 44: TRAP #12                                           */
-		 34, /* 45: TRAP #13                                           */
-		 34, /* 46: TRAP #14                                           */
-		 34, /* 47: TRAP #15                                           */
-		  4, /* 48: FP Branch or Set on Unknown Condition (unemulated) */
-		  4, /* 49: FP Inexact Result                     (unemulated) */
-		  4, /* 50: FP Divide by Zero                     (unemulated) */
-		  4, /* 51: FP Underflow                          (unemulated) */
-		  4, /* 52: FP Operand Error                      (unemulated) */
-		  4, /* 53: FP Overflow                           (unemulated) */
-		  4, /* 54: FP Signaling NAN                      (unemulated) */
-		  4, /* 55: FP Unimplemented Data Type            (unemulated) */
-		  4, /* 56: MMU Configuration Error               (unemulated) */
-		  4, /* 57: MMU Illegal Operation Error           (unemulated) */
-		  4, /* 58: MMU Access Level Violation Error      (unemulated) */
-		  4, /* 59: RESERVED                                           */
-		  4, /* 60: RESERVED                                           */
-		  4, /* 61: RESERVED                                           */
-		  4, /* 62: RESERVED                                           */
-		  4, /* 63: RESERVED                                           */
-		     /* 64-255: User Defined                                   */
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
+			40, /*  0: Reset - Initial Stack Pointer                      */
+			4, /*  1: Reset - Initial Program Counter                    */
+			50, /*  2: Bus Error                             (unemulated) */
+			50, /*  3: Address Error                         (unemulated) */
+			34, /*  4: Illegal Instruction                                */
+			38, /*  5: Divide by Zero                                     */
+			40, /*  6: CHK                                                */
+			34, /*  7: TRAPV                                              */
+			34, /*  8: Privilege Violation                                */
+			34, /*  9: Trace                                              */
+			4, /* 10: 1010                                               */
+			4, /* 11: 1111                                               */
+			4, /* 12: RESERVED                                           */
+			4, /* 13: Coprocessor Protocol Violation        (unemulated) */
+			4, /* 14: Format Error                                       */
+			44, /* 15: Uninitialized Interrupt                            */
+			4, /* 16: RESERVED                                           */
+			4, /* 17: RESERVED                                           */
+			4, /* 18: RESERVED                                           */
+			4, /* 19: RESERVED                                           */
+			4, /* 20: RESERVED                                           */
+			4, /* 21: RESERVED                                           */
+			4, /* 22: RESERVED                                           */
+			4, /* 23: RESERVED                                           */
+			44, /* 24: Spurious Interrupt                                 */
+			44, /* 25: Level 1 Interrupt Autovector                       */
+			44, /* 26: Level 2 Interrupt Autovector                       */
+			44, /* 27: Level 3 Interrupt Autovector                       */
+			44, /* 28: Level 4 Interrupt Autovector                       */
+			44, /* 29: Level 5 Interrupt Autovector                       */
+			44, /* 30: Level 6 Interrupt Autovector                       */
+			44, /* 31: Level 7 Interrupt Autovector                       */
+			34, /* 32: TRAP #0                                            */
+			34, /* 33: TRAP #1                                            */
+			34, /* 34: TRAP #2                                            */
+			34, /* 35: TRAP #3                                            */
+			34, /* 36: TRAP #4                                            */
+			34, /* 37: TRAP #5                                            */
+			34, /* 38: TRAP #6                                            */
+			34, /* 39: TRAP #7                                            */
+			34, /* 40: TRAP #8                                            */
+			34, /* 41: TRAP #9                                            */
+			34, /* 42: TRAP #10                                           */
+			34, /* 43: TRAP #11                                           */
+			34, /* 44: TRAP #12                                           */
+			34, /* 45: TRAP #13                                           */
+			34, /* 46: TRAP #14                                           */
+			34, /* 47: TRAP #15                                           */
+			4, /* 48: FP Branch or Set on Unknown Condition (unemulated) */
+			4, /* 49: FP Inexact Result                     (unemulated) */
+			4, /* 50: FP Divide by Zero                     (unemulated) */
+			4, /* 51: FP Underflow                          (unemulated) */
+			4, /* 52: FP Operand Error                      (unemulated) */
+			4, /* 53: FP Overflow                           (unemulated) */
+			4, /* 54: FP Signaling NAN                      (unemulated) */
+			4, /* 55: FP Unimplemented Data Type            (unemulated) */
+			4, /* 56: MMU Configuration Error               (unemulated) */
+			4, /* 57: MMU Illegal Operation Error           (unemulated) */
+			4, /* 58: MMU Access Level Violation Error      (unemulated) */
+			4, /* 59: RESERVED                                           */
+			4, /* 60: RESERVED                                           */
+			4, /* 61: RESERVED                                           */
+			4, /* 62: RESERVED                                           */
+			4, /* 63: RESERVED                                           */
+				/* 64-255: User Defined                                   */
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
 	},
 	{ /* 010 */
-		 40, /*  0: Reset - Initial Stack Pointer                      */
-		  4, /*  1: Reset - Initial Program Counter                    */
+			40, /*  0: Reset - Initial Stack Pointer                      */
+			4, /*  1: Reset - Initial Program Counter                    */
 		126, /*  2: Bus Error                             (unemulated) */
 		126, /*  3: Address Error                         (unemulated) */
-		 38, /*  4: Illegal Instruction                                */
-		 44, /*  5: Divide by Zero                                     */
-		 44, /*  6: CHK                                                */
-		 34, /*  7: TRAPV                                              */
-		 38, /*  8: Privilege Violation                                */
-		 38, /*  9: Trace                                              */
-		  4, /* 10: 1010                                               */
-		  4, /* 11: 1111                                               */
-		  4, /* 12: RESERVED                                           */
-		  4, /* 13: Coprocessor Protocol Violation        (unemulated) */
-		  4, /* 14: Format Error                                       */
-		 44, /* 15: Uninitialized Interrupt                            */
-		  4, /* 16: RESERVED                                           */
-		  4, /* 17: RESERVED                                           */
-		  4, /* 18: RESERVED                                           */
-		  4, /* 19: RESERVED                                           */
-		  4, /* 20: RESERVED                                           */
-		  4, /* 21: RESERVED                                           */
-		  4, /* 22: RESERVED                                           */
-		  4, /* 23: RESERVED                                           */
-		 46, /* 24: Spurious Interrupt                                 */
-		 46, /* 25: Level 1 Interrupt Autovector                       */
-		 46, /* 26: Level 2 Interrupt Autovector                       */
-		 46, /* 27: Level 3 Interrupt Autovector                       */
-		 46, /* 28: Level 4 Interrupt Autovector                       */
-		 46, /* 29: Level 5 Interrupt Autovector                       */
-		 46, /* 30: Level 6 Interrupt Autovector                       */
-		 46, /* 31: Level 7 Interrupt Autovector                       */
-		 38, /* 32: TRAP #0                                            */
-		 38, /* 33: TRAP #1                                            */
-		 38, /* 34: TRAP #2                                            */
-		 38, /* 35: TRAP #3                                            */
-		 38, /* 36: TRAP #4                                            */
-		 38, /* 37: TRAP #5                                            */
-		 38, /* 38: TRAP #6                                            */
-		 38, /* 39: TRAP #7                                            */
-		 38, /* 40: TRAP #8                                            */
-		 38, /* 41: TRAP #9                                            */
-		 38, /* 42: TRAP #10                                           */
-		 38, /* 43: TRAP #11                                           */
-		 38, /* 44: TRAP #12                                           */
-		 38, /* 45: TRAP #13                                           */
-		 38, /* 46: TRAP #14                                           */
-		 38, /* 47: TRAP #15                                           */
-		  4, /* 48: FP Branch or Set on Unknown Condition (unemulated) */
-		  4, /* 49: FP Inexact Result                     (unemulated) */
-		  4, /* 50: FP Divide by Zero                     (unemulated) */
-		  4, /* 51: FP Underflow                          (unemulated) */
-		  4, /* 52: FP Operand Error                      (unemulated) */
-		  4, /* 53: FP Overflow                           (unemulated) */
-		  4, /* 54: FP Signaling NAN                      (unemulated) */
-		  4, /* 55: FP Unimplemented Data Type            (unemulated) */
-		  4, /* 56: MMU Configuration Error               (unemulated) */
-		  4, /* 57: MMU Illegal Operation Error           (unemulated) */
-		  4, /* 58: MMU Access Level Violation Error      (unemulated) */
-		  4, /* 59: RESERVED                                           */
-		  4, /* 60: RESERVED                                           */
-		  4, /* 61: RESERVED                                           */
-		  4, /* 62: RESERVED                                           */
-		  4, /* 63: RESERVED                                           */
-		     /* 64-255: User Defined                                   */
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
+			38, /*  4: Illegal Instruction                                */
+			44, /*  5: Divide by Zero                                     */
+			44, /*  6: CHK                                                */
+			34, /*  7: TRAPV                                              */
+			38, /*  8: Privilege Violation                                */
+			38, /*  9: Trace                                              */
+			4, /* 10: 1010                                               */
+			4, /* 11: 1111                                               */
+			4, /* 12: RESERVED                                           */
+			4, /* 13: Coprocessor Protocol Violation        (unemulated) */
+			4, /* 14: Format Error                                       */
+			44, /* 15: Uninitialized Interrupt                            */
+			4, /* 16: RESERVED                                           */
+			4, /* 17: RESERVED                                           */
+			4, /* 18: RESERVED                                           */
+			4, /* 19: RESERVED                                           */
+			4, /* 20: RESERVED                                           */
+			4, /* 21: RESERVED                                           */
+			4, /* 22: RESERVED                                           */
+			4, /* 23: RESERVED                                           */
+			46, /* 24: Spurious Interrupt                                 */
+			46, /* 25: Level 1 Interrupt Autovector                       */
+			46, /* 26: Level 2 Interrupt Autovector                       */
+			46, /* 27: Level 3 Interrupt Autovector                       */
+			46, /* 28: Level 4 Interrupt Autovector                       */
+			46, /* 29: Level 5 Interrupt Autovector                       */
+			46, /* 30: Level 6 Interrupt Autovector                       */
+			46, /* 31: Level 7 Interrupt Autovector                       */
+			38, /* 32: TRAP #0                                            */
+			38, /* 33: TRAP #1                                            */
+			38, /* 34: TRAP #2                                            */
+			38, /* 35: TRAP #3                                            */
+			38, /* 36: TRAP #4                                            */
+			38, /* 37: TRAP #5                                            */
+			38, /* 38: TRAP #6                                            */
+			38, /* 39: TRAP #7                                            */
+			38, /* 40: TRAP #8                                            */
+			38, /* 41: TRAP #9                                            */
+			38, /* 42: TRAP #10                                           */
+			38, /* 43: TRAP #11                                           */
+			38, /* 44: TRAP #12                                           */
+			38, /* 45: TRAP #13                                           */
+			38, /* 46: TRAP #14                                           */
+			38, /* 47: TRAP #15                                           */
+			4, /* 48: FP Branch or Set on Unknown Condition (unemulated) */
+			4, /* 49: FP Inexact Result                     (unemulated) */
+			4, /* 50: FP Divide by Zero                     (unemulated) */
+			4, /* 51: FP Underflow                          (unemulated) */
+			4, /* 52: FP Operand Error                      (unemulated) */
+			4, /* 53: FP Overflow                           (unemulated) */
+			4, /* 54: FP Signaling NAN                      (unemulated) */
+			4, /* 55: FP Unimplemented Data Type            (unemulated) */
+			4, /* 56: MMU Configuration Error               (unemulated) */
+			4, /* 57: MMU Illegal Operation Error           (unemulated) */
+			4, /* 58: MMU Access Level Violation Error      (unemulated) */
+			4, /* 59: RESERVED                                           */
+			4, /* 60: RESERVED                                           */
+			4, /* 61: RESERVED                                           */
+			4, /* 62: RESERVED                                           */
+			4, /* 63: RESERVED                                           */
+				/* 64-255: User Defined                                   */
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
 	},
 	{ /* 020 */
-		  4, /*  0: Reset - Initial Stack Pointer                      */
-		  4, /*  1: Reset - Initial Program Counter                    */
-		 50, /*  2: Bus Error                             (unemulated) */
-		 50, /*  3: Address Error                         (unemulated) */
-		 20, /*  4: Illegal Instruction                                */
-		 38, /*  5: Divide by Zero                                     */
-		 40, /*  6: CHK                                                */
-		 20, /*  7: TRAPV                                              */
-		 34, /*  8: Privilege Violation                                */
-		 25, /*  9: Trace                                              */
-		 20, /* 10: 1010                                               */
-		 20, /* 11: 1111                                               */
-		  4, /* 12: RESERVED                                           */
-		  4, /* 13: Coprocessor Protocol Violation        (unemulated) */
-		  4, /* 14: Format Error                                       */
-		 30, /* 15: Uninitialized Interrupt                            */
-		  4, /* 16: RESERVED                                           */
-		  4, /* 17: RESERVED                                           */
-		  4, /* 18: RESERVED                                           */
-		  4, /* 19: RESERVED                                           */
-		  4, /* 20: RESERVED                                           */
-		  4, /* 21: RESERVED                                           */
-		  4, /* 22: RESERVED                                           */
-		  4, /* 23: RESERVED                                           */
-		 30, /* 24: Spurious Interrupt                                 */
-		 30, /* 25: Level 1 Interrupt Autovector                       */
-		 30, /* 26: Level 2 Interrupt Autovector                       */
-		 30, /* 27: Level 3 Interrupt Autovector                       */
-		 30, /* 28: Level 4 Interrupt Autovector                       */
-		 30, /* 29: Level 5 Interrupt Autovector                       */
-		 30, /* 30: Level 6 Interrupt Autovector                       */
-		 30, /* 31: Level 7 Interrupt Autovector                       */
-		 20, /* 32: TRAP #0                                            */
-		 20, /* 33: TRAP #1                                            */
-		 20, /* 34: TRAP #2                                            */
-		 20, /* 35: TRAP #3                                            */
-		 20, /* 36: TRAP #4                                            */
-		 20, /* 37: TRAP #5                                            */
-		 20, /* 38: TRAP #6                                            */
-		 20, /* 39: TRAP #7                                            */
-		 20, /* 40: TRAP #8                                            */
-		 20, /* 41: TRAP #9                                            */
-		 20, /* 42: TRAP #10                                           */
-		 20, /* 43: TRAP #11                                           */
-		 20, /* 44: TRAP #12                                           */
-		 20, /* 45: TRAP #13                                           */
-		 20, /* 46: TRAP #14                                           */
-		 20, /* 47: TRAP #15                                           */
-		  4, /* 48: FP Branch or Set on Unknown Condition (unemulated) */
-		  4, /* 49: FP Inexact Result                     (unemulated) */
-		  4, /* 50: FP Divide by Zero                     (unemulated) */
-		  4, /* 51: FP Underflow                          (unemulated) */
-		  4, /* 52: FP Operand Error                      (unemulated) */
-		  4, /* 53: FP Overflow                           (unemulated) */
-		  4, /* 54: FP Signaling NAN                      (unemulated) */
-		  4, /* 55: FP Unimplemented Data Type            (unemulated) */
-		  4, /* 56: MMU Configuration Error               (unemulated) */
-		  4, /* 57: MMU Illegal Operation Error           (unemulated) */
-		  4, /* 58: MMU Access Level Violation Error      (unemulated) */
-		  4, /* 59: RESERVED                                           */
-		  4, /* 60: RESERVED                                           */
-		  4, /* 61: RESERVED                                           */
-		  4, /* 62: RESERVED                                           */
-		  4, /* 63: RESERVED                                           */
-		     /* 64-255: User Defined                                   */
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
+			4, /*  0: Reset - Initial Stack Pointer                      */
+			4, /*  1: Reset - Initial Program Counter                    */
+			50, /*  2: Bus Error                             (unemulated) */
+			50, /*  3: Address Error                         (unemulated) */
+			20, /*  4: Illegal Instruction                                */
+			38, /*  5: Divide by Zero                                     */
+			40, /*  6: CHK                                                */
+			20, /*  7: TRAPV                                              */
+			34, /*  8: Privilege Violation                                */
+			25, /*  9: Trace                                              */
+			20, /* 10: 1010                                               */
+			20, /* 11: 1111                                               */
+			4, /* 12: RESERVED                                           */
+			4, /* 13: Coprocessor Protocol Violation        (unemulated) */
+			4, /* 14: Format Error                                       */
+			30, /* 15: Uninitialized Interrupt                            */
+			4, /* 16: RESERVED                                           */
+			4, /* 17: RESERVED                                           */
+			4, /* 18: RESERVED                                           */
+			4, /* 19: RESERVED                                           */
+			4, /* 20: RESERVED                                           */
+			4, /* 21: RESERVED                                           */
+			4, /* 22: RESERVED                                           */
+			4, /* 23: RESERVED                                           */
+			30, /* 24: Spurious Interrupt                                 */
+			30, /* 25: Level 1 Interrupt Autovector                       */
+			30, /* 26: Level 2 Interrupt Autovector                       */
+			30, /* 27: Level 3 Interrupt Autovector                       */
+			30, /* 28: Level 4 Interrupt Autovector                       */
+			30, /* 29: Level 5 Interrupt Autovector                       */
+			30, /* 30: Level 6 Interrupt Autovector                       */
+			30, /* 31: Level 7 Interrupt Autovector                       */
+			20, /* 32: TRAP #0                                            */
+			20, /* 33: TRAP #1                                            */
+			20, /* 34: TRAP #2                                            */
+			20, /* 35: TRAP #3                                            */
+			20, /* 36: TRAP #4                                            */
+			20, /* 37: TRAP #5                                            */
+			20, /* 38: TRAP #6                                            */
+			20, /* 39: TRAP #7                                            */
+			20, /* 40: TRAP #8                                            */
+			20, /* 41: TRAP #9                                            */
+			20, /* 42: TRAP #10                                           */
+			20, /* 43: TRAP #11                                           */
+			20, /* 44: TRAP #12                                           */
+			20, /* 45: TRAP #13                                           */
+			20, /* 46: TRAP #14                                           */
+			20, /* 47: TRAP #15                                           */
+			4, /* 48: FP Branch or Set on Unknown Condition (unemulated) */
+			4, /* 49: FP Inexact Result                     (unemulated) */
+			4, /* 50: FP Divide by Zero                     (unemulated) */
+			4, /* 51: FP Underflow                          (unemulated) */
+			4, /* 52: FP Operand Error                      (unemulated) */
+			4, /* 53: FP Overflow                           (unemulated) */
+			4, /* 54: FP Signaling NAN                      (unemulated) */
+			4, /* 55: FP Unimplemented Data Type            (unemulated) */
+			4, /* 56: MMU Configuration Error               (unemulated) */
+			4, /* 57: MMU Illegal Operation Error           (unemulated) */
+			4, /* 58: MMU Access Level Violation Error      (unemulated) */
+			4, /* 59: RESERVED                                           */
+			4, /* 60: RESERVED                                           */
+			4, /* 61: RESERVED                                           */
+			4, /* 62: RESERVED                                           */
+			4, /* 63: RESERVED                                           */
+				/* 64-255: User Defined                                   */
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
 	},
 	{ /* 030 - not correct */
-		  4, /*  0: Reset - Initial Stack Pointer                      */
-		  4, /*  1: Reset - Initial Program Counter                    */
-		 50, /*  2: Bus Error                             (unemulated) */
-		 50, /*  3: Address Error                         (unemulated) */
-		 20, /*  4: Illegal Instruction                                */
-		 38, /*  5: Divide by Zero                                     */
-		 40, /*  6: CHK                                                */
-		 20, /*  7: TRAPV                                              */
-		 34, /*  8: Privilege Violation                                */
-		 25, /*  9: Trace                                              */
-		 20, /* 10: 1010                                               */
-		 20, /* 11: 1111                                               */
-		  4, /* 12: RESERVED                                           */
-		  4, /* 13: Coprocessor Protocol Violation        (unemulated) */
-		  4, /* 14: Format Error                                       */
-		 30, /* 15: Uninitialized Interrupt                            */
-		  4, /* 16: RESERVED                                           */
-		  4, /* 17: RESERVED                                           */
-		  4, /* 18: RESERVED                                           */
-		  4, /* 19: RESERVED                                           */
-		  4, /* 20: RESERVED                                           */
-		  4, /* 21: RESERVED                                           */
-		  4, /* 22: RESERVED                                           */
-		  4, /* 23: RESERVED                                           */
-		 30, /* 24: Spurious Interrupt                                 */
-		 30, /* 25: Level 1 Interrupt Autovector                       */
-		 30, /* 26: Level 2 Interrupt Autovector                       */
-		 30, /* 27: Level 3 Interrupt Autovector                       */
-		 30, /* 28: Level 4 Interrupt Autovector                       */
-		 30, /* 29: Level 5 Interrupt Autovector                       */
-		 30, /* 30: Level 6 Interrupt Autovector                       */
-		 30, /* 31: Level 7 Interrupt Autovector                       */
-		 20, /* 32: TRAP #0                                            */
-		 20, /* 33: TRAP #1                                            */
-		 20, /* 34: TRAP #2                                            */
-		 20, /* 35: TRAP #3                                            */
-		 20, /* 36: TRAP #4                                            */
-		 20, /* 37: TRAP #5                                            */
-		 20, /* 38: TRAP #6                                            */
-		 20, /* 39: TRAP #7                                            */
-		 20, /* 40: TRAP #8                                            */
-		 20, /* 41: TRAP #9                                            */
-		 20, /* 42: TRAP #10                                           */
-		 20, /* 43: TRAP #11                                           */
-		 20, /* 44: TRAP #12                                           */
-		 20, /* 45: TRAP #13                                           */
-		 20, /* 46: TRAP #14                                           */
-		 20, /* 47: TRAP #15                                           */
-		  4, /* 48: FP Branch or Set on Unknown Condition (unemulated) */
-		  4, /* 49: FP Inexact Result                     (unemulated) */
-		  4, /* 50: FP Divide by Zero                     (unemulated) */
-		  4, /* 51: FP Underflow                          (unemulated) */
-		  4, /* 52: FP Operand Error                      (unemulated) */
-		  4, /* 53: FP Overflow                           (unemulated) */
-		  4, /* 54: FP Signaling NAN                      (unemulated) */
-		  4, /* 55: FP Unimplemented Data Type            (unemulated) */
-		  4, /* 56: MMU Configuration Error               (unemulated) */
-		  4, /* 57: MMU Illegal Operation Error           (unemulated) */
-		  4, /* 58: MMU Access Level Violation Error      (unemulated) */
-		  4, /* 59: RESERVED                                           */
-		  4, /* 60: RESERVED                                           */
-		  4, /* 61: RESERVED                                           */
-		  4, /* 62: RESERVED                                           */
-		  4, /* 63: RESERVED                                           */
-		     /* 64-255: User Defined                                   */
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
+			4, /*  0: Reset - Initial Stack Pointer                      */
+			4, /*  1: Reset - Initial Program Counter                    */
+			50, /*  2: Bus Error                             (unemulated) */
+			50, /*  3: Address Error                         (unemulated) */
+			20, /*  4: Illegal Instruction                                */
+			38, /*  5: Divide by Zero                                     */
+			40, /*  6: CHK                                                */
+			20, /*  7: TRAPV                                              */
+			34, /*  8: Privilege Violation                                */
+			25, /*  9: Trace                                              */
+			20, /* 10: 1010                                               */
+			20, /* 11: 1111                                               */
+			4, /* 12: RESERVED                                           */
+			4, /* 13: Coprocessor Protocol Violation        (unemulated) */
+			4, /* 14: Format Error                                       */
+			30, /* 15: Uninitialized Interrupt                            */
+			4, /* 16: RESERVED                                           */
+			4, /* 17: RESERVED                                           */
+			4, /* 18: RESERVED                                           */
+			4, /* 19: RESERVED                                           */
+			4, /* 20: RESERVED                                           */
+			4, /* 21: RESERVED                                           */
+			4, /* 22: RESERVED                                           */
+			4, /* 23: RESERVED                                           */
+			30, /* 24: Spurious Interrupt                                 */
+			30, /* 25: Level 1 Interrupt Autovector                       */
+			30, /* 26: Level 2 Interrupt Autovector                       */
+			30, /* 27: Level 3 Interrupt Autovector                       */
+			30, /* 28: Level 4 Interrupt Autovector                       */
+			30, /* 29: Level 5 Interrupt Autovector                       */
+			30, /* 30: Level 6 Interrupt Autovector                       */
+			30, /* 31: Level 7 Interrupt Autovector                       */
+			20, /* 32: TRAP #0                                            */
+			20, /* 33: TRAP #1                                            */
+			20, /* 34: TRAP #2                                            */
+			20, /* 35: TRAP #3                                            */
+			20, /* 36: TRAP #4                                            */
+			20, /* 37: TRAP #5                                            */
+			20, /* 38: TRAP #6                                            */
+			20, /* 39: TRAP #7                                            */
+			20, /* 40: TRAP #8                                            */
+			20, /* 41: TRAP #9                                            */
+			20, /* 42: TRAP #10                                           */
+			20, /* 43: TRAP #11                                           */
+			20, /* 44: TRAP #12                                           */
+			20, /* 45: TRAP #13                                           */
+			20, /* 46: TRAP #14                                           */
+			20, /* 47: TRAP #15                                           */
+			4, /* 48: FP Branch or Set on Unknown Condition (unemulated) */
+			4, /* 49: FP Inexact Result                     (unemulated) */
+			4, /* 50: FP Divide by Zero                     (unemulated) */
+			4, /* 51: FP Underflow                          (unemulated) */
+			4, /* 52: FP Operand Error                      (unemulated) */
+			4, /* 53: FP Overflow                           (unemulated) */
+			4, /* 54: FP Signaling NAN                      (unemulated) */
+			4, /* 55: FP Unimplemented Data Type            (unemulated) */
+			4, /* 56: MMU Configuration Error               (unemulated) */
+			4, /* 57: MMU Illegal Operation Error           (unemulated) */
+			4, /* 58: MMU Access Level Violation Error      (unemulated) */
+			4, /* 59: RESERVED                                           */
+			4, /* 60: RESERVED                                           */
+			4, /* 61: RESERVED                                           */
+			4, /* 62: RESERVED                                           */
+			4, /* 63: RESERVED                                           */
+				/* 64-255: User Defined                                   */
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
 	},
 	{ /* 040 */ // TODO: these values are not correct
-		  4, /*  0: Reset - Initial Stack Pointer                      */
-		  4, /*  1: Reset - Initial Program Counter                    */
-		 50, /*  2: Bus Error                             (unemulated) */
-		 50, /*  3: Address Error                         (unemulated) */
-		 20, /*  4: Illegal Instruction                                */
-		 38, /*  5: Divide by Zero                                     */
-		 40, /*  6: CHK                                                */
-		 20, /*  7: TRAPV                                              */
-		 34, /*  8: Privilege Violation                                */
-		 25, /*  9: Trace                                              */
-		 20, /* 10: 1010                                               */
-		 20, /* 11: 1111                                               */
-		  4, /* 12: RESERVED                                           */
-		  4, /* 13: Coprocessor Protocol Violation        (unemulated) */
-		  4, /* 14: Format Error                                       */
-		 30, /* 15: Uninitialized Interrupt                            */
-		  4, /* 16: RESERVED                                           */
-		  4, /* 17: RESERVED                                           */
-		  4, /* 18: RESERVED                                           */
-		  4, /* 19: RESERVED                                           */
-		  4, /* 20: RESERVED                                           */
-		  4, /* 21: RESERVED                                           */
-		  4, /* 22: RESERVED                                           */
-		  4, /* 23: RESERVED                                           */
-		 30, /* 24: Spurious Interrupt                                 */
-		 30, /* 25: Level 1 Interrupt Autovector                       */
-		 30, /* 26: Level 2 Interrupt Autovector                       */
-		 30, /* 27: Level 3 Interrupt Autovector                       */
-		 30, /* 28: Level 4 Interrupt Autovector                       */
-		 30, /* 29: Level 5 Interrupt Autovector                       */
-		 30, /* 30: Level 6 Interrupt Autovector                       */
-		 30, /* 31: Level 7 Interrupt Autovector                       */
-		 20, /* 32: TRAP #0                                            */
-		 20, /* 33: TRAP #1                                            */
-		 20, /* 34: TRAP #2                                            */
-		 20, /* 35: TRAP #3                                            */
-		 20, /* 36: TRAP #4                                            */
-		 20, /* 37: TRAP #5                                            */
-		 20, /* 38: TRAP #6                                            */
-		 20, /* 39: TRAP #7                                            */
-		 20, /* 40: TRAP #8                                            */
-		 20, /* 41: TRAP #9                                            */
-		 20, /* 42: TRAP #10                                           */
-		 20, /* 43: TRAP #11                                           */
-		 20, /* 44: TRAP #12                                           */
-		 20, /* 45: TRAP #13                                           */
-		 20, /* 46: TRAP #14                                           */
-		 20, /* 47: TRAP #15                                           */
-		  4, /* 48: FP Branch or Set on Unknown Condition (unemulated) */
-		  4, /* 49: FP Inexact Result                     (unemulated) */
-		  4, /* 50: FP Divide by Zero                     (unemulated) */
-		  4, /* 51: FP Underflow                          (unemulated) */
-		  4, /* 52: FP Operand Error                      (unemulated) */
-		  4, /* 53: FP Overflow                           (unemulated) */
-		  4, /* 54: FP Signaling NAN                      (unemulated) */
-		  4, /* 55: FP Unimplemented Data Type            (unemulated) */
-		  4, /* 56: MMU Configuration Error               (unemulated) */
-		  4, /* 57: MMU Illegal Operation Error           (unemulated) */
-		  4, /* 58: MMU Access Level Violation Error      (unemulated) */
-		  4, /* 59: RESERVED                                           */
-		  4, /* 60: RESERVED                                           */
-		  4, /* 61: RESERVED                                           */
-		  4, /* 62: RESERVED                                           */
-		  4, /* 63: RESERVED                                           */
-		     /* 64-255: User Defined                                   */
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
-		  4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
-	}
+			4, /*  0: Reset - Initial Stack Pointer                      */
+			4, /*  1: Reset - Initial Program Counter                    */
+			50, /*  2: Bus Error                             (unemulated) */
+			50, /*  3: Address Error                         (unemulated) */
+			20, /*  4: Illegal Instruction                                */
+			38, /*  5: Divide by Zero                                     */
+			40, /*  6: CHK                                                */
+			20, /*  7: TRAPV                                              */
+			34, /*  8: Privilege Violation                                */
+			25, /*  9: Trace                                              */
+			20, /* 10: 1010                                               */
+			20, /* 11: 1111                                               */
+			4, /* 12: RESERVED                                           */
+			4, /* 13: Coprocessor Protocol Violation        (unemulated) */
+			4, /* 14: Format Error                                       */
+			30, /* 15: Uninitialized Interrupt                            */
+			4, /* 16: RESERVED                                           */
+			4, /* 17: RESERVED                                           */
+			4, /* 18: RESERVED                                           */
+			4, /* 19: RESERVED                                           */
+			4, /* 20: RESERVED                                           */
+			4, /* 21: RESERVED                                           */
+			4, /* 22: RESERVED                                           */
+			4, /* 23: RESERVED                                           */
+			30, /* 24: Spurious Interrupt                                 */
+			30, /* 25: Level 1 Interrupt Autovector                       */
+			30, /* 26: Level 2 Interrupt Autovector                       */
+			30, /* 27: Level 3 Interrupt Autovector                       */
+			30, /* 28: Level 4 Interrupt Autovector                       */
+			30, /* 29: Level 5 Interrupt Autovector                       */
+			30, /* 30: Level 6 Interrupt Autovector                       */
+			30, /* 31: Level 7 Interrupt Autovector                       */
+			20, /* 32: TRAP #0                                            */
+			20, /* 33: TRAP #1                                            */
+			20, /* 34: TRAP #2                                            */
+			20, /* 35: TRAP #3                                            */
+			20, /* 36: TRAP #4                                            */
+			20, /* 37: TRAP #5                                            */
+			20, /* 38: TRAP #6                                            */
+			20, /* 39: TRAP #7                                            */
+			20, /* 40: TRAP #8                                            */
+			20, /* 41: TRAP #9                                            */
+			20, /* 42: TRAP #10                                           */
+			20, /* 43: TRAP #11                                           */
+			20, /* 44: TRAP #12                                           */
+			20, /* 45: TRAP #13                                           */
+			20, /* 46: TRAP #14                                           */
+			20, /* 47: TRAP #15                                           */
+			4, /* 48: FP Branch or Set on Unknown Condition (unemulated) */
+			4, /* 49: FP Inexact Result                     (unemulated) */
+			4, /* 50: FP Divide by Zero                     (unemulated) */
+			4, /* 51: FP Underflow                          (unemulated) */
+			4, /* 52: FP Operand Error                      (unemulated) */
+			4, /* 53: FP Overflow                           (unemulated) */
+			4, /* 54: FP Signaling NAN                      (unemulated) */
+			4, /* 55: FP Unimplemented Data Type            (unemulated) */
+			4, /* 56: MMU Configuration Error               (unemulated) */
+			4, /* 57: MMU Illegal Operation Error           (unemulated) */
+			4, /* 58: MMU Access Level Violation Error      (unemulated) */
+			4, /* 59: RESERVED                                           */
+			4, /* 60: RESERVED                                           */
+			4, /* 61: RESERVED                                           */
+			4, /* 62: RESERVED                                           */
+			4, /* 63: RESERVED                                           */
+				/* 64-255: User Defined                                   */
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
+	},
+	{ /* CPU32 */
+			4, /*  0: Reset - Initial Stack Pointer                      */
+			4, /*  1: Reset - Initial Program Counter                    */
+			50, /*  2: Bus Error                             (unemulated) */
+			50, /*  3: Address Error                         (unemulated) */
+			20, /*  4: Illegal Instruction                                */
+			38, /*  5: Divide by Zero                                     */
+			40, /*  6: CHK                                                */
+			20, /*  7: TRAPV                                              */
+			34, /*  8: Privilege Violation                                */
+			25, /*  9: Trace                                              */
+			20, /* 10: 1010                                               */
+			20, /* 11: 1111                                               */
+			4, /* 12: RESERVED                                           */
+			4, /* 13: Coprocessor Protocol Violation        (unemulated) */
+			4, /* 14: Format Error                                       */
+			30, /* 15: Uninitialized Interrupt                            */
+			4, /* 16: RESERVED                                           */
+			4, /* 17: RESERVED                                           */
+			4, /* 18: RESERVED                                           */
+			4, /* 19: RESERVED                                           */
+			4, /* 20: RESERVED                                           */
+			4, /* 21: RESERVED                                           */
+			4, /* 22: RESERVED                                           */
+			4, /* 23: RESERVED                                           */
+			30, /* 24: Spurious Interrupt                                 */
+			30, /* 25: Level 1 Interrupt Autovector                       */
+			30, /* 26: Level 2 Interrupt Autovector                       */
+			30, /* 27: Level 3 Interrupt Autovector                       */
+			30, /* 28: Level 4 Interrupt Autovector                       */
+			30, /* 29: Level 5 Interrupt Autovector                       */
+			30, /* 30: Level 6 Interrupt Autovector                       */
+			30, /* 31: Level 7 Interrupt Autovector                       */
+			20, /* 32: TRAP #0                                            */
+			20, /* 33: TRAP #1                                            */
+			20, /* 34: TRAP #2                                            */
+			20, /* 35: TRAP #3                                            */
+			20, /* 36: TRAP #4                                            */
+			20, /* 37: TRAP #5                                            */
+			20, /* 38: TRAP #6                                            */
+			20, /* 39: TRAP #7                                            */
+			20, /* 40: TRAP #8                                            */
+			20, /* 41: TRAP #9                                            */
+			20, /* 42: TRAP #10                                           */
+			20, /* 43: TRAP #11                                           */
+			20, /* 44: TRAP #12                                           */
+			20, /* 45: TRAP #13                                           */
+			20, /* 46: TRAP #14                                           */
+			20, /* 47: TRAP #15                                           */
+			4, /* 48: FP Branch or Set on Unknown Condition (unemulated) */
+			4, /* 49: FP Inexact Result                     (unemulated) */
+			4, /* 50: FP Divide by Zero                     (unemulated) */
+			4, /* 51: FP Underflow                          (unemulated) */
+			4, /* 52: FP Operand Error                      (unemulated) */
+			4, /* 53: FP Overflow                           (unemulated) */
+			4, /* 54: FP Signaling NAN                      (unemulated) */
+			4, /* 55: FP Unimplemented Data Type            (unemulated) */
+			4, /* 56: MMU Configuration Error               (unemulated) */
+			4, /* 57: MMU Illegal Operation Error           (unemulated) */
+			4, /* 58: MMU Access Level Violation Error      (unemulated) */
+			4, /* 59: RESERVED                                           */
+			4, /* 60: RESERVED                                           */
+			4, /* 61: RESERVED                                           */
+			4, /* 62: RESERVED                                           */
+			4, /* 63: RESERVED                                           */
+				/* 64-255: User Defined                                   */
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
+	},
+	{ /* ColdFire - not correct */
+			4, /*  0: Reset - Initial Stack Pointer                      */
+			4, /*  1: Reset - Initial Program Counter                    */
+			50, /*  2: Bus Error                             (unemulated) */
+			50, /*  3: Address Error                         (unemulated) */
+			20, /*  4: Illegal Instruction                                */
+			38, /*  5: Divide by Zero                                     */
+			40, /*  6: CHK                                                */
+			20, /*  7: TRAPV                                              */
+			34, /*  8: Privilege Violation                                */
+			25, /*  9: Trace                                              */
+			20, /* 10: 1010                                               */
+			20, /* 11: 1111                                               */
+			4, /* 12: RESERVED                                           */
+			4, /* 13: Coprocessor Protocol Violation        (unemulated) */
+			4, /* 14: Format Error                                       */
+			30, /* 15: Uninitialized Interrupt                            */
+			4, /* 16: RESERVED                                           */
+			4, /* 17: RESERVED                                           */
+			4, /* 18: RESERVED                                           */
+			4, /* 19: RESERVED                                           */
+			4, /* 20: RESERVED                                           */
+			4, /* 21: RESERVED                                           */
+			4, /* 22: RESERVED                                           */
+			4, /* 23: RESERVED                                           */
+			30, /* 24: Spurious Interrupt                                 */
+			30, /* 25: Level 1 Interrupt Autovector                       */
+			30, /* 26: Level 2 Interrupt Autovector                       */
+			30, /* 27: Level 3 Interrupt Autovector                       */
+			30, /* 28: Level 4 Interrupt Autovector                       */
+			30, /* 29: Level 5 Interrupt Autovector                       */
+			30, /* 30: Level 6 Interrupt Autovector                       */
+			30, /* 31: Level 7 Interrupt Autovector                       */
+			20, /* 32: TRAP #0                                            */
+			20, /* 33: TRAP #1                                            */
+			20, /* 34: TRAP #2                                            */
+			20, /* 35: TRAP #3                                            */
+			20, /* 36: TRAP #4                                            */
+			20, /* 37: TRAP #5                                            */
+			20, /* 38: TRAP #6                                            */
+			20, /* 39: TRAP #7                                            */
+			20, /* 40: TRAP #8                                            */
+			20, /* 41: TRAP #9                                            */
+			20, /* 42: TRAP #10                                           */
+			20, /* 43: TRAP #11                                           */
+			20, /* 44: TRAP #12                                           */
+			20, /* 45: TRAP #13                                           */
+			20, /* 46: TRAP #14                                           */
+			20, /* 47: TRAP #15                                           */
+			4, /* 48: FP Branch or Set on Unknown Condition (unemulated) */
+			4, /* 49: FP Inexact Result                     (unemulated) */
+			4, /* 50: FP Divide by Zero                     (unemulated) */
+			4, /* 51: FP Underflow                          (unemulated) */
+			4, /* 52: FP Operand Error                      (unemulated) */
+			4, /* 53: FP Overflow                           (unemulated) */
+			4, /* 54: FP Signaling NAN                      (unemulated) */
+			4, /* 55: FP Unimplemented Data Type            (unemulated) */
+			4, /* 56: MMU Configuration Error               (unemulated) */
+			4, /* 57: MMU Illegal Operation Error           (unemulated) */
+			4, /* 58: MMU Access Level Violation Error      (unemulated) */
+			4, /* 59: RESERVED                                           */
+			4, /* 60: RESERVED                                           */
+			4, /* 61: RESERVED                                           */
+			4, /* 62: RESERVED                                           */
+			4, /* 63: RESERVED                                           */
+				/* 64-255: User Defined                                   */
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,
+			4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
+	},
 };
 
 const UINT8 m68ki_ea_idx_cycle_table[64] =
 {
-	 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	 0, /* ..01.000 no memory indirect, base NULL             */
-	 5, /* ..01..01 memory indirect,    base NULL, outer NULL */
-	 7, /* ..01..10 memory indirect,    base NULL, outer 16   */
-	 7, /* ..01..11 memory indirect,    base NULL, outer 32   */
-	 0,  5,  7,  7,  0,  5,  7,  7,  0,  5,  7,  7,
-	 2, /* ..10.000 no memory indirect, base 16               */
-	 7, /* ..10..01 memory indirect,    base 16,   outer NULL */
-	 9, /* ..10..10 memory indirect,    base 16,   outer 16   */
-	 9, /* ..10..11 memory indirect,    base 16,   outer 32   */
-	 0,  7,  9,  9,  0,  7,  9,  9,  0,  7,  9,  9,
-	 6, /* ..11.000 no memory indirect, base 32               */
+		0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+		0, /* ..01.000 no memory indirect, base NULL             */
+		5, /* ..01..01 memory indirect,    base NULL, outer NULL */
+		7, /* ..01..10 memory indirect,    base NULL, outer 16   */
+		7, /* ..01..11 memory indirect,    base NULL, outer 32   */
+		0,  5,  7,  7,  0,  5,  7,  7,  0,  5,  7,  7,
+		2, /* ..10.000 no memory indirect, base 16               */
+		7, /* ..10..01 memory indirect,    base 16,   outer NULL */
+		9, /* ..10..10 memory indirect,    base 16,   outer 16   */
+		9, /* ..10..11 memory indirect,    base 16,   outer 32   */
+		0,  7,  9,  9,  0,  7,  9,  9,  0,  7,  9,  9,
+		6, /* ..11.000 no memory indirect, base 32               */
 	11, /* ..11..01 memory indirect,    base 32,   outer NULL */
 	13, /* ..11..10 memory indirect,    base 32,   outer 16   */
 	13, /* ..11..11 memory indirect,    base 32,   outer 32   */
-	 0, 11, 13, 13,  0, 11, 13, 13,  0, 11, 13, 13
+		0, 11, 13, 13,  0, 11, 13, 13,  0, 11, 13, 13
 };
 
 
@@ -484,38 +629,21 @@ const UINT8 m68ki_ea_idx_cycle_table[64] =
     CPU STATE DESCRIPTION
 ***************************************************************************/
 
-#define MASK_ALL				(CPU_TYPE_000 | CPU_TYPE_008 | CPU_TYPE_010 | CPU_TYPE_EC020 | CPU_TYPE_020 | CPU_TYPE_EC030 | CPU_TYPE_030 | CPU_TYPE_EC040 | CPU_TYPE_040)
-#define MASK_24BIT_SPACE			(CPU_TYPE_000 | CPU_TYPE_008 | CPU_TYPE_010 | CPU_TYPE_EC020)
-#define MASK_32BIT_SPACE			(CPU_TYPE_020 | CPU_TYPE_EC030 | CPU_TYPE_030 | CPU_TYPE_EC040 | CPU_TYPE_040)
-#define MASK_010_OR_LATER			(CPU_TYPE_010 | CPU_TYPE_EC020 | CPU_TYPE_020 | CPU_TYPE_030 | CPU_TYPE_EC030 | CPU_TYPE_040 | CPU_TYPE_EC040)
-#define MASK_020_OR_LATER			(CPU_TYPE_EC020 | CPU_TYPE_020 | CPU_TYPE_EC030 | CPU_TYPE_030 | CPU_TYPE_EC040 | CPU_TYPE_040)
-#define MASK_030_OR_LATER			(CPU_TYPE_030 | CPU_TYPE_EC030 | CPU_TYPE_040 | CPU_TYPE_EC040)
-#define MASK_040_OR_LATER			(CPU_TYPE_040 | CPU_TYPE_EC040)
+#define MASK_ALL                (CPU_TYPE_000 | CPU_TYPE_008 | CPU_TYPE_010 | CPU_TYPE_EC020 | CPU_TYPE_020 | CPU_TYPE_EC030 | CPU_TYPE_030 | CPU_TYPE_EC040 | CPU_TYPE_040 | CPU_TYPE_FSCPU32 )
+#define MASK_24BIT_SPACE            (CPU_TYPE_000 | CPU_TYPE_008 | CPU_TYPE_010 | CPU_TYPE_EC020)
+#define MASK_32BIT_SPACE            (CPU_TYPE_020 | CPU_TYPE_EC030 | CPU_TYPE_030 | CPU_TYPE_EC040 | CPU_TYPE_040 | CPU_TYPE_FSCPU32 )
+#define MASK_010_OR_LATER           (CPU_TYPE_010 | CPU_TYPE_EC020 | CPU_TYPE_020 | CPU_TYPE_030 | CPU_TYPE_EC030 | CPU_TYPE_040 | CPU_TYPE_EC040 | CPU_TYPE_FSCPU32 )
+#define MASK_020_OR_LATER           (CPU_TYPE_EC020 | CPU_TYPE_020 | CPU_TYPE_EC030 | CPU_TYPE_030 | CPU_TYPE_EC040 | CPU_TYPE_040 | CPU_TYPE_FSCPU32 )
+#define MASK_030_OR_LATER           (CPU_TYPE_030 | CPU_TYPE_EC030 | CPU_TYPE_040 | CPU_TYPE_EC040)
+#define MASK_040_OR_LATER           (CPU_TYPE_040 | CPU_TYPE_EC040)
 
 
-INLINE m68ki_cpu_core *get_safe_token(device_t *device)
-{
-	assert(device != NULL);
-	assert(device->type() == M68000 ||
-		   device->type() == M68008 ||
-		   device->type() == M68010 ||
-		   device->type() == M68EC020 ||
-		   device->type() == M68020 ||
-		   device->type() == M68020HMMU ||
-		   device->type() == M68020PMMU ||
-		   device->type() == M68EC030 ||
-		   device->type() == M68030 ||
-		   device->type() == M68EC040 ||
-		   device->type() == M68040 ||
-		   device->type() == SCC68070);
-	return (m68ki_cpu_core *)downcast<legacy_cpu_device *>(device)->token();
-}
 
 /* ======================================================================== */
 /* ================================= API ================================== */
 /* ======================================================================== */
 
-static void set_irq_line(m68ki_cpu_core *m68k, int irqline, int state)
+static void set_irq_line(m68000_base_device *m68k, int irqline, int state)
 {
 	UINT32 old_level = m68k->int_level;
 	UINT32 vstate = m68k->virq_state;
@@ -539,202 +667,270 @@ static void set_irq_line(m68ki_cpu_core *m68k, int irqline, int state)
 		m68k->nmi_pending = TRUE;
 }
 
-static void m68k_presave(m68ki_cpu_core *m68k)
+static void m68k_presave(m68000_base_device *m68k)
 {
 	m68k->save_sr = m68ki_get_sr(m68k);
 	m68k->save_stopped = (m68k->stopped & STOP_LEVEL_STOP) != 0;
 	m68k->save_halted  = (m68k->stopped & STOP_LEVEL_HALT) != 0;
 }
 
-static void m68k_postload(m68ki_cpu_core *m68k)
+static void m68k_postload(m68000_base_device *m68k)
 {
 	m68ki_set_sr_noint_nosp(m68k, m68k->save_sr);
 	m68k->stopped = m68k->save_stopped ? STOP_LEVEL_STOP : 0
-		        | m68k->save_halted  ? STOP_LEVEL_HALT : 0;
-	m68ki_jump(m68k, REG_PC);
+				| m68k->save_halted  ? STOP_LEVEL_HALT : 0;
+	m68ki_jump(m68k, REG_PC(m68k));
 }
 
-/* translate logical to physical addresses */
-static CPU_TRANSLATE( m68k )
+static void m68k_cause_bus_error(m68000_base_device *m68k)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
+	UINT32 sr;
 
-	/* only applies to the program address space and only does something if the MMU's enabled */
-	if (m68k)
+	sr = m68ki_init_exception(m68k);
+
+	m68k->run_mode = RUN_MODE_BERR_AERR_RESET;
+
+	if (!CPU_TYPE_IS_020_PLUS(m68k->cpu_type))
 	{
-		if ((space == AS_PROGRAM) && (m68k->pmmu_enabled))
+		/* Note: This is implemented for 68000 only! */
+		m68ki_stack_frame_buserr(m68k, sr);
+	}
+	else if (m68k->mmu_tmp_buserror_address == REG_PPC(m68k))
+	{
+		m68ki_stack_frame_1010(m68k, sr, EXCEPTION_BUS_ERROR, REG_PPC(m68k), m68k->mmu_tmp_buserror_address);
+	}
+	else
+	{
+		m68ki_stack_frame_1011(m68k, sr, EXCEPTION_BUS_ERROR, REG_PPC(m68k), m68k->mmu_tmp_buserror_address);
+	}
+
+	m68ki_jump_vector(m68k, EXCEPTION_BUS_ERROR);
+}
+
+bool m68000_base_device::memory_translate(address_spacenum space, int intention, offs_t &address)
+{
+	/* only applies to the program address space and only does something if the MMU's enabled */
+	if (this)
+	{
+		/* 68040 needs to call the MMU even when disabled so transparent translation works */
+		if ((space == AS_PROGRAM) && ((pmmu_enabled) || (CPU_TYPE_IS_040_PLUS(cpu_type))))
 		{
 			// FIXME: mmu_tmp_sr will be overwritten in pmmu_translate_addr_with_fc
-			UINT16 mmu_tmp_sr = m68k->mmu_tmp_sr;
-//          UINT32 va=*address;
+			UINT16 temp_mmu_tmp_sr = mmu_tmp_sr;
+			int mode = s_flag ? FUNCTION_CODE_SUPERVISOR_PROGRAM : FUNCTION_CODE_USER_PROGRAM;
+//          UINT32 va=address;
 
-			*address = pmmu_translate_addr_with_fc(m68k, *address, 4, 1);
-
-			if ((m68k->mmu_tmp_sr & M68K_MMU_SR_INVALID) != 0) {
-//              logerror("cpu_translate_m68k failed with mmu_sr=%04x va=%08x pa=%08x\n",m68k->mmu_tmp_sr,va ,*address);
-				*address = 0;
-			}
-
-			m68k->mmu_tmp_sr= mmu_tmp_sr;
-		}
-	}
-	return TRUE;
-}
-
-/* translate logical to physical addresses for Apple HMMU */
-static CPU_TRANSLATE( m68khmmu )
-{
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	/* only applies to the program address space and only does something if the MMU's enabled */
-	if (m68k)
-	{
-		if ((space == AS_PROGRAM) && (m68k->hmmu_enabled))
-		{
-			*address = hmmu_translate_addr(m68k, *address);
-		}
-	}
-	return TRUE;
-}
-
-/* Execute some instructions until we use up cycles clock cycles */
-static CPU_EXECUTE( m68k )
-{
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	m68k->initial_cycles = m68k->remaining_cycles;
-
-	/* eat up any reset cycles */
-	if (m68k->reset_cycles) {
-		int rc = m68k->reset_cycles;
-		m68k->reset_cycles = 0;
-		m68k->remaining_cycles -= rc;
-
-		if (m68k->remaining_cycles <= 0) return;
-	}
-
-	/* See if interrupts came in */
-	m68ki_check_interrupts(m68k);
-
-	/* Make sure we're not stopped */
-	if(!m68k->stopped)
-	{
-		/* Return point if we had an address error */
-		m68ki_set_address_error_trap(m68k); /* auto-disable (see m68kcpu.h) */
-
-		/* Main loop.  Keep going until we run out of clock cycles */
-		do
-		{
-			/* Set tracing accodring to T1. (T0 is done inside instruction) */
-			m68ki_trace_t1(); /* auto-disable (see m68kcpu.h) */
-
-			/* Call external hook to peek at CPU */
-			debugger_instruction_hook(device, REG_PC);
-
-			/* call external instruction hook (independent of debug mode) */
-			if (m68k->instruction_hook != NULL)
-				m68k->instruction_hook(device, REG_PC);
-
-			/* Record previous program counter */
-			REG_PPC = REG_PC;
-
-			if (!m68k->pmmu_enabled)
+			if (CPU_TYPE_IS_040_PLUS(cpu_type))
 			{
-				/* Read an instruction and call its handler */
-				m68k->ir = m68ki_read_imm_16(m68k);
-				m68ki_instruction_jump_table[m68k->ir](m68k);
-				m68k->remaining_cycles -= m68k->cyc_instruction[m68k->ir];
+				address = pmmu_translate_addr_with_fc_040(this, address, mode, 1);
 			}
 			else
 			{
+				address = pmmu_translate_addr_with_fc(this, address, mode, 1);
+			}
+
+			if ((mmu_tmp_sr & M68K_MMU_SR_INVALID) != 0) {
+//              logerror("cpu_translate_m68k failed with mmu_sr=%04x va=%08x pa=%08x\n",mmu_tmp_sr,va ,address);
+				address = 0;
+			}
+
+			mmu_tmp_sr = temp_mmu_tmp_sr;
+		}
+	}
+	return TRUE;
+}
+
+
+
+
+
+
+
+
+
+inline void m68000_base_device::cpu_execute(void)
+{
+	initial_cycles = remaining_cycles;
+
+	/* eat up any reset cycles */
+	if (reset_cycles) {
+		int rc = reset_cycles;
+		reset_cycles = 0;
+		remaining_cycles -= rc;
+
+		if (remaining_cycles <= 0) return;
+	}
+
+	/* See if interrupts came in */
+	m68ki_check_interrupts(this);
+
+	/* Make sure we're not stopped */
+	if(!stopped)
+	{
+		/* Return point if we had an address error */
+		check_address_error:
+		if (m_address_error==1)
+		{
+			m_address_error = 0;
+			try {
+				m68ki_exception_address_error(this);
+			}
+			catch(int error)
+			{
+				if (error==10)
+				{
+					m_address_error = 1;
+					REG_PPC(this) = REG_PC(this);
+					goto check_address_error;
+				}
+				else
+					throw;
+			}
+			if(stopped)
+			{
+				if (remaining_cycles > 0)
+					remaining_cycles = 0;
+				return;
+			}
+		}
+
+
+		/* Main loop.  Keep going until we run out of clock cycles */
+		while (remaining_cycles > 0)
+		{
+			/* Set tracing accodring to T1. (T0 is done inside instruction) */
+			m68ki_trace_t1(this); /* auto-disable (see m68kcpu.h) */
+
+			/* Call external hook to peek at CPU */
+			debugger_instruction_hook(this, REG_PC(this));
+
+			/* call external instruction hook (independent of debug mode) */
+			if (instruction_hook != NULL)
+				instruction_hook(this, REG_PC(this));
+
+			/* Record previous program counter */
+			REG_PPC(this) = REG_PC(this);
+
+			try
+			{
+			if (!pmmu_enabled)
+			{
+				run_mode = RUN_MODE_NORMAL;
+				/* Read an instruction and call its handler */
+				ir = m68ki_read_imm_16(this);
+				jump_table[ir](this);
+				remaining_cycles -= cyc_instruction[ir];
+			}
+			else
+			{
+				run_mode = RUN_MODE_NORMAL;
 				// save CPU address registers values at start of instruction
 				int i;
 				UINT32 tmp_dar[16];
 
 				for (i = 15; i >= 0; i--)
 				{
-					tmp_dar[i] = REG_DA[i];
+					tmp_dar[i] = REG_DA(this)[i];
 				}
 
-				m68k->mmu_tmp_buserror_occurred = 0;
+				mmu_tmp_buserror_occurred = 0;
 
 				/* Read an instruction and call its handler */
-				m68k->ir = m68ki_read_imm_16(m68k);
+				ir = m68ki_read_imm_16(this);
 
-				if (!m68k->mmu_tmp_buserror_occurred)
+				if (!mmu_tmp_buserror_occurred)
 				{
-					m68ki_instruction_jump_table[m68k->ir](m68k);
-					m68k->remaining_cycles -= m68k->cyc_instruction[m68k->ir];
+					jump_table[ir](this);
+					remaining_cycles -= cyc_instruction[ir];
 				}
 
-				if (m68k->mmu_tmp_buserror_occurred)
+				if (mmu_tmp_buserror_occurred)
 				{
 					UINT32 sr;
 
-					m68k->mmu_tmp_buserror_occurred = 0;
+					mmu_tmp_buserror_occurred = 0;
 
 					// restore cpu address registers to value at start of instruction
 					for (i = 15; i >= 0; i--)
 					{
-						if (REG_DA[i] != tmp_dar[i])
+						if (REG_DA(this)[i] != tmp_dar[i])
 						{
 //                          logerror("PMMU: pc=%08x sp=%08x bus error: fixed %s[%d]: %08x -> %08x\n",
-//                                  REG_PPC, REG_A[7], i < 8 ? "D" : "A", i & 7, REG_DA[i], tmp_dar[i]);
-							REG_DA[i] = tmp_dar[i];
+//                                  REG_PPC(this), REG_A(this)[7], i < 8 ? "D" : "A", i & 7, REG_DA(this)[i], tmp_dar[i]);
+							REG_DA(this)[i] = tmp_dar[i];
 						}
 					}
 
-					sr = m68ki_init_exception(m68k);
+					sr = m68ki_init_exception(this);
 
-					m68k->run_mode = RUN_MODE_BERR_AERR_RESET;
+					run_mode = RUN_MODE_BERR_AERR_RESET;
 
-					if (!CPU_TYPE_IS_020_PLUS(m68k->cpu_type))
+					if (!CPU_TYPE_IS_020_PLUS(cpu_type))
 					{
 						/* Note: This is implemented for 68000 only! */
-						m68ki_stack_frame_buserr(m68k, sr);
+						m68ki_stack_frame_buserr(this, sr);
 					}
-					else if (m68k->mmu_tmp_buserror_address == REG_PPC)
-					{
-						m68ki_stack_frame_1010(m68k, sr, EXCEPTION_BUS_ERROR, REG_PPC, m68k->mmu_tmp_buserror_address);
+					else if(!CPU_TYPE_IS_040_PLUS(cpu_type)) {
+						if (mmu_tmp_buserror_address == REG_PPC(this))
+						{
+							m68ki_stack_frame_1010(this, sr, EXCEPTION_BUS_ERROR, REG_PPC(this), mmu_tmp_buserror_address);
+						}
+						else
+						{
+							m68ki_stack_frame_1011(this, sr, EXCEPTION_BUS_ERROR, REG_PPC(this), mmu_tmp_buserror_address);
+						}
 					}
 					else
 					{
-						m68ki_stack_frame_1011(m68k, sr, EXCEPTION_BUS_ERROR, REG_PPC, m68k->mmu_tmp_buserror_address);
+						m68ki_stack_frame_0111(this, sr, EXCEPTION_BUS_ERROR, REG_PPC(this), mmu_tmp_buserror_address, true);
 					}
 
-					m68ki_jump_vector(m68k, EXCEPTION_BUS_ERROR);
+					m68ki_jump_vector(this, EXCEPTION_BUS_ERROR);
 
 					// TODO:
 					/* Use up some clock cycles and undo the instruction's cycles */
-					// m68k->remaining_cycles -= m68k->cyc_exception[EXCEPTION_BUS_ERROR] - m68k->cyc_instruction[m68k->ir];
+					// remaining_cycles -= cyc_exception[EXCEPTION_BUS_ERROR] - cyc_instruction[ir];
 				}
 			}
+			}
+			catch (int error)
+			{
+				if (error==10)
+				{
+					m_address_error = 1;
+					goto check_address_error;
+				}
+				else
+					throw;
+			}
+
 
 			/* Trace m68k_exception, if necessary */
-			m68ki_exception_if_trace(); /* auto-disable (see m68kcpu.h) */
-		} while (m68k->remaining_cycles > 0);
+			m68ki_exception_if_trace(this); /* auto-disable (see m68kcpu.h) */
+		}
 
 		/* set previous PC to current PC for the next entry into the loop */
-		REG_PPC = REG_PC;
+		REG_PPC(this) = REG_PC(this);
 	}
-	else if (m68k->remaining_cycles > 0)
-		m68k->remaining_cycles = 0;
+	else if (remaining_cycles > 0)
+		remaining_cycles = 0;
 }
 
-static CPU_INIT( m68k )
+
+
+void m68000_base_device::init_cpu_common(void)
 {
 	static UINT32 emulation_initialized = 0;
-	m68ki_cpu_core *m68k = get_safe_token(device);
 
-	m68k->device = device;
-	m68k->program = device->space(AS_PROGRAM);
-	m68k->int_ack_callback = irqcallback;
+	//this = device;//deviceparam;
+	program = &space(AS_PROGRAM);
+	int_ack_callback = static_standard_irq_callback;
 
 	/* disable all MMUs */
-	m68k->has_pmmu	       = 0;
-	m68k->has_hmmu	       = 0;
-	m68k->pmmu_enabled     = 0;
-	m68k->hmmu_enabled     = 0;
+	has_pmmu         = 0;
+	has_hmmu         = 0;
+	pmmu_enabled     = 0;
+	hmmu_enabled     = 0;
 
 	/* The first call to this function initializes the opcode handler jump table */
 	if(!emulation_initialized)
@@ -743,91 +939,88 @@ static CPU_INIT( m68k )
 		emulation_initialized = 1;
 	}
 
-	/* Note, D covers A because the dar array is common, REG_A=REG_D+8 */
-	device->save_item(NAME(REG_D));
-	device->save_item(NAME(REG_PPC));
-	device->save_item(NAME(REG_PC));
-	device->save_item(NAME(REG_USP));
-	device->save_item(NAME(REG_ISP));
-	device->save_item(NAME(REG_MSP));
-	device->save_item(NAME(m68k->vbr));
-	device->save_item(NAME(m68k->sfc));
-	device->save_item(NAME(m68k->dfc));
-	device->save_item(NAME(m68k->cacr));
-	device->save_item(NAME(m68k->caar));
-	device->save_item(NAME(m68k->save_sr));
-	device->save_item(NAME(m68k->int_level));
-	device->save_item(NAME(m68k->save_stopped));
-	device->save_item(NAME(m68k->save_halted));
-	device->save_item(NAME(m68k->pref_addr));
-	device->save_item(NAME(m68k->pref_data));
-	device->machine().save().register_presave(save_prepost_delegate(FUNC(m68k_presave), m68k));
-	device->machine().save().register_postload(save_prepost_delegate(FUNC(m68k_postload), m68k));
+	/* Note, D covers A because the dar array is common, REG_A(m68k)=REG_D(m68k)+8 */
+	save_item(NAME(REG_D(this)));
+	save_item(NAME(REG_PPC(this)));
+	save_item(NAME(REG_PC(this)));
+	save_item(NAME(REG_USP(this)));
+	save_item(NAME(REG_ISP(this)));
+	save_item(NAME(REG_MSP(this)));
+	save_item(NAME(vbr));
+	save_item(NAME(sfc));
+	save_item(NAME(dfc));
+	save_item(NAME(cacr));
+	save_item(NAME(caar));
+	save_item(NAME(save_sr));
+	save_item(NAME(int_level));
+	save_item(NAME(save_stopped));
+	save_item(NAME(save_halted));
+	save_item(NAME(pref_addr));
+	save_item(NAME(pref_data));
+	machine().save().register_presave(save_prepost_delegate(FUNC(m68k_presave), this));
+	machine().save().register_postload(save_prepost_delegate(FUNC(m68k_postload), this));
+
+	m_icountptr = &remaining_cycles;
+	remaining_cycles = 0;
+
 }
 
-/* Pulse the RESET line on the CPU */
-static CPU_RESET( m68k )
+void m68000_base_device::reset_cpu(void)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
 	/* Disable the PMMU/HMMU on reset, if any */
-	m68k->pmmu_enabled = 0;
-	m68k->hmmu_enabled = 0;
+	pmmu_enabled = 0;
+	hmmu_enabled = 0;
 
-	m68k->mmu_tc = 0;
-	m68k->mmu_tt0 = 0;
-	m68k->mmu_tt1 = 0;
+	mmu_tc = 0;
+	mmu_tt0 = 0;
+	mmu_tt1 = 0;
 
 	/* Clear all stop levels and eat up all remaining cycles */
-	m68k->stopped = 0;
-	if (m68k->remaining_cycles > 0)
-		m68k->remaining_cycles = 0;
+	stopped = 0;
+	if (remaining_cycles > 0)
+		remaining_cycles = 0;
 
-	m68k->run_mode = RUN_MODE_BERR_AERR_RESET;
+	run_mode = RUN_MODE_BERR_AERR_RESET;
 
 	/* Turn off tracing */
-	m68k->t1_flag = m68k->t0_flag = 0;
-	m68ki_clear_trace();
+	t1_flag = t0_flag = 0;
+	m68ki_clear_trace(this);
 	/* Interrupt mask to level 7 */
-	m68k->int_mask = 0x0700;
-	m68k->int_level = 0;
-	m68k->virq_state = 0;
+	int_mask = 0x0700;
+	int_level = 0;
+	virq_state = 0;
 	/* Reset VBR */
-	m68k->vbr = 0;
+	vbr = 0;
 	/* Go to supervisor mode */
-	m68ki_set_sm_flag(m68k, SFLAG_SET | MFLAG_CLEAR);
+	m68ki_set_sm_flag(this, SFLAG_SET | MFLAG_CLEAR);
 
 	/* Invalidate the prefetch queue */
 	/* Set to arbitrary number since our first fetch is from 0 */
-	m68k->pref_addr = 0x1000;
+	pref_addr = 0x1000;
 
 	/* Read the initial stack pointer and program counter */
-	m68ki_jump(m68k, 0);
-	REG_SP = m68ki_read_imm_32(m68k);
-	REG_PC = m68ki_read_imm_32(m68k);
-	m68ki_jump(m68k, REG_PC);
+	m68ki_jump(this, 0);
+	REG_SP(this) = m68ki_read_imm_32(this);
+	REG_PC(this) = m68ki_read_imm_32(this);
+	m68ki_jump(this, REG_PC(this));
 
-	m68k->run_mode = RUN_MODE_NORMAL;
+	run_mode = RUN_MODE_NORMAL;
 
-	m68k->reset_cycles = m68k->cyc_exception[EXCEPTION_RESET];
+	reset_cycles = cyc_exception[EXCEPTION_RESET];
 
 	/* flush the MMU's cache */
-	pmmu_atc_flush(m68k);
+	pmmu_atc_flush(this);
 
-	if(CPU_TYPE_IS_EC020_PLUS(m68k->cpu_type))
+	if(CPU_TYPE_IS_EC020_PLUS(cpu_type))
 	{
 		// clear instruction cache
-		m68ki_ic_clear(m68k);
+		m68ki_ic_clear(this);
 	}
 
 	// disable instruction hook
-	m68k->instruction_hook = NULL;
-}
+	instruction_hook = NULL;
 
-static CPU_DISASSEMBLE( m68k )
-{
-	m68ki_cpu_core *m68k = get_safe_token(device);
-	return m68k_disassemble_raw(buffer, pc, oprom, opram, m68k->dasm_type);
+
 }
 
 
@@ -836,66 +1029,64 @@ static CPU_DISASSEMBLE( m68k )
  * STATE IMPORT/EXPORT
  **************************************************************************/
 
-static CPU_IMPORT_STATE( m68k )
+void m68000_base_device::state_import(const device_state_entry &entry)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
 	switch (entry.index())
 	{
 		case M68K_SR:
 		case STATE_GENFLAGS:
-			m68ki_set_sr(m68k, m68k->iotemp);
+			m68ki_set_sr(this, iotemp);
 			break;
 
 		case M68K_ISP:
-			if (m68k->s_flag && !m68k->m_flag)
-				REG_SP = m68k->iotemp;
+			if (s_flag && !m_flag)
+				REG_SP(this) = iotemp;
 			else
-				REG_ISP = m68k->iotemp;
+				REG_ISP(this) = iotemp;
 			break;
 
 		case M68K_USP:
-			if (!m68k->s_flag)
-				REG_SP = m68k->iotemp;
+			if (!s_flag)
+				REG_SP(this) = iotemp;
 			else
-				REG_USP = m68k->iotemp;
+				REG_USP(this) = iotemp;
 			break;
 
 		case M68K_MSP:
-			if (m68k->s_flag && m68k->m_flag)
-				REG_SP = m68k->iotemp;
+			if (s_flag && m_flag)
+				REG_SP(this) = iotemp;
 			else
-				REG_MSP = m68k->iotemp;
+				REG_MSP(this) = iotemp;
 			break;
 
 		default:
-			fatalerror("CPU_IMPORT_STATE(m68k) called for unexpected value\n");
+			fatalerror("CPU_IMPORT_STATE(this) called for unexpected value\n");
 			break;
 	}
+
 }
 
 
-static CPU_EXPORT_STATE( m68k )
-{
-	m68ki_cpu_core *m68k = get_safe_token(device);
 
+void m68000_base_device::state_export(const device_state_entry &entry)
+{
 	switch (entry.index())
 	{
 		case M68K_SR:
 		case STATE_GENFLAGS:
-			m68k->iotemp = m68ki_get_sr(m68k);
+			iotemp = m68ki_get_sr(this);
 			break;
 
 		case M68K_ISP:
-			m68k->iotemp = (m68k->s_flag && !m68k->m_flag) ? REG_SP : REG_ISP;
+			iotemp = (s_flag && !m_flag) ? REG_SP(this) : REG_ISP(this);
 			break;
 
 		case M68K_USP:
-			m68k->iotemp = (!m68k->s_flag) ? REG_SP : REG_USP;
+			iotemp = (!s_flag) ? REG_SP(this) : REG_USP(this);
 			break;
 
 		case M68K_MSP:
-			m68k->iotemp = (m68k->s_flag && m68k->m_flag) ? REG_SP : REG_MSP;
+			iotemp = (s_flag && m_flag) ? REG_SP(this) : REG_MSP(this);
 			break;
 
 		case M68K_FP0:
@@ -909,72 +1100,51 @@ static CPU_EXPORT_STATE( m68k )
 			break;
 
 		default:
-			fatalerror("CPU_EXPORT_STATE(m68k) called for unexpected value\n");
+			fatalerror("CPU_EXPORT_STATE(this) called for unexpected value\n");
 			break;
 	}
 }
 
-static CPU_SET_INFO( m68k )
+void m68000_base_device::state_string_export(const device_state_entry &entry, astring &string)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-	switch (state)
-	{
-		/* --- the following bits of info are set as 64-bit signed integers --- */
-		case CPUINFO_INT_INPUT_STATE + 0:
-		case CPUINFO_INT_INPUT_STATE + 1:
-		case CPUINFO_INT_INPUT_STATE + 2:
-		case CPUINFO_INT_INPUT_STATE + 3:
-		case CPUINFO_INT_INPUT_STATE + 4:
-		case CPUINFO_INT_INPUT_STATE + 5:
-		case CPUINFO_INT_INPUT_STATE + 6:
-		case CPUINFO_INT_INPUT_STATE + 7:
-		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:
-			set_irq_line(m68k, state - CPUINFO_INT_INPUT_STATE, info->i);
-			break;
-	}
-}
-
-static CPU_EXPORT_STRING( m68k )
-{
-	m68ki_cpu_core *m68k = get_safe_token(device);
 	UINT16 sr;
 
 	switch (entry.index())
 	{
 		case M68K_FP0:
-			string.printf("%f", fx80_to_double(REG_FP[0]));
+			string.printf("%f", fx80_to_double(REG_FP(this)[0]));
 			break;
 
 		case M68K_FP1:
-			string.printf("%f", fx80_to_double(REG_FP[1]));
+			string.printf("%f", fx80_to_double(REG_FP(this)[1]));
 			break;
 
 		case M68K_FP2:
-			string.printf("%f", fx80_to_double(REG_FP[2]));
+			string.printf("%f", fx80_to_double(REG_FP(this)[2]));
 			break;
 
 		case M68K_FP3:
-			string.printf("%f", fx80_to_double(REG_FP[3]));
+			string.printf("%f", fx80_to_double(REG_FP(this)[3]));
 			break;
 
 		case M68K_FP4:
-			string.printf("%f", fx80_to_double(REG_FP[4]));
+			string.printf("%f", fx80_to_double(REG_FP(this)[4]));
 			break;
 
 		case M68K_FP5:
-			string.printf("%f", fx80_to_double(REG_FP[5]));
+			string.printf("%f", fx80_to_double(REG_FP(this)[5]));
 			break;
 
 		case M68K_FP6:
-			string.printf("%f", fx80_to_double(REG_FP[6]));
+			string.printf("%f", fx80_to_double(REG_FP(this)[6]));
 			break;
 
 		case M68K_FP7:
-			string.printf("%f", fx80_to_double(REG_FP[7]));
+			string.printf("%f", fx80_to_double(REG_FP(this)[7]));
 			break;
 
 		case STATE_GENFLAGS:
-			sr = m68ki_get_sr(m68k);
+			sr = m68ki_get_sr(this);
 			string.printf("%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c",
 				sr & 0x8000 ? 'T':'.',
 				sr & 0x4000 ? 't':'.',
@@ -994,96 +1164,45 @@ static CPU_EXPORT_STRING( m68k )
 				sr & 0x0001 ? 'C':'.');
 			break;
 	}
-}
 
-static CPU_GET_INFO( m68k )
-{
-	m68ki_cpu_core *m68k = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
-
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_CONTEXT_SIZE:					info->i = sizeof(m68ki_cpu_core);		break;
-		case CPUINFO_INT_INPUT_LINES:					info->i = 8;							break;
-		case CPUINFO_INT_DEFAULT_IRQ_VECTOR:			info->i = -1;							break;
-		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_BIG;				break;
-		case CPUINFO_INT_CLOCK_MULTIPLIER:				info->i = 1;							break;
-		case CPUINFO_INT_CLOCK_DIVIDER:					info->i = 1;							break;
-		case CPUINFO_INT_MIN_INSTRUCTION_BYTES:			info->i = 2;							break;
-		case CPUINFO_INT_MAX_INSTRUCTION_BYTES:			info->i = 10;							break;
-		case CPUINFO_INT_MIN_CYCLES:					info->i = 4;							break;
-		case CPUINFO_INT_MAX_CYCLES:					info->i = 158;							break;
-
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 16;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 24;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:		info->i = 0;							break;
-
-		case CPUINFO_INT_INPUT_STATE + 0:				info->i = 0;  /* there is no level 0 */	break;
-		case CPUINFO_INT_INPUT_STATE + 1:				info->i = (m68k->virq_state >> 1) & 1;	break;
-		case CPUINFO_INT_INPUT_STATE + 2:				info->i = (m68k->virq_state >> 2) & 1;	break;
-		case CPUINFO_INT_INPUT_STATE + 3:				info->i = (m68k->virq_state >> 3) & 1;	break;
-		case CPUINFO_INT_INPUT_STATE + 4:				info->i = (m68k->virq_state >> 4) & 1;	break;
-		case CPUINFO_INT_INPUT_STATE + 5:				info->i = (m68k->virq_state >> 5) & 1;	break;
-		case CPUINFO_INT_INPUT_STATE + 6:				info->i = (m68k->virq_state >> 6) & 1;	break;
-		case CPUINFO_INT_INPUT_STATE + 7:				info->i = (m68k->virq_state >> 7) & 1;	break;
-
-		/* --- the following bits of info are returned as pointers to functions --- */
-		case CPUINFO_FCT_SET_INFO:		info->setinfo = CPU_SET_INFO_NAME(m68k);				break;
-		case CPUINFO_FCT_INIT:			/* set per-core */										break;
-		case CPUINFO_FCT_RESET:			info->reset = CPU_RESET_NAME(m68k);						break;
-		case CPUINFO_FCT_EXECUTE:		info->execute = CPU_EXECUTE_NAME(m68k);					break;
-		case CPUINFO_FCT_DISASSEMBLE:	info->disassemble = CPU_DISASSEMBLE_NAME(m68k);			break;
-		case CPUINFO_FCT_IMPORT_STATE:	info->import_state = CPU_IMPORT_STATE_NAME(m68k);		break;
-		case CPUINFO_FCT_EXPORT_STATE:	info->export_state = CPU_EXPORT_STATE_NAME(m68k);		break;
-		case CPUINFO_FCT_EXPORT_STRING: info->export_string = CPU_EXPORT_STRING_NAME(m68k);		break;
-		case CPUINFO_FCT_TRANSLATE:	    	info->translate = CPU_TRANSLATE_NAME(m68k);		break;
-
-		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &m68k->remaining_cycles;	break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							/* set per-core */						break;
-		case DEVINFO_STR_FAMILY:					strcpy(info->s, "Motorola 68K");		break;
-		case DEVINFO_STR_VERSION:					strcpy(info->s, "4.60");				break;
-		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);				break;
-		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Karl Stenerud. All rights reserved. (2.1 fixes HJB, FPU+MMU by RB+HO)"); break;
-	}
 }
 
 
 /* global access */
 
-void m68k_set_encrypted_opcode_range(device_t *device, offs_t start, offs_t end)
+void m68k_set_encrypted_opcode_range(m68000_base_device *device, offs_t start, offs_t end)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-	m68k->encrypted_start = start;
-	m68k->encrypted_end = end;
+	device->encrypted_start = start;
+	device->encrypted_end = end;
 }
 
-void m68k_set_hmmu_enable(device_t *device, int enable)
+void m68k_set_hmmu_enable(m68000_base_device *device, int enable)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
+	device->hmmu_enabled = enable;
+}
 
-	m68k->hmmu_enabled = enable;
+void m68k_set_instruction_hook(m68000_base_device *device, instruction_hook_t ihook)
+{
+	device->instruction_hook = ihook;
 }
 
 /****************************************************************************
  * 8-bit data memory interface
  ****************************************************************************/
 
-UINT16 m68k_memory_interface::m68008_read_immediate_16(offs_t address)
+UINT16 m68000_base_device::m68008_read_immediate_16(offs_t address)
 {
 	return (m_direct->read_decrypted_byte(address) << 8) | (m_direct->read_decrypted_byte(address + 1));
 }
 
-void m68k_memory_interface::init8(address_space &space)
+void m68000_base_device::init8(address_space &space)
 {
 	m_space = &space;
 	m_direct = &space.direct();
-	m_cpustate = get_safe_token(&space.device());
+//  m_cpustate = this;
 	opcode_xor = 0;
 
-	readimm16 = m68k_readimm16_delegate(FUNC(m68k_memory_interface::m68008_read_immediate_16), this);
+	readimm16 = m68k_readimm16_delegate(FUNC(m68000_base_device::m68008_read_immediate_16), this);
 	read8 = m68k_read8_delegate(FUNC(address_space::read_byte), &space);
 	read16 = m68k_read16_delegate(FUNC(address_space::read_word), &space);
 	read32 = m68k_read32_delegate(FUNC(address_space::read_dword), &space);
@@ -1096,24 +1215,23 @@ void m68k_memory_interface::init8(address_space &space)
  * 16-bit data memory interface
  ****************************************************************************/
 
-UINT16 m68k_memory_interface::read_immediate_16(offs_t address)
+UINT16 m68000_base_device::read_immediate_16(offs_t address)
 {
 	return m_direct->read_decrypted_word((address), opcode_xor);
 }
 
-UINT16 m68k_memory_interface::simple_read_immediate_16(offs_t address)
+UINT16 m68000_base_device::simple_read_immediate_16(offs_t address)
 {
 	return m_direct->read_decrypted_word(address);
 }
 
-void m68k_memory_interface::init16(address_space &space)
+void m68000_base_device::init16(address_space &space)
 {
 	m_space = &space;
 	m_direct = &space.direct();
-	m_cpustate = get_safe_token(&space.device());
 	opcode_xor = 0;
 
-	readimm16 = m68k_readimm16_delegate(FUNC(m68k_memory_interface::simple_read_immediate_16), this);
+	readimm16 = m68k_readimm16_delegate(FUNC(m68000_base_device::simple_read_immediate_16), this);
 	read8 = m68k_read8_delegate(FUNC(address_space::read_byte), &space);
 	read16 = m68k_read16_delegate(FUNC(address_space::read_word), &space);
 	read32 = m68k_read32_delegate(FUNC(address_space::read_dword), &space);
@@ -1122,19 +1240,22 @@ void m68k_memory_interface::init16(address_space &space)
 	write32 = m68k_write32_delegate(FUNC(address_space::write_dword), &space);
 }
 
+
+
+
+
 /****************************************************************************
  * 32-bit data memory interface
  ****************************************************************************/
 
 /* interface for 32-bit data bus (68EC020, 68020) */
-void m68k_memory_interface::init32(address_space &space)
+void m68000_base_device::init32(address_space &space)
 {
 	m_space = &space;
 	m_direct = &space.direct();
-	m_cpustate = get_safe_token(&space.device());
 	opcode_xor = WORD_XOR_BE(0);
 
-	readimm16 = m68k_readimm16_delegate(FUNC(m68k_memory_interface::read_immediate_16), this);
+	readimm16 = m68k_readimm16_delegate(FUNC(m68000_base_device::read_immediate_16), this);
 	read8 = m68k_read8_delegate(FUNC(address_space::read_byte), &space);
 	read16 = m68k_read16_delegate(FUNC(address_space::read_word_unaligned), &space);
 	read32 = m68k_read32_delegate(FUNC(address_space::read_dword_unaligned), &space);
@@ -1144,12 +1265,12 @@ void m68k_memory_interface::init32(address_space &space)
 }
 
 /* interface for 32-bit data bus with PMMU (68EC020, 68020) */
-UINT8 m68k_memory_interface::read_byte_32_mmu(offs_t address)
+UINT8 m68000_base_device::read_byte_32_mmu(offs_t address)
 {
-	if (m_cpustate->pmmu_enabled)
+	if (pmmu_enabled)
 	{
-		address = pmmu_translate_addr(m_cpustate, address);
-		if (m_cpustate->mmu_tmp_buserror_occurred) {
+		address = pmmu_translate_addr(this, address);
+		if (mmu_tmp_buserror_occurred) {
 			return ~0;
 		}
 	}
@@ -1157,12 +1278,12 @@ UINT8 m68k_memory_interface::read_byte_32_mmu(offs_t address)
 	return m_space->read_byte(address);
 }
 
-void m68k_memory_interface::write_byte_32_mmu(offs_t address, UINT8 data)
+void m68000_base_device::write_byte_32_mmu(offs_t address, UINT8 data)
 {
-	if (m_cpustate->pmmu_enabled)
+	if (pmmu_enabled)
 	{
-		address = pmmu_translate_addr(m_cpustate, address);
-		if (m_cpustate->mmu_tmp_buserror_occurred) {
+		address = pmmu_translate_addr(this, address);
+		if (mmu_tmp_buserror_occurred) {
 			return;
 		}
 	}
@@ -1170,34 +1291,34 @@ void m68k_memory_interface::write_byte_32_mmu(offs_t address, UINT8 data)
 	m_space->write_byte(address, data);
 }
 
-UINT16 m68k_memory_interface::read_immediate_16_mmu(offs_t address)
+UINT16 m68000_base_device::read_immediate_16_mmu(offs_t address)
 {
-	if (m_cpustate->pmmu_enabled)
+	if (pmmu_enabled)
 	{
-		address = pmmu_translate_addr(m_cpustate, address);
-		if (m_cpustate->mmu_tmp_buserror_occurred) {
+		address = pmmu_translate_addr(this, address);
+		if (mmu_tmp_buserror_occurred) {
 			return ~0;
 		}
 	}
 
-	return m_direct->read_decrypted_word((address), m_cpustate->memory.opcode_xor);
+	return m_direct->read_decrypted_word((address), opcode_xor);
 }
 
 /* potentially misaligned 16-bit reads with a 32-bit data bus (and 24-bit address bus) */
-UINT16 m68k_memory_interface::readword_d32_mmu(offs_t address)
+UINT16 m68000_base_device::readword_d32_mmu(offs_t address)
 {
 	UINT16 result;
 
-	if (m_cpustate->pmmu_enabled)
+	if (pmmu_enabled)
 	{
-		UINT32 address0 = pmmu_translate_addr(m_cpustate, address);
-		if (m_cpustate->mmu_tmp_buserror_occurred) {
+		UINT32 address0 = pmmu_translate_addr(this, address);
+		if (mmu_tmp_buserror_occurred) {
 			return ~0;
 		} else if (!(address & 1)) {
 			return m_space->read_word(address0);
 		} else {
-			UINT32 address1 = pmmu_translate_addr(m_cpustate, address + 1);
-			if (m_cpustate->mmu_tmp_buserror_occurred) {
+			UINT32 address1 = pmmu_translate_addr(this, address + 1);
+			if (mmu_tmp_buserror_occurred) {
 				return ~0;
 			} else {
 				result = m_space->read_byte(address0) << 8;
@@ -1213,19 +1334,19 @@ UINT16 m68k_memory_interface::readword_d32_mmu(offs_t address)
 }
 
 /* potentially misaligned 16-bit writes with a 32-bit data bus (and 24-bit address bus) */
-void m68k_memory_interface::writeword_d32_mmu(offs_t address, UINT16 data)
+void m68000_base_device::writeword_d32_mmu(offs_t address, UINT16 data)
 {
-	if (m_cpustate->pmmu_enabled)
+	if (pmmu_enabled)
 	{
-		UINT32 address0 = pmmu_translate_addr(m_cpustate, address);
-		if (m_cpustate->mmu_tmp_buserror_occurred) {
+		UINT32 address0 = pmmu_translate_addr(this, address);
+		if (mmu_tmp_buserror_occurred) {
 			return;
 		} else if (!(address & 1)) {
 			m_space->write_word(address0, data);
 			return;
 		} else {
-			UINT32 address1 = pmmu_translate_addr(m_cpustate, address + 1);
-			if (m_cpustate->mmu_tmp_buserror_occurred) {
+			UINT32 address1 = pmmu_translate_addr(this, address + 1);
+			if (mmu_tmp_buserror_occurred) {
 				return;
 			} else {
 				m_space->write_byte(address0, data >> 8);
@@ -1245,14 +1366,14 @@ void m68k_memory_interface::writeword_d32_mmu(offs_t address, UINT16 data)
 }
 
 /* potentially misaligned 32-bit reads with a 32-bit data bus (and 24-bit address bus) */
-UINT32 m68k_memory_interface::readlong_d32_mmu(offs_t address)
+UINT32 m68000_base_device::readlong_d32_mmu(offs_t address)
 {
 	UINT32 result;
 
-	if (m_cpustate->pmmu_enabled)
+	if (pmmu_enabled)
 	{
-		UINT32 address0 = pmmu_translate_addr(m_cpustate, address);
-		if (m_cpustate->mmu_tmp_buserror_occurred) {
+		UINT32 address0 = pmmu_translate_addr(this, address);
+		if (mmu_tmp_buserror_occurred) {
 			return ~0;
 		} else if ((address +3) & 0xfc) {
 			// not at page boundary; use default code
@@ -1260,16 +1381,16 @@ UINT32 m68k_memory_interface::readlong_d32_mmu(offs_t address)
 		} else if (!(address & 3)) { // 0
 			return m_space->read_dword(address0);
 		} else {
-			UINT32 address2 = pmmu_translate_addr(m_cpustate, address+2);
-			if (m_cpustate->mmu_tmp_buserror_occurred) {
+			UINT32 address2 = pmmu_translate_addr(this, address+2);
+			if (mmu_tmp_buserror_occurred) {
 				return ~0;
 			} else if (!(address & 1)) { // 2
 				result = m_space->read_word(address0) << 16;
 				return result | m_space->read_word(address2);
 			} else {
-				UINT32 address1 = pmmu_translate_addr(m_cpustate, address+1);
-				UINT32 address3 = pmmu_translate_addr(m_cpustate, address+3);
-				if (m_cpustate->mmu_tmp_buserror_occurred) {
+				UINT32 address1 = pmmu_translate_addr(this, address+1);
+				UINT32 address3 = pmmu_translate_addr(this, address+3);
+				if (mmu_tmp_buserror_occurred) {
 					return ~0;
 				} else {
 					result = m_space->read_byte(address0) << 24;
@@ -1293,12 +1414,12 @@ UINT32 m68k_memory_interface::readlong_d32_mmu(offs_t address)
 }
 
 /* potentially misaligned 32-bit writes with a 32-bit data bus (and 24-bit address bus) */
-void m68k_memory_interface::writelong_d32_mmu(offs_t address, UINT32 data)
+void m68000_base_device::writelong_d32_mmu(offs_t address, UINT32 data)
 {
-	if (m_cpustate->pmmu_enabled)
+	if (pmmu_enabled)
 	{
-		UINT32 address0 = pmmu_translate_addr(m_cpustate, address);
-		if (m_cpustate->mmu_tmp_buserror_occurred) {
+		UINT32 address0 = pmmu_translate_addr(this, address);
+		if (mmu_tmp_buserror_occurred) {
 			return;
 		} else if ((address +3) & 0xfc) {
 			// not at page boundary; use default code
@@ -1307,17 +1428,17 @@ void m68k_memory_interface::writelong_d32_mmu(offs_t address, UINT32 data)
 			m_space->write_dword(address0, data);
 			return;
 		} else {
-			UINT32 address2 = pmmu_translate_addr(m_cpustate, address+2);
-			if (m_cpustate->mmu_tmp_buserror_occurred) {
+			UINT32 address2 = pmmu_translate_addr(this, address+2);
+			if (mmu_tmp_buserror_occurred) {
 				return;
 			} else if (!(address & 1)) { // 2
 				m_space->write_word(address0, data >> 16);
 				m_space->write_word(address2, data);
 				return;
 			} else {
-				UINT32 address1 = pmmu_translate_addr(m_cpustate, address+1);
-				UINT32 address3 = pmmu_translate_addr(m_cpustate, address+3);
-				if (m_cpustate->mmu_tmp_buserror_occurred) {
+				UINT32 address1 = pmmu_translate_addr(this, address+1);
+				UINT32 address3 = pmmu_translate_addr(this, address+3);
+				if (mmu_tmp_buserror_occurred) {
 					return;
 				} else {
 					m_space->write_byte(address0, data >> 24);
@@ -1345,62 +1466,61 @@ void m68k_memory_interface::writelong_d32_mmu(offs_t address, UINT32 data)
 	m_space->write_byte(address + 3, data);
 }
 
-void m68k_memory_interface::init32mmu(address_space &space)
+void m68000_base_device::init32mmu(address_space &space)
 {
 	m_space = &space;
 	m_direct = &space.direct();
-	m_cpustate = get_safe_token(&space.device());
 	opcode_xor = WORD_XOR_BE(0);
 
-	readimm16 = m68k_readimm16_delegate(FUNC(m68k_memory_interface::read_immediate_16_mmu), this);
-	read8 = m68k_read8_delegate(FUNC(m68k_memory_interface::read_byte_32_mmu), this);
-	read16 = m68k_read16_delegate(FUNC(m68k_memory_interface::readword_d32_mmu), this);
-	read32 = m68k_read32_delegate(FUNC(m68k_memory_interface::readlong_d32_mmu), this);
-	write8 = m68k_write8_delegate(FUNC(m68k_memory_interface::write_byte_32_mmu), this);
-	write16 = m68k_write16_delegate(FUNC(m68k_memory_interface::writeword_d32_mmu), this);
-	write32 = m68k_write32_delegate(FUNC(m68k_memory_interface::writelong_d32_mmu), this);
+	readimm16 = m68k_readimm16_delegate(FUNC(m68000_base_device::read_immediate_16_mmu), this);
+	read8 = m68k_read8_delegate(FUNC(m68000_base_device::read_byte_32_mmu), this);
+	read16 = m68k_read16_delegate(FUNC(m68000_base_device::readword_d32_mmu), this);
+	read32 = m68k_read32_delegate(FUNC(m68000_base_device::readlong_d32_mmu), this);
+	write8 = m68k_write8_delegate(FUNC(m68000_base_device::write_byte_32_mmu), this);
+	write16 = m68k_write16_delegate(FUNC(m68000_base_device::writeword_d32_mmu), this);
+	write32 = m68k_write32_delegate(FUNC(m68000_base_device::writelong_d32_mmu), this);
 }
 
 
 /* interface for 32-bit data bus with PMMU (68EC020, 68020) */
-UINT8 m68k_memory_interface::read_byte_32_hmmu(offs_t address)
+UINT8 m68000_base_device::read_byte_32_hmmu(offs_t address)
 {
-	if (m_cpustate->hmmu_enabled)
+	if (hmmu_enabled)
 	{
-		address = hmmu_translate_addr(m_cpustate, address);
+		address = hmmu_translate_addr(this, address);
 	}
 
 	return m_space->read_byte(address);
 }
 
-void m68k_memory_interface::write_byte_32_hmmu(offs_t address, UINT8 data)
+void m68000_base_device::write_byte_32_hmmu(offs_t address, UINT8 data)
 {
-	if (m_cpustate->hmmu_enabled)
+	if (hmmu_enabled)
 	{
-		address = hmmu_translate_addr(m_cpustate, address);
+		address = hmmu_translate_addr(this, address);
 	}
 
 	m_space->write_byte(address, data);
 }
 
-UINT16 m68k_memory_interface::read_immediate_16_hmmu(offs_t address)
+UINT16 m68000_base_device::read_immediate_16_hmmu(offs_t address)
 {
-	if (m_cpustate->hmmu_enabled)
+	if (hmmu_enabled)
 	{
-		address = hmmu_translate_addr(m_cpustate, address);
+		address = hmmu_translate_addr(this, address);
 	}
 
-	return m_direct->read_decrypted_word((address), m_cpustate->memory.opcode_xor);
+	return m_direct->read_decrypted_word((address), opcode_xor);
 }
 
 /* potentially misaligned 16-bit reads with a 32-bit data bus (and 24-bit address bus) */
-UINT16 m68k_memory_interface::readword_d32_hmmu(offs_t address)
+UINT16 m68000_base_device::readword_d32_hmmu(offs_t address)
 {
 	UINT16 result;
 
-	if (m_cpustate->hmmu_enabled)
+	if (hmmu_enabled)
 	{
-		address = hmmu_translate_addr(m_cpustate, address);
+		address = hmmu_translate_addr(this, address);
 	}
 
 	if (!(address & 1))
@@ -1410,11 +1530,11 @@ UINT16 m68k_memory_interface::readword_d32_hmmu(offs_t address)
 }
 
 /* potentially misaligned 16-bit writes with a 32-bit data bus (and 24-bit address bus) */
-void m68k_memory_interface::writeword_d32_hmmu(offs_t address, UINT16 data)
+void m68000_base_device::writeword_d32_hmmu(offs_t address, UINT16 data)
 {
-	if (m_cpustate->hmmu_enabled)
+	if (hmmu_enabled)
 	{
-		address = hmmu_translate_addr(m_cpustate, address);
+		address = hmmu_translate_addr(this, address);
 	}
 
 	if (!(address & 1))
@@ -1427,13 +1547,13 @@ void m68k_memory_interface::writeword_d32_hmmu(offs_t address, UINT16 data)
 }
 
 /* potentially misaligned 32-bit reads with a 32-bit data bus (and 24-bit address bus) */
-UINT32 m68k_memory_interface::readlong_d32_hmmu(offs_t address)
+UINT32 m68000_base_device::readlong_d32_hmmu(offs_t address)
 {
 	UINT32 result;
 
-	if (m_cpustate->hmmu_enabled)
+	if (hmmu_enabled)
 	{
-		address = hmmu_translate_addr(m_cpustate, address);
+		address = hmmu_translate_addr(this, address);
 	}
 
 	if (!(address & 3))
@@ -1449,11 +1569,11 @@ UINT32 m68k_memory_interface::readlong_d32_hmmu(offs_t address)
 }
 
 /* potentially misaligned 32-bit writes with a 32-bit data bus (and 24-bit address bus) */
-void m68k_memory_interface::writelong_d32_hmmu(offs_t address, UINT32 data)
+void m68000_base_device::writelong_d32_hmmu(offs_t address, UINT32 data)
 {
-	if (m_cpustate->hmmu_enabled)
+	if (hmmu_enabled)
 	{
-		address = hmmu_translate_addr(m_cpustate, address);
+		address = hmmu_translate_addr(this, address);
 	}
 
 	if (!(address & 3))
@@ -1472,734 +1592,1126 @@ void m68k_memory_interface::writelong_d32_hmmu(offs_t address, UINT32 data)
 	m_space->write_byte(address + 3, data);
 }
 
-void m68k_memory_interface::init32hmmu(address_space &space)
+void m68000_base_device::init32hmmu(address_space &space)
 {
 	m_space = &space;
 	m_direct = &space.direct();
-	m_cpustate = get_safe_token(&space.device());
 	opcode_xor = WORD_XOR_BE(0);
 
-	readimm16 = m68k_readimm16_delegate(FUNC(m68k_memory_interface::read_immediate_16_hmmu), this);
-	read8 = m68k_read8_delegate(FUNC(m68k_memory_interface::read_byte_32_hmmu), this);
-	read16 = m68k_read16_delegate(FUNC(m68k_memory_interface::readword_d32_hmmu), this);
-	read32 = m68k_read32_delegate(FUNC(m68k_memory_interface::readlong_d32_hmmu), this);
-	write8 = m68k_write8_delegate(FUNC(m68k_memory_interface::write_byte_32_hmmu), this);
-	write16 = m68k_write16_delegate(FUNC(m68k_memory_interface::writeword_d32_hmmu), this);
-	write32 = m68k_write32_delegate(FUNC(m68k_memory_interface::writelong_d32_hmmu), this);
+	readimm16 = m68k_readimm16_delegate(FUNC(m68000_base_device::read_immediate_16_hmmu), this);
+	read8 = m68k_read8_delegate(FUNC(m68000_base_device::read_byte_32_hmmu), this);
+	read16 = m68k_read16_delegate(FUNC(m68000_base_device::readword_d32_hmmu), this);
+	read32 = m68k_read32_delegate(FUNC(m68000_base_device::readlong_d32_hmmu), this);
+	write8 = m68k_write8_delegate(FUNC(m68000_base_device::write_byte_32_hmmu), this);
+	write16 = m68k_write16_delegate(FUNC(m68000_base_device::writeword_d32_hmmu), this);
+	write32 = m68k_write32_delegate(FUNC(m68000_base_device::writelong_d32_hmmu), this);
 }
 
-void m68k_set_reset_callback(device_t *device, m68k_reset_func callback)
+void m68k_set_reset_callback(m68000_base_device *device, m68k_reset_func callback)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-	m68k->reset_instr_callback = callback;
+	device->reset_instr_callback = callback;
 }
 
-void m68k_set_cmpild_callback(device_t *device, m68k_cmpild_func callback)
+void m68k_set_cmpild_callback(m68000_base_device *device, m68k_cmpild_func callback)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-	m68k->cmpild_instr_callback = callback;
+	device->cmpild_instr_callback = callback;
 }
 
-void m68k_set_rte_callback(device_t *device, m68k_rte_func callback)
+void m68k_set_rte_callback(m68000_base_device *device, m68k_rte_func callback)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-	m68k->rte_instr_callback = callback;
+	device->rte_instr_callback = callback;
 }
 
-void m68k_set_tas_callback(device_t *device, m68k_tas_func callback)
+void m68k_set_tas_callback(m68000_base_device *device, m68k_tas_func callback)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-	m68k->tas_instr_callback = callback;
+	device->tas_instr_callback = callback;
 }
 
-UINT16 m68k_get_fc(device_t *device)
+UINT16 m68k_get_fc(m68000_base_device *device)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-	return m68k->mmu_tmp_fc;
+	return device->mmu_tmp_fc;
 }
+
+
 
 
 /****************************************************************************
  * State definition
  ****************************************************************************/
 
-static void define_state(device_t *device)
+void m68000_base_device::define_state(void)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-	UINT32 addrmask = (m68k->cpu_type & MASK_24BIT_SPACE) ? 0xffffff : 0xffffffff;
+	UINT32 addrmask = (cpu_type & MASK_24BIT_SPACE) ? 0xffffff : 0xffffffff;
 
-	device_state_interface *state;
-	device->interface(state);
-	state->state_add(M68K_PC,         "PC",        m68k->pc).mask(addrmask);
-	state->state_add(STATE_GENPC,     "GENPC",     m68k->pc).mask(addrmask).noshow();
-	state->state_add(STATE_GENPCBASE, "GENPCBASE", m68k->ppc).mask(addrmask).noshow();
-	state->state_add(M68K_SP,         "SP",        m68k->dar[15]);
-	state->state_add(STATE_GENSP,     "GENSP",     m68k->dar[15]).noshow();
-	state->state_add(STATE_GENFLAGS,  "GENFLAGS",  m68k->iotemp).noshow().callimport().callexport().formatstr("%16s");
-	state->state_add(M68K_ISP,        "ISP",       m68k->iotemp).callimport().callexport();
-	state->state_add(M68K_USP,        "USP",       m68k->iotemp).callimport().callexport();
-	if (m68k->cpu_type & MASK_020_OR_LATER)
-		state->state_add(M68K_MSP,    "MSP",       m68k->iotemp).callimport().callexport();
-	state->state_add(M68K_ISP,        "ISP",       m68k->iotemp).callimport().callexport();
+	state_add(M68K_PC,         "PC",        pc).mask(addrmask);
+	state_add(STATE_GENPC,     "GENPC",     pc).mask(addrmask).noshow();
+	state_add(STATE_GENPCBASE, "GENPCBASE", ppc).mask(addrmask).noshow();
+	state_add(M68K_SP,         "SP",        dar[15]);
+	state_add(STATE_GENSP,     "GENSP",     dar[15]).noshow();
+	state_add(STATE_GENFLAGS,  "GENFLAGS",  iotemp).noshow().callimport().callexport().formatstr("%16s");
+	state_add(M68K_ISP,        "ISP",       iotemp).callimport().callexport();
+	state_add(M68K_USP,        "USP",       iotemp).callimport().callexport();
+	if (cpu_type & MASK_020_OR_LATER)
+		state_add(M68K_MSP,    "MSP",       iotemp).callimport().callexport();
+	state_add(M68K_ISP,        "ISP",       iotemp).callimport().callexport();
 
 	astring tempstr;
 	for (int regnum = 0; regnum < 8; regnum++)
-		state->state_add(M68K_D0 + regnum, tempstr.format("D%d", regnum), m68k->dar[regnum]);
+		state_add(M68K_D0 + regnum, tempstr.format("D%d", regnum), dar[regnum]);
 	for (int regnum = 0; regnum < 8; regnum++)
-		state->state_add(M68K_A0 + regnum, tempstr.format("A%d", regnum), m68k->dar[8 + regnum]);
+		state_add(M68K_A0 + regnum, tempstr.format("A%d", regnum), dar[8 + regnum]);
 
-	state->state_add(M68K_PREF_ADDR,  "PREF_ADDR", m68k->pref_addr).mask(addrmask);
-	state->state_add(M68K_PREF_DATA,  "PREF_DATA", m68k->pref_data);
+	state_add(M68K_PREF_ADDR,  "PREF_ADDR", pref_addr).mask(addrmask);
+	state_add(M68K_PREF_DATA,  "PREF_DATA", pref_data);
 
-	if (m68k->cpu_type & MASK_010_OR_LATER)
+	if (cpu_type & MASK_010_OR_LATER)
 	{
-		state->state_add(M68K_SFC,    "SFC",       m68k->sfc).mask(0x7);
-		state->state_add(M68K_DFC,    "DFC",       m68k->dfc).mask(0x7);
-		state->state_add(M68K_VBR,    "VBR",       m68k->vbr);
+		state_add(M68K_SFC,    "SFC",       sfc).mask(0x7);
+		state_add(M68K_DFC,    "DFC",       dfc).mask(0x7);
+		state_add(M68K_VBR,    "VBR",       vbr);
 	}
 
-	if (m68k->cpu_type & MASK_020_OR_LATER)
+	if (cpu_type & MASK_020_OR_LATER)
 	{
-		state->state_add(M68K_CACR,   "CACR",      m68k->cacr);
-		state->state_add(M68K_CAAR,   "CAAR",      m68k->caar);
+		state_add(M68K_CACR,   "CACR",      cacr);
+		state_add(M68K_CAAR,   "CAAR",      caar);
 	}
 
-	if (m68k->cpu_type & MASK_030_OR_LATER)
+	if (cpu_type & MASK_030_OR_LATER)
 	{
 		for (int regnum = 0; regnum < 8; regnum++)
-			state->state_add(M68K_FP0 + regnum, tempstr.format("FP%d", regnum), m68k->iotemp).callimport().callexport().formatstr("%10s");
-		state->state_add(M68K_FPSR, "FPSR", m68k->fpsr);
-		state->state_add(M68K_FPCR, "FPCR", m68k->fpcr);
+			state_add(M68K_FP0 + regnum, tempstr.format("FP%d", regnum), iotemp).callimport().callexport().formatstr("%10s");
+		state_add(M68K_FPSR, "FPSR", fpsr);
+		state_add(M68K_FPCR, "FPCR", fpcr);
 	}
 }
 
 
-/****************************************************************************
- * 68000 section
- ****************************************************************************/
 
-static CPU_INIT( m68000 )
+/****************
+ CPU Inits
+****************/
+
+
+void m68000_base_device::init_cpu_m68000(void)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
+	init_cpu_common();
 
-	CPU_INIT_CALL(m68k);
+	cpu_type         = CPU_TYPE_000;
+//  dasm_type        = M68K_CPU_TYPE_68000;
 
-	m68k->cpu_type         = CPU_TYPE_000;
-	m68k->dasm_type        = M68K_CPU_TYPE_68000;
-// hack alert: we use placement new to ensure we are properly initialized
-// because we live in the device state which is allocated as bytes
-// remove me when we have a real C++ device
-	new(&m68k->memory) m68k_memory_interface;
-	m68k->memory.init16(*m68k->program);
-	m68k->sr_mask          = 0xa71f; /* T1 -- S  -- -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
-	m68k->cyc_instruction  = m68ki_cycles[0];
-	m68k->cyc_exception    = m68ki_exception_cycle_table[0];
-	m68k->cyc_bcc_notake_b = -2;
-	m68k->cyc_bcc_notake_w = 2;
-	m68k->cyc_dbcc_f_noexp = -2;
-	m68k->cyc_dbcc_f_exp   = 2;
-	m68k->cyc_scc_r_true   = 2;
-	m68k->cyc_movem_w      = 2;
-	m68k->cyc_movem_l      = 3;
-	m68k->cyc_shift        = 1;
-	m68k->cyc_reset        = 132;
-	m68k->has_pmmu	       = 0;
-	m68k->has_hmmu	       = 0;
-	m68k->has_fpu	       = 0;
+	init16(*program);
+	sr_mask          = 0xa71f; /* T1 -- S  -- -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	jump_table       = m68ki_instruction_jump_table[0];
+	cyc_instruction  = m68ki_cycles[0];
+	cyc_exception    = m68ki_exception_cycle_table[0];
+	cyc_bcc_notake_b = -2;
+	cyc_bcc_notake_w = 2;
+	cyc_dbcc_f_noexp = -2;
+	cyc_dbcc_f_exp   = 2;
+	cyc_scc_r_true   = 2;
+	cyc_movem_w      = 2;
+	cyc_movem_l      = 3;
+	cyc_shift        = 1;
+	cyc_reset        = 132;
+	has_pmmu         = 0;
+	has_hmmu         = 0;
+	has_fpu          = 0;
 
-	define_state(device);
+	define_state();
+
 }
 
-CPU_GET_INFO( m68000 )
+
+void m68000_base_device::init_cpu_m68008(void)
 {
-	switch (state)
+	init_cpu_common();
+
+	cpu_type         = CPU_TYPE_008;
+//  dasm_type        = M68K_CPU_TYPE_68008;
+
+	init8(*program);
+	sr_mask          = 0xa71f; /* T1 -- S  -- -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	jump_table       = m68ki_instruction_jump_table[0];
+	cyc_instruction  = m68ki_cycles[0];
+	cyc_exception    = m68ki_exception_cycle_table[0];
+	cyc_bcc_notake_b = -2;
+	cyc_bcc_notake_w = 2;
+	cyc_dbcc_f_noexp = -2;
+	cyc_dbcc_f_exp   = 2;
+	cyc_scc_r_true   = 2;
+	cyc_movem_w      = 2;
+	cyc_movem_l      = 3;
+	cyc_shift        = 1;
+	cyc_reset        = 132;
+	has_pmmu         = 0;
+	has_fpu          = 0;
+
+	define_state();
+
+}
+
+
+void m68000_base_device::init_cpu_m68010(void)
+{
+	init_cpu_common();
+	cpu_type         = CPU_TYPE_010;
+//  dasm_type        = M68K_CPU_TYPE_68010;
+
+	init16(*program);
+	sr_mask          = 0xa71f; /* T1 -- S  -- -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	jump_table       = m68ki_instruction_jump_table[1];
+	cyc_instruction  = m68ki_cycles[1];
+	cyc_exception    = m68ki_exception_cycle_table[1];
+	cyc_bcc_notake_b = -4;
+	cyc_bcc_notake_w = 0;
+	cyc_dbcc_f_noexp = 0;
+	cyc_dbcc_f_exp   = 6;
+	cyc_scc_r_true   = 0;
+	cyc_movem_w      = 2;
+	cyc_movem_l      = 3;
+	cyc_shift        = 1;
+	cyc_reset        = 130;
+	has_pmmu         = 0;
+	has_fpu          = 0;
+
+	define_state();
+}
+
+
+void m68000_base_device::init_cpu_m68020(void)
+{
+	init_cpu_common();
+	cpu_type         = CPU_TYPE_020;
+//  dasm_type        = M68K_CPU_TYPE_68020;
+
+	init32(*program);
+	sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	jump_table       = m68ki_instruction_jump_table[2];
+	cyc_instruction  = m68ki_cycles[2];
+	cyc_exception    = m68ki_exception_cycle_table[2];
+	cyc_bcc_notake_b = -2;
+	cyc_bcc_notake_w = 0;
+	cyc_dbcc_f_noexp = 0;
+	cyc_dbcc_f_exp   = 4;
+	cyc_scc_r_true   = 0;
+	cyc_movem_w      = 2;
+	cyc_movem_l      = 2;
+	cyc_shift        = 0;
+	cyc_reset        = 518;
+
+	define_state();
+}
+
+
+void m68000_base_device::init_cpu_m68020pmmu(void)
+{
+	init_cpu_m68020();
+
+	has_pmmu         = 1;
+	has_fpu          = 1;
+
+
+	init32mmu(*program);
+}
+
+
+
+void m68000_base_device::init_cpu_m68020hmmu(void)
+{
+	init_cpu_m68020();
+
+	has_hmmu = 1;
+	has_fpu  = 1;
+
+
+	init32hmmu(*program);
+}
+
+void m68000_base_device::init_cpu_m68ec020(void)
+{
+	init_cpu_common();
+
+	cpu_type         = CPU_TYPE_EC020;
+//  dasm_type        = M68K_CPU_TYPE_68EC020;
+
+
+	init32(*program);
+	sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	jump_table       = m68ki_instruction_jump_table[2];
+	cyc_instruction  = m68ki_cycles[2];
+	cyc_exception    = m68ki_exception_cycle_table[2];
+	cyc_bcc_notake_b = -2;
+	cyc_bcc_notake_w = 0;
+	cyc_dbcc_f_noexp = 0;
+	cyc_dbcc_f_exp   = 4;
+	cyc_scc_r_true   = 0;
+	cyc_movem_w      = 2;
+	cyc_movem_l      = 2;
+	cyc_shift        = 0;
+	cyc_reset        = 518;
+	has_pmmu         = 0;
+	has_fpu          = 0;
+
+	define_state();
+}
+
+
+void m68000_base_device::init_cpu_m68030(void)
+{
+	init_cpu_common();
+
+	cpu_type         = CPU_TYPE_030;
+//  dasm_type        = M68K_CPU_TYPE_68030;
+
+
+	init32mmu(*program);
+	sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	jump_table       = m68ki_instruction_jump_table[3];
+	cyc_instruction  = m68ki_cycles[3];
+	cyc_exception    = m68ki_exception_cycle_table[3];
+	cyc_bcc_notake_b = -2;
+	cyc_bcc_notake_w = 0;
+	cyc_dbcc_f_noexp = 0;
+	cyc_dbcc_f_exp   = 4;
+	cyc_scc_r_true   = 0;
+	cyc_movem_w      = 2;
+	cyc_movem_l      = 2;
+	cyc_shift        = 0;
+	cyc_reset        = 518;
+	has_pmmu         = 1;
+	has_fpu          = 1;
+
+	define_state();
+}
+
+
+
+void m68000_base_device::init_cpu_m68ec030(void)
+{
+	init_cpu_common();
+
+	cpu_type         = CPU_TYPE_EC030;
+//  dasm_type        = M68K_CPU_TYPE_68EC030;
+
+
+	init32(*program);
+	sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	jump_table       = m68ki_instruction_jump_table[3];
+	cyc_instruction  = m68ki_cycles[3];
+	cyc_exception    = m68ki_exception_cycle_table[3];
+	cyc_bcc_notake_b = -2;
+	cyc_bcc_notake_w = 0;
+	cyc_dbcc_f_noexp = 0;
+	cyc_dbcc_f_exp   = 4;
+	cyc_scc_r_true   = 0;
+	cyc_movem_w      = 2;
+	cyc_movem_l      = 2;
+	cyc_shift        = 0;
+	cyc_reset        = 518;
+	has_pmmu         = 0;     /* EC030 lacks the PMMU and is effectively a die-shrink 68020 */
+	has_fpu          = 1;
+
+	define_state();
+}
+
+
+
+void m68000_base_device::init_cpu_m68040(void)
+{
+	init_cpu_common();
+
+	cpu_type         = CPU_TYPE_040;
+//  dasm_type        = M68K_CPU_TYPE_68040;
+
+
+	init32mmu(*program);
+	sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	jump_table       = m68ki_instruction_jump_table[4];
+	cyc_instruction  = m68ki_cycles[4];
+	cyc_exception    = m68ki_exception_cycle_table[4];
+	cyc_bcc_notake_b = -2;
+	cyc_bcc_notake_w = 0;
+	cyc_dbcc_f_noexp = 0;
+	cyc_dbcc_f_exp   = 4;
+	cyc_scc_r_true   = 0;
+	cyc_movem_w      = 2;
+	cyc_movem_l      = 2;
+	cyc_shift        = 0;
+	cyc_reset        = 518;
+	has_pmmu         = 1;
+	has_fpu          = 1;
+
+	define_state();
+}
+
+
+void m68000_base_device::init_cpu_m68ec040(void)
+{
+	init_cpu_common();
+
+	cpu_type         = CPU_TYPE_EC040;
+//  dasm_type        = M68K_CPU_TYPE_68EC040;
+
+
+	init32(*program);
+	sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	jump_table       = m68ki_instruction_jump_table[4];
+	cyc_instruction  = m68ki_cycles[4];
+	cyc_exception    = m68ki_exception_cycle_table[4];
+	cyc_bcc_notake_b = -2;
+	cyc_bcc_notake_w = 0;
+	cyc_dbcc_f_noexp = 0;
+	cyc_dbcc_f_exp   = 4;
+	cyc_scc_r_true   = 0;
+	cyc_movem_w      = 2;
+	cyc_movem_l      = 2;
+	cyc_shift        = 0;
+	cyc_reset        = 518;
+	has_pmmu         = 0;
+	has_fpu          = 0;
+
+	define_state();
+}
+
+
+void m68000_base_device::init_cpu_m68lc040(void)
+{
+	init_cpu_common();
+
+	cpu_type         = CPU_TYPE_LC040;
+//  dasm_type        = M68K_CPU_TYPE_68LC040;
+
+
+	init32mmu(*program);
+	sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	jump_table       = m68ki_instruction_jump_table[4];
+	cyc_instruction  = m68ki_cycles[4];
+	cyc_exception    = m68ki_exception_cycle_table[4];
+	cyc_bcc_notake_b = -2;
+	cyc_bcc_notake_w = 0;
+	cyc_dbcc_f_noexp = 0;
+	cyc_dbcc_f_exp   = 4;
+	cyc_scc_r_true   = 0;
+	cyc_movem_w      = 2;
+	cyc_movem_l      = 2;
+	cyc_shift        = 0;
+	cyc_reset        = 518;
+	has_pmmu         = 1;
+	has_fpu          = 0;
+
+	define_state();
+}
+
+
+void m68000_base_device::init_cpu_scc68070(void)
+{
+	init_cpu_m68010();
+	cpu_type         = CPU_TYPE_SCC070;
+}
+
+
+void m68000_base_device::init_cpu_fscpu32(void)
+{
+	init_cpu_common();
+
+	cpu_type         = CPU_TYPE_FSCPU32;
+//  dasm_type        = M68K_CPU_TYPE_FSCPU32;
+
+
+	init32(*program);
+	sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	jump_table       = m68ki_instruction_jump_table[5];
+	cyc_instruction  = m68ki_cycles[5];
+	cyc_exception    = m68ki_exception_cycle_table[5];
+	cyc_bcc_notake_b = -2;
+	cyc_bcc_notake_w = 0;
+	cyc_dbcc_f_noexp = 0;
+	cyc_dbcc_f_exp   = 4;
+	cyc_scc_r_true   = 0;
+	cyc_movem_w      = 2;
+	cyc_movem_l      = 2;
+	cyc_shift        = 0;
+	cyc_reset        = 518;
+
+	define_state();
+}
+
+
+
+void m68000_base_device::init_cpu_coldfire(void)
+{
+	init_cpu_common();
+
+	cpu_type         = CPU_TYPE_COLDFIRE;
+//  dasm_type        = M68K_CPU_TYPE_COLDFIRE;
+
+
+	init32(*program);
+	sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	jump_table       = m68ki_instruction_jump_table[6];
+	cyc_instruction  = m68ki_cycles[6];
+	cyc_exception    = m68ki_exception_cycle_table[6];
+	cyc_bcc_notake_b = -2;
+	cyc_bcc_notake_w = 0;
+	cyc_dbcc_f_noexp = 0;
+	cyc_dbcc_f_exp   = 4;
+	cyc_scc_r_true   = 0;
+	cyc_movem_w      = 2;
+	cyc_movem_l      = 2;
+	cyc_shift        = 0;
+	cyc_reset        = 518;
+
+	define_state();
+}
+
+
+
+
+
+
+/*
+        case CPUINFO_INT_CLOCK_MULTIPLIER:              info->i = 1;                            break;
+        case CPUINFO_INT_CLOCK_DIVIDER:                 info->i = 1;                            break;
+
+        case CPUINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:        info->i = 24;                           break;
+        case CPUINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:        info->i = 0;                            break;
+
+        case CPUINFO_INT_INPUT_STATE + 0:               info->i = 0;  // there is no level 0
+        case CPUINFO_INT_INPUT_STATE + 1:               info->i = (m68k->virq_state >> 1) & 1;  break;
+        case CPUINFO_INT_INPUT_STATE + 2:               info->i = (m68k->virq_state >> 2) & 1;  break;
+        case CPUINFO_INT_INPUT_STATE + 3:               info->i = (m68k->virq_state >> 3) & 1;  break;
+        case CPUINFO_INT_INPUT_STATE + 4:               info->i = (m68k->virq_state >> 4) & 1;  break;
+        case CPUINFO_INT_INPUT_STATE + 5:               info->i = (m68k->virq_state >> 5) & 1;  break;
+        case CPUINFO_INT_INPUT_STATE + 6:               info->i = (m68k->virq_state >> 6) & 1;  break;
+        case CPUINFO_INT_INPUT_STATE + 7:               info->i = (m68k->virq_state >> 7) & 1;  break;
+
+        case CPUINFO_STR_FAMILY:                    strcpy(info->s, "Motorola 68K");        break;
+        case CPUINFO_STR_VERSION:                   strcpy(info->s, "4.95");                break;
+        case CPUINFO_STR_SOURCE_FILE:                       strcpy(info->s, __FILE__);              break;
+        case CPUINFO_STR_CREDITS:                   strcpy(info->s, "Copyright Karl Stenerud. All rights reserved. (2.1 fixes HJB, FPU+MMU by RB+HO+OG)"); break;
+
+
+*/
+
+
+
+
+
+CPU_DISASSEMBLE( dasm_m68000 )
+{
+	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_68000);
+}
+
+CPU_DISASSEMBLE( dasm_m68008 )
+{
+	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_68008);
+}
+
+CPU_DISASSEMBLE( dasm_m68010 )
+{
+	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_68010);
+}
+
+CPU_DISASSEMBLE( dasm_m68020 )
+{
+	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_68020);
+}
+
+CPU_DISASSEMBLE( dasm_m68030 )
+{
+	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_68030);
+}
+
+CPU_DISASSEMBLE( dasm_m68ec030 )
+{
+	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_68EC030);
+}
+
+CPU_DISASSEMBLE( dasm_m68040 )
+{
+	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_68040);
+}
+
+CPU_DISASSEMBLE( dasm_m68ec040 )
+{
+	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_68EC040);
+}
+
+CPU_DISASSEMBLE( dasm_m68lc040 )
+{
+	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_68LC040);
+}
+
+CPU_DISASSEMBLE( dasm_fscpu32 )
+{
+	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_FSCPU32);
+}
+
+CPU_DISASSEMBLE( dasm_coldfire )
+{
+	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_COLDFIRE);
+}
+
+offs_t m68000_base_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68000)(this, buffer, pc, oprom, opram, options); };
+offs_t m68000_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68000)(this, buffer, pc, oprom, opram, options); };
+offs_t m68301_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68000)(this, buffer, pc, oprom, opram, options); };
+offs_t m68008_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68008)(this, buffer, pc, oprom, opram, options); };
+offs_t m68008plcc_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68008)(this, buffer, pc, oprom, opram, options); };
+offs_t m68010_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68010)(this, buffer, pc, oprom, opram, options); };
+offs_t m68ec020_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68020)(this, buffer, pc, oprom, opram, options); };
+offs_t m68020_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68020)(this, buffer, pc, oprom, opram, options); };
+offs_t m68020pmmu_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68020)(this, buffer, pc, oprom, opram, options); };
+offs_t m68020hmmu_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68020)(this, buffer, pc, oprom, opram, options); };
+offs_t m68ec030_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68ec030)(this, buffer, pc, oprom, opram, options); };
+offs_t m68030_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68030)(this, buffer, pc, oprom, opram, options); };
+offs_t m68ec040_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68ec040)(this, buffer, pc, oprom, opram, options); };
+offs_t m68lc040_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68lc040)(this, buffer, pc, oprom, opram, options); };
+offs_t m68040_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68040)(this, buffer, pc, oprom, opram, options); };
+offs_t scc68070_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_m68000)(this, buffer, pc, oprom, opram, options); };
+offs_t fscpu32_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_fscpu32)(this, buffer, pc, oprom, opram, options); };
+offs_t mcf5206e_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) { return CPU_DISASSEMBLE_NAME(dasm_coldfire)(this, buffer, pc, oprom, opram, options); };
+
+
+/* Service an interrupt request and start exception processing */
+void m68000_base_device::m68ki_exception_interrupt(m68000_base_device *m68k, UINT32 int_level)
+{
+	UINT32 vector;
+	UINT32 sr;
+	UINT32 new_pc;
+
+	if(CPU_TYPE_IS_000(cpu_type))
 	{
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:						info->init = CPU_INIT_NAME(m68000);				break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:						strcpy(info->s, "68000");						break;
-
-		default:									CPU_GET_INFO_CALL(m68k);						break;
+		instr_mode = INSTRUCTION_NO;
 	}
-}
 
+	/* Turn off the stopped state */
+	stopped &= ~STOP_LEVEL_STOP;
 
-/****************************************************************************
- * M68008 section
- ****************************************************************************/
+	/* If we are halted, don't do anything */
+	if(stopped)
+		return;
 
-static CPU_INIT( m68008 )
-{
-	m68ki_cpu_core *m68k = get_safe_token(device);
+	/* Acknowledge the interrupt */
+	vector = (*int_ack_callback)(this, int_level);
 
-	CPU_INIT_CALL(m68k);
+	/* Get the interrupt vector */
+	if(vector == M68K_INT_ACK_AUTOVECTOR)
+		/* Use the autovectors.  This is the most commonly used implementation */
+		vector = EXCEPTION_INTERRUPT_AUTOVECTOR+int_level;
+	else if(vector == M68K_INT_ACK_SPURIOUS)
+		/* Called if no devices respond to the interrupt acknowledge */
+		vector = EXCEPTION_SPURIOUS_INTERRUPT;
+	else if(vector > 255)
+		return;
 
-	m68k->cpu_type         = CPU_TYPE_008;
-	m68k->dasm_type        = M68K_CPU_TYPE_68008;
-// hack alert: we use placement new to ensure we are properly initialized
-// because we live in the device state which is allocated as bytes
-// remove me when we have a real C++ device
-	new(&m68k->memory) m68k_memory_interface;
-	m68k->memory.init8(*m68k->program);
-	m68k->sr_mask          = 0xa71f; /* T1 -- S  -- -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
-	m68k->cyc_instruction  = m68ki_cycles[0];
-	m68k->cyc_exception    = m68ki_exception_cycle_table[0];
-	m68k->cyc_bcc_notake_b = -2;
-	m68k->cyc_bcc_notake_w = 2;
-	m68k->cyc_dbcc_f_noexp = -2;
-	m68k->cyc_dbcc_f_exp   = 2;
-	m68k->cyc_scc_r_true   = 2;
-	m68k->cyc_movem_w      = 2;
-	m68k->cyc_movem_l      = 3;
-	m68k->cyc_shift        = 1;
-	m68k->cyc_reset        = 132;
-	m68k->has_pmmu	       = 0;
-	m68k->has_fpu	       = 0;
+	/* Start exception processing */
+	sr = m68ki_init_exception(m68k);
 
-	define_state(device);
-}
+	/* Set the interrupt mask to the level of the one being serviced */
+	int_mask = int_level<<8;
 
-CPU_GET_INFO( m68008 )
-{
-	switch (state)
+	/* Get the new PC */
+	new_pc = m68ki_read_data_32(this, (vector<<2) + vbr);
+
+	/* If vector is uninitialized, call the uninitialized interrupt vector */
+	if(new_pc == 0)
+		new_pc = m68ki_read_data_32(this, (EXCEPTION_UNINITIALIZED_INTERRUPT<<2) + vbr);
+
+	/* Generate a stack frame */
+	m68ki_stack_frame_0000(this, REG_PC(m68k), sr, vector);
+	if(m_flag && CPU_TYPE_IS_EC020_PLUS(cpu_type))
 	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 22;							break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68008);						break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "68008");				break;
-
-		default:										CPU_GET_INFO_CALL(m68k);				break;
+		/* Create throwaway frame */
+		m68ki_set_sm_flag(this, s_flag);  /* clear M */
+		sr |= 0x2000; /* Same as SR in master stack frame except S is forced high */
+		m68ki_stack_frame_0001(this, REG_PC(m68k), sr, vector);
 	}
+
+	m68ki_jump(this, new_pc);
+
+	/* Defer cycle counting until later */
+	remaining_cycles -= cyc_exception[vector];
 }
 
 
-/****************************************************************************
- * M68010 section
- ****************************************************************************/
+const device_type M68K = &device_creator<m68000_base_device>;
 
-static CPU_INIT( m68010 )
+//-------------------------------------------------
+//  h6280_device - constructor
+//-------------------------------------------------
+
+m68000_base_device::m68000_base_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: cpu_device(mconfig, M68K, "M68K", tag, owner, clock, "m68k", __FILE__),
+	m_program_config("program", ENDIANNESS_BIG, 16, 24)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	CPU_INIT_CALL(m68k);
-
-	m68k->cpu_type         = CPU_TYPE_010;
-	m68k->dasm_type        = M68K_CPU_TYPE_68010;
-// hack alert: we use placement new to ensure we are properly initialized
-// because we live in the device state which is allocated as bytes
-// remove me when we have a real C++ device
-	new(&m68k->memory) m68k_memory_interface;
-	m68k->memory.init16(*m68k->program);
-	m68k->sr_mask          = 0xa71f; /* T1 -- S  -- -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
-	m68k->cyc_instruction  = m68ki_cycles[1];
-	m68k->cyc_exception    = m68ki_exception_cycle_table[1];
-	m68k->cyc_bcc_notake_b = -4;
-	m68k->cyc_bcc_notake_w = 0;
-	m68k->cyc_dbcc_f_noexp = 0;
-	m68k->cyc_dbcc_f_exp   = 6;
-	m68k->cyc_scc_r_true   = 0;
-	m68k->cyc_movem_w      = 2;
-	m68k->cyc_movem_l      = 3;
-	m68k->cyc_shift        = 1;
-	m68k->cyc_reset        = 130;
-	m68k->has_pmmu	       = 0;
-	m68k->has_fpu	       = 0;
-
-	define_state(device);
+	clear_all();
 }
 
-CPU_GET_INFO( m68010 )
+
+
+
+m68000_base_device::m68000_base_device(const machine_config &mconfig, const char *name, const char *tag, device_t *owner, UINT32 clock,
+										const device_type type, UINT32 prg_data_width, UINT32 prg_address_bits, address_map_constructor internal_map, const char *shortname, const char *source)
+	: cpu_device(mconfig, type, name, tag, owner, clock, shortname, source),
+		m_program_config("program", ENDIANNESS_BIG, prg_data_width, prg_address_bits, 0, internal_map)
 {
-	switch (state)
+	clear_all();
+}
+
+
+m68000_base_device::m68000_base_device(const machine_config &mconfig, const char *name, const char *tag, device_t *owner, UINT32 clock,
+										const device_type type, UINT32 prg_data_width, UINT32 prg_address_bits, const char *shortname, const char *source)
+	: cpu_device(mconfig, type, name, tag, owner, clock, shortname, source),
+		m_program_config("program", ENDIANNESS_BIG, prg_data_width, prg_address_bits)
+{
+	clear_all();
+}
+
+void m68000_base_device::clear_all()
+{
+	cpu_type= 0;
+//  dasm_type= 0;
+	for (int i=0;i<16;i++)
+		dar[i]= 0;
+	ppc= 0;
+	pc= 0;
+	for (int i=0;i<7;i++)
+		sp[i]= 0;
+	vbr= 0;
+	sfc= 0;
+	dfc= 0;
+	cacr= 0;
+	caar= 0;
+	ir= 0;
+//  for (int i=0;i<8;i++)
+//      fpr[i]= 0;
+	fpiar= 0;
+	fpsr= 0;
+	fpcr= 0;
+	t1_flag= 0;
+	t0_flag= 0;
+	s_flag= 0;
+	m_flag= 0;
+	x_flag= 0;
+	n_flag= 0;
+	not_z_flag= 0;
+	v_flag= 0;
+	c_flag= 0;
+	int_mask= 0;
+	int_level= 0;
+	stopped= 0;
+	pref_addr= 0;
+	pref_data= 0;
+	sr_mask= 0;
+	instr_mode= 0;
+	run_mode= 0;
+	has_pmmu= 0;
+	has_hmmu= 0;
+	pmmu_enabled= 0;
+	hmmu_enabled= 0;
+	has_fpu= 0;
+	fpu_just_reset= 0;
+
+	cyc_bcc_notake_b = 0;
+	cyc_bcc_notake_w = 0;
+	cyc_dbcc_f_noexp = 0;
+	cyc_dbcc_f_exp = 0;
+	cyc_scc_r_true = 0;
+	cyc_movem_w = 0;
+	cyc_movem_l = 0;
+	cyc_shift = 0;
+	cyc_reset = 0;
+
+	initial_cycles = 0;
+	remaining_cycles = 0;
+	reset_cycles = 0;
+	tracing = 0;
+
+	m_address_error = 0;
+
+	aerr_address = 0;
+	aerr_write_mode = 0;
+	aerr_fc = 0;
+
+	virq_state = 0;
+	nmi_pending = 0;
+
+	cyc_instruction = 0;
+	cyc_exception = 0;
+
+	int_ack_callback = 0;
+	bkpt_ack_callback = 0;
+	reset_instr_callback = 0;
+	cmpild_instr_callback = 0;
+	rte_instr_callback = 0;
+	tas_instr_callback = 0;
+
+	program = 0;
+
+	opcode_xor = 0;
+//  readimm16 = 0;
+//  read8 = 0;
+//  read16 = 0;
+//  read32 = 0;
+//  write8 = 0;
+//  write16 = 0;
+//  write32 = 0;
+
+	m_space = 0;
+	m_direct = 0;
+
+
+	encrypted_start = 0;
+	encrypted_end = 0;
+
+	iotemp = 0;
+
+	save_sr = 0;
+	save_stopped = 0;
+	save_halted = 0;
+
+
+	mmu_crp_aptr = mmu_crp_limit = 0;
+	mmu_srp_aptr = mmu_srp_limit = 0;
+	mmu_urp_aptr = 0;
+	mmu_tc = 0;
+	mmu_sr = 0;
+	mmu_sr_040 = 0;
+
+	for (int i=0; i<MMU_ATC_ENTRIES;i++)
+		mmu_atc_tag[i] = mmu_atc_data[i] = 0;
+
+	mmu_atc_rr = 0;
+	mmu_tt0 = mmu_tt1 = 0;
+	mmu_itt0 = mmu_itt1 = mmu_dtt0 = mmu_dtt1 = 0;
+	mmu_acr0= mmu_acr1 = mmu_acr2 = mmu_acr3 = 0;
+	mmu_tmp_sr = 0;
+	mmu_tmp_fc = 0;
+	mmu_tmp_rw = 0;
+	mmu_tmp_buserror_address = 0;
+	mmu_tmp_buserror_occurred = 0;
+	mmu_tmp_buserror_fc = 0;
+	mmu_tmp_buserror_rw = 0;
+
+	for (int i=0;i<M68K_IC_SIZE;i++)
+		ic_address[i] = 0;
+
+	for (int i=0;i<M68K_IC_SIZE;i++)
+		ic_data[i] = 0;
+
+	internal = 0;
+
+	instruction_hook = 0;
+}
+
+
+void m68000_base_device::execute_run()
+{
+	cpu_execute();
+}
+
+void m68000_base_device::device_start()
+{
+}
+
+void m68000_base_device::device_reset()
+{
+	reset_cpu();
+}
+
+void m68000_base_device::device_stop()
+{
+}
+
+
+
+
+void m68000_base_device::execute_set_input(int inputnum, int state)
+{
+	switch (inputnum)
 	{
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68010);						break;
+		/* --- the following bits of info are set as 64-bit signed integers --- */
+		case M68K_IRQ_NONE:
+		case M68K_IRQ_1:
+		case M68K_IRQ_2:
+		case M68K_IRQ_3:
+		case M68K_IRQ_4:
+		case M68K_IRQ_5:
+		case M68K_IRQ_6:
+		case M68K_IRQ_7:
+		case INPUT_LINE_NMI:
+			set_irq_line(this, inputnum, state);
+			break;
 
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "68010");				break;
-
-		default:										CPU_GET_INFO_CALL(m68k);				break;
+		case M68K_LINE_BUSERROR:
+			if (state == ASSERT_LINE)
+			{
+				m68k_cause_bus_error(this);
+			}
+			break;
 	}
 }
 
 
-/****************************************************************************
- * M68020 section
- ****************************************************************************/
-
-static CPU_INIT( m68020 )
+const address_space_config *m68000_base_device::memory_space_config(address_spacenum spacenum) const
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	CPU_INIT_CALL(m68k);
-
-	m68k->cpu_type         = CPU_TYPE_020;
-	m68k->dasm_type        = M68K_CPU_TYPE_68020;
-// hack alert: we use placement new to ensure we are properly initialized
-// because we live in the device state which is allocated as bytes
-// remove me when we have a real C++ device
-	new(&m68k->memory) m68k_memory_interface;
-	m68k->memory.init32(*m68k->program);
-	m68k->sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
-	m68k->cyc_instruction  = m68ki_cycles[2];
-	m68k->cyc_exception    = m68ki_exception_cycle_table[2];
-	m68k->cyc_bcc_notake_b = -2;
-	m68k->cyc_bcc_notake_w = 0;
-	m68k->cyc_dbcc_f_noexp = 0;
-	m68k->cyc_dbcc_f_exp   = 4;
-	m68k->cyc_scc_r_true   = 0;
-	m68k->cyc_movem_w      = 2;
-	m68k->cyc_movem_l      = 2;
-	m68k->cyc_shift        = 0;
-	m68k->cyc_reset        = 518;
-
-	define_state(device);
-}
-
-CPU_GET_INFO( m68020 )
-{
-	switch (state)
+	if (spacenum == AS_PROGRAM)
 	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_MAX_INSTRUCTION_BYTES:			info->i = 20;							break;
-		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
-		case CPUINFO_INT_MAX_CYCLES:					info->i = 158;							break;
-
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 32;							break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68020);						break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "68020");				break;
-
-		default:										CPU_GET_INFO_CALL(m68k);				break;
+		return &m_program_config;
 	}
+
+	return NULL;
+}
+
+
+
+const device_type M68000 = &device_creator<m68000_device>;
+const device_type M68301 = &device_creator<m68301_device>;
+const device_type M68008 = &device_creator<m68008_device>;
+const device_type M68008PLCC = &device_creator<m68008plcc_device>;
+const device_type M68010 = &device_creator<m68010_device>;
+const device_type M68EC020 = &device_creator<m68ec020_device>;
+const device_type M68020 = &device_creator<m68020_device>;
+const device_type M68020PMMU = &device_creator<m68020pmmu_device>;
+const device_type M68020HMMU = &device_creator<m68020hmmu_device>;
+const device_type M68EC030 = &device_creator<m68ec030_device>;
+const device_type M68030 = &device_creator<m68030_device>;
+const device_type M68EC040 = &device_creator<m68ec040_device>;
+const device_type M68LC040 = &device_creator<m68lc040_device>;
+const device_type M68040 = &device_creator<m68040_device>;
+const device_type SCC68070 = &device_creator<scc68070_device>;
+const device_type FSCPU32 = &device_creator<fscpu32_device>;
+const device_type MCF5206E = &device_creator<mcf5206e_device>;
+
+m68000_device::m68000_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68000", tag, owner, clock, M68000, 16,24, "m68000", __FILE__)
+{
+}
+
+m68000_device::m68000_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source)
+	: m68000_base_device(mconfig, "M68000", tag, owner, clock, M68000, 16,24, shortname, source)
+{
+}
+
+void m68000_device::device_start()
+{
+	init_cpu_m68000();
+}
+
+m68000_device::m68000_device(const machine_config &mconfig, const char *name, const char *tag, device_t *owner, UINT32 clock,
+										const device_type type, UINT32 prg_data_width, UINT32 prg_address_bits, address_map_constructor internal_map, const char *shortname, const char *source)
+	: m68000_base_device(mconfig, name, tag, owner, clock, type, prg_data_width, prg_address_bits, internal_map, shortname, source)
+{
+}
+
+
+
+
+
+m68301_device::m68301_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68301", tag, owner, clock, M68301, 16,24, "m68301", __FILE__)
+{
+}
+
+
+void m68301_device::device_start()
+{
+	init_cpu_m68000();
+}
+
+
+
+
+
+
+/* m68008_device */
+
+m68008_device::m68008_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68008", tag, owner, clock, M68008, 8,20, "m68008", __FILE__)
+{
+}
+
+void m68008_device::device_start()
+{
+	init_cpu_m68008();
+}
+
+
+m68008plcc_device::m68008plcc_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68008PLCC", tag, owner, clock, M68008, 8,22, "m68008plcc", __FILE__)
+{
+}
+
+void m68008plcc_device::device_start()
+{
+	init_cpu_m68008();
+}
+
+
+
+m68010_device::m68010_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68010", tag, owner, clock, M68010, 16,24, "m68010", __FILE__)
+{
+}
+
+void m68010_device::device_start()
+{
+	init_cpu_m68010();
+}
+
+
+
+m68020_device::m68020_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68020", tag, owner, clock, M68020, 32,32, "m68020", __FILE__)
+{
+}
+
+void m68020_device::device_start()
+{
+	init_cpu_m68020();
 }
 
 // 68020 with 68851 PMMU
-static CPU_INIT( m68020pmmu )
+m68020pmmu_device::m68020pmmu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68020PMMU", tag, owner, clock, M68020PMMU, 32,32, "m68020pmmu", __FILE__)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	CPU_INIT_CALL(m68020);
-
-	m68k->has_pmmu	       = 1;
-	m68k->has_fpu	       = 1;
-
-// hack alert: we use placement new to ensure we are properly initialized
-// because we live in the device state which is allocated as bytes
-// remove me when we have a real C++ device
-	new(&m68k->memory) m68k_memory_interface;
-	m68k->memory.init32mmu(*m68k->program);
 }
 
-CPU_GET_INFO( m68020pmmu )
+void m68020pmmu_device::device_start()
 {
-	switch (state)
+	init_cpu_m68020pmmu();
+}
+
+bool m68020hmmu_device::memory_translate(address_spacenum space, int intention, offs_t &address)
+{
+	/* only applies to the program address space and only does something if the MMU's enabled */
+	if (this)
 	{
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68020pmmu);						break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "68020, 68851");				break;
-
-		default:										CPU_GET_INFO_CALL(m68020);				break;
+		if ((space == AS_PROGRAM) && (hmmu_enabled))
+		{
+			address = hmmu_translate_addr(this, address);
+		}
 	}
+	return TRUE;
 }
 
-// 68020 with Apple HMMU
-static CPU_INIT( m68020hmmu )
+
+// 68020 with Apple HMMU & 68881 FPU
+//      case CPUINFO_FCT_TRANSLATE: info->translate = CPU_TRANSLATE_NAME(m68khmmu);     break;
+m68020hmmu_device::m68020hmmu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68020HMMU", tag, owner, clock, M68020HMMU, 32,32, "m68020hmmu", __FILE__)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	CPU_INIT_CALL(m68020);
-
-	m68k->has_hmmu = 1;
-// hack alert: we use placement new to ensure we are properly initialized
-// because we live in the device state which is allocated as bytes
-// remove me when we have a real C++ device
-	new(&m68k->memory) m68k_memory_interface;
-	m68k->memory.init32mmu(*m68k->program);
 }
 
-CPU_GET_INFO( m68020hmmu )
+void m68020hmmu_device::device_start()
 {
-	switch (state)
-	{
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:		info->init = CPU_INIT_NAME(m68020hmmu);			break;
-		case CPUINFO_FCT_TRANSLATE:	info->translate = CPU_TRANSLATE_NAME(m68khmmu);		break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:		strcpy(info->s, "68020, Apple HMMU");			break;
-
-		default:			CPU_GET_INFO_CALL(m68020);				break;
-	}
+	init_cpu_m68020hmmu();
 }
 
-/****************************************************************************
- * M680EC20 section
- ****************************************************************************/
 
-static CPU_INIT( m68ec020 )
+m68ec020_device::m68ec020_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68EC020", tag, owner, clock, M68EC020, 32,24, "m68ec020", __FILE__)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	CPU_INIT_CALL(m68k);
-
-	m68k->cpu_type         = CPU_TYPE_EC020;
-	m68k->dasm_type        = M68K_CPU_TYPE_68EC020;
-// hack alert: we use placement new to ensure we are properly initialized
-// because we live in the device state which is allocated as bytes
-// remove me when we have a real C++ device
-	new(&m68k->memory) m68k_memory_interface;
-	m68k->memory.init32(*m68k->program);
-	m68k->sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
-	m68k->cyc_instruction  = m68ki_cycles[2];
-	m68k->cyc_exception    = m68ki_exception_cycle_table[2];
-	m68k->cyc_bcc_notake_b = -2;
-	m68k->cyc_bcc_notake_w = 0;
-	m68k->cyc_dbcc_f_noexp = 0;
-	m68k->cyc_dbcc_f_exp   = 4;
-	m68k->cyc_scc_r_true   = 0;
-	m68k->cyc_movem_w      = 2;
-	m68k->cyc_movem_l      = 2;
-	m68k->cyc_shift        = 0;
-	m68k->cyc_reset        = 518;
-	m68k->has_pmmu	       = 0;
-	m68k->has_fpu	       = 0;
-
-	define_state(device);
 }
 
-CPU_GET_INFO( m68ec020 )
+void m68ec020_device::device_start()
 {
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 24;							break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68ec020);					break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "68EC020");				break;
-
-		default:										CPU_GET_INFO_CALL(m68020);				break;
-	}
+	init_cpu_m68ec020();
 }
 
-/****************************************************************************
- * M68030 section
- ****************************************************************************/
-
-static CPU_INIT( m68030 )
+m68030_device::m68030_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68030", tag, owner, clock, M68030, 32,32, "m68030", __FILE__)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	CPU_INIT_CALL(m68k);
-
-	m68k->cpu_type         = CPU_TYPE_030;
-	m68k->dasm_type        = M68K_CPU_TYPE_68030;
-// hack alert: we use placement new to ensure we are properly initialized
-// because we live in the device state which is allocated as bytes
-// remove me when we have a real C++ device
-	new(&m68k->memory) m68k_memory_interface;
-	m68k->memory.init32mmu(*m68k->program);
-	m68k->sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
-	m68k->cyc_instruction  = m68ki_cycles[3];
-	m68k->cyc_exception    = m68ki_exception_cycle_table[3];
-	m68k->cyc_bcc_notake_b = -2;
-	m68k->cyc_bcc_notake_w = 0;
-	m68k->cyc_dbcc_f_noexp = 0;
-	m68k->cyc_dbcc_f_exp   = 4;
-	m68k->cyc_scc_r_true   = 0;
-	m68k->cyc_movem_w      = 2;
-	m68k->cyc_movem_l      = 2;
-	m68k->cyc_shift        = 0;
-	m68k->cyc_reset        = 518;
-	m68k->has_pmmu	       = 1;
-	m68k->has_fpu	       = 1;
-
-	define_state(device);
 }
 
-CPU_GET_INFO( m68030 )
+void m68030_device::device_start()
 {
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_MAX_INSTRUCTION_BYTES:			info->i = 20;							break;
-		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
-		case CPUINFO_INT_MAX_CYCLES:					info->i = 158;							break;
-
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 32;							break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68030);						break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "68030");				break;
-
-		default:										CPU_GET_INFO_CALL(m68k);				break;
-	}
+	init_cpu_m68030();
 }
 
-
-/****************************************************************************
- * M680EC30 section
- ****************************************************************************/
-
-static CPU_INIT( m68ec030 )
+m68ec030_device::m68ec030_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68EC030", tag, owner, clock, M68EC030, 32,32, "m68ec030", __FILE__)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	CPU_INIT_CALL(m68k);
-
-	m68k->cpu_type         = CPU_TYPE_EC030;
-	m68k->dasm_type        = M68K_CPU_TYPE_68EC030;
-// hack alert: we use placement new to ensure we are properly initialized
-// because we live in the device state which is allocated as bytes
-// remove me when we have a real C++ device
-	new(&m68k->memory) m68k_memory_interface;
-	m68k->memory.init32(*m68k->program);
-	m68k->sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
-	m68k->cyc_instruction  = m68ki_cycles[3];
-	m68k->cyc_exception    = m68ki_exception_cycle_table[3];
-	m68k->cyc_bcc_notake_b = -2;
-	m68k->cyc_bcc_notake_w = 0;
-	m68k->cyc_dbcc_f_noexp = 0;
-	m68k->cyc_dbcc_f_exp   = 4;
-	m68k->cyc_scc_r_true   = 0;
-	m68k->cyc_movem_w      = 2;
-	m68k->cyc_movem_l      = 2;
-	m68k->cyc_shift        = 0;
-	m68k->cyc_reset        = 518;
-	m68k->has_pmmu	       = 0;		/* EC030 lacks the PMMU and is effectively a die-shrink 68020 */
-	m68k->has_fpu	       = 1;
-
-	define_state(device);
 }
 
-CPU_GET_INFO( m68ec030 )
+void m68ec030_device::device_start()
 {
-	switch (state)
-	{
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68ec030);					break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "68EC030");				break;
-
-		default:										CPU_GET_INFO_CALL(m68030);				break;
-	}
+	init_cpu_m68ec030();
 }
 
-/****************************************************************************
- * M68040 section
- ****************************************************************************/
-
-static CPU_INIT( m68040 )
+m68040_device::m68040_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68040", tag, owner, clock, M68040, 32,32, "m68040", __FILE__)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	CPU_INIT_CALL(m68k);
-
-	m68k->cpu_type         = CPU_TYPE_040;
-	m68k->dasm_type        = M68K_CPU_TYPE_68040;
-// hack alert: we use placement new to ensure we are properly initialized
-// because we live in the device state which is allocated as bytes
-// remove me when we have a real C++ device
-	new(&m68k->memory) m68k_memory_interface;
-	m68k->memory.init32mmu(*m68k->program);
-	m68k->sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
-	m68k->cyc_instruction  = m68ki_cycles[4];
-	m68k->cyc_exception    = m68ki_exception_cycle_table[4];
-	m68k->cyc_bcc_notake_b = -2;
-	m68k->cyc_bcc_notake_w = 0;
-	m68k->cyc_dbcc_f_noexp = 0;
-	m68k->cyc_dbcc_f_exp   = 4;
-	m68k->cyc_scc_r_true   = 0;
-	m68k->cyc_movem_w      = 2;
-	m68k->cyc_movem_l      = 2;
-	m68k->cyc_shift        = 0;
-	m68k->cyc_reset        = 518;
-	m68k->has_pmmu	       = 1;
-	m68k->has_fpu	       = 1;
-
-	define_state(device);
 }
 
-CPU_GET_INFO( m68040 )
+
+void m68040_device::device_start()
 {
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_MAX_INSTRUCTION_BYTES:			info->i = 20;							break;
-		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
-		case CPUINFO_INT_MAX_CYCLES:					info->i = 158;							break;
-
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 32;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 32;							break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68040);						break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "68040");				break;
-
-		default:										CPU_GET_INFO_CALL(m68k);				break;
-	}
+	init_cpu_m68040();
 }
 
-/****************************************************************************
- * M68EC040 section
- ****************************************************************************/
 
-static CPU_INIT( m68ec040 )
+
+m68ec040_device::m68ec040_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68EC040", tag, owner, clock, M68EC040, 32,32, "m68ec040", __FILE__)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	CPU_INIT_CALL(m68k);
-
-	m68k->cpu_type         = CPU_TYPE_EC040;
-	m68k->dasm_type        = M68K_CPU_TYPE_68EC040;
-// hack alert: we use placement new to ensure we are properly initialized
-// because we live in the device state which is allocated as bytes
-// remove me when we have a real C++ device
-	new(&m68k->memory) m68k_memory_interface;
-	m68k->memory.init32(*m68k->program);
-	m68k->sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
-	m68k->cyc_instruction  = m68ki_cycles[4];
-	m68k->cyc_exception    = m68ki_exception_cycle_table[4];
-	m68k->cyc_bcc_notake_b = -2;
-	m68k->cyc_bcc_notake_w = 0;
-	m68k->cyc_dbcc_f_noexp = 0;
-	m68k->cyc_dbcc_f_exp   = 4;
-	m68k->cyc_scc_r_true   = 0;
-	m68k->cyc_movem_w      = 2;
-	m68k->cyc_movem_l      = 2;
-	m68k->cyc_shift        = 0;
-	m68k->cyc_reset        = 518;
-	m68k->has_pmmu	       = 0;
-	m68k->has_fpu	       = 0;
-
-	define_state(device);
 }
 
-CPU_GET_INFO( m68ec040 )
+void m68ec040_device::device_start()
 {
-	switch (state)
-	{
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68ec040);					break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "68EC040");				break;
-
-		default:										CPU_GET_INFO_CALL(m68040);				break;
-	}
+	init_cpu_m68ec040();
 }
 
-/****************************************************************************
- * M68LC040 section
- ****************************************************************************/
 
-static CPU_INIT( m68lc040 )
+
+m68lc040_device::m68lc040_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "M68LC040", tag, owner, clock, M68LC040, 32,32, "m68lc040", __FILE__)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	CPU_INIT_CALL(m68k);
-
-	m68k->cpu_type         = CPU_TYPE_LC040;
-	m68k->dasm_type        = M68K_CPU_TYPE_68LC040;
-// hack alert: we use placement new to ensure we are properly initialized
-// because we live in the device state which is allocated as bytes
-// remove me when we have a real C++ device
-	new(&m68k->memory) m68k_memory_interface;
-	m68k->memory.init32(*m68k->program);
-	m68k->sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
-	m68k->cyc_instruction  = m68ki_cycles[4];
-	m68k->cyc_exception    = m68ki_exception_cycle_table[4];
-	m68k->cyc_bcc_notake_b = -2;
-	m68k->cyc_bcc_notake_w = 0;
-	m68k->cyc_dbcc_f_noexp = 0;
-	m68k->cyc_dbcc_f_exp   = 4;
-	m68k->cyc_scc_r_true   = 0;
-	m68k->cyc_movem_w      = 2;
-	m68k->cyc_movem_l      = 2;
-	m68k->cyc_shift        = 0;
-	m68k->cyc_reset        = 518;
-	m68k->has_pmmu	       = 1;
-	m68k->has_fpu	       = 0;
-
-	define_state(device);
 }
 
-CPU_GET_INFO( m68lc040 )
+void m68lc040_device::device_start()
 {
-	switch (state)
-	{
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68lc040);					break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "68LC040");				break;
-
-		default:										CPU_GET_INFO_CALL(m68040);				break;
-	}
+	init_cpu_m68lc040();
 }
 
-/****************************************************************************
- * SCC-68070 section
- ****************************************************************************/
 
-static CPU_INIT( scc68070 )
+scc68070_device::scc68070_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "SCC68070", tag, owner, clock, SCC68070, 16,32, "scc68070", __FILE__)
 {
-	m68ki_cpu_core *m68k = get_safe_token(device);
-
-	CPU_INIT_CALL(m68010);
-
-	m68k->cpu_type         = CPU_TYPE_SCC070;
 }
 
-CPU_GET_INFO( scc68070 )
+void scc68070_device::device_start()
 {
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 32;							break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(scc68070);	break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "SCC68070");			break;
-
-		default:										CPU_GET_INFO_CALL(m68k);				break;
-	}
+	init_cpu_scc68070();
 }
 
-DEFINE_LEGACY_CPU_DEVICE(M68000, m68000);
-DEFINE_LEGACY_CPU_DEVICE(M68008, m68008);
-DEFINE_LEGACY_CPU_DEVICE(M68010, m68010);
-DEFINE_LEGACY_CPU_DEVICE(M68EC020, m68ec020);
-DEFINE_LEGACY_CPU_DEVICE(M68020, m68020);
-DEFINE_LEGACY_CPU_DEVICE(M68020PMMU, m68020pmmu);
-DEFINE_LEGACY_CPU_DEVICE(M68020HMMU, m68020hmmu);
-DEFINE_LEGACY_CPU_DEVICE(M68EC030, m68ec030);
-DEFINE_LEGACY_CPU_DEVICE(M68030, m68030);
-DEFINE_LEGACY_CPU_DEVICE(M68EC040, m68ec040);
-DEFINE_LEGACY_CPU_DEVICE(M68LC040, m68lc040);
-DEFINE_LEGACY_CPU_DEVICE(M68040, m68040);
-DEFINE_LEGACY_CPU_DEVICE(SCC68070, scc68070);
 
+fscpu32_device::fscpu32_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "Freescale CPU32 Core", tag, owner, clock, FSCPU32, 32,32, "fscpu32", __FILE__)
+{
+}
+
+fscpu32_device::fscpu32_device(const machine_config &mconfig, const char *name, const char *tag, device_t *owner, UINT32 clock,
+										const device_type type, UINT32 prg_data_width, UINT32 prg_address_bits, address_map_constructor internal_map, const char *shortname, const char *source)
+	: m68000_base_device(mconfig, name, tag, owner, clock, type, prg_data_width, prg_address_bits, internal_map, shortname, source)
+{
+}
+
+
+void fscpu32_device::device_start()
+{
+	init_cpu_fscpu32();
+}
+
+
+
+mcf5206e_device::mcf5206e_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: m68000_base_device(mconfig, "MCF5206E", tag, owner, clock, MCF5206E, 32,32, "mcf5206e", __FILE__)
+{
+}
+
+void mcf5206e_device::device_start()
+{
+	init_cpu_coldfire();
+}

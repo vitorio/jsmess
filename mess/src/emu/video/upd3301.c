@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     NEC uPD3301 Programmable CRT Controller emulation
@@ -22,7 +24,6 @@
 
 #include "emu.h"
 #include "upd3301.h"
-#include "machine/devhelpr.h"
 
 
 // device type definition
@@ -36,21 +37,21 @@ const device_type UPD3301 = &device_creator<upd3301_device>;
 #define LOG 0
 
 
-#define COMMAND_MASK					0xe0
-#define COMMAND_RESET					0x00
-#define COMMAND_START_DISPLAY			0x20
-#define COMMAND_SET_INTERRUPT_MASK		0x40
-#define COMMAND_READ_LIGHT_PEN			0x60	// not supported
-#define COMMAND_LOAD_CURSOR_POSITION	0x80
-#define COMMAND_RESET_INTERRUPT			0xa0
-#define COMMAND_RESET_COUNTERS			0xc0	// not supported
+#define COMMAND_MASK                    0xe0
+#define COMMAND_RESET                   0x00
+#define COMMAND_START_DISPLAY           0x20
+#define COMMAND_SET_INTERRUPT_MASK      0x40
+#define COMMAND_READ_LIGHT_PEN          0x60    // not supported
+#define COMMAND_LOAD_CURSOR_POSITION    0x80
+#define COMMAND_RESET_INTERRUPT         0xa0
+#define COMMAND_RESET_COUNTERS          0xc0    // not supported
 
 
-#define STATUS_VE						0x10
-#define STATUS_U						0x08	// not supported
-#define STATUS_N						0x04	// not supported
-#define STATUS_E						0x02
-#define STATUS_LP						0x01	// not supported
+#define STATUS_VE                       0x10
+#define STATUS_U                        0x08    // not supported
+#define STATUS_N                        0x04    // not supported
+#define STATUS_E                        0x02
+#define STATUS_LP                       0x01    // not supported
 
 
 enum
@@ -169,10 +170,7 @@ inline void upd3301_device::recompute_parameters()
 
 	rectangle visarea;
 
-	visarea.min_x = 0;
-	visarea.min_y = 0;
-	visarea.max_x = (m_h * m_width) - 1;
-	visarea.max_y = (m_l * m_r) - 1;
+	visarea.set(0, (m_h * m_width) - 1, 0, (m_l * m_r) - 1);
 
 	if (LOG)
 	{
@@ -197,17 +195,26 @@ inline void upd3301_device::recompute_parameters()
 //-------------------------------------------------
 
 upd3301_device::upd3301_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, UPD3301, "UPD3301", tag, owner, clock),
-	  m_status(0),
-	  m_param_count(0),
-	  m_data_fifo_pos(0),
-	  m_attr_fifo_pos(0),
-	  m_input_fifo(0),
-	  m_h(80),
-	  m_l(20),
-	  m_r(10),
-	  m_v(6),
-	  m_z(32)
+	: device_t(mconfig, UPD3301, "UPD3301", tag, owner, clock, "upd3301", __FILE__),
+		device_video_interface(mconfig, *this),
+		m_status(0),
+		m_param_count(0),
+		m_data_fifo_pos(0),
+		m_attr_fifo_pos(0),
+		m_input_fifo(0),
+		m_me(0),
+		m_h(80),
+		m_l(20),
+		m_r(10),
+		m_v(6),
+		m_z(32),
+		m_attr_blink(0),
+		m_attr_frame(0),
+		m_cm(0),
+		m_cx(0),
+		m_cy(0),
+		m_cursor_blink(0),
+		m_cursor_frame(0)
 {
 }
 
@@ -252,10 +259,6 @@ void upd3301_device::device_start()
 	m_out_drq_func.resolve(m_out_drq_cb, *this);
 	m_out_hrtc_func.resolve(m_out_hrtc_cb, *this);
 	m_out_vrtc_func.resolve(m_out_vrtc_cb, *this);
-
-	// get the screen device
-	m_screen = machine().device<screen_device>(m_screen_tag);
-	assert(m_screen != NULL);
 
 	// state saving
 	save_item(NAME(m_y));
@@ -606,7 +609,7 @@ void upd3301_device::draw_scanline()
 			int csr = m_cm && m_cursor_blink && ((y / m_r) == m_cy) && (sx == m_cx);
 			int gpa = 0; // TODO
 
-			m_display_cb(this, m_bitmap, y, sx, cc, lc, hlgt, rvv, vsp, sl0, sl12, csr, gpa);
+			m_display_cb(this, *m_bitmap, y, sx, cc, lc, hlgt, rvv, vsp, sl0, sl12, csr, gpa);
 		}
 	}
 
@@ -618,12 +621,12 @@ void upd3301_device::draw_scanline()
 //  update_screen -
 //-------------------------------------------------
 
-void upd3301_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
+UINT32 upd3301_device::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
 	if (m_status & STATUS_VE)
 	{
 		m_y = 0;
-		m_bitmap = bitmap;
+		m_bitmap = &bitmap;
 		m_data_fifo_pos = 0;
 		m_attr_fifo_pos = 0;
 
@@ -648,6 +651,7 @@ void upd3301_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 	}
 	else
 	{
-		bitmap_fill(bitmap, cliprect, get_black_pen(machine()));
+		bitmap.fill(get_black_pen(machine()), cliprect);
 	}
+	return 0;
 }

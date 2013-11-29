@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     distate.c
 
     Device state interfaces.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -80,17 +51,15 @@ const UINT64 device_state_entry::k_decimal_divisor[] =
 
 device_state_entry::device_state_entry(int index, const char *symbol, void *dataptr, UINT8 size)
 	: m_next(NULL),
-	  m_index(index),
-	  m_datamask(0),
-	  m_datasize(size),
-	  m_flags(0),
-	  m_symbol(symbol),
-	  m_default_format(true),
-	  m_sizemask(0)
+		m_index(index),
+		m_dataptr(dataptr),
+		m_datamask(0),
+		m_datasize(size),
+		m_flags(0),
+		m_symbol(symbol),
+		m_default_format(true),
+		m_sizemask(0)
 {
-	// set the data pointer
-	m_dataptr.v = dataptr;
-
 	// convert the size to a mask
 	assert(size == 1 || size == 2 || size == 4 || size == 8);
 	if (size == 1)
@@ -115,6 +84,19 @@ device_state_entry::device_state_entry(int index, const char *symbol, void *data
 		m_symbol.cpy("CURSP");
 	else if (index == STATE_GENFLAGS)
 		m_symbol.cpy("CURFLAGS");
+}
+
+device_state_entry::device_state_entry(int index)
+	: m_next(NULL),
+		m_index(index),
+		m_dataptr(NULL),
+		m_datamask(0),
+		m_datasize(0),
+		m_flags(DSF_DIVIDER),
+		m_symbol(),
+		m_default_format(true),
+		m_sizemask(0)
+{
 }
 
 
@@ -166,10 +148,10 @@ UINT64 device_state_entry::value() const
 	switch (m_datasize)
 	{
 		default:
-		case 1:	result = *m_dataptr.u8;		break;
-		case 2:	result = *m_dataptr.u16;	break;
-		case 4:	result = *m_dataptr.u32;	break;
-		case 8:	result = *m_dataptr.u64;	break;
+		case 1: result = *m_dataptr.u8;     break;
+		case 2: result = *m_dataptr.u16;    break;
+		case 4: result = *m_dataptr.u32;    break;
+		case 8: result = *m_dataptr.u64;    break;
 	}
 	return result & m_datamask;
 }
@@ -231,8 +213,8 @@ astring &device_state_entry::format(astring &dest, const char *string, bool maxo
 				break;
 
 			// 1-9 accumulate into the width
-			case '1':	case '2':	case '3':	case '4':	case '5':
-			case '6':	case '7':	case '8':	case '9':
+			case '1':   case '2':   case '3':   case '4':   case '5':
+			case '6':   case '7':   case '8':   case '9':
 				width = width * 10 + (*fptr - '0');
 				break;
 
@@ -332,7 +314,6 @@ astring &device_state_entry::format(astring &dest, const char *string, bool maxo
 			// other formats unknown
 			default:
 				throw emu_fatalerror("Unknown format character '%c'\n", *fptr);
-				break;
 		}
 	}
 	return dest;
@@ -356,10 +337,10 @@ void device_state_entry::set_value(UINT64 value) const
 	switch (m_datasize)
 	{
 		default:
-		case 1:	*m_dataptr.u8 = value;		break;
-		case 2:	*m_dataptr.u16 = value;		break;
-		case 4:	*m_dataptr.u32 = value;		break;
-		case 8:	*m_dataptr.u64 = value;		break;
+		case 1: *m_dataptr.u8 = value;      break;
+		case 2: *m_dataptr.u16 = value;     break;
+		case 4: *m_dataptr.u32 = value;     break;
+		case 8: *m_dataptr.u64 = value;     break;
 	}
 }
 
@@ -403,11 +384,11 @@ device_state_interface::~device_state_interface()
 
 
 //-------------------------------------------------
-//  state - return the value of the given piece
+//  state_int - return the value of the given piece
 //  of indexed state as a UINT64
 //-------------------------------------------------
 
-UINT64 device_state_interface::state(int index)
+UINT64 device_state_interface::state_int(int index)
 {
 	// NULL or out-of-range entry returns 0
 	const device_state_entry *entry = state_find_entry(index);
@@ -464,11 +445,11 @@ int device_state_interface::state_string_max_length(int index)
 
 
 //-------------------------------------------------
-//  set_state - set the value of the given piece
-//  of indexed state from a UINT64
+//  set_state_int - set the value of the given
+//  piece of indexed state from a UINT64
 //-------------------------------------------------
 
-void device_state_interface::set_state(int index, UINT64 value)
+void device_state_interface::set_state_int(int index, UINT64 value)
 {
 	// NULL or out-of-range entry is a no-op
 	const device_state_entry *entry = state_find_entry(index);
@@ -489,7 +470,7 @@ void device_state_interface::set_state(int index, UINT64 value)
 //  of indexed state from a string
 //-------------------------------------------------
 
-void device_state_interface::set_state(int index, const char *string)
+void device_state_interface::set_state_string(int index, const char *string)
 {
 	// NULL or out-of-range entry is a no-op
 	const device_state_entry *entry = state_find_entry(index);
@@ -517,18 +498,33 @@ device_state_entry &device_state_interface::state_add(int index, const char *sym
 	assert(symbol != NULL);
 
 	// allocate new entry
-	device_state_entry *entry = auto_alloc(device().machine(), device_state_entry(index, symbol, data, size));
+	device_state_entry *entry = global_alloc(device_state_entry(index, symbol, data, size));
 
 	// append to the end of the list
 	m_state_list.append(*entry);
 
 	// set the fast entry if applicable
-	if (index >= k_fast_state_min && index <= k_fast_state_max)
-		m_fast_state[index - k_fast_state_min] = entry;
+	if (index >= FAST_STATE_MIN && index <= FAST_STATE_MAX)
+		m_fast_state[index - FAST_STATE_MIN] = entry;
 
 	return *entry;
 }
 
+//-------------------------------------------------
+//  state_add_divider - add a simple divider
+//  entry
+//-------------------------------------------------
+
+device_state_entry &device_state_interface::state_add_divider(int index)
+{
+	// allocate new entry
+	device_state_entry *entry = global_alloc(device_state_entry(index));
+
+	// append to the end of the list
+	m_state_list.append(*entry);
+
+	return *entry;
+}
 
 //-------------------------------------------------
 //  state_import - called after new state is
@@ -595,8 +591,8 @@ void device_state_interface::interface_post_start()
 const device_state_entry *device_state_interface::state_find_entry(int index)
 {
 	// use fast lookup if possible
-	if (index >= k_fast_state_min && index <= k_fast_state_max)
-		return m_fast_state[index - k_fast_state_min];
+	if (index >= FAST_STATE_MIN && index <= FAST_STATE_MAX)
+		return m_fast_state[index - FAST_STATE_MIN];
 
 	// otherwise, scan the first
 	for (const device_state_entry *entry = m_state_list.first(); entry != NULL; entry = entry->m_next)

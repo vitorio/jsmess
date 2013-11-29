@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Miodrag Milanovic
 #ifndef __SCMP_H__
 #define __SCMP_H__
 
@@ -17,15 +19,14 @@ enum
 /***************************************************************************
     TYPE DEFINITIONS
 ***************************************************************************/
-typedef struct _scmp_config scmp_config;
-struct _scmp_config
+struct scmp_config
 {
-	devcb_write8		flag_out_func;
-	devcb_write_line	sout_func;
-	devcb_read_line		sin_func;
-	devcb_read_line		sensea_func;
-	devcb_read_line		senseb_func;
-	devcb_write_line	halt_func;
+	devcb_write8        flag_out_func;
+	devcb_write_line    sout_func;
+	devcb_read_line     sin_func;
+	devcb_read_line     sensea_func;
+	devcb_read_line     senseb_func;
+	devcb_write_line    halt_func;
 };
 #define SCMP_CONFIG(name) const scmp_config (name) =
 

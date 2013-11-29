@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /***************************************************************************
 
     Zilog Z80 Parallel Input/Output Controller implementation
@@ -33,14 +35,14 @@ enum
 	MASK
 };
 
-const int ICW_ENABLE_INT	= 0x80;
-const int ICW_AND_OR		= 0x40;
-const int ICW_AND			= 0x40;
-const int ICW_OR			= 0x00;
-const int ICW_HIGH_LOW		= 0x20;
-const int ICW_HIGH			= 0x20;
-const int ICW_LOW			= 0x00;
-const int ICW_MASK_FOLLOWS	= 0x10;
+const int ICW_ENABLE_INT    = 0x80;
+const int ICW_AND_OR        = 0x40;
+const int ICW_AND           = 0x40;
+const int ICW_OR            = 0x00;
+const int ICW_HIGH_LOW      = 0x20;
+const int ICW_HIGH          = 0x20;
+const int ICW_LOW           = 0x00;
+const int ICW_MASK_FOLLOWS  = 0x10;
 
 
 
@@ -56,8 +58,8 @@ const device_type Z80PIO = &device_creator<z80pio_device>;
 //-------------------------------------------------
 
 z80pio_device::z80pio_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, Z80PIO, "Z8420", tag, owner, clock),
-	  device_z80daisy_interface(mconfig, *this)
+	: device_t(mconfig, Z80PIO, "Z8420", tag, owner, clock, "z80pio", __FILE__),
+		device_z80daisy_interface(mconfig, *this)
 {
 }
 
@@ -211,6 +213,52 @@ void z80pio_device::z80daisy_irq_reti()
 
 
 //**************************************************************************
+//  READ/WRITE HANDLERS
+//**************************************************************************
+
+//-------------------------------------------------
+//  read - register read
+//-------------------------------------------------
+
+READ8_MEMBER( z80pio_device::read )
+{
+	int index = BIT(offset, 0);
+	return BIT(offset, 1) ? control_read() : data_read(index);
+}
+
+//-------------------------------------------------
+//  write - register write
+//-------------------------------------------------
+
+WRITE8_MEMBER( z80pio_device::write )
+{
+	int index = BIT(offset, 0);
+	BIT(offset, 1) ? control_write(index, data) : data_write(index, data);
+}
+
+//-------------------------------------------------
+//  read_alt - register read
+//-------------------------------------------------
+
+READ8_MEMBER( z80pio_device::read_alt )
+{
+	int index = BIT(offset, 1);
+	return BIT(offset, 0) ? control_read() : data_read(index);
+}
+
+//-------------------------------------------------
+//  write_alt - register write
+//-------------------------------------------------
+
+WRITE8_MEMBER( z80pio_device::write_alt )
+{
+	int index = BIT(offset, 1);
+	BIT(offset, 0) ? control_write(index, data) : data_write(index, data);
+}
+
+
+
+//**************************************************************************
 //  DEVICE-LEVEL IMPLEMENTATION
 //**************************************************************************
 
@@ -252,21 +300,21 @@ void z80pio_device::check_interrupts()
 
 z80pio_device::pio_port::pio_port()
 	: m_device(NULL),
-	  m_index(0),
-	  m_mode(0),
-	  m_next_control_word(0),
-	  m_input(0),
-	  m_output(0),
-	  m_ior(0),
-	  m_rdy(false),
-	  m_stb(false),
-	  m_ie(false),
-	  m_ip(false),
-	  m_ius(false),
-	  m_icw(0),
-	  m_vector(0),
-	  m_mask(0),
-	  m_match(false)
+		m_index(0),
+		m_mode(0),
+		m_next_control_word(0),
+		m_input(0),
+		m_output(0),
+		m_ior(0),
+		m_rdy(false),
+		m_stb(false),
+		m_ie(false),
+		m_ip(false),
+		m_ius(false),
+		m_icw(0),
+		m_vector(0),
+		m_mask(0),
+		m_match(false)
 {
 	memset(&m_in_p_func, 0, sizeof(m_in_p_func));
 	memset(&m_out_p_func, 0, sizeof(m_out_p_func));
@@ -773,72 +821,4 @@ void z80pio_device::pio_port::data_write(UINT8 data)
 		m_out_p_func(0, m_ior | (m_output & (m_ior ^ 0xff)));
 		break;
 	}
-}
-
-
-
-//**************************************************************************
-//  GLOBAL STUBS
-//**************************************************************************
-
-READ8_DEVICE_HANDLER( z80pio_c_r ) { return downcast<z80pio_device *>(device)->control_read(); }
-WRITE8_DEVICE_HANDLER( z80pio_c_w ) { downcast<z80pio_device *>(device)->control_write(offset & 1, data); }
-
-READ8_DEVICE_HANDLER( z80pio_d_r ) { return downcast<z80pio_device *>(device)->data_read(offset & 1); }
-WRITE8_DEVICE_HANDLER( z80pio_d_w ) { downcast<z80pio_device *>(device)->data_write(offset & 1, data); }
-
-READ_LINE_DEVICE_HANDLER( z80pio_ardy_r ) { return downcast<z80pio_device *>(device)->rdy(z80pio_device::PORT_A); }
-READ_LINE_DEVICE_HANDLER( z80pio_brdy_r ) { return downcast<z80pio_device *>(device)->rdy(z80pio_device::PORT_B); }
-
-WRITE_LINE_DEVICE_HANDLER( z80pio_astb_w ) { downcast<z80pio_device *>(device)->strobe(z80pio_device::PORT_A, state ? true : false); }
-WRITE_LINE_DEVICE_HANDLER( z80pio_bstb_w ) { downcast<z80pio_device *>(device)->strobe(z80pio_device::PORT_B, state ? true : false); }
-
-READ8_DEVICE_HANDLER( z80pio_pa_r ) { return downcast<z80pio_device *>(device)->port_read(z80pio_device::PORT_A); }
-READ8_DEVICE_HANDLER( z80pio_pb_r ) { return downcast<z80pio_device *>(device)->port_read(z80pio_device::PORT_B); }
-
-WRITE8_DEVICE_HANDLER( z80pio_pa_w ) { downcast<z80pio_device *>(device)->port_write(z80pio_device::PORT_A, data); }
-WRITE8_DEVICE_HANDLER( z80pio_pb_w ) { downcast<z80pio_device *>(device)->port_write(z80pio_device::PORT_B, data); }
-
-//-------------------------------------------------
-//  z80pio_cd_ba_r - register read
-//-------------------------------------------------
-
-READ8_DEVICE_HANDLER( z80pio_cd_ba_r )
-{
-	int index = BIT(offset, 0);
-
-	return BIT(offset, 1) ? z80pio_c_r(device, index) : z80pio_d_r(device, index);
-}
-
-//-------------------------------------------------
-//  z80pio_cd_ba_w - register write
-//-------------------------------------------------
-
-WRITE8_DEVICE_HANDLER( z80pio_cd_ba_w )
-{
-	int index = BIT(offset, 0);
-
-	BIT(offset, 1) ? z80pio_c_w(device, index, data) : z80pio_d_w(device, index, data);
-}
-
-//-------------------------------------------------
-//  z80pio_ba_cd_r - register read
-//-------------------------------------------------
-
-READ8_DEVICE_HANDLER( z80pio_ba_cd_r )
-{
-	int index = BIT(offset, 1);
-
-	return BIT(offset, 0) ? z80pio_c_r(device, index) : z80pio_d_r(device, index);
-}
-
-//-------------------------------------------------
-//  z80pio_ba_cd_w - register write
-//-------------------------------------------------
-
-WRITE8_DEVICE_HANDLER( z80pio_ba_cd_w )
-{
-	int index = BIT(offset, 1);
-
-	BIT(offset, 0) ? z80pio_c_w(device, index, data) : z80pio_d_w(device, index, data);
 }

@@ -32,7 +32,7 @@
 #define LOG 0
 
 
-#define MICROWIRE_DEVICE_ADDRESS	2
+#define MICROWIRE_DEVICE_ADDRESS    2
 
 
 enum
@@ -140,8 +140,8 @@ inline void lmc1992_device::execute_command(int addr, int data)
 //-------------------------------------------------
 
 lmc1992_device::lmc1992_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, LMC1992, "LMC1992", tag, owner, clock),
-	  device_sound_interface(mconfig, *this)
+	: device_t(mconfig, LMC1992, "LMC1992", tag, owner, clock, "lmc1992", __FILE__),
+		device_sound_interface(mconfig, *this)
 {
 }
 

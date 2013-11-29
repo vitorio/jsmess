@@ -25,38 +25,36 @@ TODO:
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
-#include "audio/t5182.h"
 #include "includes/darkmist.h"
 
 
-static WRITE8_HANDLER(darkmist_hw_w)
+WRITE8_MEMBER(darkmist_state::darkmist_hw_w)
 {
-	darkmist_state *state = space->machine().driver_data<darkmist_state>();
-	state->m_hw=data;
-	memory_set_bankptr(space->machine(), "bank1",&space->machine().region("maincpu")->base()[0x010000+((data&0x80)?0x4000:0)]);
+	m_hw=data;
+	membank("bank1")->set_base(&memregion("maincpu")->base()[0x010000+((data&0x80)?0x4000:0)]);
 }
 
-static ADDRESS_MAP_START( memmap, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( memmap, AS_PROGRAM, 8, darkmist_state )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc801, 0xc801) AM_READ_PORT("P1")
 	AM_RANGE(0xc802, 0xc802) AM_READ_PORT("P2")
 	AM_RANGE(0xc803, 0xc803) AM_READ_PORT("START")
 	AM_RANGE(0xc804, 0xc804) AM_WRITE(darkmist_hw_w)
-	AM_RANGE(0xc805, 0xc805) AM_WRITEONLY AM_BASE_MEMBER(darkmist_state, m_spritebank)
+	AM_RANGE(0xc805, 0xc805) AM_WRITEONLY AM_SHARE("spritebank")
 	AM_RANGE(0xc806, 0xc806) AM_READ_PORT("DSW1")
 	AM_RANGE(0xc807, 0xc807) AM_READ_PORT("DSW2")
 	AM_RANGE(0xc808, 0xc808) AM_READ_PORT("UNK")
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xd400, 0xd41f) AM_RAM AM_BASE_MEMBER(darkmist_state, m_scroll)
-	AM_RANGE(0xd600, 0xd67f) AM_READWRITE(t5182_sharedram_r, t5182_sharedram_w)
-	AM_RANGE(0xd680, 0xd680) AM_WRITE(t5182_sound_irq_w)
-	AM_RANGE(0xd681, 0xd681) AM_READ(t5182_sharedram_semaphore_snd_r)
-	AM_RANGE(0xd682, 0xd682) AM_WRITE(t5182_sharedram_semaphore_main_acquire_w)
-	AM_RANGE(0xd683, 0xd683) AM_WRITE(t5182_sharedram_semaphore_main_release_w)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_BASE_MEMBER(darkmist_state, m_videoram)
-	AM_RANGE(0xe000, 0xefff) AM_RAM AM_BASE_MEMBER(darkmist_state, m_workram)
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_SIZE_MEMBER(darkmist_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_SHARE("paletteram")
+	AM_RANGE(0xd400, 0xd41f) AM_RAM AM_SHARE("scroll")
+	AM_RANGE(0xd600, 0xd67f) AM_DEVREADWRITE("t5182", t5182_device, sharedram_r, sharedram_w)
+	AM_RANGE(0xd680, 0xd680) AM_DEVWRITE("t5182", t5182_device, sound_irq_w)
+	AM_RANGE(0xd681, 0xd681) AM_DEVREAD("t5182", t5182_device, sharedram_semaphore_snd_r)
+	AM_RANGE(0xd682, 0xd682) AM_DEVWRITE("t5182", t5182_device, sharedram_semaphore_main_acquire_w)
+	AM_RANGE(0xd683, 0xd683) AM_DEVWRITE("t5182", t5182_device, sharedram_semaphore_main_release_w)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_SHARE("videoram")
+	AM_RANGE(0xe000, 0xefff) AM_RAM AM_SHARE("workram")
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_SHARE("spriteram")
 ADDRESS_MAP_END
 
 
@@ -117,7 +115,7 @@ static INPUT_PORTS_START( darkmist )
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_3C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 1C_2C ) )
 	PORT_SERVICE_DIPLOC( 0x20, IP_ACTIVE_LOW, "SW1:6" )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW1:7")	/* Listed as "ALWAYS ON" */
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW1:7")    /* Listed as "ALWAYS ON" */
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Free_Play ) ) PORT_DIPLOCATION("SW1:8")
@@ -214,48 +212,44 @@ static GFXDECODE_START( darkmist )
 	GFXDECODE_ENTRY( "gfx3", 0, tilelayout,  0, 16*4 )
 GFXDECODE_END
 
-static TIMER_DEVICE_CALLBACK( darkmist_scanline )
+TIMER_DEVICE_CALLBACK_MEMBER(darkmist_state::darkmist_scanline)
 {
 	int scanline = param;
 
 	if(scanline == 240) // vblank-out irq
-		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE,0x10); /* RST 10h */
+		m_maincpu->set_input_line_and_vector(0, HOLD_LINE,0x10); /* RST 10h */
 
 	if(scanline == 0) // vblank-in irq
-		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE,0x08); /* RST 08h */
+		m_maincpu->set_input_line_and_vector(0, HOLD_LINE,0x08); /* RST 08h */
 }
 
 
 
 static MACHINE_CONFIG_START( darkmist, darkmist_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,4000000)		 /* ? MHz */
+	MCFG_CPU_ADD("maincpu", Z80,4000000)         /* ? MHz */
 	MCFG_CPU_PROGRAM_MAP(memmap)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", darkmist_scanline, "screen", 0, 1)
+	MCFG_TIMER_DRIVER_ADD_SCANLINE("scantimer", darkmist_state, darkmist_scanline, "screen", 0, 1)
 
-	MCFG_CPU_ADD(CPUTAG_T5182,Z80,14318180/4)	/* 3.579545 MHz */
-	MCFG_CPU_PROGRAM_MAP(t5182_map)
-	MCFG_CPU_IO_MAP(t5182_io)
+	MCFG_T5182_ADD("t5182")
+	MCFG_FRAGMENT_ADD(t5182)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(256, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
-	MCFG_SCREEN_UPDATE(darkmist)
+	MCFG_SCREEN_UPDATE_DRIVER(darkmist_state, screen_update_darkmist)
 
 	MCFG_GFXDECODE(darkmist)
-	MCFG_PALETTE_INIT(darkmist)
 	MCFG_PALETTE_LENGTH(0x100*4)
-	MCFG_VIDEO_START(darkmist)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 14318180/4)	/* 3.579545 MHz */
-	MCFG_SOUND_CONFIG(t5182_ym2151_interface)
+	MCFG_YM2151_ADD("ymsnd", 14318180/4)    /* 3.579545 MHz */
+	MCFG_YM2151_IRQ_HANDLER(DEVWRITELINE("t5182", t5182_device, ym2151_irq_handler))
 	MCFG_SOUND_ROUTE(0, "mono", 1.0)
 	MCFG_SOUND_ROUTE(1, "mono", 1.0)
 
@@ -267,7 +261,7 @@ ROM_START( darkmist )
 
 	ROM_LOAD( "dm_16.rom", 0x10000, 0x08000, CRC(094579d9) SHA1(2449bc9ba38396912ee9b72dd870ea9fcff95776) )
 
-	ROM_REGION( 0x10000, "t5182", 0 ) /* Toshiba T5182 module */
+	ROM_REGION( 0x10000, "t5182_z80", 0 ) /* Toshiba T5182 module */
 	ROM_LOAD( "t5182.rom", 0x0000, 0x2000, CRC(d354c8fc) SHA1(a1c9e1ac293f107f69cc5788cf6abc3db1646e33) )
 	ROM_LOAD( "dm_17.rom", 0x8000, 0x8000, CRC(7723dcae) SHA1(a0c69e7a7b6fd74f7ed6b9c6419aed94aabcd4b0) )
 
@@ -315,15 +309,15 @@ ROM_START( darkmist )
 ROM_END
 
 
-static void decrypt_gfx(running_machine &machine)
+void darkmist_state::decrypt_gfx()
 {
-	UINT8 *buf = auto_alloc_array(machine, UINT8, 0x40000);
+	UINT8 *buf = auto_alloc_array(machine(), UINT8, 0x40000);
 	UINT8 *rom;
 	int size;
 	int i;
 
-	rom = machine.region("gfx1")->base();
-	size = machine.region("gfx1")->bytes();
+	rom = memregion("gfx1")->base();
+	size = memregion("gfx1")->bytes();
 
 	/* data lines */
 	for (i = 0;i < size/2;i++)
@@ -345,8 +339,8 @@ static void decrypt_gfx(running_machine &machine)
 	}
 
 
-	rom = machine.region("gfx2")->base();
-	size = machine.region("gfx2")->bytes();
+	rom = memregion("gfx2")->base();
+	size = memregion("gfx2")->bytes();
 
 	/* data lines */
 	for (i = 0;i < size/2;i++)
@@ -368,8 +362,8 @@ static void decrypt_gfx(running_machine &machine)
 	}
 
 
-	rom = machine.region("gfx3")->base();
-	size = machine.region("gfx3")->bytes();
+	rom = memregion("gfx3")->base();
+	size = memregion("gfx3")->bytes();
 
 	/* data lines */
 	for (i = 0;i < size/2;i++)
@@ -390,29 +384,29 @@ static void decrypt_gfx(running_machine &machine)
 		rom[i] = buf[BITSWAP24(i, 23,22,21,20,19,18,17,16,15,14, 12,11,10,9,8, 5,4,3, 13, 7,6, 1,0, 2)];
 	}
 
-	auto_free(machine, buf);
+	auto_free(machine(), buf);
 }
 
-static void decrypt_snd(running_machine &machine)
+void darkmist_state::decrypt_snd()
 {
 	int i;
-	UINT8 *ROM = machine.region("t5182")->base();
+	UINT8 *ROM = memregion("t5182_z80")->base();
 
 	for(i=0x8000;i<0x10000;i++)
 		ROM[i] = BITSWAP8(ROM[i], 7,1,2,3,4,5,6,0);
 }
 
-static DRIVER_INIT(darkmist)
+DRIVER_INIT_MEMBER(darkmist_state,darkmist)
 {
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space &space = m_maincpu->space(AS_PROGRAM);
 	int i, len;
-	UINT8 *ROM = machine.region("maincpu")->base();
-	UINT8 *buffer = auto_alloc_array(machine, UINT8, 0x10000);
-	UINT8 *decrypt = auto_alloc_array(machine, UINT8, 0x8000);
+	UINT8 *ROM = memregion("maincpu")->base();
+	UINT8 *buffer = auto_alloc_array(machine(), UINT8, 0x10000);
+	UINT8 *decrypt = auto_alloc_array(machine(), UINT8, 0x8000);
 
-	decrypt_gfx(machine);
+	decrypt_gfx();
 
-	decrypt_snd(machine);
+	decrypt_snd();
 
 	for(i=0;i<0x8000;i++)
 	{
@@ -438,12 +432,12 @@ static DRIVER_INIT(darkmist)
 		decrypt[i] = p;
 	}
 
-	space->set_decrypted_region(0x0000, 0x7fff, decrypt);
-	memory_set_bankptr(space->machine(), "bank1",&ROM[0x010000]);
+	space.set_decrypted_region(0x0000, 0x7fff, decrypt);
+	membank("bank1")->set_base(&ROM[0x010000]);
 
 	/* adr line swaps */
-	ROM = machine.region("user1")->base();
-	len = machine.region("user1")->bytes();
+	ROM = memregion("user1")->base();
+	len = memregion("user1")->bytes();
 	memcpy( buffer, ROM, len );
 
 	for(i=0;i<len;i++)
@@ -451,31 +445,31 @@ static DRIVER_INIT(darkmist)
 		ROM[i]=buffer[BITSWAP24(i,23,22,21,20,19,18,17,16,15,6,5,4,3,2,14,13,12,11,8,7,1,0,10,9)];
 	}
 
-	ROM = machine.region("user2")->base();
-	len = machine.region("user2")->bytes();
+	ROM = memregion("user2")->base();
+	len = memregion("user2")->bytes();
 	memcpy( buffer, ROM, len );
 	for(i=0;i<len;i++)
 	{
 		ROM[i]=buffer[BITSWAP24(i,23,22,21,20,19,18,17,16,15,6,5,4,3,2,14,13,12,11,8,7,1,0,10,9)];
 	}
 
-	ROM = machine.region("user3")->base();
-	len = machine.region("user3")->bytes();
+	ROM = memregion("user3")->base();
+	len = memregion("user3")->bytes();
 	memcpy( buffer, ROM, len );
 	for(i=0;i<len;i++)
 	{
 		ROM[i]=buffer[BITSWAP24(i,23,22,21,20,19,18,17,16,15,14 ,5,4,3,2,11,10,9,8,13,12,1,0,7,6)];
 	}
 
-	ROM = machine.region("user4")->base();
-	len = machine.region("user4")->bytes();
+	ROM = memregion("user4")->base();
+	len = memregion("user4")->bytes();
 	memcpy( buffer, ROM, len );
 	for(i=0;i<len;i++)
 	{
 		ROM[i]=buffer[BITSWAP24(i,23,22,21,20,19,18,17,16,15,14 ,5,4,3,2,11,10,9,8,13,12,1,0,7,6)];
 	}
 
-	auto_free(machine, buffer);
+	auto_free(machine(), buffer);
 }
 
-GAME( 1986, darkmist, 0, darkmist, darkmist, darkmist, ROT270, "Taito", "The Lost Castle In Darkmist", GAME_IMPERFECT_GRAPHICS|GAME_NO_COCKTAIL )
+GAME( 1986, darkmist, 0, darkmist, darkmist, darkmist_state, darkmist, ROT270, "Taito Corporation", "The Lost Castle In Darkmist", GAME_IMPERFECT_GRAPHICS|GAME_NO_COCKTAIL )

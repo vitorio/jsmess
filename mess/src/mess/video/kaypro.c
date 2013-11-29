@@ -1,5 +1,4 @@
 
-#include "emu.h"
 #include "includes/kaypro.h"
 
 
@@ -10,16 +9,15 @@
 
 ************************************************************/
 
-PALETTE_INIT( kaypro )
+PALETTE_INIT_MEMBER(kaypro_state,kaypro)
 {
-	palette_set_color(machine, 0, RGB_BLACK); /* black */
-	palette_set_color(machine, 1, MAKE_RGB(0, 220, 0)); /* green */
-	palette_set_color(machine, 2, MAKE_RGB(0, 110, 0)); /* low intensity green */
+	palette_set_color(machine(), 0, RGB_BLACK); /* black */
+	palette_set_color(machine(), 1, MAKE_RGB(0, 220, 0)); /* green */
+	palette_set_color(machine(), 2, MAKE_RGB(0, 110, 0)); /* low intensity green */
 }
 
-SCREEN_UPDATE( kayproii )
+UINT32 kaypro_state::screen_update_kayproii(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	kaypro_state *state = screen->machine().driver_data<kaypro_state>();
 /* The display consists of 80 columns and 24 rows. Each row is allocated 128 bytes of ram,
     but only the first 80 are used. The total video ram therefore is 0x0c00 bytes.
     There is one video attribute: bit 7 causes blinking. The first half of the
@@ -30,13 +28,13 @@ SCREEN_UPDATE( kayproii )
 	UINT8 y,ra,chr,gfx;
 	UINT16 sy=0,ma=0,x;
 
-	state->m_framecnt++;
+	m_framecnt++;
 
 	for (y = 0; y < 24; y++)
 	{
 		for (ra = 0; ra < 10; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma + 80; x++)
 			{
@@ -44,14 +42,14 @@ SCREEN_UPDATE( kayproii )
 
 				if (ra < 8)
 				{
-					chr = state->m_p_videoram[x]^0x80;
+					chr = m_p_videoram[x]^0x80;
 
 					/* Take care of flashing characters */
-					if ((chr < 0x80) && (state->m_framecnt & 0x08))
+					if ((chr < 0x80) && (m_framecnt & 0x08))
 						chr |= 0x80;
 
 					/* get pattern of pixels for that character scanline */
-					gfx = state->m_p_chargen[(chr<<3) | ra ];
+					gfx = m_p_chargen[(chr<<3) | ra ];
 				}
 
 				/* Display a scanline of a character (7 pixels) */
@@ -69,19 +67,18 @@ SCREEN_UPDATE( kayproii )
 	return 0;
 }
 
-SCREEN_UPDATE( omni2 )
+UINT32 kaypro_state::screen_update_omni2(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	kaypro_state *state = screen->machine().driver_data<kaypro_state>();
 	UINT8 y,ra,chr,gfx;
 	UINT16 sy=0,ma=0,x;
 
-	state->m_framecnt++;
+	m_framecnt++;
 
 	for (y = 0; y < 24; y++)
 	{
 		for (ra = 0; ra < 10; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma + 80; x++)
 			{
@@ -89,14 +86,14 @@ SCREEN_UPDATE( omni2 )
 
 				if (ra < 8)
 				{
-					chr = state->m_p_videoram[x];
+					chr = m_p_videoram[x];
 
 					/* Take care of flashing characters */
-					if ((chr > 0x7f) && (state->m_framecnt & 0x08))
+					if ((chr > 0x7f) && (m_framecnt & 0x08))
 						chr |= 0x80;
 
 					/* get pattern of pixels for that character scanline */
-					gfx = state->m_p_chargen[(chr<<3) | ra ];
+					gfx = m_p_chargen[(chr<<3) | ra ];
 				}
 
 				/* Display a scanline of a character (7 pixels) */
@@ -114,14 +111,13 @@ SCREEN_UPDATE( omni2 )
 	return 0;
 }
 
-SCREEN_UPDATE( kaypro2x )
+UINT32 kaypro_state::screen_update_kaypro2x(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-	kaypro_state *state = screen->machine().driver_data<kaypro_state>();
-	state->m_framecnt++;
-	state->m_speed = state->m_mc6845_reg[10]&0x20;
-	state->m_flash = state->m_mc6845_reg[10]&0x40;				// cursor modes
-	state->m_cursor = (state->m_mc6845_reg[14]<<8) | state->m_mc6845_reg[15];					// get cursor position
-	state->m_crtc->update(bitmap, cliprect);
+	m_framecnt++;
+	m_speed = m_mc6845_reg[10]&0x20;
+	m_flash = m_mc6845_reg[10]&0x40;                // cursor modes
+	m_cursor = (m_mc6845_reg[14]<<8) | m_mc6845_reg[15];                    // get cursor position
+	m_crtc->screen_update(screen, bitmap, cliprect);
 	return 0;
 }
 
@@ -141,11 +137,12 @@ SCREEN_UPDATE( kaypro2x )
 MC6845_UPDATE_ROW( kaypro2x_update_row )
 {
 	kaypro_state *state = device->machine().driver_data<kaypro_state>();
-	UINT16 *p = BITMAP_ADDR16(bitmap, y, 0);
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
+	UINT32 *p = &bitmap.pix32(y);
 	UINT16 x;
 	UINT8 gfx,fg,bg;
 
-	for (x = 0; x < x_count; x++)				// for each character
+	for (x = 0; x < x_count; x++)               // for each character
 	{
 		UINT8 inv=0;
 		//      if (x == cursor_x) inv=0xff;    /* uncomment when mame fixed */
@@ -188,20 +185,20 @@ MC6845_UPDATE_ROW( kaypro2x_update_row )
 				inv ^= state->m_mc6845_cursor[ra];
 
 		/* get pattern of pixels for that character scanline */
-		if ( (ra == 15) & (BIT(attr, 3)) )	/* underline */
+		if ( (ra == 15) & (BIT(attr, 3)) )  /* underline */
 			gfx = 0xff;
 		else
 			gfx = state->m_p_chargen[(chr<<4) | ra ] ^ inv;
 
 		/* Display a scanline of a character (8 pixels) */
-		*p++ = BIT( gfx, 7 ) ? fg : bg;
-		*p++ = BIT( gfx, 6 ) ? fg : bg;
-		*p++ = BIT( gfx, 5 ) ? fg : bg;
-		*p++ = BIT( gfx, 4 ) ? fg : bg;
-		*p++ = BIT( gfx, 3 ) ? fg : bg;
-		*p++ = BIT( gfx, 2 ) ? fg : bg;
-		*p++ = BIT( gfx, 1 ) ? fg : bg;
-		*p++ = BIT( gfx, 0 ) ? fg : bg;
+		*p++ = palette[BIT( gfx, 7 ) ? fg : bg];
+		*p++ = palette[BIT( gfx, 6 ) ? fg : bg];
+		*p++ = palette[BIT( gfx, 5 ) ? fg : bg];
+		*p++ = palette[BIT( gfx, 4 ) ? fg : bg];
+		*p++ = palette[BIT( gfx, 3 ) ? fg : bg];
+		*p++ = palette[BIT( gfx, 2 ) ? fg : bg];
+		*p++ = palette[BIT( gfx, 1 ) ? fg : bg];
+		*p++ = palette[BIT( gfx, 0 ) ? fg : bg];
 	}
 }
 
@@ -213,26 +210,26 @@ void kaypro_state::mc6845_cursor_configure()
 	UINT8 i,curs_type=0,r9,r10,r11;
 
 	/* curs_type holds the general cursor shape to be created
-        0 = no cursor
-        1 = partial cursor (only shows on a block of scan lines)
-        2 = full cursor
-        3 = two-part cursor (has a part at the top and bottom with the middle blank) */
+	    0 = no cursor
+	    1 = partial cursor (only shows on a block of scan lines)
+	    2 = full cursor
+	    3 = two-part cursor (has a part at the top and bottom with the middle blank) */
 
-	for ( i = 0; i < ARRAY_LENGTH(m_mc6845_cursor); i++) m_mc6845_cursor[i] = 0;		// prepare cursor by erasing old one
+	for ( i = 0; i < ARRAY_LENGTH(m_mc6845_cursor); i++) m_mc6845_cursor[i] = 0;        // prepare cursor by erasing old one
 
-	r9  = m_mc6845_reg[9];					// number of scan lines - 1
-	r10 = m_mc6845_reg[10] & 0x1f;				// cursor start line = last 5 bits
-	r11 = m_mc6845_reg[11]+1;					// cursor end line incremented to suit for-loops below
+	r9  = m_mc6845_reg[9];                  // number of scan lines - 1
+	r10 = m_mc6845_reg[10] & 0x1f;              // cursor start line = last 5 bits
+	r11 = m_mc6845_reg[11]+1;                   // cursor end line incremented to suit for-loops below
 
 	/* decide the curs_type by examining the registers */
-	if (r10 < r11) curs_type=1;				// start less than end, show start to end
+	if (r10 < r11) curs_type=1;             // start less than end, show start to end
 	else
-	if (r10 == r11) curs_type=2;				// if equal, show full cursor
-	else curs_type=3;					// if start greater than end, it's a two-part cursor
+	if (r10 == r11) curs_type=2;                // if equal, show full cursor
+	else curs_type=3;                   // if start greater than end, it's a two-part cursor
 
-	if ((r11 - 1) > r9) curs_type=2;			// if end greater than scan-lines, show full cursor
-	if (r10 > r9) curs_type=0;				// if start greater than scan-lines, then no cursor
-	if (r11 > 16) r11=16;					// truncate 5-bit register to fit our 4-bit hardware
+	if ((r11 - 1) > r9) curs_type=2;            // if end greater than scan-lines, show full cursor
+	if (r10 > r9) curs_type=0;              // if start greater than scan-lines, then no cursor
+	if (r11 > 16) r11=16;                   // truncate 5-bit register to fit our 4-bit hardware
 
 	/* create the new cursor */
 	if (curs_type > 1) for (i = 0;i < ARRAY_LENGTH(m_mc6845_cursor);i++) m_mc6845_cursor[i]=0xff; // turn on full cursor
@@ -247,18 +244,12 @@ void kaypro_state::mc6845_cursor_configure()
 
 void kaypro_state::mc6845_screen_configure()
 {
-//  rectangle visarea;
-
-	UINT16 width = m_mc6845_reg[1]*8-1;							// width in pixels
-	UINT16 height = m_mc6845_reg[6]*(m_mc6845_reg[9]+1)-1;					// height in pixels
-	UINT16 bytes = m_mc6845_reg[1]*m_mc6845_reg[6]-1;						// video ram needed -1
+	UINT16 width = m_mc6845_reg[1]*8-1;                         // width in pixels
+	UINT16 height = m_mc6845_reg[6]*(m_mc6845_reg[9]+1)-1;                  // height in pixels
+	UINT16 bytes = m_mc6845_reg[1]*m_mc6845_reg[6]-1;                       // video ram needed -1
 
 	/* Resize the screen */
-//  visarea.min_x = 0;
-//  visarea.max_x = width-1;
-//  visarea.min_y = 0;
-//  visarea.max_y = height-1;
-	if ((width < 640) && (height < 400) && (bytes < 0x800))	/* bounds checking to prevent an assert or violation */
+	if ((width < 640) && (height < 400) && (bytes < 0x800)) /* bounds checking to prevent an assert or violation */
 		machine().primary_screen->set_visible_area(0, width, 0, height);
 }
 
@@ -283,32 +274,30 @@ WRITE8_MEMBER( kaypro_state::kaypro2x_register_w )
 	static const UINT8 mcmask[32]={0xff,0xff,0xff,0x0f,0x7f,0x1f,0x7f,0x7f,3,0x1f,0x7f,0x1f,0x3f,0xff,0x3f,0xff,0,0};
 
 	if (m_mc6845_ind < 16)
-		m_mc6845_reg[m_mc6845_ind] = data & mcmask[m_mc6845_ind];	/* save data in register */
+		m_mc6845_reg[m_mc6845_ind] = data & mcmask[m_mc6845_ind];   /* save data in register */
 	else
 		m_mc6845_reg[m_mc6845_ind] = data;
 
 	m_crtc->register_w( space, 0, data );
 
 	if ((m_mc6845_ind == 1) || (m_mc6845_ind == 6) || (m_mc6845_ind == 9))
-		mc6845_screen_configure();			/* adjust screen size */
+		mc6845_screen_configure();          /* adjust screen size */
 
 	if ((m_mc6845_ind > 8) && (m_mc6845_ind < 12))
-		mc6845_cursor_configure();		/* adjust cursor shape - remove when mame fixed */
+		mc6845_cursor_configure();      /* adjust cursor shape - remove when mame fixed */
 
 	if ((m_mc6845_ind > 17) && (m_mc6845_ind < 20))
-		m_mc6845_video_address = m_mc6845_reg[19] | ((m_mc6845_reg[18] & 0x3f) << 8);	/* internal ULA address */
+		m_mc6845_video_address = m_mc6845_reg[19] | ((m_mc6845_reg[18] & 0x3f) << 8);   /* internal ULA address */
 }
 
-READ8_HANDLER( kaypro_videoram_r )
+READ8_MEMBER( kaypro_state::kaypro_videoram_r )
 {
-	kaypro_state *state = space->machine().driver_data<kaypro_state>();
-	return state->m_p_videoram[offset];
+	return m_p_videoram[offset];
 }
 
-WRITE8_HANDLER( kaypro_videoram_w )
+WRITE8_MEMBER( kaypro_state::kaypro_videoram_w )
 {
-	kaypro_state *state = space->machine().driver_data<kaypro_state>();
-	state->m_p_videoram[offset] = data;
+	m_p_videoram[offset] = data;
 }
 
 READ8_MEMBER( kaypro_state::kaypro2x_videoram_r )
@@ -321,8 +310,8 @@ WRITE8_MEMBER( kaypro_state::kaypro2x_videoram_w )
 	m_p_videoram[m_mc6845_video_address] = data;
 }
 
-VIDEO_START( kaypro )
+VIDEO_START_MEMBER(kaypro_state,kaypro)
 {
-	kaypro_state *state = machine.driver_data<kaypro_state>();
-	state->m_p_chargen = machine.region("chargen")->base();
+	m_p_chargen = memregion("chargen")->base();
+	m_p_videoram = memregion("roms")->base()+0x3000;
 }

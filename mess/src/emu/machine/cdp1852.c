@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     RCA CDP1852 Byte-Wide Input/Output Port emulation
@@ -8,7 +10,6 @@
 **********************************************************************/
 
 #include "cdp1852.h"
-#include "machine/devhelpr.h"
 
 
 // device type definition
@@ -66,7 +67,7 @@ void cdp1852_device::set_sr_line(int state)
 //-------------------------------------------------
 
 cdp1852_device::cdp1852_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, CDP1852, "CDP1852", tag, owner, clock)
+	: device_t(mconfig, CDP1852, "CDP1852", tag, owner, clock, "cdp1852", __FILE__)
 {
 }
 

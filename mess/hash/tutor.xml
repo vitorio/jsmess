@@ -26,7 +26,7 @@ Japanese Releases - Pyuuta
 016E Guttang Gottong ~ ガッタンゴットン
 017E Maze Patrol ~ メイズ パトロール
 018E Tron ~ トロン
-019E Mr. Do! ~ Ｍｒ．ＤＯ！
+019E Mr. Do! ~ Mr.DO!
 020E Bermuda Triangle ~ バミューダ・ トライアングル
 021E 4-nin Mahjan ~ 四人麻雀
 022E Triplecommand ~ トリプルコマンド
@@ -274,7 +274,7 @@ Battlefighter (Original) (Unreleased - Prototype Stage)
 
 	<software name="trafjam">
 	<!-- Stock No: 8103, (Japanese 010E)-->
-		<description>Trafic Jam</description>
+		<description>Traffic Jam</description>
 		<year>1983</year>
 		<publisher>Tomy</publisher>
 		<part name="cart" interface="tutor_cart">
@@ -286,7 +286,7 @@ Battlefighter (Original) (Unreleased - Prototype Stage)
 
 	<software name="trafjama" cloneof="trafjam">
 	<!-- Stock No: 8103, (Japanese 010E)-->
-		<description>Trafic Jam (Alt)</description>
+		<description>Traffic Jam (Alt)</description>
 		<year>1982</year>
 		<publisher>Tomy</publisher>
 		<part name="cart" interface="tutor_cart">

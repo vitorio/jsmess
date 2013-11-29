@@ -39,13 +39,13 @@ static const int hp48_fg_color[3] = {   0,   0,  64 };  /* dark blue */
     FUNCTIONS
 ***************************************************************************/
 
-PALETTE_INIT ( hp48 )
+void hp48_state::palette_init()
 {
 	int i;
 	for ( i = 0; i < 255; i++ )
 	{
 		float c = i/255.;
-		palette_set_color( machine, i, MAKE_ARGB( 0, mix2(0,c), mix2(1,c), mix2(2,c) ) );
+		palette_set_color( machine(), i, MAKE_ARGB( 0, mix2(0,c), mix2(1,c), mix2(2,c) ) );
 	}
 }
 
@@ -117,20 +117,20 @@ PALETTE_INIT ( hp48 )
  */
 
 
-#define draw_pixel							\
+#define draw_pixel                          \
 	state->m_screens[ state->m_cur_screen ][ y ][ xp + 8 ] = (data & 1) ? fg : 0; \
-	xp++;								\
+	xp++;                               \
 	data >>= 1
 
-#define draw_quart					\
-	UINT8 data = space->read_byte( addr );	\
+#define draw_quart                  \
+	UINT8 data = space.read_byte( addr );   \
 	draw_pixel; draw_pixel; draw_pixel; draw_pixel;
 
 
-SCREEN_UPDATE ( hp48 )
+UINT32 hp48_state::screen_update_hp48(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	hp48_state *state = screen->machine().driver_data<hp48_state>();
-	address_space *space = screen->machine().device("maincpu")->memory().space(AS_PROGRAM);
+	hp48_state *state = machine().driver_data<hp48_state>();
+	address_space &space = m_maincpu->space(AS_PROGRAM);
 	int x, y, xp, i, addr;
 	int display       = HP48_IO_4(0) >> 3;           /* 1=on, 0=off */
 	int left_margin   = HP48_IO_4(0) & 7;            /* 0..7 pixels for main bitmap */
@@ -142,12 +142,12 @@ SCREEN_UPDATE ( hp48 )
 	int menu_start    = HP48_IO_20(0x30) & ~1;       /* menu bitmap address */
 	int fg = contrast + 2;
 
-	LOG(( "%f hp48 video_update called: ", screen->machine().time().as_double()));
+	LOG(( "%f hp48 video_update called: ", machine().time().as_double()));
 
 	if ( !display || refresh )
 	{
 		LOG(( "display off\n" ));
-		bitmap_fill( bitmap, NULL, 0 );
+		bitmap.fill(0 );
 		return 0;
 	}
 
@@ -156,7 +156,7 @@ SCREEN_UPDATE ( hp48 )
 	if ( last_line <= 1 ) last_line = 0x3f;
 
 	LOG(( "on=%i lmargin=%i rmargin=%i contrast=%i start=%05x lline=%i menu=%05x\n",
-	      display, left_margin, right_margin, contrast, bitmap_start, last_line, menu_start ));
+			display, left_margin, right_margin, contrast, bitmap_start, last_line, menu_start ));
 
 	/* draw main bitmap */
 	addr = bitmap_start;
@@ -189,14 +189,14 @@ SCREEN_UPDATE ( hp48 )
 			int acc = 0;
 			for ( i = 0; i < HP48_NB_SCREENS; i++ )
 			{
-				acc += state->m_screens[ i ][ y ][ x+8 ];
+				acc += m_screens[ i ][ y ][ x+8 ];
 			}
 			acc = (acc * 255) / (33 * HP48_NB_SCREENS);
-			*BITMAP_ADDR16( bitmap, y, x ) = acc;
+			bitmap.pix16(y, x ) = acc;
 		}
 	}
 
-	state->m_cur_screen = (state->m_cur_screen + 1) % HP48_NB_SCREENS;
+	m_cur_screen = (m_cur_screen + 1) % HP48_NB_SCREENS;
 
 	return 0;
 }

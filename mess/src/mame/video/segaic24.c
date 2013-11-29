@@ -22,7 +22,7 @@ const device_type S24MIXER = &device_creator<segas24_mixer>;
 
 
 segas24_tile::segas24_tile(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, S24TILE, "S24TILE", tag, owner, clock)
+	: device_t(mconfig, S24TILE, "S24TILE", tag, owner, clock, "segas24_tile", __FILE__)
 {
 }
 
@@ -44,31 +44,31 @@ const gfx_layout segas24_tile::char_layout = {
 	8*32
 };
 
-void segas24_tile::tile_info(int offset, tile_data *tileinfo, tilemap_memory_index tile_index)
+void segas24_tile::tile_info(int offset, tile_data &tileinfo, tilemap_memory_index tile_index)
 {
 	UINT16 val = tile_ram[tile_index|offset];
-	tileinfo->category = (val & 0x8000) != 0;
-	tileinfo_set(machine(), tileinfo, char_gfx_index, val & tile_mask, (val >> 7) & 0xff, 0);
+	tileinfo.category = (val & 0x8000) != 0;
+	tileinfo.set(machine(), char_gfx_index, val & tile_mask, (val >> 7) & 0xff, 0);
 }
 
-TILE_GET_INFO_DEVICE( segas24_tile::tile_info_0s )
+TILE_GET_INFO_MEMBER(segas24_tile::tile_info_0s)
 {
-	downcast<segas24_tile *>(device)->tile_info(0x0000, tileinfo, tile_index);
+	tile_info(0x0000, tileinfo, tile_index);
 }
 
-TILE_GET_INFO_DEVICE( segas24_tile::tile_info_0w )
+TILE_GET_INFO_MEMBER( segas24_tile::tile_info_0w)
 {
-	downcast<segas24_tile *>(device)->tile_info(0x1000, tileinfo, tile_index);
+	tile_info(0x1000, tileinfo, tile_index);
 }
 
-TILE_GET_INFO_DEVICE( segas24_tile::tile_info_1s )
+TILE_GET_INFO_MEMBER(segas24_tile::tile_info_1s)
 {
-	downcast<segas24_tile *>(device)->tile_info(0x2000, tileinfo, tile_index);
+	tile_info(0x2000, tileinfo, tile_index);
 }
 
-TILE_GET_INFO_DEVICE( segas24_tile::tile_info_1w )
+TILE_GET_INFO_MEMBER(segas24_tile::tile_info_1w)
 {
-	downcast<segas24_tile *>(device)->tile_info(0x3000, tileinfo, tile_index);
+	tile_info(0x3000, tileinfo, tile_index);
 }
 
 void segas24_tile::device_start()
@@ -81,38 +81,38 @@ void segas24_tile::device_start()
 	char_ram = auto_alloc_array(machine(), UINT16, 0x80000/2);
 	tile_ram = auto_alloc_array(machine(), UINT16, 0x10000/2);
 
-	tile_layer[0] = tilemap_create_device(this, tile_info_0s, tilemap_scan_rows,  8, 8, 64, 64);
-	tile_layer[1] = tilemap_create_device(this, tile_info_0w, tilemap_scan_rows,  8, 8, 64, 64);
-	tile_layer[2] = tilemap_create_device(this, tile_info_1s, tilemap_scan_rows,  8, 8, 64, 64);
-	tile_layer[3] = tilemap_create_device(this, tile_info_1w, tilemap_scan_rows,  8, 8, 64, 64);
+	tile_layer[0] = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(segas24_tile::tile_info_0s),this), TILEMAP_SCAN_ROWS,  8, 8, 64, 64);
+	tile_layer[1] = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(segas24_tile::tile_info_0w),this), TILEMAP_SCAN_ROWS,  8, 8, 64, 64);
+	tile_layer[2] = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(segas24_tile::tile_info_1s),this), TILEMAP_SCAN_ROWS,  8, 8, 64, 64);
+	tile_layer[3] = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(segas24_tile::tile_info_1w),this), TILEMAP_SCAN_ROWS,  8, 8, 64, 64);
 
-	tilemap_set_transparent_pen(tile_layer[0], 0);
-	tilemap_set_transparent_pen(tile_layer[1], 0);
-	tilemap_set_transparent_pen(tile_layer[2], 0);
-	tilemap_set_transparent_pen(tile_layer[3], 0);
+	tile_layer[0]->set_transparent_pen(0);
+	tile_layer[1]->set_transparent_pen(0);
+	tile_layer[2]->set_transparent_pen(0);
+	tile_layer[3]->set_transparent_pen(0);
 
 	memset(char_ram, 0, 0x80000);
 	memset(tile_ram, 0, 0x10000);
 
-	machine().gfx[char_gfx_index] = gfx_element_alloc(machine(), &char_layout, (UINT8 *)char_ram, machine().total_colors() / 16, 0);
+	machine().gfx[char_gfx_index] = auto_alloc(machine(), gfx_element(machine(), char_layout, (UINT8 *)char_ram, machine().total_colors() / 16, 0));
 
 	save_pointer(NAME(tile_ram), 0x10000/2);
 	save_pointer(NAME(char_ram), 0x80000/2);
 }
 
-void segas24_tile::draw_rect(bitmap_t *bm, bitmap_t *tm, bitmap_t *dm, const UINT16 *mask,
-							 UINT16 tpri, UINT8 lpri, int win, int sx, int sy, int xx1, int yy1, int xx2, int yy2)
+void segas24_tile::draw_rect(screen_device &screen, bitmap_ind16 &bm, bitmap_ind8 &tm, bitmap_ind16 &dm, const UINT16 *mask,
+								UINT16 tpri, UINT8 lpri, int win, int sx, int sy, int xx1, int yy1, int xx2, int yy2)
 {
 	int y;
-	const UINT16 *source  = ((UINT16 *)bm->base) + sx + sy*bm->rowpixels;
-	const UINT8  *trans = ((UINT8 *) tm->base) + sx + sy*tm->rowpixels;
-	UINT8        *prib = (UINT8 *)machine().priority_bitmap->base;
-	UINT16       *dest = (UINT16 *)dm->base;
+	const UINT16 *source  = &bm.pix16(sy, sx);
+	const UINT8  *trans = &tm.pix8(sy, sx);
+	UINT8        *prib = &screen.priority().pix8(0);
+	UINT16       *dest = &dm.pix16(0);
 
 	tpri |= TILEMAP_PIXEL_LAYER0;
 
-	dest += yy1*dm->rowpixels + xx1;
-	prib += yy1*machine().priority_bitmap->rowpixels + xx1;
+	dest += yy1*dm.rowpixels() + xx1;
+	prib += yy1*screen.priority().rowpixels() + xx1;
 	mask += yy1*4;
 	yy2 -= yy1;
 
@@ -168,8 +168,8 @@ void segas24_tile::draw_rect(bitmap_t *bm, bitmap_t *tm, bitmap_t *dm, const UIN
 							int xx;
 							for(xx=0; xx<8; xx++)
 								if(srct[xx] == tpri) {
-								   dst[xx] = src[xx];
-								   pr[xx] |= lpri;
+									dst[xx] = src[xx];
+									pr[xx] |= lpri;
 								}
 						}
 						src += 8;
@@ -188,8 +188,8 @@ void segas24_tile::draw_rect(bitmap_t *bm, bitmap_t *tm, bitmap_t *dm, const UIN
 					int x;
 					for(x = cur_x; x<llx1; x++) {
 						if(*srct++ == tpri) {
-						   *dst = *src;
-						   *pr |= lpri;
+							*dst = *src;
+							*pr |= lpri;
 						}
 						src++;
 						dst++;
@@ -208,8 +208,8 @@ void segas24_tile::draw_rect(bitmap_t *bm, bitmap_t *tm, bitmap_t *dm, const UIN
 					int x;
 					for(x=cur_x; x<llx1; x++) {
 						if(*srct++ == tpri && !(m & (0x8000 >> (x >> 3)))) {
-						   *dst = *src;
-						   *pr |= lpri;
+							*dst = *src;
+							*pr |= lpri;
 						}
 
 						src++;
@@ -221,10 +221,10 @@ void segas24_tile::draw_rect(bitmap_t *bm, bitmap_t *tm, bitmap_t *dm, const UIN
 			llx -= 128;
 			cur_x = 0;
 		}
-		source += bm->rowpixels;
-		trans  += tm->rowpixels;
-		dest   += dm->rowpixels;
-		prib   += machine().priority_bitmap->rowpixels;
+		source += bm.rowpixels();
+		trans  += tm.rowpixels();
+		dest   += dm.rowpixels();
+		prib   += screen.priority().rowpixels();
 		mask   += 4;
 	}
 }
@@ -234,18 +234,18 @@ void segas24_tile::draw_rect(bitmap_t *bm, bitmap_t *tm, bitmap_t *dm, const UIN
 // about sprite priority hence the lack of support for the
 // priority_bitmap
 
-void segas24_tile::draw_rect_rgb(bitmap_t *bm, bitmap_t *tm, bitmap_t *dm, const UINT16 *mask,
-								 UINT16 tpri, UINT8 lpri, int win, int sx, int sy, int xx1, int yy1, int xx2, int yy2)
+void segas24_tile::draw_rect(screen_device &screen, bitmap_ind16 &bm, bitmap_ind8 &tm, bitmap_rgb32 &dm, const UINT16 *mask,
+								UINT16 tpri, UINT8 lpri, int win, int sx, int sy, int xx1, int yy1, int xx2, int yy2)
 {
 	int y;
-	const UINT16 *source  = ((UINT16 *)bm->base) + sx + sy*bm->rowpixels;
-	const UINT8  *trans = ((UINT8 *) tm->base) + sx + sy*tm->rowpixels;
-	UINT16       *dest = (UINT16 *)dm->base;
+	const UINT16 *source  = &bm.pix16(sy, sx);
+	const UINT8  *trans = &tm.pix8(sy, sx);
+	UINT32       *dest = &dm.pix32(0);
 	const pen_t  *pens   = machine().pens;
 
 	tpri |= TILEMAP_PIXEL_LAYER0;
 
-	dest += yy1*dm->rowpixels + xx1;
+	dest += yy1*dm.rowpixels() + xx1;
 	mask += yy1*4;
 	yy2 -= yy1;
 
@@ -258,7 +258,7 @@ void segas24_tile::draw_rect_rgb(bitmap_t *bm, bitmap_t *tm, bitmap_t *dm, const
 	for(y=0; y<yy2; y++) {
 		const UINT16 *src   = source;
 		const UINT8  *srct  = trans;
-		UINT16 *dst         = dest;
+		UINT32 *dst         = dest;
 		const UINT16 *mask1 = mask;
 		int llx = xx2;
 		int cur_x = xx1;
@@ -296,7 +296,7 @@ void segas24_tile::draw_rect_rgb(bitmap_t *bm, bitmap_t *tm, bitmap_t *dm, const
 							int xx;
 							for(xx=0; xx<8; xx++)
 								if(srct[xx] == tpri)
-								   dst[xx] = pens[src[xx]];
+									dst[xx] = pens[src[xx]];
 						}
 						src += 8;
 						srct += 8;
@@ -313,7 +313,7 @@ void segas24_tile::draw_rect_rgb(bitmap_t *bm, bitmap_t *tm, bitmap_t *dm, const
 					int x;
 					for(x = cur_x; x<llx1; x++) {
 						if(*srct++ == tpri)
-						   *dst = pens[*src];
+							*dst = pens[*src];
 						src++;
 						dst++;
 					}
@@ -329,7 +329,7 @@ void segas24_tile::draw_rect_rgb(bitmap_t *bm, bitmap_t *tm, bitmap_t *dm, const
 					int x;
 					for(x=cur_x; x<llx1; x++) {
 						if(*srct++ == tpri && !(m & (0x8000 >> (x >> 3))))
-						   *dst = pens[*src];
+							*dst = pens[*src];
 
 						src++;
 						dst++;
@@ -339,14 +339,15 @@ void segas24_tile::draw_rect_rgb(bitmap_t *bm, bitmap_t *tm, bitmap_t *dm, const
 			llx -= 128;
 			cur_x = 0;
 		}
-		source += bm->rowpixels;
-		trans  += tm->rowpixels;
-		dest   += dm->rowpixels;
+		source += bm.rowpixels();
+		trans  += tm.rowpixels();
+		dest   += dm.rowpixels();
 		mask   += 4;
 	}
 }
 
-void segas24_tile::draw(bitmap_t *bitmap, const rectangle *cliprect, int layer, int lpri, int flags)
+template<class _BitmapClass>
+void segas24_tile::draw_common(screen_device &screen, _BitmapClass &bitmap, const rectangle &cliprect, int layer, int lpri, int flags)
 {
 	UINT16 hscr = tile_ram[0x5000+(layer >> 1)];
 	UINT16 vscr = tile_ram[0x5004+(layer >> 1)];
@@ -366,8 +367,8 @@ void segas24_tile::draw(bitmap_t *bitmap, const rectangle *cliprect, int layer, 
 		if(layer & 1)
 			return;
 
-		tilemap_set_scrolly(tile_layer[layer],   0, vscr & 0x1ff);
-		tilemap_set_scrolly(tile_layer[layer|1], 0, vscr & 0x1ff);
+		tile_layer[layer]->set_scrolly(0, vscr & 0x1ff);
+		tile_layer[layer|1]->set_scrolly(0, vscr & 0x1ff);
 
 		if(hscr & 0x8000) {
 			UINT16 *hscrtb = tile_ram + 0x4000 + 0x200*layer;
@@ -378,9 +379,9 @@ void segas24_tile::draw(bitmap_t *bitmap, const rectangle *cliprect, int layer, 
 				UINT16 v = (-vscr) & 0x1ff;
 				if(!((-vscr) & 0x200))
 					layer ^= 1;
-				for(y=cliprect->min_y; y<=cliprect->max_y; y++) {
+				for(y=cliprect.min_y; y<=cliprect.max_y; y++) {
 					UINT16 h;
-					rectangle c = *cliprect;
+					rectangle c = cliprect;
 					int l1 = layer;
 					if(y >= v)
 						l1 ^= 1;
@@ -390,24 +391,24 @@ void segas24_tile::draw(bitmap_t *bitmap, const rectangle *cliprect, int layer, 
 					hscr = hscrtb[y];
 
 					h = hscr & 0x1ff;
-					tilemap_set_scrollx(tile_layer[l1], 0, -h);
-					tilemap_draw(bitmap, &c, tile_layer[l1], tpri, lpri);
+					tile_layer[l1]->set_scrollx(0, -h);
+					tile_layer[l1]->draw(screen, bitmap, c, tpri, lpri);
 				}
 				break;
 			}
 			case 2: case 3: {
 				int y;
-				for(y=cliprect->min_y; y<=cliprect->max_y; y++) {
+				for(y=cliprect.min_y; y<=cliprect.max_y; y++) {
 					UINT16 h;
-					rectangle c1 = *cliprect;
-					rectangle c2 = *cliprect;
+					rectangle c1 = cliprect;
+					rectangle c2 = cliprect;
 					int l1 = layer;
 
 					hscr = hscrtb[y];
 
 					h = hscr & 0x1ff;
-					tilemap_set_scrollx(tile_layer[layer],   0, -h);
-					tilemap_set_scrollx(tile_layer[layer|1], 0, -h);
+					tile_layer[layer]->set_scrollx(0, -h);
+					tile_layer[layer|1]->set_scrollx(0, -h);
 
 					if(c1.max_x >= h)
 						c1.max_x = h-1;
@@ -418,21 +419,21 @@ void segas24_tile::draw(bitmap_t *bitmap, const rectangle *cliprect, int layer, 
 
 					c1.min_y = c1.max_y = c2.min_y = c2.max_y = y;
 
-					tilemap_draw(bitmap, &c1, tile_layer[l1],   tpri, lpri);
-					tilemap_draw(bitmap, &c2, tile_layer[l1^1], tpri, lpri);
+					tile_layer[l1]->draw(screen, bitmap, c1, tpri, lpri);
+					tile_layer[l1^1]->draw(screen, bitmap, c2, tpri, lpri);
 				}
 				break;
 			}
 			}
 
 		} else {
-			tilemap_set_scrollx(tile_layer[layer],   0, -(hscr & 0x1ff));
-			tilemap_set_scrollx(tile_layer[layer|1], 0, -(hscr & 0x1ff));
+			tile_layer[layer]->set_scrollx(0, -(hscr & 0x1ff));
+			tile_layer[layer|1]->set_scrollx(0, -(hscr & 0x1ff));
 
 			switch((ctrl & 0x6000) >> 13) {
 			case 1: {
-				rectangle c1 = *cliprect;
-				rectangle c2 = *cliprect;
+				rectangle c1 = cliprect;
+				rectangle c2 = cliprect;
 				UINT16 v;
 				v = (-vscr) & 0x1ff;
 				if(c1.max_y >= v)
@@ -442,13 +443,13 @@ void segas24_tile::draw(bitmap_t *bitmap, const rectangle *cliprect, int layer, 
 				if(!((-vscr) & 0x200))
 					layer ^= 1;
 
-				tilemap_draw(bitmap, &c1, tile_layer[layer],   tpri, lpri);
-				tilemap_draw(bitmap, &c2, tile_layer[layer^1], tpri, lpri);
+				tile_layer[layer]->draw(screen, bitmap, c1, tpri, lpri);
+				tile_layer[layer^1]->draw(screen, bitmap, c2, tpri, lpri);
 				break;
 			}
 			case 2: case 3: {
-				rectangle c1 = *cliprect;
-				rectangle c2 = *cliprect;
+				rectangle c1 = cliprect;
+				rectangle c2 = cliprect;
 				UINT16 h;
 				h = (+hscr) & 0x1ff;
 				if(c1.max_x >= h)
@@ -458,26 +459,18 @@ void segas24_tile::draw(bitmap_t *bitmap, const rectangle *cliprect, int layer, 
 				if(!((+hscr) & 0x200))
 					layer ^= 1;
 
-				tilemap_draw(bitmap, &c1, tile_layer[layer],   tpri, lpri);
-				tilemap_draw(bitmap, &c2, tile_layer[layer^1], tpri, lpri);
+				tile_layer[layer]->draw(screen, bitmap, c1, tpri, lpri);
+				tile_layer[layer^1]->draw(screen, bitmap, c2, tpri, lpri);
 				break;
 			}
 			}
 		}
 
 	} else {
-		bitmap_t *bm, *tm;
-		void (segas24_tile::*draw)(bitmap_t *, bitmap_t *, bitmap_t *, const UINT16 *,
-					 UINT16, UINT8, int, int, int, int, int, int, int);
 		int win = layer & 1;
 
-		if(bitmap->format != BITMAP_FORMAT_INDEXED16)
-			draw = &segas24_tile::draw_rect_rgb;
-		else
-			draw = &segas24_tile::draw_rect;
-
-		bm = tilemap_get_pixmap(tile_layer[layer]);
-		tm = tilemap_get_flagsmap(tile_layer[layer]);
+		bitmap_ind16 &bm = tile_layer[layer]->pixmap();
+		bitmap_ind8 &tm = tile_layer[layer]->flagsmap();
 
 		if(hscr & 0x8000) {
 			int y;
@@ -488,11 +481,11 @@ void segas24_tile::draw(bitmap_t *bitmap, const rectangle *cliprect, int layer, 
 				hscr = (-hscrtb[y]) & 0x1ff;
 				if(hscr + 496 <= 512) {
 					// Horizontal split unnecessary
-					(this->*draw)(bm, tm, bitmap, mask, tpri, lpri, win, hscr, vscr,        0,        y,      496,      y+1);
+					draw_rect(screen, bm, tm, bitmap, mask, tpri, lpri, win, hscr, vscr,        0,        y,      496,      y+1);
 				} else {
 					// Horizontal split necessary
-					(this->*draw)(bm, tm, bitmap, mask, tpri, lpri, win, hscr, vscr,        0,        y, 512-hscr,      y+1);
-					(this->*draw)(bm, tm, bitmap, mask, tpri, lpri, win,    0, vscr, 512-hscr,        y,      496,      y+1);
+					draw_rect(screen, bm, tm, bitmap, mask, tpri, lpri, win, hscr, vscr,        0,        y, 512-hscr,      y+1);
+					draw_rect(screen, bm, tm, bitmap, mask, tpri, lpri, win,    0, vscr, 512-hscr,        y,      496,      y+1);
 				}
 				vscr = (vscr + 1) & 0x1ff;
 			}
@@ -504,30 +497,36 @@ void segas24_tile::draw(bitmap_t *bitmap, const rectangle *cliprect, int layer, 
 				// Horizontal split unnecessary
 				if(vscr + 384 <= 512) {
 					// Vertical split unnecessary
-					(this->*draw)(bm, tm, bitmap, mask, tpri, lpri, win, hscr, vscr,        0,        0,      496,      384);
+					draw_rect(screen, bm, tm, bitmap, mask, tpri, lpri, win, hscr, vscr,        0,        0,      496,      384);
 				} else {
 					// Vertical split necessary
-					(this->*draw)(bm, tm, bitmap, mask, tpri, lpri, win, hscr, vscr,        0,        0,      496, 512-vscr);
-					(this->*draw)(bm, tm, bitmap, mask, tpri, lpri, win, hscr,    0,        0, 512-vscr,      496,      384);
+					draw_rect(screen, bm, tm, bitmap, mask, tpri, lpri, win, hscr, vscr,        0,        0,      496, 512-vscr);
+					draw_rect(screen, bm, tm, bitmap, mask, tpri, lpri, win, hscr,    0,        0, 512-vscr,      496,      384);
 
 				}
 			} else {
 				// Horizontal split necessary
 				if(vscr + 384 <= 512) {
 					// Vertical split unnecessary
-					(this->*draw)(bm, tm, bitmap, mask, tpri, lpri, win, hscr, vscr,        0,        0, 512-hscr,      384);
-					(this->*draw)(bm, tm, bitmap, mask, tpri, lpri, win,    0, vscr, 512-hscr,        0,      496,      384);
+					draw_rect(screen, bm, tm, bitmap, mask, tpri, lpri, win, hscr, vscr,        0,        0, 512-hscr,      384);
+					draw_rect(screen, bm, tm, bitmap, mask, tpri, lpri, win,    0, vscr, 512-hscr,        0,      496,      384);
 				} else {
 					// Vertical split necessary
-					(this->*draw)(bm, tm, bitmap, mask, tpri, lpri, win, hscr, vscr,        0,        0, 512-hscr, 512-vscr);
-					(this->*draw)(bm, tm, bitmap, mask, tpri, lpri, win,    0, vscr, 512-hscr,        0,      496, 512-vscr);
-					(this->*draw)(bm, tm, bitmap, mask, tpri, lpri, win, hscr,    0,        0, 512-vscr, 512-hscr,      384);
-					(this->*draw)(bm, tm, bitmap, mask, tpri, lpri, win,    0,    0, 512-hscr, 512-vscr,      496,      384);
+					draw_rect(screen, bm, tm, bitmap, mask, tpri, lpri, win, hscr, vscr,        0,        0, 512-hscr, 512-vscr);
+					draw_rect(screen, bm, tm, bitmap, mask, tpri, lpri, win,    0, vscr, 512-hscr,        0,      496, 512-vscr);
+					draw_rect(screen, bm, tm, bitmap, mask, tpri, lpri, win, hscr,    0,        0, 512-vscr, 512-hscr,      384);
+					draw_rect(screen, bm, tm, bitmap, mask, tpri, lpri, win,    0,    0, 512-hscr, 512-vscr,      496,      384);
 				}
 			}
 		}
 	}
 }
+
+void segas24_tile::draw(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect, int layer, int lpri, int flags)
+{ draw_common(screen, bitmap, cliprect, layer, lpri, flags); }
+
+void segas24_tile::draw(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect, int layer, int lpri, int flags)
+{ draw_common(screen, bitmap, cliprect, layer, lpri, flags); }
 
 READ16_MEMBER(segas24_tile::tile_r)
 {
@@ -543,7 +542,7 @@ WRITE16_MEMBER(segas24_tile::tile_w)
 {
 	COMBINE_DATA(tile_ram + offset);
 	if(offset < 0x4000)
-		tilemap_mark_tile_dirty(tile_layer[offset >> 12], offset & 0xfff);
+		tile_layer[offset >> 12]->mark_tile_dirty(offset & 0xfff);
 }
 
 WRITE16_MEMBER(segas24_tile::char_w)
@@ -551,7 +550,7 @@ WRITE16_MEMBER(segas24_tile::char_w)
 	UINT16 old = char_ram[offset];
 	COMBINE_DATA(char_ram + offset);
 	if(old != char_ram[offset])
-		gfx_element_mark_dirty(machine().gfx[char_gfx_index], offset / 16);
+		machine().gfx[char_gfx_index]->mark_dirty(offset / 16);
 }
 
 READ32_MEMBER(segas24_tile::tile32_r)
@@ -578,7 +577,7 @@ WRITE32_MEMBER(segas24_tile::char32_w)
 
 
 segas24_sprite::segas24_sprite(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, S24SPRITE, "S24SPRITE", tag, owner, clock)
+	: device_t(mconfig, S24SPRITE, "S24SPRITE", tag, owner, clock, "segas24_sprite", __FILE__)
 {
 }
 
@@ -613,7 +612,7 @@ void segas24_sprite::device_start()
     0   11------    --------
 */
 
-void segas24_sprite::draw(bitmap_t *bitmap, const rectangle *cliprect, const int *spri)
+void segas24_sprite::draw(bitmap_ind16 &bitmap, const rectangle &cliprect, bitmap_ind8 &priority_bitmap, const int *spri)
 {
 	UINT16 curspr = 0;
 	int countspr = 0;
@@ -637,7 +636,7 @@ void segas24_sprite::draw(bitmap_t *bitmap, const rectangle *cliprect, const int
 
 		curspr = source[0];
 		type = curspr & 0xc000;
-		curspr &= 0x03ff;
+		curspr &= 0x1fff;
 
 		if(type == 0xc000)
 			break;
@@ -690,14 +689,14 @@ void segas24_sprite::draw(bitmap_t *bitmap, const rectangle *cliprect, const int
 		}
 
 
-		if(min_x < cliprect->min_x)
-			min_x = cliprect->min_x;
-		if(min_y < cliprect->min_y)
-			min_y = cliprect->min_y;
-		if(max_x > cliprect->max_x)
-			max_x = cliprect->max_x;
-		if(max_y > cliprect->max_y)
-			max_y = cliprect->max_y;
+		if(min_x < cliprect.min_x)
+			min_x = cliprect.min_x;
+		if(min_y < cliprect.min_y)
+			min_y = cliprect.min_y;
+		if(max_x > cliprect.max_x)
+			max_x = cliprect.max_x;
+		if(max_y > cliprect.max_y)
+			max_y = cliprect.max_y;
 
 		if(!(source[0] & 0x2000))
 			zoomx = zoomy = source[1] & 0xff;
@@ -760,7 +759,6 @@ void segas24_sprite::draw(bitmap_t *bitmap, const rectangle *cliprect, const int
 				ymod1 = ymod;
 				ypos1 = y;
 				for(zy=0; zy<8; zy++) {
-
 					ymod1 += zoomy;
 					while(ymod1 >= 0x40) {
 						if(ypos1 >= min_y && ypos1 <= max_y) {
@@ -775,11 +773,11 @@ void segas24_sprite::draw(bitmap_t *bitmap, const rectangle *cliprect, const int
 										int zx1 = flipx ? 7-zx : zx;
 										UINT32 neweroffset = (newoffset+(zx1>>2))&0x1ffff; // crackdown sometimes attempts to use data past the end of spriteram
 										int c = (sprite_ram[neweroffset] >> (((~zx1) & 3) << 2)) & 0xf;
-										UINT8 *pri = BITMAP_ADDR8(machine().priority_bitmap, ypos1, xpos2);
+										UINT8 *pri = &priority_bitmap.pix8(ypos1, xpos2);
 										if(!(*pri & pm[c])) {
 											c = colors[c];
 											if(c) {
-												UINT16 *dst = BITMAP_ADDR16(bitmap, ypos1, xpos2);
+												UINT16 *dst = &bitmap.pix16(ypos1, xpos2);
 												if(c==1)
 													*dst = (*dst) | 0x2000;
 												else
@@ -824,7 +822,7 @@ READ16_MEMBER(segas24_sprite::read)
 
 
 segas24_mixer::segas24_mixer(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, S24MIXER, "S24MIXER", tag, owner, clock)
+	: device_t(mconfig, S24MIXER, "S24MIXER", tag, owner, clock, "segas24_mixer", __FILE__)
 {
 }
 
@@ -848,4 +846,3 @@ UINT16 segas24_mixer::get_reg(int reg)
 {
 	return mixer_reg[reg];
 }
-

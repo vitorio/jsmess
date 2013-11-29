@@ -7,147 +7,128 @@
 
 
 
-void pc1350_outa(device_t *device, int data)
+WRITE8_MEMBER(pc1350_state::pc1350_outa)
 {
-	pc1350_state *state = device->machine().driver_data<pc1350_state>();
-	state->m_outa=data;
+	m_outa=data;
 }
 
-void pc1350_outb(device_t *device, int data)
+WRITE8_MEMBER(pc1350_state::pc1350_outb)
 {
-	pc1350_state *state = device->machine().driver_data<pc1350_state>();
-	state->m_outb=data;
+	m_outb=data;
 }
 
-void pc1350_outc(device_t *device, int data)
+WRITE8_MEMBER(pc1350_state::pc1350_outc)
 {
-
 }
 
-int pc1350_ina(device_t *device)
+READ8_MEMBER(pc1350_state::pc1350_ina)
 {
-	pc1350_state *state = device->machine().driver_data<pc1350_state>();
-	running_machine &machine = device->machine();
-	int data = state->m_outa;
-	int t = pc1350_keyboard_line_r(machine);
+	int data = m_outa;
+	int t = pc1350_keyboard_line_r(space,0);
 
 	if (t & 0x01)
-		data |= input_port_read(machine, "KEY0");
+		data |= ioport("KEY0")->read();
 
 	if (t & 0x02)
-		data |= input_port_read(machine, "KEY1");
+		data |= ioport("KEY1")->read();
 
 	if (t & 0x04)
-		data |= input_port_read(machine, "KEY2");
+		data |= ioport("KEY2")->read();
 
 	if (t & 0x08)
-		data |= input_port_read(machine, "KEY3");
+		data |= ioport("KEY3")->read();
 
 	if (t & 0x10)
-		data |= input_port_read(machine, "KEY4");
+		data |= ioport("KEY4")->read();
 
 	if (t & 0x20)
-		data |= input_port_read(machine, "KEY5");
+		data |= ioport("KEY5")->read();
 
-	if (state->m_outa & 0x01)
-		data |= input_port_read(machine, "KEY6");
+	if (m_outa & 0x01)
+		data |= ioport("KEY6")->read();
 
-	if (state->m_outa & 0x02)
-		data |= input_port_read(machine, "KEY7");
+	if (m_outa & 0x02)
+		data |= ioport("KEY7")->read();
 
-	if (state->m_outa & 0x04)
+	if (m_outa & 0x04)
 	{
-		data |= input_port_read(machine, "KEY8");
+		data |= ioport("KEY8")->read();
 
 		/* At Power Up we fake a 'CLS' pressure */
-		if (state->m_power)
+		if (m_power)
 			data |= 0x08;
 	}
 
-	if (state->m_outa & 0x08)
-		data |= input_port_read(machine, "KEY9");
+	if (m_outa & 0x08)
+		data |= ioport("KEY9")->read();
 
-	if (state->m_outa & 0x10)
-		data |= input_port_read(machine, "KEY10");
+	if (m_outa & 0x10)
+		data |= ioport("KEY10")->read();
 
-	if (state->m_outa & 0xc0)
-		data |= input_port_read(machine, "KEY11");
+	if (m_outa & 0xc0)
+		data |= ioport("KEY11")->read();
 
 	// missing lshift
 
 	return data;
 }
 
-int pc1350_inb(device_t *device)
+READ8_MEMBER(pc1350_state::pc1350_inb)
 {
-	pc1350_state *state = device->machine().driver_data<pc1350_state>();
-	int data=state->m_outb;
-	return data;
+	return m_outb;
 }
 
-int pc1350_brk(device_t *device)
+READ_LINE_MEMBER(pc1350_state::pc1350_brk)
 {
-	return (input_port_read(device->machine(), "EXTRA") & 0x01);
+	return (ioport("EXTRA")->read() & 0x01);
 }
 
-/* currently enough to save the external ram */
-NVRAM_HANDLER( pc1350 )
+void pc1350_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	device_t *main_cpu = machine.device("maincpu");
-	UINT8 *ram = machine.region("maincpu")->base() + 0x2000;
+	switch (id)
+	{
+	case TIMER_POWER_UP:
+		m_power=0;
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in pc1350_state::device_timer");
+	}
+}
+
+void pc1350_state::machine_start()
+{
+	address_space &space = m_maincpu->space(AS_PROGRAM);
+
+	m_power = 1;
+	timer_set(attotime::from_seconds(1), TIMER_POWER_UP);
+
+	space.install_readwrite_bank(0x6000, 0x6fff, "bank1");
+	membank("bank1")->set_base(&m_ram->pointer()[0x0000]);
+
+	if (m_ram->size() >= 0x3000)
+	{
+		space.install_readwrite_bank(0x4000, 0x5fff, "bank2");
+		membank("bank2")->set_base(&m_ram->pointer()[0x1000]);
+	}
+	else
+	{
+		space.nop_readwrite(0x4000, 0x5fff);
+	}
+
+	if (m_ram->size() >= 0x5000)
+	{
+		space.install_readwrite_bank(0x2000, 0x3fff, "bank3");
+		membank("bank3")->set_base(&m_ram->pointer()[0x3000]);
+	}
+	else
+	{
+		space.nop_readwrite(0x2000, 0x3fff);
+	}
+
+	device_t *main_cpu = m_maincpu;
+	UINT8 *ram = memregion("maincpu")->base() + 0x2000;
 	UINT8 *cpu = sc61860_internal_ram(main_cpu);
 
-	if (read_or_write)
-	{
-		file->write(cpu, 96);
-		file->write(ram, 0x5000);
-	}
-	else if (file)
-	{
-		file->read(cpu, 96);
-		file->read(ram, 0x5000);
-	}
-	else
-	{
-		memset(cpu, 0, 96);
-		memset(ram, 0, 0x5000);
-	}
-}
-
-static TIMER_CALLBACK(pc1350_power_up)
-{
-	pc1350_state *state = machine.driver_data<pc1350_state>();
-	state->m_power=0;
-}
-
-MACHINE_START( pc1350 )
-{
-	pc1350_state *state = machine.driver_data<pc1350_state>();
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
-
-	state->m_power = 1;
-	machine.scheduler().timer_set(attotime::from_seconds(1), FUNC(pc1350_power_up));
-
-	space->install_readwrite_bank(0x6000, 0x6fff, "bank1");
-	memory_set_bankptr(machine, "bank1", &ram_get_ptr(machine.device(RAM_TAG))[0x0000]);
-
-	if (ram_get_size(machine.device(RAM_TAG)) >= 0x3000)
-	{
-		space->install_readwrite_bank(0x4000, 0x5fff, "bank2");
-		memory_set_bankptr(machine, "bank2", &ram_get_ptr(machine.device(RAM_TAG))[0x1000]);
-	}
-	else
-	{
-		space->nop_readwrite(0x4000, 0x5fff);
-	}
-
-	if (ram_get_size(machine.device(RAM_TAG)) >= 0x5000)
-	{
-		space->install_readwrite_bank(0x2000, 0x3fff, "bank3");
-		memory_set_bankptr(machine, "bank3", &ram_get_ptr(machine.device(RAM_TAG))[0x3000]);
-	}
-	else
-	{
-		space->nop_readwrite(0x2000, 0x3fff);
-	}
+	machine().device<nvram_device>("cpu_nvram")->set_base(cpu, 96);
+	machine().device<nvram_device>("ram_nvram")->set_base(ram, 0x5000);
 }

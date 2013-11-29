@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /***************************************************************************
 
     Tektronix 4051/4052A
@@ -22,19 +24,8 @@
 
 */
 
-#define ADDRESS_MAP_MODERN
 
-#include "emu.h"
-#include "cpu/m6800/m6800.h"
-#include "machine/ram.h"
-#include "machine/6821pia.h"
-#include "machine/6850acia.h"
-#include "machine/ieee488.h"
-#include "machine/rs232.h"
-#include "sound/speaker.h"
-#include "video/vector.h"
 #include "includes/tek405x.h"
-
 
 
 //**************************************************************************
@@ -42,14 +33,14 @@
 //**************************************************************************
 
 enum {
-	LBS_RBC = 0,	// ROM Bank Control
-	LBS_BSOFL,		// Bank Switch Overflow (Select Overflow ROMs)
-	LBS_BSCOM,		// Bank Switch Communication (Select Communication ROMs)
+	LBS_RBC = 0,    // ROM Bank Control
+	LBS_BSOFL,      // Bank Switch Overflow (Select Overflow ROMs)
+	LBS_BSCOM,      // Bank Switch Communication (Select Communication ROMs)
 	LBS_INVALID,
-	LBS_BS_L,		// Bank Switch Left (Select Left ROM Pack)
-	LBS_BS_R,		// Bank Switch Right (Select Right ROM Pack)
-	LBS_BSX_L,		// Bank Switch Expander (Select Left ROM Expander Unit)
-	LBS_BSX_R		// Bank Switch Expander (Select Right ROM Expander Unit)
+	LBS_BS_L,       // Bank Switch Left (Select Left ROM Pack)
+	LBS_BS_R,       // Bank Switch Right (Select Right ROM Pack)
+	LBS_BSX_L,      // Bank Switch Expander (Select Left ROM Expander Unit)
+	LBS_BSX_R       // Bank Switch Expander (Select Right ROM Expander Unit)
 };
 
 
@@ -66,7 +57,7 @@ void tek4051_state::update_irq()
 {
 	int state = m_kb_pia_irqa | m_kb_pia_irqb | m_x_pia_irqa | m_x_pia_irqb | m_gpib_pia_irqa | m_gpib_pia_irqb | m_com_pia_irqa | m_com_pia_irqb | m_acia_irq;
 
-	device_set_input_line(m_maincpu, INPUT_LINE_IRQ0, state);
+	m_maincpu->set_input_line(INPUT_LINE_IRQ0, state);
 }
 
 
@@ -78,7 +69,7 @@ void tek4051_state::update_nmi()
 {
 	int state = m_y_pia_irqa | m_y_pia_irqb | m_tape_pia_irqa | m_tape_pia_irqb;
 
-	device_set_input_line(m_maincpu, INPUT_LINE_NMI, state);
+	m_maincpu->set_input_line(INPUT_LINE_NMI, state);
 }
 
 
@@ -97,14 +88,12 @@ void tek4051_state::scan_keyboard()
 
 
 //-------------------------------------------------
-//  TIMER_DEVICE_CALLBACK( keyboard_tick )
+//  TIMER_DEVICE_CALLBACK_MEMBER( keyboard_tick )
 //-------------------------------------------------
 
-static TIMER_DEVICE_CALLBACK( keyboard_tick )
+TIMER_DEVICE_CALLBACK_MEMBER(tek4051_state::keyboard_tick)
 {
-	tek4051_state *state = timer.machine().driver_data<tek4051_state>();
-
-	state->scan_keyboard();
+	scan_keyboard();
 }
 
 
@@ -119,7 +108,7 @@ static TIMER_DEVICE_CALLBACK( keyboard_tick )
 
 void tek4051_state::bankswitch(UINT8 data)
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
+	address_space &program = m_maincpu->space(AS_PROGRAM);
 
 	//int d = data & 0x07;
 	int lbs = (data >> 3) & 0x07;
@@ -127,19 +116,19 @@ void tek4051_state::bankswitch(UINT8 data)
 	switch (lbs)
 	{
 	case LBS_RBC:
-		program->install_rom(0x8800, 0xa7ff, machine().region(MC6800_TAG)->base() + 0x800);
+		program.install_rom(0x8800, 0xa7ff, m_rom->base() + 0x800);
 		break;
 
 	case LBS_BSOFL:
-		program->install_rom(0x8800, 0xa7ff, machine().region("020_0147_00")->base());
+		program.install_rom(0x8800, 0xa7ff, m_bsofl_rom->base());
 		break;
 
 	case LBS_BSCOM:
-		program->install_rom(0x8800, 0xa7ff, machine().region("672_0799_08")->base());
+		program.install_rom(0x8800, 0xa7ff, m_bscom_rom->base());
 		break;
 
 	default:
-		program->unmap_readwrite(0x8800, 0xa7ff);
+		program.unmap_readwrite(0x8800, 0xa7ff);
 	}
 }
 
@@ -148,18 +137,18 @@ WRITE8_MEMBER( tek4051_state::lbs_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       ROM Expander Slot Address
-        1       ROM Expander Slot Address
-        2       ROM Expander Slot Address
-        3       Bank Switch
-        4       Bank Switch
-        5       Bank Switch
-        6
-        7
+	    0       ROM Expander Slot Address
+	    1       ROM Expander Slot Address
+	    2       ROM Expander Slot Address
+	    3       Bank Switch
+	    4       Bank Switch
+	    5       Bank Switch
+	    6
+	    7
 
-    */
+	*/
 
 	logerror("LBS %02x\n", data);
 
@@ -388,18 +377,10 @@ INPUT_PORTS_END
 //  VIDEO
 //**************************************************************************
 
-//-------------------------------------------------
-//  VIDEO_START( tek4051 )
-//-------------------------------------------------
-
 void tek4051_state::video_start()
 {
 }
 
-
-//-------------------------------------------------
-//  VIDEO_START( tek4052 )
-//-------------------------------------------------
 
 void tek4052_state::video_start()
 {
@@ -419,18 +400,18 @@ READ8_MEMBER( tek4051_state::x_pia_pa_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0
-        PA1
-        PA2     DRBUSY-0
-        PA3     VPULSE-1
-        PA4
-        PA5
-        PA6
-        PA7
+	    PA0
+	    PA1
+	    PA2     DRBUSY-0
+	    PA3     VPULSE-1
+	    PA4
+	    PA5
+	    PA6
+	    PA7
 
-    */
+	*/
 
 	return 0;
 }
@@ -439,36 +420,36 @@ WRITE8_MEMBER( tek4051_state::x_pia_pa_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     X D/A
-        PA1     X D/A
-        PA2
-        PA3
-        PA4     ERASE-0
-        PA5     COPY-0
-        PA6     VECTOR-0
-        PA7     VEN-1
+	    PA0     X D/A
+	    PA1     X D/A
+	    PA2
+	    PA3
+	    PA4     ERASE-0
+	    PA5     COPY-0
+	    PA6     VECTOR-0
+	    PA7     VEN-1
 
-    */
+	*/
 }
 
 WRITE8_MEMBER( tek4051_state::x_pia_pb_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0     X D/A
-        PB1     X D/A
-        PB2     X D/A
-        PB3     X D/A
-        PB4     X D/A
-        PB5     X D/A
-        PB6     X D/A
-        PB7     X D/A
+	    PB0     X D/A
+	    PB1     X D/A
+	    PB2     X D/A
+	    PB3     X D/A
+	    PB4     X D/A
+	    PB5     X D/A
+	    PB6     X D/A
+	    PB7     X D/A
 
-    */
+	*/
 }
 
 WRITE_LINE_MEMBER( tek4051_state::adot_w )
@@ -521,18 +502,18 @@ READ8_MEMBER( tek4051_state::sa_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     SA0
-        PA1     SA1
-        PA2     SA2
-        PA3     SA3
-        PA4     SA4
-        PA5     SA5
-        PA6     SA6
-        PA7     SA7
+	    PA0     SA0
+	    PA1     SA1
+	    PA2     SA2
+	    PA3     SA3
+	    PA4     SA4
+	    PA5     SA5
+	    PA6     SA6
+	    PA7     SA7
 
-    */
+	*/
 
 	return 0;
 }
@@ -541,36 +522,36 @@ WRITE8_MEMBER( tek4051_state::y_pia_pa_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     Y D/A
-        PA1     Y D/A
-        PA2     Y CHAR D/A
-        PA3     Y CHAR D/A
-        PA4     Y CHAR D/A
-        PA5     X CHAR D/A
-        PA6     X CHAR D/A
-        PA7     X CHAR D/A
+	    PA0     Y D/A
+	    PA1     Y D/A
+	    PA2     Y CHAR D/A
+	    PA3     Y CHAR D/A
+	    PA4     Y CHAR D/A
+	    PA5     X CHAR D/A
+	    PA6     X CHAR D/A
+	    PA7     X CHAR D/A
 
-    */
+	*/
 }
 
 WRITE8_MEMBER( tek4051_state::sb_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0     SB0
-        PB1     SB1
-        PB2     SB2
-        PB3     SB3
-        PB4     SB4
-        PB5     SB5
-        PB6     SB6
-        PB7     SB7
+	    PB0     SB0
+	    PB1     SB1
+	    PB2     SB2
+	    PB3     SB3
+	    PB4     SB4
+	    PB5     SB5
+	    PB6     SB6
+	    PB7     SB7
 
-    */
+	*/
 }
 
 READ_LINE_MEMBER( tek4051_state::rdbyte_r )
@@ -629,21 +610,21 @@ READ8_MEMBER( tek4051_state::kb_pia_pa_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     KC0-1
-        PA1     KC1-1
-        PA2     KC2-1
-        PA3     KC3-1
-        PA4     KC4-1
-        PA5     KC5-1
-        PA6     KC6-1
-        PA7     TTY-0
+	    PA0     KC0-1
+	    PA1     KC1-1
+	    PA2     KC2-1
+	    PA3     KC3-1
+	    PA4     KC4-1
+	    PA5     KC5-1
+	    PA6     KC6-1
+	    PA7     TTY-0
 
-    */
+	*/
 
 	UINT8 data = 0;
-	UINT8 special = input_port_read(machine(), "SPECIAL");
+	UINT8 special = m_special->read();
 
 	// keyboard column
 	data = m_kc;
@@ -658,21 +639,21 @@ READ8_MEMBER( tek4051_state::kb_pia_pb_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0     SHIFT-0
-        PB1     CTRL-0
-        PB2
-        PB3     LOAD-0
-        PB4
-        PB5
-        PB6
-        PB7
+	    PB0     SHIFT-0
+	    PB1     CTRL-0
+	    PB2
+	    PB3     LOAD-0
+	    PB4
+	    PB5
+	    PB6
+	    PB7
 
-    */
+	*/
 
 	UINT8 data = 0;
-	UINT8 special = input_port_read(machine(), "SPECIAL");
+	UINT8 special = m_special->read();
 
 	// shift
 	data |= (BIT(special, 0) & BIT(special, 1));
@@ -687,18 +668,18 @@ WRITE8_MEMBER( tek4051_state::kb_pia_pb_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0
-        PB1
-        PB2
-        PB3
-        PB4     EOI-1
-        PB5     BREAK-1
-        PB6     I/O-1
-        PB7     BUSY-1/REN-0/SPEAKER
+	    PB0
+	    PB1
+	    PB2
+	    PB3
+	    PB4     EOI-1
+	    PB5     BREAK-1
+	    PB6     I/O-1
+	    PB7     BUSY-1/REN-0/SPEAKER
 
-    */
+	*/
 
 	// lamps
 	output_set_led_value(1, !BIT(data, 5));
@@ -709,7 +690,7 @@ WRITE8_MEMBER( tek4051_state::kb_pia_pb_w )
 	m_gpib->eoi_w(!BIT(data, 4));
 
 	// speaker
-	speaker_level_w(m_speaker, !BIT(data, 7));
+	m_speaker->level_w(!BIT(data, 7));
 
 	// remote enable
 	m_gpib->ren_w(!BIT(data, 7));
@@ -761,18 +742,18 @@ READ8_MEMBER( tek4051_state::tape_pia_pa_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     DELAY OUT-1
-        PA1
-        PA2     TUTS-1
-        PA3     SAFE-1
-        PA4     SAFE-1
-        PA5     JOYSTICK
-        PA6     FILFND-1
-        PA7     JOYSTICK
+	    PA0     DELAY OUT-1
+	    PA1
+	    PA2     TUTS-1
+	    PA3     SAFE-1
+	    PA4     SAFE-1
+	    PA5     JOYSTICK
+	    PA6     FILFND-1
+	    PA7     JOYSTICK
 
-    */
+	*/
 
 	return 0;
 }
@@ -781,36 +762,36 @@ WRITE8_MEMBER( tek4051_state::tape_pia_pa_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0
-        PA1     LDCLK-1
-        PA2
-        PA3
-        PA4
-        PA5     XERR-1
-        PA6
-        PA7     YERR-1
+	    PA0
+	    PA1     LDCLK-1
+	    PA2
+	    PA3
+	    PA4
+	    PA5     XERR-1
+	    PA6
+	    PA7     YERR-1
 
-    */
+	*/
 }
 
 WRITE8_MEMBER( tek4051_state::tape_pia_pb_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0     WR-0
-        PB1     FAST-1
-        PB2     REV-1
-        PB3     DRTAPE-0
-        PB4     GICG-1
-        PB5     FICG-1
-        PB6     WENABLE-1
-        PB7     FSENABLE-0
+	    PB0     WR-0
+	    PB1     FAST-1
+	    PB2     REV-1
+	    PB3     DRTAPE-0
+	    PB4     GICG-1
+	    PB5     FICG-1
+	    PB6     WENABLE-1
+	    PB7     FSENABLE-0
 
-    */
+	*/
 }
 
 READ_LINE_MEMBER( tek4051_state::rmark_r )
@@ -870,18 +851,18 @@ WRITE8_MEMBER( tek4051_state::dio_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     DIO1-1
-        PA1     DIO2-1
-        PA2     DIO3-1
-        PA3     DIO4-1
-        PA4     DIO5-1
-        PA5     DIO6-1
-        PA6     DIO7-1
-        PA7     DIO8-1
+	    PA0     DIO1-1
+	    PA1     DIO2-1
+	    PA2     DIO3-1
+	    PA3     DIO4-1
+	    PA4     DIO5-1
+	    PA5     DIO6-1
+	    PA6     DIO7-1
+	    PA7     DIO8-1
 
-    */
+	*/
 
 	if (m_talk)
 	{
@@ -893,18 +874,18 @@ READ8_MEMBER( tek4051_state::gpib_pia_pb_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0
-        PB1
-        PB2
-        PB3
-        PB4     NRFD
-        PB5     SRQ-1
-        PB6     DAV-1
-        PB7     NDAC
+	    PB0
+	    PB1
+	    PB2
+	    PB3
+	    PB4     NRFD
+	    PB5     SRQ-1
+	    PB6     DAV-1
+	    PB7     NDAC
 
-    */
+	*/
 
 	UINT8 data = 0;
 
@@ -930,18 +911,18 @@ WRITE8_MEMBER( tek4051_state::gpib_pia_pb_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0     EOI-1
-        PB1     IFC-1
-        PB2
-        PB3     ATN-0
-        PB4     NRFD
-        PB5
-        PB6
-        PB7     NDAC
+	    PB0     EOI-1
+	    PB1     IFC-1
+	    PB2
+	    PB3     ATN-0
+	    PB4     NRFD
+	    PB5
+	    PB6
+	    PB7     NDAC
 
-    */
+	*/
 
 	// end or identify
 	m_gpib->eoi_w(!BIT(data, 0));
@@ -1011,18 +992,18 @@ WRITE8_MEMBER( tek4051_state::com_pia_pa_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0
-        PA1
-        PA2
-        PA3     Bank Switch Register
-        PA4     Bank Switch Register
-        PA5     Bank Switch Register
-        PA6
-        PA7
+	    PA0
+	    PA1
+	    PA2
+	    PA3     Bank Switch Register
+	    PA4     Bank Switch Register
+	    PA5     Bank Switch Register
+	    PA6
+	    PA7
 
-    */
+	*/
 
 	bankswitch(data);
 }
@@ -1031,26 +1012,24 @@ READ8_MEMBER( tek4051_state::com_pia_pb_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0     SRX
-        PB1     DTR
-        PB2     RTS
-        PB3
-        PB4
-        PB5
-        PB6
-        PB7
+	    PB0     SRX
+	    PB1     DTR
+	    PB2     RTS
+	    PB3
+	    PB4
+	    PB5
+	    PB6
+	    PB7
 
-    */
+	*/
 
 	UINT8 data = 0;
 
 	// data terminal ready
-	//data |= rs232_dtr_r(m_rs232) << 1;
 
 	// request to send
-	//data |= rs232_rts_r(m_rs232) << 2;
 
 	return data;
 }
@@ -1059,21 +1038,20 @@ WRITE8_MEMBER( tek4051_state::com_pia_pb_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PB0
-        PB1
-        PB2
-        PB3     CTS
-        PB4     STXA-C
-        PB5     Baud Rate Select
-        PB6     Baud Rate Select
-        PB7     Baud Rate Select
+	    PB0
+	    PB1
+	    PB2
+	    PB3     CTS
+	    PB4     STXA-C
+	    PB5     Baud Rate Select
+	    PB6     Baud Rate Select
+	    PB7     Baud Rate Select
 
-    */
+	*/
 
 	// clear to send
-	//rs232_cts_w(m_rs232, BIT(data, 3));
 
 	// baud rate select
 	int osc = BIT(data, 7) ? 28160 : 38400;
@@ -1081,8 +1059,8 @@ WRITE8_MEMBER( tek4051_state::com_pia_pb_w )
 
 	switch ((data >> 5) & 0x03)
 	{
-	case 2:	div = 4; break;
-	case 3:	div = 2; break;
+	case 2: div = 4; break;
+	case 3: div = 2; break;
 	}
 
 	int clock = osc / div;
@@ -1108,9 +1086,9 @@ static const pia6821_interface com_pia_intf =
 	DEVCB_NULL,
 	DEVCB_DRIVER_MEMBER(tek4051_state, com_pia_pb_r),
 	DEVCB_NULL, // SRX (RS-232 pin 12)
-	DEVCB_NULL,//DEVCB_DEVICE_LINE(RS232_TAG, rs232_dtr_r),
 	DEVCB_NULL,
-	DEVCB_NULL,//DEVCB_DEVICE_LINE(RS232_TAG, rs232_rts_r),
+	DEVCB_NULL,
+	DEVCB_NULL,
 	DEVCB_DRIVER_MEMBER(tek4051_state, com_pia_pa_w),
 	DEVCB_DRIVER_MEMBER(tek4051_state, com_pia_pb_w),
 	DEVCB_NULL,
@@ -1134,22 +1112,12 @@ static ACIA6850_INTERFACE( acia_intf )
 {
 	0,
 	0,
-	DEVCB_NULL,//DEVCB_DEVICE_LINE(RS232_TAG, rs232_td_r),
-	DEVCB_NULL,//DEVCB_DEVICE_LINE(RS232_TAG, rs232_rd_w),
+	DEVCB_NULL,
+	DEVCB_NULL,
 	DEVCB_LINE_GND,
 	DEVCB_NULL,
 	DEVCB_LINE_GND,
 	DEVCB_DRIVER_LINE_MEMBER(tek4051_state, acia_irq_w)
-};
-
-
-//-------------------------------------------------
-//  IEEE488_DAISY( ieee488_daisy )
-//-------------------------------------------------
-
-static IEEE488_DAISY( ieee488_daisy )
-{
-	{ NULL}
 };
 
 
@@ -1164,26 +1132,25 @@ static IEEE488_DAISY( ieee488_daisy )
 
 void tek4051_state::machine_start()
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
+	address_space &program = m_maincpu->space(AS_PROGRAM);
 
 	// configure RAM
-	switch (ram_get_size(m_ram))
+	switch (m_ram->size())
 	{
 	case 8*1024:
-		program->unmap_readwrite(0x2000, 0x7fff);
+		program.unmap_readwrite(0x2000, 0x7fff);
 		break;
 
 	case 16*1024:
-		program->unmap_readwrite(0x4000, 0x7fff);
+		program.unmap_readwrite(0x4000, 0x7fff);
 		break;
 
 	case 24*1024:
-		program->unmap_readwrite(0x6000, 0x7fff);
+		program.unmap_readwrite(0x6000, 0x7fff);
 		break;
 	}
 
 	// register for state saving
-//  state_save_register_global(machine, );
 }
 
 
@@ -1206,29 +1173,29 @@ void tek4052_state::machine_start()
 //-------------------------------------------------
 
 static MACHINE_CONFIG_START( tek4051, tek4051_state )
-    // basic machine hardware
+	// basic machine hardware
 	MCFG_CPU_ADD(MC6800_TAG, M6800, XTAL_12_5MHz/15)
-    MCFG_CPU_PROGRAM_MAP(tek4051_mem)
+	MCFG_CPU_PROGRAM_MAP(tek4051_mem)
 
-    // video hardware
-    MCFG_SCREEN_ADD(SCREEN_TAG, VECTOR)
-    MCFG_SCREEN_REFRESH_RATE(50)
-    MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) // not accurate
-    MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-    MCFG_SCREEN_SIZE(1024, 780)
-    MCFG_SCREEN_VISIBLE_AREA(0, 1024-1, 0, 780-1)
-	MCFG_SCREEN_UPDATE(vector)
+	// video hardware
+	MCFG_VECTOR_ADD("vector")
+	MCFG_SCREEN_ADD(SCREEN_TAG, VECTOR)
+	MCFG_SCREEN_REFRESH_RATE(50)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) // not accurate
+	MCFG_SCREEN_SIZE(1024, 780)
+	MCFG_SCREEN_VISIBLE_AREA(0, 1024-1, 0, 780-1)
+	MCFG_SCREEN_UPDATE_DEVICE("vector", vector_device, screen_update)
 
-	MCFG_PALETTE_INIT(monochrome_green)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, monochrome_green)
 	MCFG_PALETTE_LENGTH(2)
 
 	// sound hardware
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	// devices
-	MCFG_TIMER_ADD_PERIODIC("keyboard", keyboard_tick, attotime::from_hz(XTAL_12_5MHz/15/4))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("keyboard", tek4051_state, keyboard_tick, attotime::from_hz(XTAL_12_5MHz/15/4))
 	MCFG_PIA6821_ADD(MC6820_X_TAG, x_pia_intf)
 	MCFG_PIA6821_ADD(MC6820_Y_TAG, y_pia_intf)
 	MCFG_PIA6821_ADD(MC6820_KB_TAG, kb_pia_intf)
@@ -1236,13 +1203,21 @@ static MACHINE_CONFIG_START( tek4051, tek4051_state )
 	MCFG_PIA6821_ADD(MC6820_GPIB_TAG, gpib_pia_intf)
 	MCFG_PIA6821_ADD(MC6820_COM_TAG, com_pia_intf)
 	MCFG_ACIA6850_ADD(MC6850_TAG, acia_intf)
-	MCFG_IEEE488_ADD(ieee488_daisy)
-	//MCFG_RS232_ADD(RS232_TAG, rs232_intf)
+	MCFG_IEEE488_BUS_ADD()
 
 	// internal ram
 	MCFG_RAM_ADD(RAM_TAG)
 	MCFG_RAM_DEFAULT_SIZE("8K")
 	MCFG_RAM_EXTRA_OPTIONS("16K,24K,32K")
+
+	// cartridge
+	MCFG_CARTSLOT_ADD("cart1")
+	MCFG_CARTSLOT_EXTENSION_LIST("bin")
+	MCFG_CARTSLOT_INTERFACE("tek4050_cart")
+
+	MCFG_CARTSLOT_ADD("cart2")
+	MCFG_CARTSLOT_EXTENSION_LIST("bin")
+	MCFG_CARTSLOT_INTERFACE("tek4050_cart")
 MACHINE_CONFIG_END
 
 
@@ -1251,31 +1226,43 @@ MACHINE_CONFIG_END
 //-------------------------------------------------
 
 static MACHINE_CONFIG_START( tek4052, tek4052_state )
-    // basic machine hardware
+	// basic machine hardware
 	MCFG_CPU_ADD(AM2901A_TAG, M6800, 1000000) // should be 4x AM2901A + AM2911
-    MCFG_CPU_PROGRAM_MAP(tek4052_mem)
+	MCFG_CPU_PROGRAM_MAP(tek4052_mem)
 
-    // video hardware
-    MCFG_SCREEN_ADD(SCREEN_TAG, VECTOR)
-    MCFG_SCREEN_REFRESH_RATE(50)
-    MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) // not accurate
-    MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-    MCFG_SCREEN_SIZE(1024, 780)
-    MCFG_SCREEN_VISIBLE_AREA(0, 1024-1, 0, 780-1)
-	MCFG_SCREEN_UPDATE(vector)
+	// video hardware
+	MCFG_VECTOR_ADD("vector")
+	MCFG_SCREEN_ADD(SCREEN_TAG, VECTOR)
+	MCFG_SCREEN_REFRESH_RATE(50)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) // not accurate
+	MCFG_SCREEN_SIZE(1024, 780)
+	MCFG_SCREEN_VISIBLE_AREA(0, 1024-1, 0, 780-1)
+	MCFG_SCREEN_UPDATE_DEVICE("vector", vector_device, screen_update)
 
-	MCFG_PALETTE_INIT(monochrome_green)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, monochrome_green)
 	MCFG_PALETTE_LENGTH(2)
 
 	// sound hardware
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	// internal ram
 	MCFG_RAM_ADD(RAM_TAG)
 	MCFG_RAM_DEFAULT_SIZE("32K")
 	MCFG_RAM_EXTRA_OPTIONS("64K")
+
+	// cartridge
+	MCFG_CARTSLOT_ADD("cart1")
+	MCFG_CARTSLOT_EXTENSION_LIST("bin")
+	MCFG_CARTSLOT_INTERFACE("tek4050_cart")
+
+	MCFG_CARTSLOT_ADD("cart2")
+	MCFG_CARTSLOT_EXTENSION_LIST("bin")
+	MCFG_CARTSLOT_INTERFACE("tek4050_cart")
+
+	// software lists
+	MCFG_SOFTWARE_LIST_ADD("cart_list", "tek4052_cart")
 MACHINE_CONFIG_END
 
 
@@ -1330,16 +1317,17 @@ ROM_START( tek4051 )
 	ROM_LOAD( "156-0714-00.u121", 0x1000, 0x0800, NO_DUMP )
 	ROM_LOAD( "156-0714-01.u121", 0x1000, 0x0800, NO_DUMP )
 	ROM_LOAD( "156-0715-01.u131", 0x1800, 0x0800, NO_DUMP )
+/*
+    ROM_REGION( 0x2000, "4051r01", 0 ) // 4051R01 Matrix Functions
+    ROM_LOAD( "4051r01", 0x0000, 0x1000, NO_DUMP )
 
-	ROM_REGION( 0x2000, "4051r01", 0 ) // 4051R01 Matrix Functions
-	ROM_LOAD( "4051r01", 0x0000, 0x1000, NO_DUMP )
+    ROM_REGION( 0x2000, "4051r05", 0 ) // 4051R05 Binary Program Loader
+    ROM_LOAD( "156-0856-00.u1",  0x0000, 0x0800, NO_DUMP )
+    ROM_LOAD( "156-0857-00.u11", 0x0800, 0x0800, NO_DUMP )
 
-	ROM_REGION( 0x2000, "4051r05", 0 ) // 4051R05 Binary Program Loader
-	ROM_LOAD( "156-0856-00.u1",  0x0000, 0x0800, NO_DUMP )
-	ROM_LOAD( "156-0857-00.u11", 0x0800, 0x0800, NO_DUMP )
-
-	ROM_REGION( 0x2000, "4051r06", 0 ) // 4051R06 Editor
-	ROM_LOAD( "4051r06", 0x0000, 0x1000, NO_DUMP )
+    ROM_REGION( 0x2000, "4051r06", 0 ) // 4051R06 Editor
+    ROM_LOAD( "4051r06", 0x0000, 0x1000, NO_DUMP )
+*/
 ROM_END
 
 
@@ -1369,24 +1357,18 @@ ROM_START( tek4052a )
 	ROM_LOAD16_BYTE( "160-1702-00.u845", 0x10000, 0x2000, CRC(013344b1) SHA1(4a79654427e15d0fcedd9519914f6448938ecffd) )
 	ROM_LOAD16_BYTE( "160-1685-00.u863", 0x10001, 0x2000, CRC(53ddc8f9) SHA1(431d6f329dedebb54232c623a924d5ecddc5e44e) )
 
-	ROM_REGION( 0x2000, "4052r06", 0 ) // 4052R06 Editor
-	ROM_LOAD( "160-1415 v2.0.u11", 0x0000, 0x1000, CRC(04cbc80d) SHA1(7bfb80fa099a794b18a7a5d7f8c2de4b36e245ec) )
-	ROM_LOAD( "160-1414 v2.0.u1",  0x1000, 0x1000, CRC(675da652) SHA1(36a9677853e50a40195519dfdb6a3b3985438bc4) )
+	ROM_REGION( 0x2000, "020_0147_00", 0 ) // Firmware Backpack (020-0147-00)
+	ROM_LOAD( "156-0747-xx.u101", 0x0000, 0x0800, CRC(9e1facc1) SHA1(7e7a118c3e8c49630f630ee02c3de843dd95d7e1) ) // -00 or -01 ?
+	ROM_LOAD( "156-0748-xx.u201", 0x0800, 0x0800, CRC(be42bfbf) SHA1(23575b411bd9dcb7d7116628820096e3064ff93b) ) // -00 or -01 ?
 
-	ROM_REGION( 0x2000, "4052r07", 0 ) // 4052R07 Signal Processing No. 1
-	ROM_LOAD( "160-1416-00 v2.0.u1", 0x0000, 0x1000, CRC(537acdb2) SHA1(275e016eda327173095ae60ca79e72075c606954) )
-
-	ROM_REGION( 0x2000, "4052r08", 0 ) // 4052R08 Signal Processing No. 2 (FFT)
-	ROM_LOAD( "160-1418 v2.0.u11", 0x1000, 0x1000, CRC(f1c19044) SHA1(b1b86009980900f31eccf158dcc7036c7810b8f5) )
-	ROM_LOAD( "160-1417 v2.0.u1",  0x0000, 0x1000, CRC(bee2e90f) SHA1(9f1a26aa98583678047fc532f5fdb3c8a468e617) )
-
-	ROM_REGION( 0x3000, "020_0478_01", 0 ) // 4052/4054 File Manager
-	ROM_LOAD( "160-1703-00 v3.0.u13", 0x0000, 0x1000, CRC(991c9f5f) SHA1(cce038f90edec6e551049c4411da8eeca6faeb4e) )
-	ROM_LOAD( "160-1420-00 v3.0.u11", 0x1000, 0x1000, CRC(6545e073) SHA1(63a8d774a4b6f3640a833fd8be592a1baf124f7d) )
-	ROM_LOAD( "160-1419-00 v3.0.u1",  0x2000, 0x1000, CRC(66d9d2d5) SHA1(e603ef1cacd6a20b975cf532f2e1978dcbee9789) )
-
-	ROM_REGION( 0x800, "720_dac", 0 ) // Transera 4052/4054 D/A Converter
-	ROM_LOAD( "transera.da", 0x0000, 0x0800, CRC(1c16e4da) SHA1(6d6ea0c5c68bab8e6a885b3cb05aa591f7754c56) )
+	ROM_REGION( 0x2000, "021_0188_00", 0 ) // Communications Backpack (021-0188-00)
+	ROM_LOAD( "156-0712-00.u101", 0x0000, 0x0800, NO_DUMP )
+	ROM_LOAD( "156-0712-01.u101", 0x0000, 0x0800, NO_DUMP )
+	ROM_LOAD( "156-0713-00.u111", 0x0800, 0x0800, NO_DUMP )
+	ROM_LOAD( "156-0713-01.u111", 0x0800, 0x0800, NO_DUMP )
+	ROM_LOAD( "156-0714-00.u121", 0x1000, 0x0800, NO_DUMP )
+	ROM_LOAD( "156-0714-01.u121", 0x1000, 0x0800, NO_DUMP )
+	ROM_LOAD( "156-0715-01.u131", 0x1800, 0x0800, NO_DUMP )
 ROM_END
 
 
@@ -1396,6 +1378,6 @@ ROM_END
 //**************************************************************************
 
 /*    YEAR  NAME        PARENT      COMPAT  MACHINE     INPUT       INIT    COMPANY         FULLNAME            FLAGS */
-COMP( 1975, tek4051,	0,			0,		tek4051,	tek4051,	0,		"Tektronix",	"Tektronix 4051",	GAME_NOT_WORKING )
-COMP( 1978, tek4052a,	tek4051,	0,		tek4052,	tek4051,	0,		"Tektronix",	"Tektronix 4052A",	GAME_NOT_WORKING )
-//COMP( 1979, tek4054,  tek4051,    0,      tek4054,    tek4054,    0,      "Tektronix",    "Tektronix 4054",   GAME_NOT_WORKING )
+COMP( 1975, tek4051,    0,          0,      tek4051,    tek4051, driver_device, 0,      "Tektronix",    "Tektronix 4051",   GAME_NOT_WORKING )
+COMP( 1978, tek4052a,   tek4051,    0,      tek4052,    tek4051, driver_device, 0,      "Tektronix",    "Tektronix 4052A",  GAME_NOT_WORKING )
+//COMP( 1979, tek4054,  tek4051,    0,      tek4054,    tek4054, driver_device,    0,      "Tektronix",    "Tektronix 4054",   GAME_NOT_WORKING )

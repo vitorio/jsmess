@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     osdcore.h
 
     Core OS-dependent code interface.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ****************************************************************************
 
@@ -61,18 +32,18 @@ extern "C" {
 
 /* Make sure we have a path separator (default to /) */
 #ifndef PATH_SEPARATOR
-#define PATH_SEPARATOR			"/"
+#define PATH_SEPARATOR          "/"
 #endif
 
 /* flags controlling file access */
-#define OPEN_FLAG_READ			0x0001		/* open for read */
-#define OPEN_FLAG_WRITE			0x0002		/* open for write */
-#define OPEN_FLAG_CREATE		0x0004		/* create & truncate file */
-#define OPEN_FLAG_CREATE_PATHS	0x0008		/* create paths as necessary */
-#define OPEN_FLAG_NO_PRELOAD	0x0010		/* do not decompress on open */
+#define OPEN_FLAG_READ          0x0001      /* open for read */
+#define OPEN_FLAG_WRITE         0x0002      /* open for write */
+#define OPEN_FLAG_CREATE        0x0004      /* create & truncate file */
+#define OPEN_FLAG_CREATE_PATHS  0x0008      /* create paths as necessary */
+#define OPEN_FLAG_NO_PRELOAD    0x0010      /* do not decompress on open */
 
 /* error codes returned by routines below */
-enum _file_error
+enum file_error
 {
 	FILERR_NONE,
 	FILERR_FAILURE,
@@ -84,10 +55,9 @@ enum _file_error
 	FILERR_INVALID_DATA,
 	FILERR_INVALID_ACCESS
 };
-typedef enum _file_error file_error;
 
 /* osd_file is an opaque type which represents an open file */
-typedef struct _osd_file osd_file;
+struct osd_file;
 
 /*-----------------------------------------------------------------------------
     osd_open: open a new file.
@@ -267,26 +237,24 @@ int osd_uchar_from_osdchar(UINT32 /* unicode_char */ *uchar, const char *osdchar
 ***************************************************************************/
 
 /* types of directory entries that can be returned */
-enum _osd_dir_entry_type
+enum osd_dir_entry_type
 {
 	ENTTYPE_NONE,
 	ENTTYPE_FILE,
 	ENTTYPE_DIR,
 	ENTTYPE_OTHER
 };
-typedef enum _osd_dir_entry_type osd_dir_entry_type;
 
 /* osd_directory is an opaque type which represents an open directory */
-typedef struct _osd_directory osd_directory;
+struct osd_directory;
 
 /* osd_directory_entry contains basic information about a file when iterating through */
 /* a directory */
-typedef struct _osd_directory_entry osd_directory_entry;
-struct _osd_directory_entry
+struct osd_directory_entry
 {
-	const char *		name;			/* name of the entry */
-	osd_dir_entry_type	type;			/* type of the entry */
-	UINT64				size;			/* size of the entry */
+	const char *        name;           /* name of the entry */
+	osd_dir_entry_type  type;           /* type of the entry */
+	UINT64              size;           /* size of the entry */
 };
 
 
@@ -358,8 +326,8 @@ int osd_is_absolute_path(const char *path);
     TIMING INTERFACES
 ***************************************************************************/
 
-/* a osd_ticks_t is a 64-bit integer that is used as a core type in timing interfaces */
-typedef INT64 osd_ticks_t;
+/* a osd_ticks_t is a 64-bit unsigned integer that is used as a core type in timing interfaces */
+typedef UINT64 osd_ticks_t;
 
 
 /*-----------------------------------------------------------------------------
@@ -429,7 +397,7 @@ void osd_sleep(osd_ticks_t duration);
 ***************************************************************************/
 
 /* osd_lock is an opaque type which represents a recursive lock/mutex */
-typedef struct _osd_lock osd_lock;
+struct osd_lock;
 
 
 /*-----------------------------------------------------------------------------
@@ -515,23 +483,23 @@ void osd_lock_free(osd_lock *lock);
 
 /* this is the maximum number of supported threads for a single work queue */
 /* threadid values are expected to range from 0..WORK_MAX_THREADS-1 */
-#define WORK_MAX_THREADS			16
+#define WORK_MAX_THREADS            16
 
 /* these flags can be set when creating a queue to give hints to the code about
    how to configure the queue */
-#define WORK_QUEUE_FLAG_IO			0x0001
-#define WORK_QUEUE_FLAG_MULTI		0x0002
-#define WORK_QUEUE_FLAG_HIGH_FREQ	0x0004
+#define WORK_QUEUE_FLAG_IO          0x0001
+#define WORK_QUEUE_FLAG_MULTI       0x0002
+#define WORK_QUEUE_FLAG_HIGH_FREQ   0x0004
 
 /* these flags can be set when queueing a work item to indicate how to handle
    its deconstruction */
-#define WORK_ITEM_FLAG_AUTO_RELEASE	0x0001
+#define WORK_ITEM_FLAG_AUTO_RELEASE 0x0001
 
 /* osd_work_queue is an opaque type which represents a queue of work items */
-typedef struct _osd_work_queue osd_work_queue;
+struct osd_work_queue;
 
 /* osd_work_item is an opaque type which represents a single work item */
-typedef struct _osd_work_item osd_work_item;
+struct osd_work_item;
 
 /* osd_work_callback is a callback function that does work */
 typedef void *(*osd_work_callback)(void *param, int threadid);
@@ -888,6 +856,21 @@ file_error osd_get_full_path(char **dst, const char *path);
 
 
 /***************************************************************************
+    MIDI I/O INTERFACES
+***************************************************************************/
+struct osd_midi_device;
+
+void osd_init_midi(void);
+void osd_shutdown_midi(void);
+void osd_list_midi_devices(void);
+osd_midi_device *osd_open_midi_input(const char *devname);
+osd_midi_device *osd_open_midi_output(const char *devname);
+void osd_close_midi_channel(osd_midi_device *dev);
+bool osd_poll_midi_channel(osd_midi_device *dev);
+int osd_read_midi_channel(osd_midi_device *dev, UINT8 *pOut);
+void osd_write_midi_channel(osd_midi_device *dev, UINT8 data);
+
+/***************************************************************************
     UNCATEGORIZED INTERFACES
 ***************************************************************************/
 
@@ -909,4 +892,4 @@ const char *osd_get_volume_name(int idx);
 }
 #endif
 
-#endif	/* __OSDEPEND_H__ */
+#endif  /* __OSDEPEND_H__ */

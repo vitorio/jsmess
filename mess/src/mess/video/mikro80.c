@@ -11,14 +11,13 @@
 #include "includes/mikro80.h"
 
 
-VIDEO_START( mikro80 )
+void mikro80_state::video_start()
 {
 }
 
-SCREEN_UPDATE( mikro80 )
+UINT32 mikro80_state::screen_update_mikro80(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	mikro80_state *state = screen->machine().driver_data<mikro80_state>();
-	UINT8 *gfx = screen->machine().region("gfx1")->base();
+	UINT8 *gfx = m_region_gfx1->base();
 	int x,y,b;
 
 	for(y = 0; y < 32*8; y++ )
@@ -26,12 +25,12 @@ SCREEN_UPDATE( mikro80 )
 		for(x = 0; x < 64; x++ )
 		{
 			int addr = x + (y / 8)*64;
-			UINT8 code = gfx[state->m_video_ram [addr]*8+ (y % 8)];
-			UINT8 attr = state->m_cursor_ram[addr+1] & 0x80 ? 1 : 0;
+			UINT8 code = gfx[m_video_ram [addr]*8+ (y % 8)];
+			UINT8 attr = m_cursor_ram[addr+1] & 0x80 ? 1 : 0;
 			for (b = 7; b >= 0; b--)
 			{
 				UINT8 col = (code >> b) & 0x01;
-				*BITMAP_ADDR16(bitmap, y, x*8+(7-b)) =  attr ? col ^ 1 : col;
+				bitmap.pix16(y, x*8+(7-b)) =  attr ? col ^ 1 : col;
 			}
 		}
 	}

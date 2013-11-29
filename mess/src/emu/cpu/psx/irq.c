@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:smf
 /*
  * PlayStation IRQ emulator
  *
@@ -9,6 +11,8 @@
 #include "irq.h"
 
 #define VERBOSE_LEVEL ( 0 )
+
+#define PSX_IRQ_MASK ( 0x7fd )
 
 INLINE void ATTR_PRINTF(3,4) verboselog( running_machine& machine, int n_level, const char *s_fmt, ... )
 {
@@ -25,8 +29,9 @@ INLINE void ATTR_PRINTF(3,4) verboselog( running_machine& machine, int n_level, 
 
 const device_type PSX_IRQ = &device_creator<psxirq_device>;
 
-psxirq_device::psxirq_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, PSX_IRQ, "PSX IRQ", tag, owner, clock)
+psxirq_device::psxirq_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock) :
+	device_t(mconfig, PSX_IRQ, "PSX IRQ", tag, owner, clock, "psxirq", __FILE__),
+	m_irq_handler(*this)
 {
 }
 
@@ -45,6 +50,8 @@ void psxirq_device::device_post_load()
 
 void psxirq_device::device_start()
 {
+	m_irq_handler.resolve_safe();
+
 	save_item( NAME( n_irqdata ) );
 	save_item( NAME( n_irqmask ) );
 }
@@ -61,12 +68,12 @@ void psxirq_device::psx_irq_update( void )
 	if( ( n_irqdata & n_irqmask ) != 0 )
 	{
 		verboselog( machine(), 2, "psx irq assert\n" );
-		cputag_set_input_line( machine(), "maincpu", PSXCPU_IRQ0, ASSERT_LINE );
+		m_irq_handler( ASSERT_LINE );
 	}
 	else
 	{
 		verboselog( machine(), 2, "psx irq clear\n" );
-		cputag_set_input_line( machine(), "maincpu", PSXCPU_IRQ0, CLEAR_LINE );
+		m_irq_handler( CLEAR_LINE );
 	}
 }
 
@@ -109,4 +116,92 @@ READ32_MEMBER( psxirq_device::read )
 		break;
 	}
 	return 0;
+}
+
+WRITE_LINE_MEMBER( psxirq_device::intin0 )
+{
+	if( state )
+	{
+		set( 1 << 0 );
+	}
+}
+
+WRITE_LINE_MEMBER( psxirq_device::intin1 )
+{
+	if( state )
+	{
+		set( 1 << 1 );
+	}
+}
+
+WRITE_LINE_MEMBER( psxirq_device::intin2 )
+{
+	if( state )
+	{
+		set( 1 << 2 );
+	}
+}
+
+WRITE_LINE_MEMBER( psxirq_device::intin3 )
+{
+	if( state )
+	{
+		set( 1 << 3 );
+	}
+}
+
+WRITE_LINE_MEMBER( psxirq_device::intin4 )
+{
+	if( state )
+	{
+		set( 1 << 4 );
+	}
+}
+
+WRITE_LINE_MEMBER( psxirq_device::intin5 )
+{
+	if( state )
+	{
+		set( 1 << 5 );
+	}
+}
+
+WRITE_LINE_MEMBER( psxirq_device::intin6 )
+{
+	if( state )
+	{
+		set( 1 << 6 );
+	}
+}
+
+WRITE_LINE_MEMBER( psxirq_device::intin7 )
+{
+	if( state )
+	{
+		set( 1 << 7 );
+	}
+}
+
+WRITE_LINE_MEMBER( psxirq_device::intin8 )
+{
+	if( state )
+	{
+		set( 1 << 8 );
+	}
+}
+
+WRITE_LINE_MEMBER( psxirq_device::intin9 )
+{
+	if( state )
+	{
+		set( 1 << 9 );
+	}
+}
+
+WRITE_LINE_MEMBER( psxirq_device::intin10 )
+{
+	if( state )
+	{
+		set( 1 << 10 );
+	}
 }

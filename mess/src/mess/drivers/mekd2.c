@@ -1,10 +1,13 @@
+// license:MAME
+// copyright-holders:Juergen Buchmueller, Robbbert
 /******************************************************************************
     Motorola Evaluation Kit 6800 D2
     MEK6800D2
 
     system driver
 
-    Juergen Buchmueller <pullmoll@t-online.de>, Jan 2000
+    Juergen Buchmueller, Jan 2000
+    2013-06-16 Working driver [Robbbert]
 
     memory map
 
@@ -25,12 +28,49 @@
     e400-ffff   -/-     mirrors of monitor rom
 
 
-    TODO
-    - Cassette (it is extremely complex, with approx 10 chips)
-    - Proper artwork
+Enter the 4 digit address then the command key:
+
+  - M : Examine and Change Memory (example: E000M, then G to skip to next, ESC to exit)
+  - E : Escape (abort) operation (ESC key in our emulation)
+  - R : Examine Registers
+  - G : Begin execution at specified address
+  - P : Punch data from memory to magnetic tape
+  - L : Load memory from magnetic tape
+  - N : Trace one instruction
+  - V : Set (and remove) breakpoints
+
+The keys are laid out as:
+
+  P L N V
+
+  7 8 9 A  M
+  4 5 6 B  E
+  1 2 3 C  R
+  0 F E D  G
+
+
+Pasting:
+        0-F : as is
+        NEXT : ^
+        MEM : =
+        GO : ^
+
+Test Paste:
+        HA030=11^22^33^44^55^66^77^88^99^HA030=
+        Now press up-arrow to confirm the data has been entered.
+
+        If you wish to follow the tutorial in the manual, here is the test
+        program that you need to enter in step 1:
+        H0020=8E^00^FF^4F^C6^04^CE^00^10^AB^00^08^5A^26^FA^97^15^3F^H
+
+        Save the above program to tape:
+        HA002=00^20^00^32^HP (A002 has start address, A004 has end address, big endian)
+
+TODO
+        Display should go blank during cassette operations
+
 
 ******************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/m6800/m6800.h"
@@ -46,26 +86,45 @@
 class mekd2_state : public driver_device
 {
 public:
+	enum
+	{
+		TIMER_TRACE
+	};
+
 	mekd2_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-	m_maincpu(*this, "maincpu"),
-	m_pia_s(*this, "pia_s"),
-	m_pia_u(*this, "pia_u"),
-	m_acia(*this, "acia")
+		m_maincpu(*this, "maincpu"),
+		m_pia_s(*this, "pia_s"),
+		m_pia_u(*this, "pia_u"),
+		m_acia(*this, "acia"),
+		m_cass(*this, "cassette")
 	{ }
 
-	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_pia_s;
-	required_device<device_t> m_pia_u;
-	required_device<device_t> m_acia;
-	DECLARE_READ_LINE_MEMBER( mekd2_key40_r );
-	DECLARE_READ8_MEMBER( mekd2_key_r );
-	DECLARE_WRITE_LINE_MEMBER( mekd2_nmi_w );
-	DECLARE_WRITE8_MEMBER( mekd2_digit_w );
-	DECLARE_WRITE8_MEMBER( mekd2_segment_w );
+	DECLARE_READ_LINE_MEMBER(mekd2_key40_r);
+	DECLARE_READ8_MEMBER(mekd2_key_r);
+	DECLARE_WRITE_LINE_MEMBER(mekd2_nmi_w);
+	DECLARE_WRITE8_MEMBER(mekd2_digit_w);
+	DECLARE_WRITE8_MEMBER(mekd2_segment_w);
+	DECLARE_DEVICE_IMAGE_LOAD_MEMBER(mekd2_cart);
+	DECLARE_READ_LINE_MEMBER(cass_r);
+	DECLARE_WRITE_LINE_MEMBER(cass_w);
+	TIMER_DEVICE_CALLBACK_MEMBER(mekd2_c);
+	TIMER_DEVICE_CALLBACK_MEMBER(mekd2_p);
+
+protected:
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
+
+private:
+	UINT8 m_cass_data[4];
 	UINT8 m_segment;
 	UINT8 m_digit;
 	UINT8 m_keydata;
+	bool m_cass_state;
+	required_device<cpu_device> m_maincpu;
+	required_device<pia6821_device> m_pia_s;
+	required_device<pia6821_device> m_pia_u;
+	required_device<acia6850_device> m_acia;
+	required_device<cassette_image_device> m_cass;
 };
 
 
@@ -83,7 +142,7 @@ static ADDRESS_MAP_START( mekd2_mem , AS_PROGRAM, 8, mekd2_state)
 	AM_RANGE(0x8009, 0x8009) AM_DEVREADWRITE("acia", acia6850_device, data_read, data_write)
 	AM_RANGE(0x8020, 0x8023) AM_DEVREADWRITE("pia_s", pia6821_device, read, write)
 	AM_RANGE(0xa000, 0xa07f) AM_RAM // system ram
-	AM_RANGE(0xe000, 0xe3ff) AM_ROM AM_MIRROR(0x1c00)	/* JBUG ROM */
+	AM_RANGE(0xe000, 0xe3ff) AM_ROM AM_MIRROR(0x1c00)   /* JBUG ROM */
 ADDRESS_MAP_END
 
 /***********************************************************
@@ -92,65 +151,42 @@ ADDRESS_MAP_END
 
 ************************************************************/
 
-/*
-
-Enter the 4 digit address then the command key:
-
-  - M : Examine and Change Memory (example: E000M, then G to skip to next, H to exit)
-  - E : Escape (abort) operation (H key in our emulation)
-  - R : Examine Registers
-  - G : Begin execution at specified address
-  - P : Punch data from memory to magnetic tape
-  - L : Load memory from magnetic tape
-  - N : Trace one instruction
-  - V : Set (and remove) breakpoints
-
-The keys are laid out as:
-
-  P L N V
-
-  7 8 9 A  M
-  4 5 6 B  E
-  1 2 3 C  R
-  0 F E D  G
-
- */
 static INPUT_PORTS_START( mekd2 )
 	PORT_START("X0")
-	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("0") PORT_CODE(KEYCODE_0)
-	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("F") PORT_CODE(KEYCODE_F)
-	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("E (hex)") PORT_CODE(KEYCODE_E)
-	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("D") PORT_CODE(KEYCODE_D)
+	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("0") PORT_CODE(KEYCODE_0) PORT_CHAR('0')
+	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("F") PORT_CODE(KEYCODE_F) PORT_CHAR('F')
+	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("E (hex)") PORT_CODE(KEYCODE_E) PORT_CHAR('E')
+	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("D") PORT_CODE(KEYCODE_D) PORT_CHAR('D')
 
 	PORT_START("X1")
-	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("1") PORT_CODE(KEYCODE_1)
-	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("2") PORT_CODE(KEYCODE_2)
-	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("3") PORT_CODE(KEYCODE_3)
-	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("C") PORT_CODE(KEYCODE_C)
+	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("1") PORT_CODE(KEYCODE_1) PORT_CHAR('1')
+	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("2") PORT_CODE(KEYCODE_2) PORT_CHAR('2')
+	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("3") PORT_CODE(KEYCODE_3) PORT_CHAR('3')
+	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("C") PORT_CODE(KEYCODE_C) PORT_CHAR('C')
 
 	PORT_START("X2")
-	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("4") PORT_CODE(KEYCODE_4)
-	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("5") PORT_CODE(KEYCODE_5)
-	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("6") PORT_CODE(KEYCODE_6)
-	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("B") PORT_CODE(KEYCODE_B)
+	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("4") PORT_CODE(KEYCODE_4) PORT_CHAR('4')
+	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("5") PORT_CODE(KEYCODE_5) PORT_CHAR('5')
+	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("6") PORT_CODE(KEYCODE_6) PORT_CHAR('6')
+	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("B") PORT_CODE(KEYCODE_B) PORT_CHAR('B')
 
 	PORT_START("X3")
-	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("7") PORT_CODE(KEYCODE_7)
-	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("8") PORT_CODE(KEYCODE_8)
-	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("9") PORT_CODE(KEYCODE_9)
-	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("A") PORT_CODE(KEYCODE_A)
+	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("7") PORT_CODE(KEYCODE_7) PORT_CHAR('7')
+	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("8") PORT_CODE(KEYCODE_8) PORT_CHAR('8')
+	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("9") PORT_CODE(KEYCODE_9) PORT_CHAR('9')
+	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("A") PORT_CODE(KEYCODE_A) PORT_CHAR('A')
 
 	PORT_START("X4")
-	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("P") PORT_CODE(KEYCODE_P)
-	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("L") PORT_CODE(KEYCODE_L)
-	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("N") PORT_CODE(KEYCODE_N)
-	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("V") PORT_CODE(KEYCODE_V)
+	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("P") PORT_CODE(KEYCODE_P) PORT_CHAR('P') // save tape
+	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("L") PORT_CODE(KEYCODE_L) PORT_CHAR('L') // load tape
+	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("N") PORT_CODE(KEYCODE_N) PORT_CHAR('N') // trace (step)
+	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("V") PORT_CODE(KEYCODE_V) PORT_CHAR('V') // breakpoint
 
 	PORT_START("X5")
-	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("M") PORT_CODE(KEYCODE_M)
-	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("E (escape)") PORT_CODE(KEYCODE_H)
-	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("R") PORT_CODE(KEYCODE_R)
-	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("G") PORT_CODE(KEYCODE_G)
+	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("M") PORT_CODE(KEYCODE_M) PORT_CHAR('=') // memory
+	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("E (escape)") PORT_CODE(KEYCODE_ESC) PORT_CHAR('H')
+	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("R") PORT_CODE(KEYCODE_R) PORT_CHAR('R') // regs
+	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("G") PORT_CODE(KEYCODE_G) PORT_CODE(KEYCODE_UP) PORT_CHAR('^') // go, next
 INPUT_PORTS_END
 
 
@@ -160,17 +196,25 @@ INPUT_PORTS_END
 
 ************************************************************/
 
-static TIMER_CALLBACK( mekd2_trace )
+void mekd2_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
+	switch (id)
+	{
+	case TIMER_TRACE:
+		m_maincpu->set_input_line(INPUT_LINE_NMI, ASSERT_LINE);
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in mekd2_state::device_timer");
+	}
 }
+
 
 WRITE_LINE_MEMBER( mekd2_state::mekd2_nmi_w )
 {
 	if (state)
-		cputag_set_input_line(machine(), "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
+		m_maincpu->set_input_line(INPUT_LINE_NMI, CLEAR_LINE);
 	else
-		machine().scheduler().timer_set(attotime::from_usec(18), FUNC(mekd2_trace));
+		timer_set(attotime::from_usec(18), TIMER_TRACE);
 }
 
 
@@ -197,7 +241,7 @@ READ8_MEMBER( mekd2_state::mekd2_key_r )
 		if (BIT(m_digit, i))
 		{
 			sprintf(kbdrow,"X%d",i);
-			m_keydata &= input_port_read(machine(), kbdrow);
+			m_keydata &= ioport(kbdrow)->read();
 		}
 	}
 
@@ -253,54 +297,64 @@ WRITE8_MEMBER( mekd2_state::mekd2_digit_w )
 
 static const pia6821_interface mekd2_s_mc6821_intf =
 {
-	DEVCB_DRIVER_MEMBER(mekd2_state, mekd2_key_r),		/* port A input */
-	DEVCB_NULL,						/* port B input */
-	DEVCB_NULL,						/* CA1 input */
-	DEVCB_DRIVER_LINE_MEMBER(mekd2_state, mekd2_key40_r),	/* CB1 input */
-	DEVCB_NULL,						/* CA2 input */
-	DEVCB_NULL,						/* CB2 input */
-	DEVCB_DRIVER_MEMBER(mekd2_state, mekd2_segment_w),	/* port A output */
-	DEVCB_DRIVER_MEMBER(mekd2_state, mekd2_digit_w),	/* port B output */
-	DEVCB_DRIVER_LINE_MEMBER(mekd2_state, mekd2_nmi_w),	/* CA2 output */
-	DEVCB_NULL,						/* CB2 output */
-	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_NMI),	/* IRQA output */
-	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_NMI)		/* IRQB output */
+	DEVCB_DRIVER_MEMBER(mekd2_state, mekd2_key_r),      /* port A input */
+	DEVCB_NULL,                     /* port B input */
+	DEVCB_NULL,                     /* CA1 input */
+	DEVCB_DRIVER_LINE_MEMBER(mekd2_state, mekd2_key40_r),   /* CB1 input */
+	DEVCB_NULL,                     /* CA2 input */
+	DEVCB_NULL,                     /* CB2 input */
+	DEVCB_DRIVER_MEMBER(mekd2_state, mekd2_segment_w),  /* port A output */
+	DEVCB_DRIVER_MEMBER(mekd2_state, mekd2_digit_w),    /* port B output */
+	DEVCB_DRIVER_LINE_MEMBER(mekd2_state, mekd2_nmi_w), /* CA2 output */
+	DEVCB_NULL,                     /* CB2 output */
+	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_NMI),    /* IRQA output */
+	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_NMI)     /* IRQB output */
 };
 
 static const pia6821_interface mekd2_u_mc6821_intf =
 {
-	DEVCB_NULL,						/* port A input */
-	DEVCB_NULL,						/* port B input */
-	DEVCB_NULL,						/* CA1 input */
-	DEVCB_NULL,						/* CB1 input */
-	DEVCB_NULL,						/* CA2 input */
-	DEVCB_NULL,						/* CB2 input */
-	DEVCB_NULL,						/* port A output */
-	DEVCB_NULL,						/* port B output */
-	DEVCB_NULL,						/* CA2 output */
-	DEVCB_NULL,						/* CB2 output */
-	DEVCB_CPU_INPUT_LINE("maincpu", M6800_IRQ_LINE),	/* IRQA output */
-	DEVCB_CPU_INPUT_LINE("maincpu", M6800_IRQ_LINE)		/* IRQB output */
+	DEVCB_NULL,                     /* port A input */
+	DEVCB_NULL,                     /* port B input */
+	DEVCB_NULL,                     /* CA1 input */
+	DEVCB_NULL,                     /* CB1 input */
+	DEVCB_NULL,                     /* CA2 input */
+	DEVCB_NULL,                     /* CB2 input */
+	DEVCB_NULL,                     /* port A output */
+	DEVCB_NULL,                     /* port B output */
+	DEVCB_NULL,                     /* CA2 output */
+	DEVCB_NULL,                     /* CB2 output */
+	DEVCB_CPU_INPUT_LINE("maincpu", M6800_IRQ_LINE),    /* IRQA output */
+	DEVCB_CPU_INPUT_LINE("maincpu", M6800_IRQ_LINE)     /* IRQB output */
 };
+
+READ_LINE_MEMBER( mekd2_state::cass_r )
+{
+	return (bool)m_cass_data[2];
+}
+
+WRITE_LINE_MEMBER( mekd2_state::cass_w )
+{
+	m_cass_state = state;
+}
 
 static ACIA6850_INTERFACE( mekd2_acia_intf )
 {
-	XTAL_MEKD2 / 256,	//connected to cassette circuit /* tx clock 4800Hz */
-	XTAL_MEKD2 / 256,	//connected to cassette circuit /* rx clock varies, controlled by cassette circuit */
-	DEVCB_NULL,//LINE(cass),//connected to cassette circuit /* in rxd func */
-	DEVCB_NULL,//LINE(cass),//connected to cassette circuit /* out txd func */
-	DEVCB_NULL,						/* in cts func */
-	DEVCB_NULL,		//connected to cassette circuit /* out rts func */
-	DEVCB_NULL,						/* in dcd func */
-	DEVCB_NULL						/* out irq func */
+	XTAL_MEKD2 / 256, /* tx clock 4800Hz */
+	300,     /* rx clock line, toggled by cassette circuit */
+	DEVCB_DRIVER_LINE_MEMBER(mekd2_state, cass_r), /* in rxd func */
+	DEVCB_DRIVER_LINE_MEMBER(mekd2_state, cass_w), /* out txd func */
+	DEVCB_NULL, /* in cts func */
+	DEVCB_NULL, /* out rts func */
+	DEVCB_NULL, /* in dcd func */
+	DEVCB_NULL  /* out irq func NOT USED */
 };
 
-static DEVICE_IMAGE_LOAD( mekd2_cart )
+DEVICE_IMAGE_LOAD_MEMBER( mekd2_state,mekd2_cart )
 {
 	static const char magic[] = "MEK6800D2";
 	char buff[9];
 	UINT16 addr, size;
-	UINT8 ident, *RAM = image.device().machine().region("maincpu")->base();
+	UINT8 ident, *RAM = memregion("maincpu")->base();
 
 	image.fread( buff, sizeof (buff));
 	if (memcmp(buff, magic, sizeof (buff)))
@@ -320,6 +374,30 @@ static DEVICE_IMAGE_LOAD( mekd2_cart )
 	return IMAGE_INIT_PASS;
 }
 
+TIMER_DEVICE_CALLBACK_MEMBER(mekd2_state::mekd2_c)
+{
+	m_cass_data[3]++;
+
+	if (m_cass_state)
+		m_cass->output(BIT(m_cass_data[3], 0) ? -1.0 : +1.0); // 2400Hz
+	else
+		m_cass->output(BIT(m_cass_data[3], 1) ? -1.0 : +1.0); // 1200Hz
+}
+
+TIMER_DEVICE_CALLBACK_MEMBER(mekd2_state::mekd2_p)
+{
+	/* cassette - turn 1200/2400Hz to a bit */
+	m_cass_data[1]++;
+	UINT8 cass_ws = (m_cass->input() > +0.03) ? 1 : 0;
+
+	if (cass_ws != m_cass_data[0])
+	{
+		m_cass_data[0] = cass_ws;
+		m_cass_data[2] = ((m_cass_data[1] < 12) ? 1 : 0);
+		m_cass_data[1] = 0;
+	}
+}
+
 /***********************************************************
 
     Machine
@@ -335,21 +413,23 @@ static MACHINE_CONFIG_START( mekd2, mekd2_state )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, default_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", default_cassette_interface )
 
 	/* Cartslot ?? does not come with one.. */
 	MCFG_CARTSLOT_ADD("cart")
 	MCFG_CARTSLOT_EXTENSION_LIST("d2")
 	MCFG_CARTSLOT_NOT_MANDATORY
-	MCFG_CARTSLOT_LOAD(mekd2_cart)
+	MCFG_CARTSLOT_LOAD(mekd2_state,mekd2_cart)
 
 	/* Devices */
 	MCFG_PIA6821_ADD("pia_s", mekd2_s_mc6821_intf)
 	MCFG_PIA6821_ADD("pia_u", mekd2_u_mc6821_intf)
 	MCFG_ACIA6850_ADD("acia", mekd2_acia_intf)
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("mekd2_c", mekd2_state, mekd2_c, attotime::from_hz(4800))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("mekd2_p", mekd2_state, mekd2_p, attotime::from_hz(40000))
 MACHINE_CONFIG_END
 
 /***********************************************************
@@ -369,5 +449,5 @@ ROM_END
 
 ***************************************************************************/
 
-/*    YEAR  NAME    PARENT  COMPAT  MACHINE   INPUT     INIT    COMPANY     FULLNAME */
-CONS( 1977, mekd2,	0,	0,  mekd2,    mekd2,	0,	"Motorola", "MEK6800D2" , GAME_NOT_WORKING )
+/*    YEAR  NAME    PARENT  COMPAT  MACHINE   INPUT  CLASS        INIT    COMPANY     FULLNAME   FLAGS */
+CONS( 1977, mekd2,  0,      0,      mekd2,    mekd2, driver_device, 0,  "Motorola", "MEK6800D2" , 0 )

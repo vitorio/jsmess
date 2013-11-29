@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     SMC CRT9007 CRT Video Processor and Controller (VPAC) emulation
@@ -44,7 +46,7 @@ const device_type CRT9007 = &device_creator<crt9007_device>;
 //  MACROS / CONSTANTS
 //**************************************************************************
 
-#define LOG 1
+#define LOG 0
 
 #define HAS_VALID_PARAMETERS \
 	(m_reg[0x00] && m_reg[0x01] && m_reg[0x07] && m_reg[0x08] && m_reg[0x09])
@@ -179,10 +181,10 @@ enum
 // operation modes
 enum
 {
-	OPERATION_MODE_REPETITIVE_MEMORY_ADDRESSING = 0,	// not implemented
+	OPERATION_MODE_REPETITIVE_MEMORY_ADDRESSING = 0,    // not implemented
 	OPERATION_MODE_DOUBLE_ROW_BUFFER = 1,
-	OPERATION_MODE_SINGLE_ROW_BUFFER = 4,				// not implemented
-	OPERATION_MODE_ATTRIBUTE_ASSEMBLE = 7				// not implemented
+	OPERATION_MODE_SINGLE_ROW_BUFFER = 4,               // not implemented
+	OPERATION_MODE_ATTRIBUTE_ASSEMBLE = 7               // not implemented
 };
 
 
@@ -190,23 +192,23 @@ enum
 enum
 {
 	ADDRESS_MODE_SEQUENTIAL_ADDRESSING = 0,
-	ADDRESS_MODE_SEQUENTIAL_ROLL_ADDRESSING,			// not implemented
-	ADDRESS_MODE_CONTIGUOUS_ROW_TABLE,					// not implemented
-	ADDRESS_MODE_LINKED_LIST_ROW_TABLE					// not implemented
+	ADDRESS_MODE_SEQUENTIAL_ROLL_ADDRESSING,            // not implemented
+	ADDRESS_MODE_CONTIGUOUS_ROW_TABLE,                  // not implemented
+	ADDRESS_MODE_LINKED_LIST_ROW_TABLE                  // not implemented
 };
 
 
 // interrupt enable register bits
-const int IE_VERTICAL_RETRACE			= 0x40;
-const int IE_LIGHT_PEN					= 0x20;
-const int IE_FRAME_TIMER				= 0x01;
+const int IE_VERTICAL_RETRACE           = 0x40;
+const int IE_LIGHT_PEN                  = 0x20;
+const int IE_FRAME_TIMER                = 0x01;
 
 // status register bits
-const int STATUS_INTERRUPT_PENDING		= 0x80;
-const int STATUS_VERTICAL_RETRACE		= 0x40;
-const int STATUS_LIGHT_PEN_UPDATE		= 0x20;
-const int STATUS_ODD_EVEN				= 0x04;
-const int STATUS_FRAME_TIMER_OCCURRED	= 0x01;
+const int STATUS_INTERRUPT_PENDING      = 0x80;
+const int STATUS_VERTICAL_RETRACE       = 0x40;
+const int STATUS_LIGHT_PEN_UPDATE       = 0x20;
+const int STATUS_ODD_EVEN               = 0x04;
+const int STATUS_FRAME_TIMER_OCCURRED   = 0x01;
 
 
 
@@ -215,7 +217,7 @@ const int STATUS_FRAME_TIMER_OCCURRED	= 0x01;
 //**************************************************************************
 
 // default address map
-static ADDRESS_MAP_START( crt9007, AS_0, 8 )
+static ADDRESS_MAP_START( crt9007, AS_0, 8, crt9007_device )
 	AM_RANGE(0x0000, 0x3fff) AM_RAM
 ADDRESS_MAP_END
 
@@ -231,7 +233,7 @@ ADDRESS_MAP_END
 
 inline UINT8 crt9007_device::readbyte(offs_t address)
 {
-	return space()->read_byte(address);
+	return space().read_byte(address);
 }
 
 
@@ -420,11 +422,7 @@ inline void crt9007_device::recompute_parameters()
 	// visible area
 	rectangle visarea;
 
-	visarea.min_x = m_hsync_end;
-	visarea.max_x = horiz_pix_total - 1;
-
-	visarea.min_y = m_vsync_end;
-	visarea.max_y = vert_pix_total - 1;
+	visarea.set(m_hsync_end, horiz_pix_total - 1, m_vsync_end, vert_pix_total - 1);
 
 	if (LOG)
 	{
@@ -450,9 +448,10 @@ inline void crt9007_device::recompute_parameters()
 //-------------------------------------------------
 
 crt9007_device::crt9007_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, CRT9007, "SMC CRT9007", tag, owner, clock),
-	  device_memory_interface(mconfig, *this),
-	  m_space_config("videoram", ENDIANNESS_LITTLE, 8, 14, 0, NULL, *ADDRESS_MAP_NAME(crt9007))
+	: device_t(mconfig, CRT9007, "SMC CRT9007", tag, owner, clock, "crt9007", __FILE__),
+		device_memory_interface(mconfig, *this),
+		device_video_interface(mconfig, *this),
+		m_space_config("videoram", ENDIANNESS_LITTLE, 8, 14, 0, NULL, *ADDRESS_MAP_NAME(crt9007))
 {
 	for (int i = 0; i < 0x3d; i++)
 		m_reg[i] = 0;
@@ -515,10 +514,6 @@ void crt9007_device::device_start()
 	m_out_slg_func.resolve(m_out_slg_cb, *this);
 	m_out_sld_func.resolve(m_out_sld_cb, *this);
 
-	// get the screen device
-	m_screen = machine().device<screen_device>(m_screen_tag);
-	assert(m_screen != NULL);
-
 	// set horizontal pixels per column
 	m_hpixels_per_column = hpixels_per_column;
 
@@ -534,6 +529,8 @@ void crt9007_device::device_start()
 void crt9007_device::device_reset()
 {
 	m_disp = 0;
+	m_vs = 0;
+	m_cblank = 0;
 
 	// HS = 1
 	m_out_hs_func(1);

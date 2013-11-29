@@ -21,15 +21,13 @@ static const UINT8 mcm6571a_shift[] =
 	1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0
 };
 
-VIDEO_START( poly88 )
+void poly88_state::video_start()
 {
-	poly88_state *state = machine.driver_data<poly88_state>();
-	state->m_FNT = machine.region("chargen")->base();
+	m_FNT = memregion("chargen")->base();
 }
 
-SCREEN_UPDATE( poly88 )
+UINT32 poly88_state::screen_update_poly88(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	poly88_state *state = screen->machine().driver_data<poly88_state>();
 	int x,y,j,b;
 	UINT16 addr;
 	int xpos;
@@ -41,7 +39,7 @@ SCREEN_UPDATE( poly88 )
 		xpos = 0;
 		for(x = 0; x < 64; x++ )
 		{
-			UINT8 code = state->m_video_ram[addr + x];
+			UINT8 code = m_video_ram[addr + x];
 			if ((code & 0x80)==0)
 			{
 				for(j = 0; j < 15; j++ )
@@ -51,22 +49,22 @@ SCREEN_UPDATE( poly88 )
 					{
 						r = b/5;
 						if (l==0 && r==0)
-							*BITMAP_ADDR16(bitmap, y*15+j, xpos+b ) = BIT(code,5) ? 0 : 1;
+							bitmap.pix16(y*15+j, xpos+b ) = BIT(code,5) ? 0 : 1;
 
 						if (l==0 && r==1)
-							*BITMAP_ADDR16(bitmap, y*15+j, xpos+b ) = BIT(code,2) ? 0 : 1;
+							bitmap.pix16(y*15+j, xpos+b ) = BIT(code,2) ? 0 : 1;
 
 						if (l==1 && r==0)
-							*BITMAP_ADDR16(bitmap, y*15+j, xpos+b ) = BIT(code,4) ? 0 : 1;
+							bitmap.pix16(y*15+j, xpos+b ) = BIT(code,4) ? 0 : 1;
 
 						if (l==1 && r==1)
-							*BITMAP_ADDR16(bitmap, y*15+j, xpos+b ) = BIT(code,1) ? 0 : 1;
+							bitmap.pix16(y*15+j, xpos+b ) = BIT(code,1) ? 0 : 1;
 
 						if (l==2 && r==0)
-							*BITMAP_ADDR16(bitmap, y*15+j, xpos+b ) = BIT(code,3) ? 0 : 1;
+							bitmap.pix16(y*15+j, xpos+b ) = BIT(code,3) ? 0 : 1;
 
 						if (l==2 && r==1)
-							*BITMAP_ADDR16(bitmap, y*15+j, xpos+b ) = BIT(code,0) ? 0 : 1;
+							bitmap.pix16(y*15+j, xpos+b ) = BIT(code,0) ? 0 : 1;
 					}
 				}
 			}
@@ -79,20 +77,20 @@ SCREEN_UPDATE( poly88 )
 					if (mcm6571a_shift[code]==0)
 					{
 						if (j < 9)
-							l = state->m_FNT[code*16 + j];
+							l = m_FNT[code*16 + j];
 					}
 					else
 					{
 						if ((j > 2) && (j < 12))
-							l = state->m_FNT[code*16 + j - 3];
+							l = m_FNT[code*16 + j - 3];
 					}
 
 					for(b = 0; b < 7; b++ )
-						*BITMAP_ADDR16(bitmap, y*15+j, xpos+b ) =  (l >> (6-b)) & 1;
+						bitmap.pix16(y*15+j, xpos+b ) =  (l >> (6-b)) & 1;
 
-					*BITMAP_ADDR16(bitmap, y*15+j, xpos+7 ) =  0;
-					*BITMAP_ADDR16(bitmap, y*15+j, xpos+8 ) =  0;
-					*BITMAP_ADDR16(bitmap, y*15+j, xpos+9 ) =  0;
+					bitmap.pix16(y*15+j, xpos+7 ) =  0;
+					bitmap.pix16(y*15+j, xpos+8 ) =  0;
+					bitmap.pix16(y*15+j, xpos+9 ) =  0;
 				}
 			}
 			xpos += 10;
@@ -100,4 +98,3 @@ SCREEN_UPDATE( poly88 )
 	}
 	return 0;
 }
-

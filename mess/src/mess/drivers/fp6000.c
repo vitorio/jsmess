@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Angelo Salese
 /***************************************************************************
 
     Casio FP-6000
@@ -25,11 +27,14 @@ class fp6000_state : public driver_device
 {
 public:
 	fp6000_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_gvram(*this, "gvram"),
+		m_vram(*this, "vram"),
+		m_maincpu(*this, "maincpu") { }
 
 	UINT8 *m_char_rom;
-	UINT16 *m_vram;
-	UINT16 *m_gvram;
+	required_shared_ptr<UINT16> m_gvram;
+	required_shared_ptr<UINT16> m_vram;
 	UINT8 m_crtc_vreg[0x100],m_crtc_index;
 
 	mc6845_device *m_mc6845;
@@ -37,36 +42,49 @@ public:
 	struct {
 		UINT16 cmd;
 	}m_key;
+	DECLARE_READ8_MEMBER(fp6000_pcg_r);
+	DECLARE_WRITE8_MEMBER(fp6000_pcg_w);
+	DECLARE_WRITE8_MEMBER(fp6000_6845_address_w);
+	DECLARE_WRITE8_MEMBER(fp6000_6845_data_w);
+	DECLARE_READ8_MEMBER(fp6000_key_r);
+	DECLARE_WRITE8_MEMBER(fp6000_key_w);
+	DECLARE_READ16_MEMBER(unk_r);
+	DECLARE_READ16_MEMBER(ex_board_r);
+	DECLARE_READ16_MEMBER(pit_r);
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void video_start();
+	UINT32 screen_update_fp6000(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
 };
 
-static VIDEO_START( fp6000 )
+void fp6000_state::video_start()
 {
 }
 
-#define mc6845_h_char_total 	(state->m_crtc_vreg[0])
-#define mc6845_h_display		(state->m_crtc_vreg[1])
-#define mc6845_h_sync_pos		(state->m_crtc_vreg[2])
-#define mc6845_sync_width		(state->m_crtc_vreg[3])
-#define mc6845_v_char_total		(state->m_crtc_vreg[4])
-#define mc6845_v_total_adj		(state->m_crtc_vreg[5])
-#define mc6845_v_display		(state->m_crtc_vreg[6])
-#define mc6845_v_sync_pos		(state->m_crtc_vreg[7])
-#define mc6845_mode_ctrl		(state->m_crtc_vreg[8])
-#define mc6845_tile_height		(state->m_crtc_vreg[9]+1)
-#define mc6845_cursor_y_start	(state->m_crtc_vreg[0x0a])
-#define mc6845_cursor_y_end 	(state->m_crtc_vreg[0x0b])
-#define mc6845_start_addr		(((state->m_crtc_vreg[0x0c]<<8) & 0x3f00) | (state->m_crtc_vreg[0x0d] & 0xff))
-#define mc6845_cursor_addr  	(((state->m_crtc_vreg[0x0e]<<8) & 0x3f00) | (state->m_crtc_vreg[0x0f] & 0xff))
-#define mc6845_light_pen_addr	(((state->m_crtc_vreg[0x10]<<8) & 0x3f00) | (state->m_crtc_vreg[0x11] & 0xff))
-#define mc6845_update_addr  	(((state->m_crtc_vreg[0x12]<<8) & 0x3f00) | (state->m_crtc_vreg[0x13] & 0xff))
+#define mc6845_h_char_total     (m_crtc_vreg[0])
+#define mc6845_h_display        (m_crtc_vreg[1])
+#define mc6845_h_sync_pos       (m_crtc_vreg[2])
+#define mc6845_sync_width       (m_crtc_vreg[3])
+#define mc6845_v_char_total     (m_crtc_vreg[4])
+#define mc6845_v_total_adj      (m_crtc_vreg[5])
+#define mc6845_v_display        (m_crtc_vreg[6])
+#define mc6845_v_sync_pos       (m_crtc_vreg[7])
+#define mc6845_mode_ctrl        (m_crtc_vreg[8])
+#define mc6845_tile_height      (m_crtc_vreg[9]+1)
+#define mc6845_cursor_y_start   (m_crtc_vreg[0x0a])
+#define mc6845_cursor_y_end     (m_crtc_vreg[0x0b])
+#define mc6845_start_addr       (((m_crtc_vreg[0x0c]<<8) & 0x3f00) | (m_crtc_vreg[0x0d] & 0xff))
+#define mc6845_cursor_addr      (((m_crtc_vreg[0x0e]<<8) & 0x3f00) | (m_crtc_vreg[0x0f] & 0xff))
+#define mc6845_light_pen_addr   (((m_crtc_vreg[0x10]<<8) & 0x3f00) | (m_crtc_vreg[0x11] & 0xff))
+#define mc6845_update_addr      (((m_crtc_vreg[0x12]<<8) & 0x3f00) | (m_crtc_vreg[0x13] & 0xff))
 
 
-static SCREEN_UPDATE( fp6000 )
+UINT32 fp6000_state::screen_update_fp6000(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	fp6000_state *state = screen->machine().driver_data<fp6000_state>();
 	int x,y;
 	int xi,yi;
-	UINT8 *gfx_rom = screen->machine().region("pcg")->base();
+	UINT8 *gfx_rom = memregion("pcg")->base();
 	UINT32 count;
 
 	count = 0;
@@ -77,10 +95,10 @@ static SCREEN_UPDATE( fp6000 )
 		{
 			for(xi=0;xi<4;xi++)
 			{
-				int dot = (state->m_gvram[count] >> (12-xi*4)) & 0xf;
+				int dot = (m_gvram[count] >> (12-xi*4)) & 0xf;
 
 				if(y < 400 && x*4+xi < 640) /* TODO: safety check */
-					*BITMAP_ADDR16(bitmap, y, x*4+xi) = screen->machine().pens[dot];
+					bitmap.pix16(y, x*4+xi) = machine().pens[dot];
 			}
 
 			count++;
@@ -91,8 +109,8 @@ static SCREEN_UPDATE( fp6000 )
 	{
 		for(x=0;x<mc6845_h_display;x++)
 		{
-			int tile = state->m_vram[x+y*mc6845_h_display] & 0xff;
-			int color = (state->m_vram[x+y*mc6845_h_display] & 0x700) >> 8;
+			int tile = m_vram[x+y*mc6845_h_display] & 0xff;
+			int color = (m_vram[x+y*mc6845_h_display] & 0x700) >> 8;
 			int pen;
 
 			for(yi=0;yi<mc6845_tile_height;yi++)
@@ -103,7 +121,7 @@ static SCREEN_UPDATE( fp6000 )
 
 					if(pen != -1)
 						if(y*mc6845_tile_height < 400 && x*8+xi < 640) /* TODO: safety check */
-							*BITMAP_ADDR16(bitmap, y*mc6845_tile_height+yi, x*8+xi) = screen->machine().pens[pen];
+							bitmap.pix16(y*mc6845_tile_height+yi, x*8+xi) = machine().pens[pen];
 				}
 			}
 		}
@@ -118,7 +136,7 @@ static SCREEN_UPDATE( fp6000 )
 			{
 				x = mc6845_cursor_addr % mc6845_h_display;
 				y = mc6845_cursor_addr / mc6845_h_display;
-				*BITMAP_ADDR16(bitmap, y*mc6845_tile_height+yi, x*8+xi) = screen->machine().pens[7];
+				bitmap.pix16(y*mc6845_tile_height+yi, x*8+xi) = machine().pens[7];
 			}
 		}
 	}
@@ -126,59 +144,49 @@ static SCREEN_UPDATE( fp6000 )
 	return 0;
 }
 
-static READ8_HANDLER( fp6000_pcg_r )
+READ8_MEMBER(fp6000_state::fp6000_pcg_r)
 {
-	fp6000_state *state = space->machine().driver_data<fp6000_state>();
-
-	return state->m_char_rom[offset];
+	return m_char_rom[offset];
 }
 
-static WRITE8_HANDLER( fp6000_pcg_w )
+WRITE8_MEMBER(fp6000_state::fp6000_pcg_w)
 {
-	fp6000_state *state = space->machine().driver_data<fp6000_state>();
-
-	state->m_char_rom[offset] = data;
-	gfx_element_mark_dirty(space->machine().gfx[0], offset >> 4);
+	m_char_rom[offset] = data;
+	machine().gfx[0]->mark_dirty(offset >> 4);
 }
 
-static WRITE8_HANDLER( fp6000_6845_address_w )
+WRITE8_MEMBER(fp6000_state::fp6000_6845_address_w)
 {
-	fp6000_state *state = space->machine().driver_data<fp6000_state>();
-
-	state->m_crtc_index = data;
-	state->m_mc6845->address_w(*space, offset, data);
+	m_crtc_index = data;
+	m_mc6845->address_w(space, offset, data);
 }
 
-static WRITE8_HANDLER( fp6000_6845_data_w )
+WRITE8_MEMBER(fp6000_state::fp6000_6845_data_w)
 {
-	fp6000_state *state = space->machine().driver_data<fp6000_state>();
-
-	state->m_crtc_vreg[state->m_crtc_index] = data;
-	state->m_mc6845->register_w(*space, offset, data);
+	m_crtc_vreg[m_crtc_index] = data;
+	m_mc6845->register_w(space, offset, data);
 }
 
-static ADDRESS_MAP_START(fp6000_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START(fp6000_map, AS_PROGRAM, 16, fp6000_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x00000,0xbffff) AM_RAM
-	AM_RANGE(0xc0000,0xdffff) AM_RAM AM_BASE_MEMBER(fp6000_state,m_gvram)//gvram
-	AM_RANGE(0xe0000,0xe0fff) AM_RAM AM_BASE_MEMBER(fp6000_state,m_vram)
+	AM_RANGE(0xc0000,0xdffff) AM_RAM AM_SHARE("gvram")//gvram
+	AM_RANGE(0xe0000,0xe0fff) AM_RAM AM_SHARE("vram")
 	AM_RANGE(0xe7000,0xe7fff) AM_READWRITE8(fp6000_pcg_r,fp6000_pcg_w,0xffff)
 	AM_RANGE(0xf0000,0xfffff) AM_ROM AM_REGION("ipl", 0)
 ADDRESS_MAP_END
 
 /* Hack until I understand what UART is this one ... */
-static READ8_HANDLER( fp6000_key_r )
+READ8_MEMBER(fp6000_state::fp6000_key_r)
 {
-	fp6000_state *state = space->machine().driver_data<fp6000_state>();
-
 	if(offset)
 	{
-		switch(state->m_key.cmd)
+		switch(m_key.cmd)
 		{
 			case 0x7e15: return 3;
 			case 0x1b15: return 1;
 			case 0x2415: return 0;
-			default: printf("%04x\n",state->m_key.cmd);
+			default: printf("%04x\n",m_key.cmd);
 		}
 		return 0;
 	}
@@ -186,32 +194,30 @@ static READ8_HANDLER( fp6000_key_r )
 	return 0x40;
 }
 
-static WRITE8_HANDLER( fp6000_key_w )
+WRITE8_MEMBER(fp6000_state::fp6000_key_w)
 {
-	fp6000_state *state = space->machine().driver_data<fp6000_state>();
-
 	if(offset)
-		state->m_key.cmd = (data & 0xff) | (state->m_key.cmd << 8);
+		m_key.cmd = (data & 0xff) | (m_key.cmd << 8);
 	else
-		state->m_key.cmd = (data << 8) | (state->m_key.cmd & 0xff);
+		m_key.cmd = (data << 8) | (m_key.cmd & 0xff);
 }
 
-static READ16_HANDLER( unk_r )
+READ16_MEMBER(fp6000_state::unk_r)
 {
 	return 0x40;
 }
 
-static READ16_HANDLER( ex_board_r )
+READ16_MEMBER(fp6000_state::ex_board_r)
 {
 	return 0xffff;
 }
 
-static READ16_HANDLER( pit_r )
+READ16_MEMBER(fp6000_state::pit_r)
 {
-	return space->machine().rand();
+	return machine().rand();
 }
 
-static ADDRESS_MAP_START(fp6000_io, AS_IO, 16 )
+static ADDRESS_MAP_START(fp6000_io, AS_IO, 16, fp6000_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x08, 0x09) AM_READ(ex_board_r) // BIOS of some sort ...
 	AM_RANGE(0x0a, 0x0b) AM_READ_PORT("DSW") // installed RAM id?
@@ -268,30 +274,28 @@ static GFXDECODE_START( fp6000 )
 GFXDECODE_END
 
 
-static MACHINE_START(fp6000)
+void fp6000_state::machine_start()
 {
-	fp6000_state *state = machine.driver_data<fp6000_state>();
-
-	state->m_char_rom = machine.region("pcg")->base();
-	state->m_mc6845 = machine.device<mc6845_device>("crtc");
+	m_char_rom = memregion("pcg")->base();
+	m_mc6845 = machine().device<mc6845_device>("crtc");
 }
 
-static MACHINE_RESET(fp6000)
+void fp6000_state::machine_reset()
 {
 }
 
-static const mc6845_interface mc6845_intf =
+static MC6845_INTERFACE( mc6845_intf )
 {
-	"screen",	/* screen we are acting on */
-	8,			/* number of pixels per video memory address */
-	NULL,		/* before pixel update callback */
-	NULL,		/* row update callback */
-	NULL,		/* after pixel update callback */
-	DEVCB_NULL,	/* callback for display state changes */
-	DEVCB_NULL,	/* callback for cursor state changes */
-	DEVCB_NULL,	/* HSYNC callback */
-	DEVCB_NULL,	/* VSYNC callback */
-	NULL		/* update address callback */
+	false,      /* show border area */
+	8,          /* number of pixels per video memory address */
+	NULL,       /* before pixel update callback */
+	NULL,       /* row update callback */
+	NULL,       /* after pixel update callback */
+	DEVCB_NULL, /* callback for display state changes */
+	DEVCB_NULL, /* callback for cursor state changes */
+	DEVCB_NULL, /* HSYNC callback */
+	DEVCB_NULL, /* VSYNC callback */
+	NULL        /* update address callback */
 };
 
 static MACHINE_CONFIG_START( fp6000, fp6000_state )
@@ -300,25 +304,21 @@ static MACHINE_CONFIG_START( fp6000, fp6000_state )
 	MCFG_CPU_PROGRAM_MAP(fp6000_map)
 	MCFG_CPU_IO_MAP(fp6000_io)
 
-	MCFG_MACHINE_START(fp6000)
-	MCFG_MACHINE_RESET(fp6000)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
-	MCFG_SCREEN_UPDATE(fp6000)
+	MCFG_SCREEN_UPDATE_DRIVER(fp6000_state, screen_update_fp6000)
 
-	MCFG_MC6845_ADD("crtc", H46505, 16000000/5, mc6845_intf)	/* unknown clock, hand tuned to get ~60 fps */
+	MCFG_MC6845_ADD("crtc", H46505, "screen", 16000000/5, mc6845_intf)    /* unknown clock, hand tuned to get ~60 fps */
 
 	MCFG_PALETTE_LENGTH(8)
-//  MCFG_PALETTE_INIT(black_and_white)
+//  MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 	MCFG_GFXDECODE(fp6000)
 
-	MCFG_VIDEO_START(fp6000)
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -335,4 +335,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY           FULLNAME       FLAGS */
-COMP( 1985, fp6000,  0,      0,       fp6000,     fp6000,    0,     "Casio",   "FP-6000", GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 1985, fp6000,  0,      0,       fp6000,     fp6000, driver_device,    0,     "Casio",   "FP-6000", GAME_NOT_WORKING | GAME_NO_SOUND)

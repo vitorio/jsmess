@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Angelo Salese
 /*******************************************************************************************************************************************************
 
     PC-6001 series (c) 1981 NEC
@@ -25,6 +27,7 @@
                   but, according to an original video reference that I've seen, that screen should actually some kind of weird garbage on it ...
     - AX6 - Powered Knight: doesn't work too well, according to the asm code it asks the player to press either 'B' or 'C' then a number but
                             nothing is shown on screen, other emus behaves the same, bad dump?
+    - Dawn Patrol (cart): presumably too slow;
     (Mk2 mode 5 games)
     - 3D Golf Simulation Super Version: gameplay / inputs looks broken
     - American Truck: Screen is offset at the loading screen, loading bug?
@@ -124,9 +127,10 @@ irq vector 0x26:                                                                
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/i8255.h"
-#include "machine/msm8251.h"
-#include "video/m6847.h"
+#include "machine/i8251.h"
+#include "video/mc6847.h"
 #include "sound/ay8910.h"
+#include "sound/upd7752.h"
 #include "sound/wave.h"
 
 #include "imagedev/cassette.h"
@@ -139,12 +143,33 @@ class pc6001_state : public driver_device
 public:
 	pc6001_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_ppi(*this, "ppi8255")
-	{ }
+		m_ppi(*this, "ppi8255"),
+		m_ram(*this, "ram"),
+		m_maincpu(*this, "maincpu"),
+		m_cassette(*this, "cassette"),
+		m_region_maincpu(*this, "maincpu"),
+		m_region_gfx1(*this, "gfx1"),
+		m_region_cas(*this, "cas"),
+		m_region_cart_img(*this, "cart_img"),
+		m_io_mode4_dsw(*this, "MODE4_DSW"),
+		m_io_p1(*this, "P1"),
+		m_io_p2(*this, "P2"),
+		m_io_key1(*this, "key1"),
+		m_io_key2(*this, "key2"),
+		m_io_key3(*this, "key3"),
+		m_io_key_modifiers(*this, "key_modifiers"),
+		m_bank1(*this, "bank1"),
+		m_bank2(*this, "bank2"),
+		m_bank3(*this, "bank3"),
+		m_bank4(*this, "bank4"),
+		m_bank5(*this, "bank5"),
+		m_bank6(*this, "bank6"),
+		m_bank7(*this, "bank7"),
+		m_bank8(*this, "bank8") { }
 
 	required_device<i8255_device> m_ppi;
 
-	UINT8 *m_ram;
+	optional_shared_ptr<UINT8> m_ram;
 	UINT8 *m_video_ram;
 	UINT8 m_irq_vector;
 	UINT8 m_cas_switch;
@@ -176,6 +201,107 @@ public:
 	UINT32 m_old_key1;
 	UINT32 m_old_key2;
 	UINT32 m_old_key3;
+	DECLARE_WRITE8_MEMBER(pc6001_system_latch_w);
+	DECLARE_READ8_MEMBER(nec_ppi8255_r);
+	DECLARE_WRITE8_MEMBER(nec_ppi8255_w);
+	DECLARE_WRITE8_MEMBER(pc6001m2_bank_r0_w);
+	DECLARE_WRITE8_MEMBER(pc6001m2_bank_r1_w);
+	DECLARE_WRITE8_MEMBER(pc6001m2_bank_w0_w);
+	DECLARE_WRITE8_MEMBER(pc6001m2_opt_bank_w);
+	DECLARE_WRITE8_MEMBER(work_ram0_w);
+	DECLARE_WRITE8_MEMBER(work_ram1_w);
+	DECLARE_WRITE8_MEMBER(work_ram2_w);
+	DECLARE_WRITE8_MEMBER(work_ram3_w);
+	DECLARE_WRITE8_MEMBER(work_ram4_w);
+	DECLARE_WRITE8_MEMBER(work_ram5_w);
+	DECLARE_WRITE8_MEMBER(work_ram6_w);
+	DECLARE_WRITE8_MEMBER(work_ram7_w);
+	DECLARE_WRITE8_MEMBER(necmk2_ppi8255_w);
+	DECLARE_WRITE8_MEMBER(pc6001m2_system_latch_w);
+	DECLARE_WRITE8_MEMBER(pc6001m2_vram_bank_w);
+	DECLARE_WRITE8_MEMBER(pc6001m2_col_bank_w);
+	DECLARE_WRITE8_MEMBER(pc6001m2_0xf3_w);
+	DECLARE_WRITE8_MEMBER(pc6001m2_timer_adj_w);
+	DECLARE_WRITE8_MEMBER(pc6001m2_timer_irqv_w);
+	DECLARE_READ8_MEMBER(pc6001m2_bank_r0_r);
+	DECLARE_READ8_MEMBER(pc6001m2_bank_r1_r);
+	DECLARE_READ8_MEMBER(pc6001m2_bank_w0_r);
+	DECLARE_READ8_MEMBER(pc6601_fdc_r);
+	DECLARE_WRITE8_MEMBER(pc6601_fdc_w);
+	DECLARE_READ8_MEMBER(pc6001sr_bank_rn_r);
+	DECLARE_WRITE8_MEMBER(pc6001sr_bank_rn_w);
+	DECLARE_READ8_MEMBER(pc6001sr_bank_wn_r);
+	DECLARE_WRITE8_MEMBER(pc6001sr_bank_wn_w);
+	DECLARE_WRITE8_MEMBER(sr_work_ram0_w);
+	DECLARE_WRITE8_MEMBER(sr_work_ram1_w);
+	DECLARE_WRITE8_MEMBER(sr_work_ram2_w);
+	DECLARE_WRITE8_MEMBER(sr_work_ram3_w);
+	DECLARE_WRITE8_MEMBER(sr_work_ram4_w);
+	DECLARE_WRITE8_MEMBER(sr_work_ram5_w);
+	DECLARE_WRITE8_MEMBER(sr_work_ram6_w);
+	DECLARE_WRITE8_MEMBER(sr_work_ram7_w);
+	DECLARE_WRITE8_MEMBER(pc6001sr_mode_w);
+	DECLARE_WRITE8_MEMBER(pc6001sr_vram_bank_w);
+	DECLARE_WRITE8_MEMBER(pc6001sr_system_latch_w);
+	DECLARE_WRITE8_MEMBER(necsr_ppi8255_w);
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void video_start();
+	virtual void palette_init();
+	DECLARE_MACHINE_RESET(pc6001m2);
+	DECLARE_PALETTE_INIT(pc6001m2);
+	DECLARE_MACHINE_RESET(pc6001sr);
+	UINT32 screen_update_pc6001(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	UINT32 screen_update_pc6001m2(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	UINT32 screen_update_pc6001sr(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	INTERRUPT_GEN_MEMBER(pc6001_interrupt);
+	INTERRUPT_GEN_MEMBER(pc6001sr_interrupt);
+	TIMER_CALLBACK_MEMBER(audio_callback);
+	TIMER_DEVICE_CALLBACK_MEMBER(cassette_callback);
+	TIMER_DEVICE_CALLBACK_MEMBER(keyboard_callback);
+	DECLARE_READ8_MEMBER(pc6001_8255_porta_r);
+	DECLARE_WRITE8_MEMBER(pc6001_8255_porta_w);
+	DECLARE_READ8_MEMBER(pc6001_8255_portb_r);
+	DECLARE_WRITE8_MEMBER(pc6001_8255_portb_w);
+	DECLARE_WRITE8_MEMBER(pc6001_8255_portc_w);
+	DECLARE_READ8_MEMBER(pc6001_8255_portc_r);
+	DECLARE_DEVICE_IMAGE_LOAD_MEMBER(pc6001_cass);
+	IRQ_CALLBACK_MEMBER(pc6001_irq_callback);
+protected:
+	required_device<cpu_device> m_maincpu;
+	required_device<device_t> m_cassette;
+	required_memory_region m_region_maincpu;
+	required_memory_region m_region_gfx1;
+	required_memory_region m_region_cas;
+	required_memory_region m_region_cart_img;
+	required_ioport m_io_mode4_dsw;
+	required_ioport m_io_p1;
+	required_ioport m_io_p2;
+	required_ioport m_io_key1;
+	required_ioport m_io_key2;
+	required_ioport m_io_key3;
+	required_ioport m_io_key_modifiers;
+	required_memory_bank m_bank1;
+	optional_memory_bank m_bank2;
+	optional_memory_bank m_bank3;
+	optional_memory_bank m_bank4;
+	optional_memory_bank m_bank5;
+	optional_memory_bank m_bank6;
+	optional_memory_bank m_bank7;
+	optional_memory_bank m_bank8;
+
+	void draw_gfx_mode4(bitmap_ind16 &bitmap,const rectangle &cliprect,int attr);
+	void draw_bitmap_2bpp(bitmap_ind16 &bitmap,const rectangle &cliprect, int attr);
+	void draw_tile_3bpp(bitmap_ind16 &bitmap,const rectangle &cliprect,int x,int y,int tile,int attr);
+	void draw_tile_text(bitmap_ind16 &bitmap,const rectangle &cliprect,int x,int y,int tile,int attr,int has_mc6847);
+	void draw_border(bitmap_ind16 &bitmap,const rectangle &cliprect,int attr,int has_mc6847);
+	void pc6001_screen_draw(bitmap_ind16 &bitmap,const rectangle &cliprect, int has_mc6847);
+	UINT8 check_joy_press();
+	UINT8 check_keyboard_press();
+	void vram_bank_change(UINT8 vram_bank);
+	ATTR_CONST UINT8 pc6001_get_attributes(UINT8 c,int scanline, int pos);
+	const UINT8 *pc6001_get_video_ram(int scanline);
+	UINT8 pc6001_get_char_rom(UINT8 ch, int line);
 };
 
 
@@ -184,9 +310,8 @@ public:
 
 #define IRQ_LOG (0)
 
-static VIDEO_START( pc6001 )
+void pc6001_state::video_start()
 {
-	pc6001_state *state = machine.driver_data<pc6001_state>();
 	#if 0
 	m6847_config cfg;
 
@@ -195,15 +320,14 @@ static VIDEO_START( pc6001 )
 	cfg.get_attributes = pc6001_get_attributes;
 	cfg.get_video_ram = pc6001_get_video_ram;
 	cfg.get_char_rom = pc6001_get_char_rom;
-	m6847_init(machine, &cfg);
+	m6847_init(machine(), &cfg);
 	#endif
-	state->m_video_ram = auto_alloc_array(machine, UINT8, 0x4000);
+	m_video_ram = auto_alloc_array(machine(), UINT8, 0x4000);
 }
 
 /* this is known as gfx mode 4 */
-static void draw_gfx_mode4(running_machine &machine, bitmap_t *bitmap,const rectangle *cliprect,int attr)
+void pc6001_state::draw_gfx_mode4(bitmap_ind16 &bitmap,const rectangle &cliprect,int attr)
 {
-	pc6001_state *state = machine.driver_data<pc6001_state>();
 	int x,y,xi;
 	int fgcol,color;
 	int col_setting;
@@ -219,13 +343,16 @@ static void draw_gfx_mode4(running_machine &machine, bitmap_t *bitmap,const rect
 		{ 0, 5, 2, 7 }, //Pink / Green
 		{ 0, 2, 5, 7 }, //Green / Pink
 	};
-	col_setting = input_port_read(machine,"MODE4_DSW") & 7;
+	col_setting = m_io_mode4_dsw->read() & 7;
+
+	if((attr & 0x0c) != 0x0c)
+		popmessage("Mode 4 vram attr != 0x0c, contact MESSdev");
 
 	for(y=0;y<192;y++)
 	{
 		for(x=0;x<32;x++)
 		{
-			int tile = state->m_video_ram[(x+(y*32))+0x200];
+			int tile = m_video_ram[(x+(y*32))+0x200];
 
 			if(col_setting == 0x00) //monochrome
 			{
@@ -235,7 +362,7 @@ static void draw_gfx_mode4(running_machine &machine, bitmap_t *bitmap,const rect
 
 					color = ((tile)>>(7-xi) & 1) ? fgcol : 0;
 
-					*BITMAP_ADDR16(bitmap, (y+24), (x*8+xi)+32) = machine.pens[color];
+					bitmap.pix16((y+24), (x*8+xi)+32) = machine().pens[color];
 				}
 			}
 			else
@@ -246,17 +373,16 @@ static void draw_gfx_mode4(running_machine &machine, bitmap_t *bitmap,const rect
 
 					color = (attr & 2) ? (pen_wattr[col_setting-1][fgcol]) : (pen_gattr[col_setting-1][fgcol]);
 
-					*BITMAP_ADDR16(bitmap, (y+24), ((x*8+xi*2)+0)+32) = machine.pens[color];
-					*BITMAP_ADDR16(bitmap, (y+24), ((x*8+xi*2)+1)+32) = machine.pens[color];
+					bitmap.pix16((y+24), ((x*8+xi*2)+0)+32) = machine().pens[color];
+					bitmap.pix16((y+24), ((x*8+xi*2)+1)+32) = machine().pens[color];
 				}
 			}
 		}
 	}
 }
 
-static void draw_bitmap_2bpp(running_machine &machine, bitmap_t *bitmap,const rectangle *cliprect, int attr)
+void pc6001_state::draw_bitmap_2bpp(bitmap_ind16 &bitmap,const rectangle &cliprect, int attr)
 {
-	pc6001_state *state = machine.driver_data<pc6001_state>();
 	int color,x,y,xi,yi;
 
 	int shrink_x = 2*4;
@@ -264,29 +390,57 @@ static void draw_bitmap_2bpp(running_machine &machine, bitmap_t *bitmap,const re
 	int w = (shrink_x == 8) ? 32 : 16;
 	int col_bank = ((attr & 2)<<1);
 
-	for(y=0;y<(192/shrink_y);y++)
+	if(attr & 4)
 	{
-		for(x=0;x<w;x++)
+		for(y=0;y<(192/shrink_y);y++)
 		{
-			int tile = state->m_video_ram[(x+(y*32))+0x200];
-
-			for(yi=0;yi<shrink_y;yi++)
+			for(x=0;x<w;x++)
 			{
-				for(xi=0;xi<shrink_x;xi++)
-				{
-					int i;
-					i = (shrink_x == 8) ? (xi & 0x06) : (xi & 0x0c)>>1;
-					color = ((tile >> i) & 3)+8;
-					color+= col_bank;
+				int tile = m_video_ram[(x+(y*32))+0x200];
 
-					*BITMAP_ADDR16(bitmap, ((y*shrink_y+yi)+24), (x*shrink_x+((shrink_x-1)-xi))+32) = machine.pens[color];
+				for(yi=0;yi<shrink_y;yi++)
+				{
+					for(xi=0;xi<shrink_x;xi++)
+					{
+						int i;
+						i = (shrink_x == 8) ? (xi & 0x06) : (xi & 0x0c)>>1;
+						color = ((tile >> i) & 3)+8;
+						color+= col_bank;
+
+						bitmap.pix16(((y*shrink_y+yi)+24), (x*shrink_x+((shrink_x-1)-xi))+32) = machine().pens[color];
+					}
+				}
+			}
+		}
+	}
+	else /* TODO: clean this up */
+	{
+		for(y=0;y<(192/shrink_y);y+=3)
+		{
+			for(x=0;x<w;x++)
+			{
+				int tile = m_video_ram[(x+((y/3)*32))+0x200];
+
+				for(yi=0;yi<shrink_y;yi++)
+				{
+					for(xi=0;xi<shrink_x;xi++)
+					{
+						int i;
+						i = (shrink_x == 8) ? (xi & 0x06) : (xi & 0x0c)>>1;
+						color = ((tile >> i) & 3)+8;
+						color+= col_bank;
+
+						bitmap.pix16((((y+0)*shrink_y+yi)+24), (x*shrink_x+((shrink_x-1)-xi))+32) = machine().pens[color];
+						bitmap.pix16((((y+1)*shrink_y+yi)+24), (x*shrink_x+((shrink_x-1)-xi))+32) = machine().pens[color];
+						bitmap.pix16((((y+2)*shrink_y+yi)+24), (x*shrink_x+((shrink_x-1)-xi))+32) = machine().pens[color];
+					}
 				}
 			}
 		}
 	}
 }
 
-static void draw_tile_3bpp(running_machine &machine, bitmap_t *bitmap,const rectangle *cliprect,int x,int y,int tile,int attr)
+void pc6001_state::draw_tile_3bpp(bitmap_ind16 &bitmap,const rectangle &cliprect,int x,int y,int tile,int attr)
 {
 	int color,pen,xi,yi;
 
@@ -313,15 +467,15 @@ static void draw_tile_3bpp(running_machine &machine, bitmap_t *bitmap,const rect
 
 			color = ((tile >> i) & 1) ? pen+8 : 0;
 
-			*BITMAP_ADDR16(bitmap, ((y*12+(11-yi))+24), (x*8+(7-xi))+32) = machine.pens[color];
+			bitmap.pix16(((y*12+(11-yi))+24), (x*8+(7-xi))+32) = machine().pens[color];
 		}
 	}
 }
 
-static void draw_tile_text(running_machine &machine, bitmap_t *bitmap,const rectangle *cliprect,int x,int y,int tile,int attr,int has_mc6847)
+void pc6001_state::draw_tile_text(bitmap_ind16 &bitmap,const rectangle &cliprect,int x,int y,int tile,int attr,int has_mc6847)
 {
 	int xi,yi,pen,fgcol,color;
-	UINT8 *gfx_data = machine.region("gfx1")->base();
+	UINT8 *gfx_data = m_region_gfx1->base();
 
 	for(yi=0;yi<12;yi++)
 	{
@@ -349,12 +503,12 @@ static void draw_tile_text(running_machine &machine, bitmap_t *bitmap,const rect
 					color = pen ? fgcol : 0;
 			}
 
-			*BITMAP_ADDR16(bitmap, ((y*12+yi)+24), (x*8+xi)+32) = machine.pens[color];
+			bitmap.pix16(((y*12+yi)+24), (x*8+xi)+32) = machine().pens[color];
 		}
 	}
 }
 
-static void draw_border(running_machine &machine, bitmap_t *bitmap,const rectangle *cliprect,int attr,int has_mc6847)
+void pc6001_state::draw_border(bitmap_ind16 &bitmap,const rectangle &cliprect,int attr,int has_mc6847)
 {
 	int x,y,color;
 
@@ -371,30 +525,29 @@ static void draw_border(running_machine &machine, bitmap_t *bitmap,const rectang
 			else
 				color = 0; //FIXME: other modes not yet checked
 
-			*BITMAP_ADDR16(bitmap, y, x) = machine.pens[color];
+			bitmap.pix16(y, x) = machine().pens[color];
 		}
 	}
 }
 
-static void pc6001_screen_draw(running_machine &machine, bitmap_t *bitmap,const rectangle *cliprect, int has_mc6847)
+void pc6001_state::pc6001_screen_draw(bitmap_ind16 &bitmap,const rectangle &cliprect, int has_mc6847)
 {
-	pc6001_state *state = machine.driver_data<pc6001_state>();
 	int x,y;
 	int tile,attr;
 
-	attr = state->m_video_ram[0];
+	attr = m_video_ram[0];
 
-	draw_border(machine,bitmap,cliprect,attr,has_mc6847);
+	draw_border(bitmap,cliprect,attr,has_mc6847);
 
 	if(attr & 0x80) // gfx mode
 	{
 		if(attr & 0x10) // 256x192x1 mode (FIXME: might be a different trigger)
 		{
-			draw_gfx_mode4(machine,bitmap,cliprect,attr);
+			draw_gfx_mode4(bitmap,cliprect,attr);
 		}
 		else // 128x192x2 mode
 		{
-			draw_bitmap_2bpp(machine,bitmap,cliprect,attr);
+			draw_bitmap_2bpp(bitmap,cliprect,attr);
 		}
 	}
 	else // text mode
@@ -403,36 +556,35 @@ static void pc6001_screen_draw(running_machine &machine, bitmap_t *bitmap,const 
 		{
 			for(x=0;x<32;x++)
 			{
-				tile = state->m_video_ram[(x+(y*32))+0x200];
-				attr = state->m_video_ram[(x+(y*32)) & 0x1ff];
+				tile = m_video_ram[(x+(y*32))+0x200];
+				attr = m_video_ram[(x+(y*32)) & 0x1ff];
 
 				if(attr & 0x40)
 				{
-					draw_tile_3bpp(machine,bitmap,cliprect,x,y,tile,attr);
+					draw_tile_3bpp(bitmap,cliprect,x,y,tile,attr);
 				}
 				else
 				{
-					draw_tile_text(machine,bitmap,cliprect,x,y,tile,attr,has_mc6847);
+					draw_tile_text(bitmap,cliprect,x,y,tile,attr,has_mc6847);
 				}
 			}
 		}
 	}
 }
 
-static SCREEN_UPDATE( pc6001 )
+UINT32 pc6001_state::screen_update_pc6001(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	pc6001_screen_draw(screen->machine(),bitmap,cliprect,1);
+	pc6001_screen_draw(bitmap,cliprect,1);
 
 	return 0;
 }
 
-static SCREEN_UPDATE( pc6001m2 )
+UINT32 pc6001_state::screen_update_pc6001m2(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	pc6001_state *state = screen->machine().driver_data<pc6001_state>();
 	int x,y,tile,attr;
 
 	/* note: bitmap mode have priority over everything else, check American Truck */
-	if(state->m_exgfx_bitmap_mode)
+	if(m_exgfx_bitmap_mode)
 	{
 		int count,color,i;
 
@@ -455,8 +607,8 @@ static SCREEN_UPDATE( pc6001m2 )
 					color |= pal_num[(pen[0] & 3) | ((pen[1] & 3) << 2)];
 #endif
 
-					pen[0] = state->m_video_ram[count+0x0000] >> (6-i*2) & 3;
-					pen[1] = state->m_video_ram[count+0x2000] >> (6-i*2) & 3;
+					pen[0] = m_video_ram[count+0x0000] >> (6-i*2) & 3;
+					pen[1] = m_video_ram[count+0x2000] >> (6-i*2) & 3;
 
 					color = 0x10;
 					color |= ((pen[0] & 1) << 2);
@@ -464,17 +616,17 @@ static SCREEN_UPDATE( pc6001m2 )
 					color |= ((pen[1] & 1) << 1);
 					color |= ((pen[1] & 2) << 2);
 
-					if (((x+i)*2+0) <= screen->visible_area().max_x && (y) <= screen->visible_area().max_y)
-						*BITMAP_ADDR16(bitmap, y, (x+i)*2+0) = screen->machine().pens[color];
-					if (((x+i)*2+1) <= screen->visible_area().max_x && (y) <= screen->visible_area().max_y)
-						*BITMAP_ADDR16(bitmap, y, (x+i)*2+1) = screen->machine().pens[color];
+					if (cliprect.contains((x+i)*2+0, y))
+						bitmap.pix16(y, (x+i)*2+0) = machine().pens[color];
+					if (cliprect.contains((x+i)*2+1, y))
+						bitmap.pix16(y, (x+i)*2+1) = machine().pens[color];
 				}
 
 				count++;
 			}
 		}
 	}
-	else if(state->m_exgfx_2bpp_mode)
+	else if(m_exgfx_2bpp_mode)
 	{
 		int count,color,i;
 
@@ -494,26 +646,26 @@ static SCREEN_UPDATE( pc6001m2 )
 					color |= pal_num[(pen[0] & 1) | ((pen[1] & 1) << 1)];
 #endif
 
-					pen[0] = state->m_video_ram[count+0x0000] >> (7-i) & 1;
-					pen[1] = state->m_video_ram[count+0x2000] >> (7-i) & 1;
+					pen[0] = m_video_ram[count+0x0000] >> (7-i) & 1;
+					pen[1] = m_video_ram[count+0x2000] >> (7-i) & 1;
 
-					if(state->m_bgcol_bank & 4) //PC-6001 emulation mode
+					if(m_bgcol_bank & 4) //PC-6001 emulation mode
 					{
 						color = 0x08;
 						color |= (pen[0]) | (pen[1]<<1);
-						color |= (state->m_bgcol_bank & 1) << 2;
+						color |= (m_bgcol_bank & 1) << 2;
 					}
 					else //Mk-2 mode
 					{
 						color = 0x10;
 						color |= ((pen[0] & 1) << 2);
 						color |= ((pen[1] & 1) >> 0);
-						color |= ((state->m_bgcol_bank & 1) << 1);
-						color |= ((state->m_bgcol_bank & 2) << 2);
+						color |= ((m_bgcol_bank & 1) << 1);
+						color |= ((m_bgcol_bank & 2) << 2);
 					}
 
-					if ((x+i) <= screen->visible_area().max_x && (y) <= screen->visible_area().max_y)
-						*BITMAP_ADDR16(bitmap, y, (x+i)) = screen->machine().pens[color];
+					if (cliprect.contains(x+i, y))
+						bitmap.pix16(y, (x+i)) = machine().pens[color];
 				}
 
 				count++;
@@ -521,24 +673,24 @@ static SCREEN_UPDATE( pc6001m2 )
 		}
 
 	}
-	else if(state->m_exgfx_text_mode)
+	else if(m_exgfx_text_mode)
 	{
 		int xi,yi,pen,fgcol,bgcol,color;
-		UINT8 *gfx_data = screen->machine().region("gfx1")->base();
+		UINT8 *gfx_data = m_region_gfx1->base();
 
 		for(y=0;y<20;y++)
 		{
 			for(x=0;x<40;x++)
 			{
 				/*
-                exgfx attr format:
-                x--- ---- rom bank select
-                -xxx ---- bg color
-                ---- xxxx fg color
-                Note that the exgfx banks a different gfx ROM
-                */
-				tile = state->m_video_ram[(x+(y*40))+0x400] + 0x200;
-				attr = state->m_video_ram[(x+(y*40)) & 0x3ff];
+				exgfx attr format:
+				x--- ---- rom bank select
+				-xxx ---- bg color
+				---- xxxx fg color
+				Note that the exgfx banks a different gfx ROM
+				*/
+				tile = m_video_ram[(x+(y*40))+0x400] + 0x200;
+				attr = m_video_ram[(x+(y*40)) & 0x3ff];
 				tile+= ((attr & 0x80) << 1);
 
 				for(yi=0;yi<12;yi++)
@@ -548,12 +700,12 @@ static SCREEN_UPDATE( pc6001m2 )
 						pen = gfx_data[(tile*0x10)+yi]>>(7-xi) & 1;
 
 						fgcol = (attr & 0x0f) + 0x10;
-						bgcol = ((attr & 0x70) >> 4) + 0x10 + ((state->m_bgcol_bank & 2) << 2);
+						bgcol = ((attr & 0x70) >> 4) + 0x10 + ((m_bgcol_bank & 2) << 2);
 
 						color = pen ? fgcol : bgcol;
 
-						if ((x*8+xi) <= screen->visible_area().max_x && (y*12+yi) <= screen->visible_area().max_y)
-							*BITMAP_ADDR16(bitmap, ((y*12+yi)), (x*8+xi)) = screen->machine().pens[color];
+						if (cliprect.contains(x*8+xi, y*12+yi))
+							bitmap.pix16(((y*12+yi)), (x*8+xi)) = machine().pens[color];
 					}
 				}
 			}
@@ -561,29 +713,28 @@ static SCREEN_UPDATE( pc6001m2 )
 	}
 	else
 	{
-		attr = state->m_video_ram[0];
-		pc6001_screen_draw(screen->machine(),bitmap,cliprect,0);
+		attr = m_video_ram[0];
+		pc6001_screen_draw(bitmap,cliprect,0);
 	}
 
 	return 0;
 }
 
-static SCREEN_UPDATE( pc6001sr )
+UINT32 pc6001_state::screen_update_pc6001sr(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	pc6001_state *state = screen->machine().driver_data<pc6001_state>();
 	int x,y,tile,attr;
 	int xi,yi,pen,fgcol,bgcol,color;
-	UINT8 *gfx_data = screen->machine().region("gfx1")->base();
+	UINT8 *gfx_data = m_region_gfx1->base();
 
 
-	if(state->m_sr_video_mode & 8) // text mode
+	if(m_sr_video_mode & 8) // text mode
 	{
 		for(y=0;y<20;y++)
 		{
 			for(x=0;x<40;x++)
 			{
-				tile = state->m_video_ram[(x+(y*40))*2+0];
-				attr = state->m_video_ram[(x+(y*40))*2+1];
+				tile = m_video_ram[(x+(y*40))*2+0];
+				attr = m_video_ram[(x+(y*40))*2+1];
 				tile+= ((attr & 0x80) << 1);
 
 				for(yi=0;yi<12;yi++)
@@ -593,12 +744,12 @@ static SCREEN_UPDATE( pc6001sr )
 						pen = gfx_data[(tile*0x10)+yi]>>(7-xi) & 1;
 
 						fgcol = (attr & 0x0f) + 0x10;
-						bgcol = ((attr & 0x70) >> 4) + 0x10 + ((state->m_bgcol_bank & 2) << 2);
+						bgcol = ((attr & 0x70) >> 4) + 0x10 + ((m_bgcol_bank & 2) << 2);
 
 						color = pen ? fgcol : bgcol;
 
-						if ((x*8+xi) <= screen->visible_area().max_x && (y*12+yi) <= screen->visible_area().max_y)
-							*BITMAP_ADDR16(bitmap, ((y*12+yi)), (x*8+xi)) = screen->machine().pens[color];
+						if (cliprect.contains(x*8+xi, y*12+yi))
+							bitmap.pix16(((y*12+yi)), (x*8+xi)) = machine().pens[color];
 					}
 				}
 			}
@@ -614,45 +765,45 @@ static SCREEN_UPDATE( pc6001sr )
 		{
 			for(x=0;x<320;x+=4)
 			{
-				color = state->m_video_ram[count] & 0x0f;
+				color = m_video_ram[count] & 0x0f;
 
-				if ((x+0) <= screen->visible_area().max_x && (y+0) <= screen->visible_area().max_y)
-					*BITMAP_ADDR16(bitmap, (y+0), (x+0)) = screen->machine().pens[color+0x10];
+				if (cliprect.contains(x+0, y+0))
+					bitmap.pix16((y+0), (x+0)) = machine().pens[color+0x10];
 
-				color = (state->m_video_ram[count] & 0xf0) >> 4;
+				color = (m_video_ram[count] & 0xf0) >> 4;
 
-				if ((x+1) <= screen->visible_area().max_x && (y+0) <= screen->visible_area().max_y)
-					*BITMAP_ADDR16(bitmap, (y+0), (x+1)) = screen->machine().pens[color+0x10];
+				if (cliprect.contains(x+1, y+0))
+					bitmap.pix16((y+0), (x+1)) = machine().pens[color+0x10];
 
-				color = state->m_video_ram[count+1] & 0x0f;
+				color = m_video_ram[count+1] & 0x0f;
 
-				if ((x+2) <= screen->visible_area().max_x && (y+0) <= screen->visible_area().max_y)
-					*BITMAP_ADDR16(bitmap, (y+0), (x+2)) = screen->machine().pens[color+0x10];
+				if (cliprect.contains(x+2, y+0))
+					bitmap.pix16((y+0), (x+2)) = machine().pens[color+0x10];
 
-				color = (state->m_video_ram[count+1] & 0xf0) >> 4;
+				color = (m_video_ram[count+1] & 0xf0) >> 4;
 
-				if ((x+3) <= screen->visible_area().max_x && (y+0) <= screen->visible_area().max_y)
-					*BITMAP_ADDR16(bitmap, (y+0), (x+3)) = screen->machine().pens[color+0x10];
+				if (cliprect.contains(x+3, y+0))
+					bitmap.pix16((y+0), (x+3)) = machine().pens[color+0x10];
 
-				color = state->m_video_ram[count+2] & 0x0f;
+				color = m_video_ram[count+2] & 0x0f;
 
-				if ((x+0) <= screen->visible_area().max_x && (y+1) <= screen->visible_area().max_y)
-					*BITMAP_ADDR16(bitmap, (y+1), (x+0)) = screen->machine().pens[color+0x10];
+				if (cliprect.contains(x+0, y+1))
+					bitmap.pix16((y+1), (x+0)) = machine().pens[color+0x10];
 
-				color = (state->m_video_ram[count+2] & 0xf0) >> 4;
+				color = (m_video_ram[count+2] & 0xf0) >> 4;
 
-				if ((x+1) <= screen->visible_area().max_x && (y+1) <= screen->visible_area().max_y)
-					*BITMAP_ADDR16(bitmap, (y+1), (x+1)) = screen->machine().pens[color+0x10];
+				if (cliprect.contains(x+1, y+1))
+					bitmap.pix16((y+1), (x+1)) = machine().pens[color+0x10];
 
-				color = state->m_video_ram[count+3] & 0x0f;
+				color = m_video_ram[count+3] & 0x0f;
 
-				if ((x+2) <= screen->visible_area().max_x && (y+1) <= screen->visible_area().max_y)
-					*BITMAP_ADDR16(bitmap, (y+1), (x+2)) = screen->machine().pens[color+0x10];
+				if (cliprect.contains(x+2, y+1))
+					bitmap.pix16((y+1), (x+2)) = machine().pens[color+0x10];
 
-				color = (state->m_video_ram[count+3] & 0xf0) >> 4;
+				color = (m_video_ram[count+3] & 0xf0) >> 4;
 
-				if ((x+3) <= screen->visible_area().max_x && (y+1) <= screen->visible_area().max_y)
-					*BITMAP_ADDR16(bitmap, (y+1), (x+3)) = screen->machine().pens[color+0x10];
+				if (cliprect.contains(x+3, y+1))
+					bitmap.pix16((y+1), (x+3)) = machine().pens[color+0x10];
 
 
 				count+=4;
@@ -663,39 +814,37 @@ static SCREEN_UPDATE( pc6001sr )
 	return 0;
 }
 
-static WRITE8_HANDLER ( pc6001_system_latch_w )
+WRITE8_MEMBER(pc6001_state::pc6001_system_latch_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
 	static const UINT16 startaddr[] = {0xC000, 0xE000, 0x8000, 0xA000 };
 
-	state->m_video_ram =  state->m_ram + startaddr[(data >> 1) & 0x03] - 0x8000;
+	m_video_ram =  m_ram + startaddr[(data >> 1) & 0x03] - 0x8000;
 
-	if((!(state->m_sys_latch & 8)) && data & 0x8) //PLAY tape cmd
+	if((!(m_sys_latch & 8)) && data & 0x8) //PLAY tape cmd
 	{
-		state->m_cas_switch = 1;
-		//space->machine().device(CASSETTE_TAG )->change_state(CASSETTE_MOTOR_ENABLED,CASSETTE_MASK_MOTOR);
-		//space->machine().device(CASSETTE_TAG )->change_state(CASSETTE_PLAY,CASSETTE_MASK_UISTATE);
+		m_cas_switch = 1;
+		//m_cassette->change_state(CASSETTE_MOTOR_ENABLED,CASSETTE_MASK_MOTOR);
+		//m_cassette->change_state(CASSETTE_PLAY,CASSETTE_MASK_UISTATE);
 	}
-	if((state->m_sys_latch & 8) && ((data & 0x8) == 0)) //STOP tape cmd
+	if((m_sys_latch & 8) && ((data & 0x8) == 0)) //STOP tape cmd
 	{
-		state->m_cas_switch = 0;
-		//space->machine().device(CASSETTE_TAG )->change_state(CASSETTE_MOTOR_DISABLED,CASSETTE_MASK_MOTOR);
-		//space->machine().device(CASSETTE_TAG )->change_state(CASSETTE_STOPPED,CASSETTE_MASK_UISTATE);
-		//state->m_irq_vector = 0x00;
-		//cputag_set_input_line(space->machine(),"maincpu", 0, ASSERT_LINE);
+		m_cas_switch = 0;
+		//m_cassette->change_state(CASSETTE_MOTOR_DISABLED,CASSETTE_MASK_MOTOR);
+		//m_cassette->change_state(CASSETTE_STOPPED,CASSETTE_MASK_UISTATE);
+		//m_irq_vector = 0x00;
+		//m_maincpu->set_input_line(0, ASSERT_LINE);
 	}
 
-	state->m_sys_latch = data;
-	state->m_timer_irq_mask = data & 1;
+	m_sys_latch = data;
+	m_timer_irq_mask = data & 1;
 	//printf("%02x\n",data);
 }
 
 #if 0
-static ATTR_CONST UINT8 pc6001_get_attributes(running_machine &machine, UINT8 c,int scanline, int pos)
+ATTR_CONST pc6001_state::UINT8 pc6001_get_attributes(UINT8 c,int scanline, int pos)
 {
-	pc6001_state *state = machine.driver_data<pc6001_state>();
 	UINT8 result = 0x00;
-	UINT8 val = state->m_video_ram [(scanline / 12) * 0x20 + pos];
+	UINT8 val = m_video_ram [(scanline / 12) * 0x20 + pos];
 
 	if (val & 0x01) {
 		result |= M6847_INV;
@@ -707,88 +856,85 @@ static ATTR_CONST UINT8 pc6001_get_attributes(running_machine &machine, UINT8 c,
 	return result;
 }
 
-static const UINT8 *pc6001_get_video_ram(running_machine &machine, int scanline)
+const pc6001_state::UINT8 *pc6001_get_video_ram(int scanline)
 {
-	pc6001_state *state = machine.driver_data<pc6001_state>();
-	return state->m_video_ram +0x0200+ (scanline / 12) * 0x20;
+	return m_video_ram +0x0200+ (scanline / 12) * 0x20;
 }
 
-static UINT8 pc6001_get_char_rom(running_machine &machine, UINT8 ch, int line)
+UINT8 pc6001_state::pc6001_get_char_rom(UINT8 ch, int line)
 {
-	UINT8 *gfx = machine.region("gfx1")->base();
+	UINT8 *gfx = m_region_gfx1->base();
 	return gfx[ch*16+line];
 }
 #endif
 
 
-static READ8_HANDLER(nec_ppi8255_r)
+READ8_MEMBER(pc6001_state::nec_ppi8255_r)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
 	if (offset==2)
-		return state->m_port_c_8255;
+		return m_port_c_8255;
 	else if(offset==0)
 	{
 		UINT8 res;
-		res = state->m_cur_keycode;
-		//state->m_cur_keycode = 0;
+		res = m_cur_keycode;
+		//m_cur_keycode = 0;
 		return res;
 	}
 
-	return state->m_ppi->read(*space, offset);
+	return m_ppi->read(space, offset);
 }
 
-static WRITE8_HANDLER(nec_ppi8255_w)
+WRITE8_MEMBER(pc6001_state::nec_ppi8255_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
 	if (offset==3)
 	{
 		if(data & 1)
-			state->m_port_c_8255 |=   1<<((data>>1)&0x07);
+			m_port_c_8255 |=   1<<((data>>1)&0x07);
 		else
-			state->m_port_c_8255 &= ~(1<<((data>>1)&0x07));
+			m_port_c_8255 &= ~(1<<((data>>1)&0x07));
 
 		switch(data) {
-        	case 0x08: state->m_port_c_8255 |= 0x88; break;
-        	case 0x09: state->m_port_c_8255 &= 0xf7; break;
-        	case 0x0c: state->m_port_c_8255 |= 0x28; break;
-        	case 0x0d: state->m_port_c_8255 &= 0xf7; break;
-        	default: break;
+			case 0x08: m_port_c_8255 |= 0x88; break;
+			case 0x09: m_port_c_8255 &= 0xf7; break;
+			case 0x0c: m_port_c_8255 |= 0x28; break;
+			case 0x0d: m_port_c_8255 &= 0xf7; break;
+			default: break;
 		}
 
-		state->m_port_c_8255 |= 0xa8;
+		m_port_c_8255 |= 0xa8;
 
 		{
-			UINT8 *gfx_data = space->machine().region("gfx1")->base();
-			UINT8 *ext_rom = space->machine().region("cart_img")->base();
+			UINT8 *gfx_data = m_region_gfx1->base();
+			UINT8 *ext_rom = m_region_cart_img->base();
 
 			//printf("%02x\n",data);
 
 			if((data & 0x0f) == 0x05)
-				memory_set_bankptr(space->machine(), "bank1", &ext_rom[0x2000]);
+				m_bank1->set_base(&ext_rom[0x2000]);
 			if((data & 0x0f) == 0x04)
-				memory_set_bankptr(space->machine(), "bank1", &gfx_data[0]);
+				m_bank1->set_base(&gfx_data[0]);
 		}
 	}
-	state->m_ppi->write(*space,offset,data);
+	m_ppi->write(space,offset,data);
 }
 
-static ADDRESS_MAP_START(pc6001_map, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(pc6001_map, AS_PROGRAM, 8, pc6001_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x3fff) AM_ROM AM_WRITENOP
 	AM_RANGE(0x4000, 0x5fff) AM_ROM AM_REGION("cart_img",0)
 	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
-	AM_RANGE(0x8000, 0xffff) AM_RAM AM_BASE_MEMBER(pc6001_state, m_ram)
+	AM_RANGE(0x8000, 0xffff) AM_RAM AM_SHARE("ram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc6001_io , AS_IO, 8)
+static ADDRESS_MAP_START( pc6001_io , AS_IO, 8, pc6001_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("uart", msm8251_data_r,msm8251_data_w)
-	AM_RANGE(0x81, 0x81) AM_DEVREADWRITE("uart", msm8251_status_r,msm8251_control_w)
+	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("uart", i8251_device, data_r, data_w)
+	AM_RANGE(0x81, 0x81) AM_DEVREADWRITE("uart", i8251_device, status_r, control_w)
 	AM_RANGE(0x90, 0x93) AM_MIRROR(0x0c) AM_READWRITE(nec_ppi8255_r, nec_ppi8255_w)
-	AM_RANGE(0xa0, 0xa0) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_address_w)
-	AM_RANGE(0xa1, 0xa1) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_data_w)
-	AM_RANGE(0xa2, 0xa2) AM_MIRROR(0x0c) AM_DEVREAD("ay8910", ay8910_r)
+	AM_RANGE(0xa0, 0xa0) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_device, address_w)
+	AM_RANGE(0xa1, 0xa1) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_device, data_w)
+	AM_RANGE(0xa2, 0xa2) AM_MIRROR(0x0c) AM_DEVREAD("ay8910", ay8910_device, data_r)
 	AM_RANGE(0xa3, 0xa3) AM_MIRROR(0x0c) AM_WRITENOP
 	AM_RANGE(0xb0, 0xb0) AM_MIRROR(0x0f) AM_WRITE(pc6001_system_latch_w)
 	AM_RANGE(0xd0, 0xd3) AM_MIRROR(0x0c) AM_NOP // disk device
@@ -804,535 +950,467 @@ ADDRESS_MAP_END
 */
 
 #define BASICROM(_v_) \
-	0x10000+0x2000*_v_ \
-
+	0x10000+0x2000*_v_
 #define VOICEROM(_v_) \
-	0x18000+0x2000*_v_ \
-
+	0x18000+0x2000*_v_
 #define TVROM(_v_) \
-	0x1c000+0x2000*_v_ \
-
+	0x1c000+0x2000*_v_
 #define KANJIROM(_v_) \
-	0x20000+0x2000*_v_ \
-
+	0x20000+0x2000*_v_
 #define WRAM(_v_) \
-	0x28000+0x2000*_v_ \
-
+	0x28000+0x2000*_v_
 #define EXWRAM(_v_) \
-	0x38000+0x2000*_v_ \
-
+	0x38000+0x2000*_v_
 #define EXROM(_v_) \
-	0x48000+0x2000*_v_ \
-
+	0x48000+0x2000*_v_
 #define INVALID(_v_) \
-	0x4c000+0x2000*_v_ \
-
+	0x4c000+0x2000*_v_
 /* FIXME: some comments aren't right */
 static const UINT32 banksw_table_r0[0x10*4][4] = {
 	/* 0 */
-	{ INVALID(0),	INVALID(0),		INVALID(0),     INVALID(0)  },	//0x00: <invalid setting>
-	{ BASICROM(0),	BASICROM(1),	BASICROM(2),	BASICROM(3) },	//0x01: basic rom 0 & 1 / basic rom 2 & 3
-	{ TVROM(0),		TVROM(1),		VOICEROM(0),	VOICEROM(1) },	//0x02: tv rom 0 & 1 / voice rom 0 & 1
-	{ EXROM(1),		EXROM(1),		EXROM(1),		EXROM(1)	},	//0x03: ex rom 1 & 1 / ex rom 1 & 1
-	{ EXROM(0),		EXROM(0),		EXROM(0),		EXROM(0)	},	//0x04: ex rom 0 & 0 / ex rom 0 & 0
-	{ TVROM(1),		BASICROM(1),	VOICEROM(0),	BASICROM(3) },	//0x05: tv rom 1 & basic rom 1 / voice rom 0 & basic 3
-	{ BASICROM(0),	TVROM(2),		BASICROM(2),	VOICEROM(1) },	//0x06: basic rom 0 & tv rom 2 / basic rom 2 & voice 1
-	{ EXROM(0),		EXROM(1),		EXROM(0),		EXROM(1)	},	//0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
-	{ EXROM(1),		EXROM(0),		EXROM(1),		EXROM(0)	},	//0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
-	{ EXROM(1),		BASICROM(1),	EXROM(1),		BASICROM(3) },	//0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
-	{ BASICROM(0),  EXROM(1),		BASICROM(2),	EXROM(1)	},	//0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
-	{ EXROM(0),		TVROM(2),		EXROM(0),		VOICEROM(1) },	//0x0b: ex rom 0 & tv rom 2 / ex rom 0 & voice 1
-	{ TVROM(1),		EXROM(0),		VOICEROM(0),	EXROM(0)	},	//0x0c: tv rom 1 & ex rom 0 / voice rom 0 & ex rom 0
-	{ WRAM(0),		WRAM(1),		WRAM(2),		WRAM(3)		},	//0x0d: ram 0 & 1 / ram 2 & 3
-	{ EXWRAM(0),	EXWRAM(1),		EXWRAM(2),		EXWRAM(3)	},	//0x0e: exram 0 & 1 / exram 2 & 3
-	{ INVALID(0),	INVALID(0),		INVALID(0),		INVALID(0)  },	//0x0f: <invalid setting>
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x00: <invalid setting>
+	{ BASICROM(0),  BASICROM(1),    BASICROM(2),    BASICROM(3) },  //0x01: basic rom 0 & 1 / basic rom 2 & 3
+	{ TVROM(0),     TVROM(1),       VOICEROM(0),    VOICEROM(1) },  //0x02: tv rom 0 & 1 / voice rom 0 & 1
+	{ EXROM(1),     EXROM(1),       EXROM(1),       EXROM(1)    },  //0x03: ex rom 1 & 1 / ex rom 1 & 1
+	{ EXROM(0),     EXROM(0),       EXROM(0),       EXROM(0)    },  //0x04: ex rom 0 & 0 / ex rom 0 & 0
+	{ TVROM(1),     BASICROM(1),    VOICEROM(0),    BASICROM(3) },  //0x05: tv rom 1 & basic rom 1 / voice rom 0 & basic 3
+	{ BASICROM(0),  TVROM(2),       BASICROM(2),    VOICEROM(1) },  //0x06: basic rom 0 & tv rom 2 / basic rom 2 & voice 1
+	{ EXROM(0),     EXROM(1),       EXROM(0),       EXROM(1)    },  //0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
+	{ EXROM(1),     EXROM(0),       EXROM(1),       EXROM(0)    },  //0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
+	{ EXROM(1),     BASICROM(1),    EXROM(1),       BASICROM(3) },  //0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
+	{ BASICROM(0),  EXROM(1),       BASICROM(2),    EXROM(1)    },  //0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
+	{ EXROM(0),     TVROM(2),       EXROM(0),       VOICEROM(1) },  //0x0b: ex rom 0 & tv rom 2 / ex rom 0 & voice 1
+	{ TVROM(1),     EXROM(0),       VOICEROM(0),    EXROM(0)    },  //0x0c: tv rom 1 & ex rom 0 / voice rom 0 & ex rom 0
+	{ WRAM(0),      WRAM(1),        WRAM(2),        WRAM(3)     },  //0x0d: ram 0 & 1 / ram 2 & 3
+	{ EXWRAM(0),    EXWRAM(1),      EXWRAM(2),      EXWRAM(3)   },  //0x0e: exram 0 & 1 / exram 2 & 3
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x0f: <invalid setting>
 	/* 1 */
-	{ INVALID(0),	INVALID(0),		INVALID(0),     INVALID(0)  },	//0x00: <invalid setting>
-	{ BASICROM(0),	BASICROM(1),	BASICROM(2),	BASICROM(3) },	//0x01: basic rom 0 & 1 / basic rom 2 & 3
-	{ KANJIROM(0),	KANJIROM(1),	KANJIROM(0),	KANJIROM(1) },	//0x02: tv rom 0 & 1 / voice rom 0 & 1
-	{ EXROM(1),		EXROM(1),		EXROM(1),		EXROM(1)	},	//0x03: ex rom 1 & 1 / ex rom 1 & 1
-	{ EXROM(0),		EXROM(0),		EXROM(0),		EXROM(0)	},	//0x04: ex rom 0 & 0 / ex rom 0 & 0
-	{ KANJIROM(0),	BASICROM(1),	KANJIROM(0),	BASICROM(3) },	//0x05: tv rom 1 & basic rom 1 / voice rom 0 & basic 3
-	{ BASICROM(0),	KANJIROM(1),	BASICROM(2),	KANJIROM(1) },	//0x06: basic rom 0 & tv rom 2 / basic rom 2 & voice 1
-	{ EXROM(0),		EXROM(1),		EXROM(0),		EXROM(1)	},	//0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
-	{ EXROM(1),		EXROM(0),		EXROM(1),		EXROM(0)	},	//0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
-	{ EXROM(1),		BASICROM(1),	EXROM(1),		BASICROM(3) },	//0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
-	{ BASICROM(0),  EXROM(1),		BASICROM(2),	EXROM(1)	},	//0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
-	{ EXROM(0),		KANJIROM(1),	EXROM(0),		KANJIROM(1) },	//0x0b: ex rom 0 & tv rom 2 / ex rom 0 & voice 1
-	{ KANJIROM(0),	EXROM(0),		KANJIROM(0),	EXROM(0)	},	//0x0c: tv rom 1 & ex rom 0 / voice rom 0 & ex rom 0
-	{ WRAM(0),		WRAM(1),		WRAM(2),		WRAM(3)		},	//0x0d: ram 0 & 1 / ram 2 & 3
-	{ EXWRAM(0),	EXWRAM(1),		EXWRAM(2),		EXWRAM(3)	},	//0x0e: exram 0 & 1 / exram 2 & 3
-	{ INVALID(0),	INVALID(0),		INVALID(0),		INVALID(0)  },	//0x0f: <invalid setting>
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x00: <invalid setting>
+	{ BASICROM(0),  BASICROM(1),    BASICROM(2),    BASICROM(3) },  //0x01: basic rom 0 & 1 / basic rom 2 & 3
+	{ KANJIROM(0),  KANJIROM(1),    KANJIROM(0),    KANJIROM(1) },  //0x02: tv rom 0 & 1 / voice rom 0 & 1
+	{ EXROM(1),     EXROM(1),       EXROM(1),       EXROM(1)    },  //0x03: ex rom 1 & 1 / ex rom 1 & 1
+	{ EXROM(0),     EXROM(0),       EXROM(0),       EXROM(0)    },  //0x04: ex rom 0 & 0 / ex rom 0 & 0
+	{ KANJIROM(0),  BASICROM(1),    KANJIROM(0),    BASICROM(3) },  //0x05: tv rom 1 & basic rom 1 / voice rom 0 & basic 3
+	{ BASICROM(0),  KANJIROM(1),    BASICROM(2),    KANJIROM(1) },  //0x06: basic rom 0 & tv rom 2 / basic rom 2 & voice 1
+	{ EXROM(0),     EXROM(1),       EXROM(0),       EXROM(1)    },  //0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
+	{ EXROM(1),     EXROM(0),       EXROM(1),       EXROM(0)    },  //0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
+	{ EXROM(1),     BASICROM(1),    EXROM(1),       BASICROM(3) },  //0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
+	{ BASICROM(0),  EXROM(1),       BASICROM(2),    EXROM(1)    },  //0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
+	{ EXROM(0),     KANJIROM(1),    EXROM(0),       KANJIROM(1) },  //0x0b: ex rom 0 & tv rom 2 / ex rom 0 & voice 1
+	{ KANJIROM(0),  EXROM(0),       KANJIROM(0),    EXROM(0)    },  //0x0c: tv rom 1 & ex rom 0 / voice rom 0 & ex rom 0
+	{ WRAM(0),      WRAM(1),        WRAM(2),        WRAM(3)     },  //0x0d: ram 0 & 1 / ram 2 & 3
+	{ EXWRAM(0),    EXWRAM(1),      EXWRAM(2),      EXWRAM(3)   },  //0x0e: exram 0 & 1 / exram 2 & 3
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x0f: <invalid setting>
 	/* 2 */
-	{ INVALID(0),	INVALID(0),		INVALID(0),     INVALID(0)  },	//0x00: <invalid setting>
-	{ BASICROM(0),	BASICROM(1),	BASICROM(2),	BASICROM(3) },	//0x01: basic rom 0 & 1 / basic rom 2 & 3
-	{ TVROM(0),		TVROM(1),		VOICEROM(0),	VOICEROM(1) },	//0x02: tv rom 0 & 1 / voice rom 0 & 1
-	{ EXROM(1),		EXROM(1),		EXROM(1),		EXROM(1)	},	//0x03: ex rom 1 & 1 / ex rom 1 & 1
-	{ EXROM(0),		EXROM(0),		EXROM(0),		EXROM(0)	},	//0x04: ex rom 0 & 0 / ex rom 0 & 0
-	{ TVROM(1),		BASICROM(1),	VOICEROM(0),	BASICROM(3) },	//0x05: tv rom 1 & basic rom 1 / voice rom 0 & basic 3
-	{ BASICROM(0),	TVROM(2),		BASICROM(2),	VOICEROM(1) },	//0x06: basic rom 0 & tv rom 2 / basic rom 2 & voice 1
-	{ EXROM(0),		EXROM(1),		EXROM(0),		EXROM(1)	},	//0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
-	{ EXROM(1),		EXROM(0),		EXROM(1),		EXROM(0)	},	//0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
-	{ EXROM(1),		BASICROM(1),	EXROM(1),		BASICROM(3) },	//0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
-	{ BASICROM(0),  EXROM(1),		BASICROM(2),	EXROM(1)	},	//0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
-	{ EXROM(0),		TVROM(2),		EXROM(0),		VOICEROM(1) },	//0x0b: ex rom 0 & tv rom 2 / ex rom 0 & voice 1
-	{ TVROM(1),		EXROM(0),		VOICEROM(0),	EXROM(0)	},	//0x0c: tv rom 1 & ex rom 0 / voice rom 0 & ex rom 0
-	{ WRAM(0),		WRAM(1),		WRAM(2),		WRAM(3)		},	//0x0d: ram 0 & 1 / ram 2 & 3
-	{ EXWRAM(0),	EXWRAM(1),		EXWRAM(2),		EXWRAM(3)	},	//0x0e: exram 0 & 1 / exram 2 & 3
-	{ INVALID(0),	INVALID(0),		INVALID(0),		INVALID(0)  },	//0x0f: <invalid setting>
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x00: <invalid setting>
+	{ BASICROM(0),  BASICROM(1),    BASICROM(2),    BASICROM(3) },  //0x01: basic rom 0 & 1 / basic rom 2 & 3
+	{ TVROM(0),     TVROM(1),       VOICEROM(0),    VOICEROM(1) },  //0x02: tv rom 0 & 1 / voice rom 0 & 1
+	{ EXROM(1),     EXROM(1),       EXROM(1),       EXROM(1)    },  //0x03: ex rom 1 & 1 / ex rom 1 & 1
+	{ EXROM(0),     EXROM(0),       EXROM(0),       EXROM(0)    },  //0x04: ex rom 0 & 0 / ex rom 0 & 0
+	{ TVROM(1),     BASICROM(1),    VOICEROM(0),    BASICROM(3) },  //0x05: tv rom 1 & basic rom 1 / voice rom 0 & basic 3
+	{ BASICROM(0),  TVROM(2),       BASICROM(2),    VOICEROM(1) },  //0x06: basic rom 0 & tv rom 2 / basic rom 2 & voice 1
+	{ EXROM(0),     EXROM(1),       EXROM(0),       EXROM(1)    },  //0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
+	{ EXROM(1),     EXROM(0),       EXROM(1),       EXROM(0)    },  //0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
+	{ EXROM(1),     BASICROM(1),    EXROM(1),       BASICROM(3) },  //0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
+	{ BASICROM(0),  EXROM(1),       BASICROM(2),    EXROM(1)    },  //0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
+	{ EXROM(0),     TVROM(2),       EXROM(0),       VOICEROM(1) },  //0x0b: ex rom 0 & tv rom 2 / ex rom 0 & voice 1
+	{ TVROM(1),     EXROM(0),       VOICEROM(0),    EXROM(0)    },  //0x0c: tv rom 1 & ex rom 0 / voice rom 0 & ex rom 0
+	{ WRAM(0),      WRAM(1),        WRAM(2),        WRAM(3)     },  //0x0d: ram 0 & 1 / ram 2 & 3
+	{ EXWRAM(0),    EXWRAM(1),      EXWRAM(2),      EXWRAM(3)   },  //0x0e: exram 0 & 1 / exram 2 & 3
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x0f: <invalid setting>
 	/* 3 */
-	{ INVALID(0),	INVALID(0),		INVALID(0),     INVALID(0)  },	//0x00: <invalid setting>
-	{ BASICROM(0),	BASICROM(1),	BASICROM(2),	BASICROM(3) },	//0x01: basic rom 0 & 1 / basic rom 2 & 3
-	{ KANJIROM(2),	KANJIROM(3),	KANJIROM(2),	KANJIROM(3) },	//0x02: tv rom 0 & 1 / voice rom 0 & 1
-	{ EXROM(1),		EXROM(1),		EXROM(1),		EXROM(1)	},	//0x03: ex rom 1 & 1 / ex rom 1 & 1
-	{ EXROM(0),		EXROM(0),		EXROM(0),		EXROM(0)	},	//0x04: ex rom 0 & 0 / ex rom 0 & 0
-	{ KANJIROM(2),	BASICROM(1),	KANJIROM(2),	BASICROM(3) },	//0x05: tv rom 1 & basic rom 1 / voice rom 0 & basic 3
-	{ BASICROM(0),	KANJIROM(3),	BASICROM(2),	KANJIROM(3) },	//0x06: basic rom 0 & tv rom 2 / basic rom 2 & voice 1
-	{ EXROM(0),		EXROM(1),		EXROM(0),		EXROM(1)	},	//0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
-	{ EXROM(1),		EXROM(0),		EXROM(1),		EXROM(0)	},	//0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
-	{ EXROM(1),		BASICROM(1),	EXROM(1),		BASICROM(3) },	//0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
-	{ BASICROM(0),  EXROM(1),		BASICROM(2),	EXROM(1)	},	//0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
-	{ EXROM(0),		KANJIROM(3),	EXROM(0),		KANJIROM(3) },	//0x0b: ex rom 0 & tv rom 2 / ex rom 0 & voice 1
-	{ KANJIROM(2),	EXROM(0),		KANJIROM(2),	EXROM(0)	},	//0x0c: tv rom 1 & ex rom 0 / voice rom 0 & ex rom 0
-	{ WRAM(0),		WRAM(1),		WRAM(2),		WRAM(3)		},	//0x0d: ram 0 & 1 / ram 2 & 3
-	{ EXWRAM(0),	EXWRAM(1),		EXWRAM(2),		EXWRAM(3)	},	//0x0e: exram 0 & 1 / exram 2 & 3
-	{ INVALID(0),	INVALID(0),		INVALID(0),		INVALID(0)  }	//0x0f: <invalid setting>
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x00: <invalid setting>
+	{ BASICROM(0),  BASICROM(1),    BASICROM(2),    BASICROM(3) },  //0x01: basic rom 0 & 1 / basic rom 2 & 3
+	{ KANJIROM(2),  KANJIROM(3),    KANJIROM(2),    KANJIROM(3) },  //0x02: tv rom 0 & 1 / voice rom 0 & 1
+	{ EXROM(1),     EXROM(1),       EXROM(1),       EXROM(1)    },  //0x03: ex rom 1 & 1 / ex rom 1 & 1
+	{ EXROM(0),     EXROM(0),       EXROM(0),       EXROM(0)    },  //0x04: ex rom 0 & 0 / ex rom 0 & 0
+	{ KANJIROM(2),  BASICROM(1),    KANJIROM(2),    BASICROM(3) },  //0x05: tv rom 1 & basic rom 1 / voice rom 0 & basic 3
+	{ BASICROM(0),  KANJIROM(3),    BASICROM(2),    KANJIROM(3) },  //0x06: basic rom 0 & tv rom 2 / basic rom 2 & voice 1
+	{ EXROM(0),     EXROM(1),       EXROM(0),       EXROM(1)    },  //0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
+	{ EXROM(1),     EXROM(0),       EXROM(1),       EXROM(0)    },  //0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
+	{ EXROM(1),     BASICROM(1),    EXROM(1),       BASICROM(3) },  //0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
+	{ BASICROM(0),  EXROM(1),       BASICROM(2),    EXROM(1)    },  //0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
+	{ EXROM(0),     KANJIROM(3),    EXROM(0),       KANJIROM(3) },  //0x0b: ex rom 0 & tv rom 2 / ex rom 0 & voice 1
+	{ KANJIROM(2),  EXROM(0),       KANJIROM(2),    EXROM(0)    },  //0x0c: tv rom 1 & ex rom 0 / voice rom 0 & ex rom 0
+	{ WRAM(0),      WRAM(1),        WRAM(2),        WRAM(3)     },  //0x0d: ram 0 & 1 / ram 2 & 3
+	{ EXWRAM(0),    EXWRAM(1),      EXWRAM(2),      EXWRAM(3)   },  //0x0e: exram 0 & 1 / exram 2 & 3
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  }   //0x0f: <invalid setting>
 };
 
 static const UINT32 banksw_table_r1[0x10*4][4] = {
 	/* 0 */
-	{ INVALID(0),	INVALID(0),		INVALID(0),     INVALID(0)  },	//0x00: <invalid setting>
-	{ BASICROM(0),	BASICROM(1),	BASICROM(2),	BASICROM(3) },	//0x01: basic rom 0 & 1 / basic rom 2 & 3
-	{ VOICEROM(0),	VOICEROM(1),	VOICEROM(0),	VOICEROM(1) },	//0x02: voice rom 0 & 1 / voice rom 0 & 1
-	{ EXROM(1),		EXROM(1),		EXROM(1),		EXROM(1)	},	//0x03: ex rom 1 & 1 / ex rom 1 & 1
-	{ EXROM(0),		EXROM(0),		EXROM(0),		EXROM(0)	},	//0x04: ex rom 0 & 0 / ex rom 0 & 0
-	{ VOICEROM(0),	BASICROM(1),	VOICEROM(0),	BASICROM(3) },	//0x05: voice rom 0 & basic rom 1 / voice rom 0 & basic 3
-	{ BASICROM(0),	VOICEROM(1),	BASICROM(2),	VOICEROM(1) },	//0x06: basic rom 0 & voice rom 1 / basic rom 2 & voice 1
-	{ EXROM(0),		EXROM(1),		EXROM(0),		EXROM(1)	},	//0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
-	{ EXROM(1),		EXROM(0),		EXROM(1),		EXROM(0)	},	//0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
-	{ EXROM(1),		BASICROM(1),	EXROM(1),		BASICROM(3) },	//0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
-	{ BASICROM(0),  EXROM(1),		BASICROM(2),	EXROM(1)	},	//0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
-	{ EXROM(0),		VOICEROM(1),	EXROM(0),		VOICEROM(1) },	//0x0b: ex rom 0 & voice rom 1 / ex rom 0 & voice 1
-	{ VOICEROM(0),	EXROM(0),		VOICEROM(0),	EXROM(0)	},	//0x0c: voice rom 1 & ex rom 0 / voice rom 0 & ex rom 0
-	{ WRAM(4),		WRAM(5),		WRAM(6),		WRAM(7)		},	//0x0d: ram 4 & 5 / ram 6 & 7
-	{ EXWRAM(4),	EXWRAM(5),		EXWRAM(6),		EXWRAM(7)	},	//0x0e: exram 4 & 5 / exram 6 & 7
-	{ INVALID(0),	INVALID(0),		INVALID(0),		INVALID(0)  },	//0x0f: <invalid setting>
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x00: <invalid setting>
+	{ BASICROM(0),  BASICROM(1),    BASICROM(2),    BASICROM(3) },  //0x01: basic rom 0 & 1 / basic rom 2 & 3
+	{ VOICEROM(0),  VOICEROM(1),    VOICEROM(0),    VOICEROM(1) },  //0x02: voice rom 0 & 1 / voice rom 0 & 1
+	{ EXROM(1),     EXROM(1),       EXROM(1),       EXROM(1)    },  //0x03: ex rom 1 & 1 / ex rom 1 & 1
+	{ EXROM(0),     EXROM(0),       EXROM(0),       EXROM(0)    },  //0x04: ex rom 0 & 0 / ex rom 0 & 0
+	{ VOICEROM(0),  BASICROM(1),    VOICEROM(0),    BASICROM(3) },  //0x05: voice rom 0 & basic rom 1 / voice rom 0 & basic 3
+	{ BASICROM(0),  VOICEROM(1),    BASICROM(2),    VOICEROM(1) },  //0x06: basic rom 0 & voice rom 1 / basic rom 2 & voice 1
+	{ EXROM(0),     EXROM(1),       EXROM(0),       EXROM(1)    },  //0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
+	{ EXROM(1),     EXROM(0),       EXROM(1),       EXROM(0)    },  //0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
+	{ EXROM(1),     BASICROM(1),    EXROM(1),       BASICROM(3) },  //0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
+	{ BASICROM(0),  EXROM(1),       BASICROM(2),    EXROM(1)    },  //0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
+	{ EXROM(0),     VOICEROM(1),    EXROM(0),       VOICEROM(1) },  //0x0b: ex rom 0 & voice rom 1 / ex rom 0 & voice 1
+	{ VOICEROM(0),  EXROM(0),       VOICEROM(0),    EXROM(0)    },  //0x0c: voice rom 1 & ex rom 0 / voice rom 0 & ex rom 0
+	{ WRAM(4),      WRAM(5),        WRAM(6),        WRAM(7)     },  //0x0d: ram 4 & 5 / ram 6 & 7
+	{ EXWRAM(4),    EXWRAM(5),      EXWRAM(6),      EXWRAM(7)   },  //0x0e: exram 4 & 5 / exram 6 & 7
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x0f: <invalid setting>
 	/* 1 */
-	{ INVALID(0),	INVALID(0),		INVALID(0),     INVALID(0)  },	//0x00: <invalid setting>
-	{ BASICROM(0),	BASICROM(1),	BASICROM(2),	BASICROM(3) },	//0x01: basic rom 0 & 1 / basic rom 2 & 3
-	{ KANJIROM(0),	KANJIROM(1),	KANJIROM(0),	KANJIROM(1) },	//0x02: kanji rom 0 & 1 / kanji rom 0 & 1
-	{ EXROM(1),		EXROM(1),		EXROM(1),		EXROM(1)	},	//0x03: ex rom 1 & 1 / ex rom 1 & 1
-	{ EXROM(0),		EXROM(0),		EXROM(0),		EXROM(0)	},	//0x04: ex rom 0 & 0 / ex rom 0 & 0
-	{ KANJIROM(0),	BASICROM(1),	KANJIROM(0),	BASICROM(3) },	//0x05: voice rom 0 & basic rom 1 / voice rom 0 & basic 3
-	{ BASICROM(0),	KANJIROM(1),	BASICROM(2),	KANJIROM(1) },	//0x06: basic rom 0 & voice rom 1 / basic rom 2 & voice 1
-	{ EXROM(0),		EXROM(1),		EXROM(0),		EXROM(1)	},	//0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
-	{ EXROM(1),		EXROM(0),		EXROM(1),		EXROM(0)	},	//0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
-	{ EXROM(1),		BASICROM(1),	EXROM(1),		BASICROM(3) },	//0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
-	{ BASICROM(0),  EXROM(1),		BASICROM(2),	EXROM(1)	},	//0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
-	{ EXROM(0),		KANJIROM(1),	EXROM(0),		KANJIROM(1) },	//0x0b: ex rom 0 & voice rom 1 / ex rom 0 & voice 1
-	{ KANJIROM(0),	EXROM(0),		KANJIROM(0),	EXROM(0)	},	//0x0c: voice rom 1 & ex rom 0 / voice rom 0 & ex rom 0
-	{ WRAM(4),		WRAM(5),		WRAM(6),		WRAM(7)		},	//0x0d: ram 4 & 5 / ram 6 & 7
-	{ EXWRAM(4),	EXWRAM(5),		EXWRAM(6),		EXWRAM(7)	},	//0x0e: exram 4 & 5 / exram 6 & 7
-	{ INVALID(0),	INVALID(0),		INVALID(0),		INVALID(0)  },	//0x0f: <invalid setting>
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x00: <invalid setting>
+	{ BASICROM(0),  BASICROM(1),    BASICROM(2),    BASICROM(3) },  //0x01: basic rom 0 & 1 / basic rom 2 & 3
+	{ KANJIROM(0),  KANJIROM(1),    KANJIROM(0),    KANJIROM(1) },  //0x02: kanji rom 0 & 1 / kanji rom 0 & 1
+	{ EXROM(1),     EXROM(1),       EXROM(1),       EXROM(1)    },  //0x03: ex rom 1 & 1 / ex rom 1 & 1
+	{ EXROM(0),     EXROM(0),       EXROM(0),       EXROM(0)    },  //0x04: ex rom 0 & 0 / ex rom 0 & 0
+	{ KANJIROM(0),  BASICROM(1),    KANJIROM(0),    BASICROM(3) },  //0x05: voice rom 0 & basic rom 1 / voice rom 0 & basic 3
+	{ BASICROM(0),  KANJIROM(1),    BASICROM(2),    KANJIROM(1) },  //0x06: basic rom 0 & voice rom 1 / basic rom 2 & voice 1
+	{ EXROM(0),     EXROM(1),       EXROM(0),       EXROM(1)    },  //0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
+	{ EXROM(1),     EXROM(0),       EXROM(1),       EXROM(0)    },  //0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
+	{ EXROM(1),     BASICROM(1),    EXROM(1),       BASICROM(3) },  //0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
+	{ BASICROM(0),  EXROM(1),       BASICROM(2),    EXROM(1)    },  //0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
+	{ EXROM(0),     KANJIROM(1),    EXROM(0),       KANJIROM(1) },  //0x0b: ex rom 0 & voice rom 1 / ex rom 0 & voice 1
+	{ KANJIROM(0),  EXROM(0),       KANJIROM(0),    EXROM(0)    },  //0x0c: voice rom 1 & ex rom 0 / voice rom 0 & ex rom 0
+	{ WRAM(4),      WRAM(5),        WRAM(6),        WRAM(7)     },  //0x0d: ram 4 & 5 / ram 6 & 7
+	{ EXWRAM(4),    EXWRAM(5),      EXWRAM(6),      EXWRAM(7)   },  //0x0e: exram 4 & 5 / exram 6 & 7
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x0f: <invalid setting>
 	/* 2 */
-	{ INVALID(0),	INVALID(0),		INVALID(0),     INVALID(0)  },	//0x00: <invalid setting>
-	{ BASICROM(0),	BASICROM(1),	BASICROM(2),	BASICROM(3) },	//0x01: basic rom 0 & 1 / basic rom 2 & 3
-	{ VOICEROM(0),	VOICEROM(1),	VOICEROM(0),	VOICEROM(1) },	//0x02: voice rom 0 & 1 / voice rom 0 & 1
-	{ EXROM(1),		EXROM(1),		EXROM(1),		EXROM(1)	},	//0x03: ex rom 1 & 1 / ex rom 1 & 1
-	{ EXROM(0),		EXROM(0),		EXROM(0),		EXROM(0)	},	//0x04: ex rom 0 & 0 / ex rom 0 & 0
-	{ VOICEROM(0),	BASICROM(1),	VOICEROM(0),	BASICROM(3) },	//0x05: voice rom 0 & basic rom 1 / voice rom 0 & basic 3
-	{ BASICROM(0),	VOICEROM(1),	BASICROM(2),	VOICEROM(1) },	//0x06: basic rom 0 & voice rom 1 / basic rom 2 & voice 1
-	{ EXROM(0),		EXROM(1),		EXROM(0),		EXROM(1)	},	//0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
-	{ EXROM(1),		EXROM(0),		EXROM(1),		EXROM(0)	},	//0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
-	{ EXROM(1),		BASICROM(1),	EXROM(1),		BASICROM(3) },	//0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
-	{ BASICROM(0),  EXROM(1),		BASICROM(2),	EXROM(1)	},	//0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
-	{ EXROM(0),		VOICEROM(1),	EXROM(0),		VOICEROM(1) },	//0x0b: ex rom 0 & voice rom 1 / ex rom 0 & voice 1
-	{ VOICEROM(0),	EXROM(0),		VOICEROM(0),	EXROM(0)	},	//0x0c: voice rom 1 & ex rom 0 / voice rom 0 & ex rom 0
-	{ WRAM(4),		WRAM(5),		WRAM(6),		WRAM(7)		},	//0x0d: ram 4 & 5 / ram 6 & 7
-	{ EXWRAM(4),	EXWRAM(5),		EXWRAM(6),		EXWRAM(7)	},	//0x0e: exram 4 & 5 / exram 6 & 7
-	{ INVALID(0),	INVALID(0),		INVALID(0),		INVALID(0)  },	//0x0f: <invalid setting>
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x00: <invalid setting>
+	{ BASICROM(0),  BASICROM(1),    BASICROM(2),    BASICROM(3) },  //0x01: basic rom 0 & 1 / basic rom 2 & 3
+	{ VOICEROM(0),  VOICEROM(1),    VOICEROM(0),    VOICEROM(1) },  //0x02: voice rom 0 & 1 / voice rom 0 & 1
+	{ EXROM(1),     EXROM(1),       EXROM(1),       EXROM(1)    },  //0x03: ex rom 1 & 1 / ex rom 1 & 1
+	{ EXROM(0),     EXROM(0),       EXROM(0),       EXROM(0)    },  //0x04: ex rom 0 & 0 / ex rom 0 & 0
+	{ VOICEROM(0),  BASICROM(1),    VOICEROM(0),    BASICROM(3) },  //0x05: voice rom 0 & basic rom 1 / voice rom 0 & basic 3
+	{ BASICROM(0),  VOICEROM(1),    BASICROM(2),    VOICEROM(1) },  //0x06: basic rom 0 & voice rom 1 / basic rom 2 & voice 1
+	{ EXROM(0),     EXROM(1),       EXROM(0),       EXROM(1)    },  //0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
+	{ EXROM(1),     EXROM(0),       EXROM(1),       EXROM(0)    },  //0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
+	{ EXROM(1),     BASICROM(1),    EXROM(1),       BASICROM(3) },  //0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
+	{ BASICROM(0),  EXROM(1),       BASICROM(2),    EXROM(1)    },  //0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
+	{ EXROM(0),     VOICEROM(1),    EXROM(0),       VOICEROM(1) },  //0x0b: ex rom 0 & voice rom 1 / ex rom 0 & voice 1
+	{ VOICEROM(0),  EXROM(0),       VOICEROM(0),    EXROM(0)    },  //0x0c: voice rom 1 & ex rom 0 / voice rom 0 & ex rom 0
+	{ WRAM(4),      WRAM(5),        WRAM(6),        WRAM(7)     },  //0x0d: ram 4 & 5 / ram 6 & 7
+	{ EXWRAM(4),    EXWRAM(5),      EXWRAM(6),      EXWRAM(7)   },  //0x0e: exram 4 & 5 / exram 6 & 7
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x0f: <invalid setting>
 	/* 3 */
-	{ INVALID(0),	INVALID(0),		INVALID(0),     INVALID(0)  },	//0x00: <invalid setting>
-	{ BASICROM(0),	BASICROM(1),	BASICROM(2),	BASICROM(3) },	//0x01: basic rom 0 & 1 / basic rom 2 & 3
-	{ KANJIROM(2),	KANJIROM(3),	KANJIROM(2),	KANJIROM(3) },	//0x02: kanji rom 0 & 1 / kanji rom 0 & 1
-	{ EXROM(1),		EXROM(1),		EXROM(1),		EXROM(1)	},	//0x03: ex rom 1 & 1 / ex rom 1 & 1
-	{ EXROM(0),		EXROM(0),		EXROM(0),		EXROM(0)	},	//0x04: ex rom 0 & 0 / ex rom 0 & 0
-	{ KANJIROM(2),	BASICROM(1),	KANJIROM(2),	BASICROM(3) },	//0x05: voice rom 0 & basic rom 1 / voice rom 0 & basic 3
-	{ BASICROM(0),	KANJIROM(3),	BASICROM(2),	KANJIROM(3) },	//0x06: basic rom 0 & voice rom 1 / basic rom 2 & voice 1
-	{ EXROM(0),		EXROM(1),		EXROM(0),		EXROM(1)	},	//0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
-	{ EXROM(1),		EXROM(0),		EXROM(1),		EXROM(0)	},	//0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
-	{ EXROM(1),		BASICROM(1),	EXROM(1),		BASICROM(3) },	//0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
-	{ BASICROM(0),  EXROM(1),		BASICROM(2),	EXROM(1)	},	//0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
-	{ EXROM(0),		KANJIROM(3),	EXROM(0),		KANJIROM(3) },	//0x0b: ex rom 0 & voice rom 1 / ex rom 0 & voice 1
-	{ KANJIROM(2),	EXROM(0),		KANJIROM(2),	EXROM(0)	},	//0x0c: voice rom 1 & ex rom 0 / voice rom 0 & ex rom 0
-	{ WRAM(4),		WRAM(5),		WRAM(6),		WRAM(7)		},	//0x0d: ram 4 & 5 / ram 6 & 7
-	{ EXWRAM(4),	EXWRAM(5),		EXWRAM(6),		EXWRAM(7)	},	//0x0e: exram 4 & 5 / exram 6 & 7
-	{ INVALID(0),	INVALID(0),		INVALID(0),		INVALID(0)  }	//0x0f: <invalid setting>
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  },  //0x00: <invalid setting>
+	{ BASICROM(0),  BASICROM(1),    BASICROM(2),    BASICROM(3) },  //0x01: basic rom 0 & 1 / basic rom 2 & 3
+	{ KANJIROM(2),  KANJIROM(3),    KANJIROM(2),    KANJIROM(3) },  //0x02: kanji rom 0 & 1 / kanji rom 0 & 1
+	{ EXROM(1),     EXROM(1),       EXROM(1),       EXROM(1)    },  //0x03: ex rom 1 & 1 / ex rom 1 & 1
+	{ EXROM(0),     EXROM(0),       EXROM(0),       EXROM(0)    },  //0x04: ex rom 0 & 0 / ex rom 0 & 0
+	{ KANJIROM(2),  BASICROM(1),    KANJIROM(2),    BASICROM(3) },  //0x05: voice rom 0 & basic rom 1 / voice rom 0 & basic 3
+	{ BASICROM(0),  KANJIROM(3),    BASICROM(2),    KANJIROM(3) },  //0x06: basic rom 0 & voice rom 1 / basic rom 2 & voice 1
+	{ EXROM(0),     EXROM(1),       EXROM(0),       EXROM(1)    },  //0x07: ex rom 0 & ex rom 1 / ex rom 0 & ex rom 1
+	{ EXROM(1),     EXROM(0),       EXROM(1),       EXROM(0)    },  //0x08: ex rom 1 & ex rom 0 / ex rom 1 & ex rom 0
+	{ EXROM(1),     BASICROM(1),    EXROM(1),       BASICROM(3) },  //0x09: ex rom 1 & basic rom 1 / ex rom 1 & basic 3
+	{ BASICROM(0),  EXROM(1),       BASICROM(2),    EXROM(1)    },  //0x0a: basic rom 0 & ex rom 1 / basic rom 2 & ex rom 1
+	{ EXROM(0),     KANJIROM(3),    EXROM(0),       KANJIROM(3) },  //0x0b: ex rom 0 & voice rom 1 / ex rom 0 & voice 1
+	{ KANJIROM(2),  EXROM(0),       KANJIROM(2),    EXROM(0)    },  //0x0c: voice rom 1 & ex rom 0 / voice rom 0 & ex rom 0
+	{ WRAM(4),      WRAM(5),        WRAM(6),        WRAM(7)     },  //0x0d: ram 4 & 5 / ram 6 & 7
+	{ EXWRAM(4),    EXWRAM(5),      EXWRAM(6),      EXWRAM(7)   },  //0x0e: exram 4 & 5 / exram 6 & 7
+	{ INVALID(0),   INVALID(0),     INVALID(0),     INVALID(0)  }   //0x0f: <invalid setting>
 };
 
-static WRITE8_HANDLER( pc6001m2_bank_r0_w )
+WRITE8_MEMBER(pc6001_state::pc6001m2_bank_r0_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	UINT8 *ROM = space->machine().region("maincpu")->base();
-	UINT8 *gfx_data = space->machine().region("gfx1")->base();
+	UINT8 *ROM = m_region_maincpu->base();
+	UINT8 *gfx_data = m_region_gfx1->base();
 
 //  bankaddress = 0x10000 + (0x4000 * ((data & 0x40)>>6));
-//  memory_set_bankptr(space->machine(), 1, &ROM[bankaddress]);
+//  membank(1)->set_base(&ROM[bankaddress]);
 
-	state->m_bank_r0 = data;
+	m_bank_r0 = data;
 
-//  printf("%02x BANK | %02x\n",data,state->m_bank_opt);
-	memory_set_bankptr(space->machine(), "bank1", &ROM[banksw_table_r0[(data & 0xf)+(state->m_bank_opt*0x10)][0]]);
-	memory_set_bankptr(space->machine(), "bank2", &ROM[banksw_table_r0[(data & 0xf)+(state->m_bank_opt*0x10)][1]]);
-	memory_set_bankptr(space->machine(), "bank3", &ROM[banksw_table_r0[((data & 0xf0)>>4)+(state->m_bank_opt*0x10)][2]]);
-	if(!state->m_gfx_bank_on)
-		memory_set_bankptr(space->machine(), "bank4", &ROM[banksw_table_r0[((state->m_bank_r0 & 0xf0)>>4)+(state->m_bank_opt*0x10)][3]]);
+//  printf("%02x BANK | %02x\n",data,m_bank_opt);
+	m_bank1->set_base(&ROM[banksw_table_r0[(data & 0xf)+(m_bank_opt*0x10)][0]]);
+	m_bank2->set_base(&ROM[banksw_table_r0[(data & 0xf)+(m_bank_opt*0x10)][1]]);
+	m_bank3->set_base(&ROM[banksw_table_r0[((data & 0xf0)>>4)+(m_bank_opt*0x10)][2]]);
+	if(!m_gfx_bank_on)
+		m_bank4->set_base(&ROM[banksw_table_r0[((m_bank_r0 & 0xf0)>>4)+(m_bank_opt*0x10)][3]]);
 	else
-		memory_set_bankptr(space->machine(), "bank4", &gfx_data[state->m_cgrom_bank_addr]);
+		m_bank4->set_base(&gfx_data[m_cgrom_bank_addr]);
 }
 
-static WRITE8_HANDLER( pc6001m2_bank_r1_w )
+WRITE8_MEMBER(pc6001_state::pc6001m2_bank_r1_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	UINT8 *ROM = space->machine().region("maincpu")->base();
+	UINT8 *ROM = m_region_maincpu->base();
 
 //  bankaddress = 0x10000 + (0x4000 * ((data & 0x40)>>6));
-//  memory_set_bankptr(space->machine(), 1, &ROM[bankaddress]);
+//  membank(1)->set_base(&ROM[bankaddress]);
 
-	state->m_bank_r1 = data;
+	m_bank_r1 = data;
 
 //  printf("%02x BANK\n",data);
-	memory_set_bankptr(space->machine(), "bank5", &ROM[banksw_table_r1[(data & 0xf)+(state->m_bank_opt*0x10)][0]]);
-	memory_set_bankptr(space->machine(), "bank6", &ROM[banksw_table_r1[(data & 0xf)+(state->m_bank_opt*0x10)][1]]);
-	memory_set_bankptr(space->machine(), "bank7", &ROM[banksw_table_r1[((data & 0xf0)>>4)+(state->m_bank_opt*0x10)][2]]);
-	memory_set_bankptr(space->machine(), "bank8", &ROM[banksw_table_r1[((data & 0xf0)>>4)+(state->m_bank_opt*0x10)][3]]);
+	m_bank5->set_base(&ROM[banksw_table_r1[(data & 0xf)+(m_bank_opt*0x10)][0]]);
+	m_bank6->set_base(&ROM[banksw_table_r1[(data & 0xf)+(m_bank_opt*0x10)][1]]);
+	m_bank7->set_base(&ROM[banksw_table_r1[((data & 0xf0)>>4)+(m_bank_opt*0x10)][2]]);
+	m_bank8->set_base(&ROM[banksw_table_r1[((data & 0xf0)>>4)+(m_bank_opt*0x10)][3]]);
 }
 
-static WRITE8_HANDLER( pc6001m2_bank_w0_w )
+WRITE8_MEMBER(pc6001_state::pc6001m2_bank_w0_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	state->m_bank_w = data;
+	m_bank_w = data;
 }
 
-static WRITE8_HANDLER( pc6001m2_opt_bank_w )
+WRITE8_MEMBER(pc6001_state::pc6001m2_opt_bank_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	UINT8 *ROM = space->machine().region("maincpu")->base();
-	UINT8 *gfx_data = space->machine().region("gfx1")->base();
+	UINT8 *ROM = m_region_maincpu->base();
+	UINT8 *gfx_data = m_region_gfx1->base();
 
 	/*
-    0 - TVROM / VOICE ROM
-    1 - KANJI ROM bank 0
-    2 - KANJI ROM bank 1
-    3 - TVROM / VOICE ROM
-    */
-	state->m_bank_opt = data & 3;
+	0 - TVROM / VOICE ROM
+	1 - KANJI ROM bank 0
+	2 - KANJI ROM bank 1
+	3 - TVROM / VOICE ROM
+	*/
+	m_bank_opt = data & 3;
 
-	memory_set_bankptr(space->machine(), "bank1", &ROM[banksw_table_r0[(state->m_bank_r0 & 0xf)+(state->m_bank_opt*0x10)][0]]);
-	memory_set_bankptr(space->machine(), "bank2", &ROM[banksw_table_r0[(state->m_bank_r0 & 0xf)+(state->m_bank_opt*0x10)][1]]);
-	memory_set_bankptr(space->machine(), "bank3", &ROM[banksw_table_r0[((state->m_bank_r0 & 0xf0)>>4)+(state->m_bank_opt*0x10)][2]]);
-	if(!state->m_gfx_bank_on)
-		memory_set_bankptr(space->machine(), "bank4", &ROM[banksw_table_r0[((state->m_bank_r0 & 0xf0)>>4)+(state->m_bank_opt*0x10)][3]]);
+	m_bank1->set_base(&ROM[banksw_table_r0[(m_bank_r0 & 0xf)+(m_bank_opt*0x10)][0]]);
+	m_bank2->set_base(&ROM[banksw_table_r0[(m_bank_r0 & 0xf)+(m_bank_opt*0x10)][1]]);
+	m_bank3->set_base(&ROM[banksw_table_r0[((m_bank_r0 & 0xf0)>>4)+(m_bank_opt*0x10)][2]]);
+	if(!m_gfx_bank_on)
+		m_bank4->set_base(&ROM[banksw_table_r0[((m_bank_r0 & 0xf0)>>4)+(m_bank_opt*0x10)][3]]);
 	else
-		memory_set_bankptr(space->machine(), "bank4", &gfx_data[state->m_cgrom_bank_addr]);
-	memory_set_bankptr(space->machine(), "bank4", &ROM[banksw_table_r0[((state->m_bank_r0 & 0xf0)>>4)+(state->m_bank_opt*0x10)][3]]);
-	memory_set_bankptr(space->machine(), "bank5", &ROM[banksw_table_r1[(state->m_bank_r1 & 0xf)+(state->m_bank_opt*0x10)][0]]);
-	memory_set_bankptr(space->machine(), "bank6", &ROM[banksw_table_r1[(state->m_bank_r1 & 0xf)+(state->m_bank_opt*0x10)][1]]);
-	memory_set_bankptr(space->machine(), "bank7", &ROM[banksw_table_r1[((state->m_bank_r1 & 0xf0)>>4)+(state->m_bank_opt*0x10)][2]]);
-	memory_set_bankptr(space->machine(), "bank8", &ROM[banksw_table_r1[((state->m_bank_r1 & 0xf0)>>4)+(state->m_bank_opt*0x10)][3]]);
+		m_bank4->set_base(&gfx_data[m_cgrom_bank_addr]);
+	m_bank4->set_base(&ROM[banksw_table_r0[((m_bank_r0 & 0xf0)>>4)+(m_bank_opt*0x10)][3]]);
+	m_bank5->set_base(&ROM[banksw_table_r1[(m_bank_r1 & 0xf)+(m_bank_opt*0x10)][0]]);
+	m_bank6->set_base(&ROM[banksw_table_r1[(m_bank_r1 & 0xf)+(m_bank_opt*0x10)][1]]);
+	m_bank7->set_base(&ROM[banksw_table_r1[((m_bank_r1 & 0xf0)>>4)+(m_bank_opt*0x10)][2]]);
+	m_bank8->set_base(&ROM[banksw_table_r1[((m_bank_r1 & 0xf0)>>4)+(m_bank_opt*0x10)][3]]);
 
 }
 
-static WRITE8_HANDLER( work_ram0_w )
+WRITE8_MEMBER(pc6001_state::work_ram0_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	UINT8 *ROM = space->machine().region("maincpu")->base();
-	ROM[offset+((state->m_bank_w & 0x01) ? WRAM(0) : EXWRAM(0))] = data;
+	UINT8 *ROM = m_region_maincpu->base();
+	ROM[offset+((m_bank_w & 0x01) ? WRAM(0) : EXWRAM(0))] = data;
 }
 
-static WRITE8_HANDLER( work_ram1_w )
+WRITE8_MEMBER(pc6001_state::work_ram1_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	UINT8 *ROM = space->machine().region("maincpu")->base();
-	ROM[offset+((state->m_bank_w & 0x01) ? WRAM(1) : EXWRAM(1))] = data;
+	UINT8 *ROM = m_region_maincpu->base();
+	ROM[offset+((m_bank_w & 0x01) ? WRAM(1) : EXWRAM(1))] = data;
 }
 
-static WRITE8_HANDLER( work_ram2_w )
+WRITE8_MEMBER(pc6001_state::work_ram2_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	UINT8 *ROM = space->machine().region("maincpu")->base();
-	ROM[offset+((state->m_bank_w & 0x04) ? WRAM(2) : EXWRAM(2))] = data;
+	UINT8 *ROM = m_region_maincpu->base();
+	ROM[offset+((m_bank_w & 0x04) ? WRAM(2) : EXWRAM(2))] = data;
 }
 
-static WRITE8_HANDLER( work_ram3_w )
+WRITE8_MEMBER(pc6001_state::work_ram3_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	UINT8 *ROM = space->machine().region("maincpu")->base();
-	ROM[offset+((state->m_bank_w & 0x04) ? WRAM(3) : EXWRAM(3))] = data;
+	UINT8 *ROM = m_region_maincpu->base();
+	ROM[offset+((m_bank_w & 0x04) ? WRAM(3) : EXWRAM(3))] = data;
 }
 
-static WRITE8_HANDLER( work_ram4_w )
+WRITE8_MEMBER(pc6001_state::work_ram4_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	UINT8 *ROM = space->machine().region("maincpu")->base();
-	ROM[offset+((state->m_bank_w & 0x10) ? WRAM(4) : EXWRAM(4))] = data;
+	UINT8 *ROM = m_region_maincpu->base();
+	ROM[offset+((m_bank_w & 0x10) ? WRAM(4) : EXWRAM(4))] = data;
 }
 
-static WRITE8_HANDLER( work_ram5_w )
+WRITE8_MEMBER(pc6001_state::work_ram5_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	UINT8 *ROM = space->machine().region("maincpu")->base();
-	ROM[offset+((state->m_bank_w & 0x10) ? WRAM(5) : EXWRAM(5))] = data;
+	UINT8 *ROM = m_region_maincpu->base();
+	ROM[offset+((m_bank_w & 0x10) ? WRAM(5) : EXWRAM(5))] = data;
 }
 
-static WRITE8_HANDLER( work_ram6_w )
+WRITE8_MEMBER(pc6001_state::work_ram6_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>(); UINT8 *ROM = space->machine().region("maincpu")->base(); ROM[offset+((state->m_bank_w & 0x40) ? WRAM(6) : EXWRAM(6))] = data;
+	UINT8 *ROM = m_region_maincpu->base();
+	ROM[offset+((m_bank_w & 0x40) ? WRAM(6) : EXWRAM(6))] = data;
 }
 
-static WRITE8_HANDLER( work_ram7_w )
+WRITE8_MEMBER(pc6001_state::work_ram7_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>(); UINT8 *ROM = space->machine().region("maincpu")->base(); ROM[offset+((state->m_bank_w & 0x40) ? WRAM(7) : EXWRAM(7))] = data;
+	UINT8 *ROM = m_region_maincpu->base();
+	ROM[offset+((m_bank_w & 0x40) ? WRAM(7) : EXWRAM(7))] = data;
 }
 
 
-static WRITE8_HANDLER(necmk2_ppi8255_w)
+WRITE8_MEMBER(pc6001_state::necmk2_ppi8255_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
 	if (offset==3)
 	{
 		if(data & 1)
-			state->m_port_c_8255 |=   1<<((data>>1)&0x07);
+			m_port_c_8255 |=   1<<((data>>1)&0x07);
 		else
-			state->m_port_c_8255 &= ~(1<<((data>>1)&0x07));
+			m_port_c_8255 &= ~(1<<((data>>1)&0x07));
 
 		switch(data) {
-        	case 0x08: state->m_port_c_8255 |= 0x88; break;
-        	case 0x09: state->m_port_c_8255 &= 0xf7; break;
-        	case 0x0c: state->m_port_c_8255 |= 0x28; break;
-        	case 0x0d: state->m_port_c_8255 &= 0xf7; break;
-        	default: break;
+			case 0x08: m_port_c_8255 |= 0x88; break;
+			case 0x09: m_port_c_8255 &= 0xf7; break;
+			case 0x0c: m_port_c_8255 |= 0x28; break;
+			case 0x0d: m_port_c_8255 &= 0xf7; break;
+			default: break;
 		}
 
-		state->m_port_c_8255 |= 0xa8;
+		m_port_c_8255 |= 0xa8;
 
 		{
-			UINT8 *ROM = space->machine().region("maincpu")->base();
-			UINT8 *gfx_data = space->machine().region("gfx1")->base();
+			UINT8 *ROM = m_region_maincpu->base();
+			UINT8 *gfx_data = m_region_gfx1->base();
 
 			//printf("%02x\n",data);
 
 			if((data & 0x0f) == 0x05)
 			{
-				state->m_gfx_bank_on = 0;
-				memory_set_bankptr(space->machine(), "bank4", &ROM[banksw_table_r0[((state->m_bank_r0 & 0xf0)>>4)+(state->m_bank_opt*0x10)][3]]);
+				m_gfx_bank_on = 0;
+				m_bank4->set_base(&ROM[banksw_table_r0[((m_bank_r0 & 0xf0)>>4)+(m_bank_opt*0x10)][3]]);
 			}
 			if((data & 0x0f) == 0x04)
 			{
-				state->m_gfx_bank_on = 1;
-				memory_set_bankptr(space->machine(), "bank4", &gfx_data[state->m_cgrom_bank_addr]);
+				m_gfx_bank_on = 1;
+				m_bank4->set_base(&gfx_data[m_cgrom_bank_addr]);
 			}
 		}
 	}
-	state->m_ppi->write(*space,offset,data);
+	m_ppi->write(space,offset,data);
 }
 
-static void vram_bank_change(running_machine &machine,UINT8 vram_bank)
+void pc6001_state::vram_bank_change(UINT8 vram_bank)
 {
-	pc6001_state *state = machine.driver_data<pc6001_state>();
-	UINT8 *work_ram = machine.region("maincpu")->base();
+	UINT8 *work_ram = m_region_maincpu->base();
 
 //  popmessage("%02x",vram_bank);
 
 	switch(vram_bank & 0x66)
 	{
-		case 0x00: state->m_video_ram = work_ram + 0x8000 + 0x28000; break; //4 color mode
-		case 0x02: state->m_video_ram = work_ram + 0xc000 + 0x28000; break;
-		case 0x04: state->m_video_ram = work_ram + 0x8000 + 0x28000; break;
-		case 0x06: state->m_video_ram = work_ram + 0xc000 + 0x28000; break;
-		case 0x20: state->m_video_ram = work_ram + 0xc000 + 0x28000; break; //4 color mode
-		case 0x22: state->m_video_ram = work_ram + 0xe000 + 0x28000; break;
-		case 0x24: state->m_video_ram = work_ram + 0xc000 + 0x28000; break;
-		case 0x26: state->m_video_ram = work_ram + 0xe000 + 0x28000; break;
-		case 0x40: state->m_video_ram = work_ram + 0x0000 + 0x28000; break; //4 color mode
-		case 0x42: state->m_video_ram = work_ram + 0x8000 + 0x28000; break;
-		case 0x44: state->m_video_ram = work_ram + 0x0000 + 0x28000; break;
-		case 0x46: state->m_video_ram = work_ram + 0x8000 + 0x28000; break;
-		case 0x60: state->m_video_ram = work_ram + 0x4000 + 0x28000; break; //4 color mode
-		case 0x62: state->m_video_ram = work_ram + 0xa000 + 0x28000; break;
-		case 0x64: state->m_video_ram = work_ram + 0x4000 + 0x28000; break;
-		case 0x66: state->m_video_ram = work_ram + 0xa000 + 0x28000; break;
+		case 0x00: m_video_ram = work_ram + 0x8000 + 0x28000; break; //4 color mode
+		case 0x02: m_video_ram = work_ram + 0xc000 + 0x28000; break;
+		case 0x04: m_video_ram = work_ram + 0x8000 + 0x28000; break;
+		case 0x06: m_video_ram = work_ram + 0xc000 + 0x28000; break;
+		case 0x20: m_video_ram = work_ram + 0xc000 + 0x28000; break; //4 color mode
+		case 0x22: m_video_ram = work_ram + 0xe000 + 0x28000; break;
+		case 0x24: m_video_ram = work_ram + 0xc000 + 0x28000; break;
+		case 0x26: m_video_ram = work_ram + 0xe000 + 0x28000; break;
+		case 0x40: m_video_ram = work_ram + 0x0000 + 0x28000; break; //4 color mode
+		case 0x42: m_video_ram = work_ram + 0x8000 + 0x28000; break;
+		case 0x44: m_video_ram = work_ram + 0x0000 + 0x28000; break;
+		case 0x46: m_video_ram = work_ram + 0x8000 + 0x28000; break;
+		case 0x60: m_video_ram = work_ram + 0x4000 + 0x28000; break; //4 color mode
+		case 0x62: m_video_ram = work_ram + 0xa000 + 0x28000; break;
+		case 0x64: m_video_ram = work_ram + 0x4000 + 0x28000; break;
+		case 0x66: m_video_ram = work_ram + 0xa000 + 0x28000; break;
 	}
 }
 
-static WRITE8_HANDLER ( pc6001m2_system_latch_w )
+WRITE8_MEMBER(pc6001_state::pc6001m2_system_latch_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	if((!(state->m_sys_latch & 8)) && data & 0x8) //PLAY tape cmd
+	if((!(m_sys_latch & 8)) && data & 0x8) //PLAY tape cmd
 	{
-		state->m_cas_switch = 1;
-		//space->machine().device(CASSETTE_TAG )->change_state(CASSETTE_MOTOR_ENABLED,CASSETTE_MASK_MOTOR);
-		//space->machine().device(CASSETTE_TAG )->change_state(CASSETTE_PLAY,CASSETTE_MASK_UISTATE);
+		m_cas_switch = 1;
+		//m_cassette->change_state(CASSETTE_MOTOR_ENABLED,CASSETTE_MASK_MOTOR);
+		//m_cassette->change_state(CASSETTE_PLAY,CASSETTE_MASK_UISTATE);
 	}
-	if((state->m_sys_latch & 8) && ((data & 0x8) == 0)) //STOP tape cmd
+	if((m_sys_latch & 8) && ((data & 0x8) == 0)) //STOP tape cmd
 	{
-		state->m_cas_switch = 0;
-		//space->machine().device(CASSETTE_TAG )->change_state(CASSETTE_MOTOR_DISABLED,CASSETTE_MASK_MOTOR);
-		//space->machine().device(CASSETTE_TAG )->change_state(CASSETTE_STOPPED,CASSETTE_MASK_UISTATE);
-		//state->m_irq_vector = 0x00;
-		//cputag_set_input_line(space->machine(),"maincpu", 0, ASSERT_LINE);
+		m_cas_switch = 0;
+		//m_cassette->change_state(CASSETTE_MOTOR_DISABLED,CASSETTE_MASK_MOTOR);
+		//m_cassette->change_state(CASSETTE_STOPPED,CASSETTE_MASK_UISTATE);
+		//m_irq_vector = 0x00;
+		//m_maincpu->set_input_line(0, ASSERT_LINE);
 	}
 
-	state->m_sys_latch = data;
+	m_sys_latch = data;
 
-	state->m_timer_irq_mask = data & 1;
-	vram_bank_change(space->machine(),(state->m_ex_vram_bank & 0x06) | ((state->m_sys_latch & 0x06) << 4));
+	m_timer_irq_mask = data & 1;
+	vram_bank_change((m_ex_vram_bank & 0x06) | ((m_sys_latch & 0x06) << 4));
 
 	//printf("%02x B0\n",data);
 }
 
 
-static WRITE8_HANDLER( pc6001m2_vram_bank_w )
+WRITE8_MEMBER(pc6001_state::pc6001m2_vram_bank_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
 	//static const UINT32 startaddr[] = {WRAM(6), WRAM(6), WRAM(0), WRAM(4) };
 
-	state->m_ex_vram_bank = data;
-	vram_bank_change(space->machine(),(state->m_ex_vram_bank & 0x06) | ((state->m_sys_latch & 0x06) << 4));
+	m_ex_vram_bank = data;
+	vram_bank_change((m_ex_vram_bank & 0x06) | ((m_sys_latch & 0x06) << 4));
 
-	state->m_exgfx_text_mode = ((data & 2) == 0);
-	state->m_cgrom_bank_addr = (data & 2) ? 0x0000 : 0x2000;
+	m_exgfx_text_mode = ((data & 2) == 0);
+	m_cgrom_bank_addr = (data & 2) ? 0x0000 : 0x2000;
 
-	state->m_exgfx_bitmap_mode = (data & 8);
-	state->m_exgfx_2bpp_mode = ((data & 6) == 0);
+	m_exgfx_bitmap_mode = (data & 8);
+	m_exgfx_2bpp_mode = ((data & 6) == 0);
 
 	{
 		/* Apparently bitmap modes changes the screen res to 320 x 200 */
 		{
-			rectangle visarea = space->machine().primary_screen->visible_area();
+			rectangle visarea = machine().primary_screen->visible_area();
 			int y_height;
 
-			y_height = (state->m_exgfx_bitmap_mode || state->m_exgfx_2bpp_mode) ? 200 : 240;
+			y_height = (m_exgfx_bitmap_mode || m_exgfx_2bpp_mode) ? 200 : 240;
 
-			visarea.min_x = visarea.min_y = 0;
-			visarea.max_y = (y_height) - 1;
-			visarea.max_x = (320) - 1;
+			visarea.set(0, (320) - 1, 0, (y_height) - 1);
 
-			space->machine().primary_screen->configure(320, 240, visarea, space->machine().primary_screen->frame_period().attoseconds);
+			machine().primary_screen->configure(320, 240, visarea, machine().primary_screen->frame_period().attoseconds);
 		}
 	}
 
 //  popmessage("%02x",data);
 
-//  state->m_video_ram = work_ram + startaddr[(data >> 1) & 0x03];
+//  m_video_ram = work_ram + startaddr[(data >> 1) & 0x03];
 }
 
-static WRITE8_HANDLER( pc6001m2_col_bank_w )
+WRITE8_MEMBER(pc6001_state::pc6001m2_col_bank_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	state->m_bgcol_bank = (data & 7);
+	m_bgcol_bank = (data & 7);
 }
 
-/* voice synth is a NEC uPD7752 sound chip (currently unemulated) */
-static READ8_HANDLER( upd7752_reg_r )
+
+WRITE8_MEMBER(pc6001_state::pc6001m2_0xf3_w)
 {
-	switch(offset & 3)
-	{
-		//[0x00]: status register
-		//x--- ---- BSY busy status (1) processing (0) stopped
-		//-x-- ---- REQ audio parameter (1) input request (0) prohibited (???)
-		//--x- ---- ~INT / EXT message data (1) Outside (0) Inside
-		//---x ---- ERR error flag
-		case 0x00: return 0x60;
-		//[0x02]: port 0xe2 latch?
-		case 0x02: return 0xff;
-		//[0x03]: port 0xe3 latch?
-		case 0x03: return 0xff;
-	}
-	return 0xff;
-}
-
-static WRITE8_HANDLER( upd7752_reg_w )
-{
-	switch(offset & 3)
-	{
-		// [0x00]: audio parameter transfer
-
-		// [0x02]: mode set
-		// ---- -x-- Frame periodic analysis (0) 10 ms / frame (1) 20 ms / frame
-		// ---- --xx Utterance (tempo?) speed
-		//        00 : NORMAL SPEED
-		//        01 : SLOW SPEED
-		//        10 : FAST SPEED
-		//        11 : Setting prohibited
-
-		// case 0x02:
-
-		// case 0x03: command set
-	}
-}
-
-static WRITE8_HANDLER( pc6001m2_0xf3_w )
-{
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
 	/*
-    x--- ---- M1 (?) wait setting
-    -x-- ---- ROM wait setting
-    --x- ---- RAM wait setting
-    ---x ---- custom irq 2 address output
-    ---- x--- custom irq 1 address output
-    ---- -x-- timer irq mask 2 (mirror?)
-    ---- --x- custom irq 2 mask
-    ---- ---x custom irq 1 mask
-    */
-	state->m_timer_irq_mask2 = data & 4;
+	x--- ---- M1 (?) wait setting
+	-x-- ---- ROM wait setting
+	--x- ---- RAM wait setting
+	---x ---- custom irq 2 address output
+	---- x--- custom irq 1 address output
+	---- -x-- timer irq mask 2 (mirror?)
+	---- --x- custom irq 2 mask
+	---- ---x custom irq 1 mask
+	*/
+	m_timer_irq_mask2 = data & 4;
 }
 
-static TIMER_CALLBACK(audio_callback)
+TIMER_CALLBACK_MEMBER(pc6001_state::audio_callback)
 {
-	pc6001_state *state = machine.driver_data<pc6001_state>();
-	if(state->m_cas_switch == 0 && ((state->m_timer_irq_mask == 0) || (state->m_timer_irq_mask2 == 0)))
+	if(m_cas_switch == 0 && ((m_timer_irq_mask == 0) || (m_timer_irq_mask2 == 0)))
 	{
-		if(IRQ_LOG) printf("Timer IRQ called %02x\n",state->m_timer_irq_vector);
-		state->m_irq_vector = state->m_timer_irq_vector;
-		cputag_set_input_line(machine,"maincpu", 0, ASSERT_LINE);
+		if(IRQ_LOG) printf("Timer IRQ called %02x\n",m_timer_irq_vector);
+		m_irq_vector = m_timer_irq_vector;
+		m_maincpu->set_input_line(0, ASSERT_LINE);
 	}
 }
 
 
-static WRITE8_HANDLER( pc6001m2_timer_adj_w )
+WRITE8_MEMBER(pc6001_state::pc6001m2_timer_adj_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	state->m_timer_hz_div = data;
-	attotime period = attotime::from_hz((487.5*4)/(state->m_timer_hz_div+1));
-	state->m_timer_irq_timer->adjust(period,  0, period);
+	m_timer_hz_div = data;
+	attotime period = attotime::from_hz((487.5*4)/(m_timer_hz_div+1));
+	m_timer_irq_timer->adjust(period,  0, period);
 }
 
-static WRITE8_HANDLER( pc6001m2_timer_irqv_w )
+WRITE8_MEMBER(pc6001_state::pc6001m2_timer_irqv_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	state->m_timer_irq_vector = data;
+	m_timer_irq_vector = data;
 }
 
-static READ8_HANDLER( pc6001m2_bank_r0_r )
+READ8_MEMBER(pc6001_state::pc6001m2_bank_r0_r)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	return state->m_bank_r0;
+	return m_bank_r0;
 }
 
-static READ8_HANDLER( pc6001m2_bank_r1_r )
+READ8_MEMBER(pc6001_state::pc6001m2_bank_r1_r)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	return state->m_bank_r1;
+	return m_bank_r1;
 }
 
-static READ8_HANDLER( pc6001m2_bank_w0_r )
+READ8_MEMBER(pc6001_state::pc6001m2_bank_w0_r)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	return state->m_bank_w;
+	return m_bank_w;
 }
 
-static ADDRESS_MAP_START(pc6001m2_map, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(pc6001m2_map, AS_PROGRAM, 8, pc6001_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x1fff) AM_ROMBANK("bank1") AM_WRITE(work_ram0_w)
 	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK("bank2") AM_WRITE(work_ram1_w)
@@ -1344,17 +1422,17 @@ static ADDRESS_MAP_START(pc6001m2_map, AS_PROGRAM, 8)
 	AM_RANGE(0xe000, 0xffff) AM_ROMBANK("bank8") AM_WRITE(work_ram7_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc6001m2_io , AS_IO, 8)
+static ADDRESS_MAP_START( pc6001m2_io , AS_IO, 8, pc6001_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("uart", msm8251_data_r,msm8251_data_w)
-	AM_RANGE(0x81, 0x81) AM_DEVREADWRITE("uart", msm8251_status_r,msm8251_control_w)
+	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("uart", i8251_device, data_r, data_w)
+	AM_RANGE(0x81, 0x81) AM_DEVREADWRITE("uart", i8251_device, status_r, control_w)
 
 	AM_RANGE(0x90, 0x93) AM_MIRROR(0x0c) AM_READWRITE(nec_ppi8255_r, necmk2_ppi8255_w)
 
-	AM_RANGE(0xa0, 0xa0) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_address_w)
-	AM_RANGE(0xa1, 0xa1) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_data_w)
-	AM_RANGE(0xa2, 0xa2) AM_MIRROR(0x0c) AM_DEVREAD("ay8910", ay8910_r)
+	AM_RANGE(0xa0, 0xa0) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_device, address_w)
+	AM_RANGE(0xa1, 0xa1) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_device, data_w)
+	AM_RANGE(0xa2, 0xa2) AM_MIRROR(0x0c) AM_DEVREAD("ay8910", ay8910_device, data_r)
 	AM_RANGE(0xa3, 0xa3) AM_MIRROR(0x0c) AM_NOP
 
 	AM_RANGE(0xb0, 0xb0) AM_MIRROR(0x0f) AM_WRITE(pc6001m2_system_latch_w)
@@ -1365,7 +1443,7 @@ static ADDRESS_MAP_START( pc6001m2_io , AS_IO, 8)
 
 	AM_RANGE(0xd0, 0xd3) AM_MIRROR(0x0c) AM_NOP // disk device
 
-	AM_RANGE(0xe0, 0xe3) AM_MIRROR(0x0c) AM_READWRITE(upd7752_reg_r,upd7752_reg_w)
+	AM_RANGE(0xe0, 0xe3) AM_MIRROR(0x0c) AM_DEVREADWRITE("upd7752", upd7752_device, read, write)
 
 	AM_RANGE(0xf0, 0xf0) AM_READWRITE(pc6001m2_bank_r0_r,pc6001m2_bank_r0_w)
 	AM_RANGE(0xf1, 0xf1) AM_READWRITE(pc6001m2_bank_r1_r,pc6001m2_bank_r1_w)
@@ -1378,26 +1456,26 @@ static ADDRESS_MAP_START( pc6001m2_io , AS_IO, 8)
 ADDRESS_MAP_END
 
 /* disk device placeholder (TODO: identify & hook-up this) */
-static READ8_HANDLER( pc6601_fdc_r )
+READ8_MEMBER(pc6001_state::pc6601_fdc_r)
 {
-	return space->machine().rand();
+	return machine().rand();
 }
 
-static WRITE8_HANDLER( pc6601_fdc_w )
+WRITE8_MEMBER(pc6001_state::pc6601_fdc_w)
 {
 }
 
-static ADDRESS_MAP_START( pc6601_io , AS_IO, 8)
+static ADDRESS_MAP_START( pc6601_io , AS_IO, 8, pc6001_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("uart", msm8251_data_r,msm8251_data_w)
-	AM_RANGE(0x81, 0x81) AM_DEVREADWRITE("uart", msm8251_status_r,msm8251_control_w)
+	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("uart", i8251_device, data_r, data_w)
+	AM_RANGE(0x81, 0x81) AM_DEVREADWRITE("uart", i8251_device, status_r, control_w)
 
 	AM_RANGE(0x90, 0x93) AM_MIRROR(0x0c) AM_READWRITE(nec_ppi8255_r, necmk2_ppi8255_w)
 
-	AM_RANGE(0xa0, 0xa0) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_address_w)
-	AM_RANGE(0xa1, 0xa1) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_data_w)
-	AM_RANGE(0xa2, 0xa2) AM_MIRROR(0x0c) AM_DEVREAD("ay8910", ay8910_r)
+	AM_RANGE(0xa0, 0xa0) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_device, address_w)
+	AM_RANGE(0xa1, 0xa1) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_device, data_w)
+	AM_RANGE(0xa2, 0xa2) AM_MIRROR(0x0c) AM_DEVREAD("ay8910", ay8910_device, data_r)
 	AM_RANGE(0xa3, 0xa3) AM_MIRROR(0x0c) AM_NOP
 
 	AM_RANGE(0xb0, 0xb0) AM_WRITE(pc6001m2_system_latch_w)
@@ -1412,7 +1490,7 @@ static ADDRESS_MAP_START( pc6601_io , AS_IO, 8)
 
 	AM_RANGE(0xd0, 0xdf) AM_READWRITE(pc6601_fdc_r,pc6601_fdc_w) // disk device
 
-	AM_RANGE(0xe0, 0xe3) AM_MIRROR(0x0c) AM_READWRITE(upd7752_reg_r,upd7752_reg_w)
+	AM_RANGE(0xe0, 0xe3) AM_MIRROR(0x0c) AM_DEVREADWRITE("upd7752", upd7752_device, read, write)
 
 	AM_RANGE(0xf0, 0xf0) AM_READWRITE(pc6001m2_bank_r0_r,pc6001m2_bank_r0_w)
 	AM_RANGE(0xf1, 0xf1) AM_READWRITE(pc6001m2_bank_r1_r,pc6001m2_bank_r1_w)
@@ -1427,172 +1505,154 @@ ADDRESS_MAP_END
 /* PC-6001 SR */
 
 #define SR_SYSROM_1(_v_) \
-	0x10000+(0x1000*_v_) \
-
+	0x10000+(0x1000*_v_)
 #define SR_SYSROM_2(_v_) \
-	0x20000+(0x1000*_v_) \
-
+	0x20000+(0x1000*_v_)
 #define SR_CGROM1(_v_) \
-	0x30000+(0x1000*_v_) \
-
+	0x30000+(0x1000*_v_)
 #define SR_EXROM0(_v_) \
-	0x40000+(0x1000*_v_) \
-
+	0x40000+(0x1000*_v_)
 #define SR_EXROM1(_v_) \
-	0x50000+(0x1000*_v_) \
-
+	0x50000+(0x1000*_v_)
 #define SR_EXRAM0(_v_) \
-	0x60000+(0x1000*_v_) \
-
+	0x60000+(0x1000*_v_)
 #define SR_WRAM0(_v_) \
-	0x70000+(0x1000*_v_) \
-
+	0x70000+(0x1000*_v_)
 #define SR_NULL(_v_) \
-	0x80000+(0x1000*_v_) \
-
-static READ8_HANDLER( pc6001sr_bank_rn_r )
+	0x80000+(0x1000*_v_)
+READ8_MEMBER(pc6001_state::pc6001sr_bank_rn_r)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	return state->m_sr_bank_r[offset];
+	return m_sr_bank_r[offset];
 }
 
-static WRITE8_HANDLER( pc6001sr_bank_rn_w )
+WRITE8_MEMBER(pc6001_state::pc6001sr_bank_rn_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	static const char *const bank_name[8] = { "bank1","bank2","bank3", "bank4", "bank5", "bank6", "bank7", "bank8" };
-	UINT8 *ROM = space->machine().region("maincpu")->base();
+	memory_bank *bank[8] = { m_bank1, m_bank2, m_bank3, m_bank4, m_bank5, m_bank6, m_bank7, m_bank8 };
+	UINT8 *ROM = m_region_maincpu->base();
 	UINT8 bank_num;
 
-	state->m_sr_bank_r[offset] = data;
+	m_sr_bank_r[offset] = data;
 	bank_num = data & 0x0f;
 
 	switch(data & 0xf0)
 	{
-		case 0xf0: memory_set_bankptr(space->machine(), bank_name[offset], &ROM[SR_SYSROM_1(bank_num)]); break;
-		case 0xe0: memory_set_bankptr(space->machine(), bank_name[offset], &ROM[SR_SYSROM_2(bank_num)]); break;
-		case 0xd0: memory_set_bankptr(space->machine(), bank_name[offset], &ROM[SR_CGROM1(bank_num)]); break;
-		case 0xc0: memory_set_bankptr(space->machine(), bank_name[offset], &ROM[SR_EXROM0(bank_num)]); break;
-		case 0xb0: memory_set_bankptr(space->machine(), bank_name[offset], &ROM[SR_EXROM1(bank_num)]); break;
-		case 0x20: memory_set_bankptr(space->machine(), bank_name[offset], &ROM[SR_EXRAM0(bank_num)]); break;
-		case 0x00: memory_set_bankptr(space->machine(), bank_name[offset], &ROM[SR_WRAM0(bank_num)]); break;
-		default:   memory_set_bankptr(space->machine(), bank_name[offset], &ROM[SR_NULL(bank_num)]); break;
+		case 0xf0: bank[offset]->set_base(&ROM[SR_SYSROM_1(bank_num)]); break;
+		case 0xe0: bank[offset]->set_base(&ROM[SR_SYSROM_2(bank_num)]); break;
+		case 0xd0: bank[offset]->set_base(&ROM[SR_CGROM1(bank_num)]); break;
+		case 0xc0: bank[offset]->set_base(&ROM[SR_EXROM0(bank_num)]); break;
+		case 0xb0: bank[offset]->set_base(&ROM[SR_EXROM1(bank_num)]); break;
+		case 0x20: bank[offset]->set_base(&ROM[SR_EXRAM0(bank_num)]); break;
+		case 0x00: bank[offset]->set_base(&ROM[SR_WRAM0(bank_num)]); break;
+		default:   bank[offset]->set_base(&ROM[SR_NULL(bank_num)]); break;
 	}
 }
 
-static READ8_HANDLER( pc6001sr_bank_wn_r )
+READ8_MEMBER(pc6001_state::pc6001sr_bank_wn_r)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	return state->m_sr_bank_w[offset];
+	return m_sr_bank_w[offset];
 }
 
-static WRITE8_HANDLER( pc6001sr_bank_wn_w )
+WRITE8_MEMBER(pc6001_state::pc6001sr_bank_wn_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	state->m_sr_bank_w[offset] = data;
+	m_sr_bank_w[offset] = data;
 }
 
 #define SR_WRAM_BANK_W(_v_) \
 { \
-	pc6001_state *state = space->machine().driver_data<pc6001_state>(); \
-	UINT8 *ROM = space->machine().region("maincpu")->base(); \
+	UINT8 *ROM = m_region_maincpu->base(); \
 	UINT8 bank_num; \
-	bank_num = state->m_sr_bank_w[_v_] & 0x0f; \
-	if((state->m_sr_bank_w[_v_] & 0xf0) != 0x20) \
+	bank_num = m_sr_bank_w[_v_] & 0x0f; \
+	if((m_sr_bank_w[_v_] & 0xf0) != 0x20) \
 		ROM[offset+(SR_WRAM0(bank_num))] = data; \
 	else \
 		ROM[offset+(SR_EXRAM0(bank_num))] = data; \
-} \
+}
+WRITE8_MEMBER(pc6001_state::sr_work_ram0_w){ SR_WRAM_BANK_W(0); }
+WRITE8_MEMBER(pc6001_state::sr_work_ram1_w){ SR_WRAM_BANK_W(1); }
+WRITE8_MEMBER(pc6001_state::sr_work_ram2_w){ SR_WRAM_BANK_W(2); }
+WRITE8_MEMBER(pc6001_state::sr_work_ram3_w){ SR_WRAM_BANK_W(3); }
+WRITE8_MEMBER(pc6001_state::sr_work_ram4_w){ SR_WRAM_BANK_W(4); }
+WRITE8_MEMBER(pc6001_state::sr_work_ram5_w){ SR_WRAM_BANK_W(5); }
+WRITE8_MEMBER(pc6001_state::sr_work_ram6_w){ SR_WRAM_BANK_W(6); }
+WRITE8_MEMBER(pc6001_state::sr_work_ram7_w){ SR_WRAM_BANK_W(7); }
 
-static WRITE8_HANDLER( sr_work_ram0_w ) { SR_WRAM_BANK_W(0); }
-static WRITE8_HANDLER( sr_work_ram1_w ) { SR_WRAM_BANK_W(1); }
-static WRITE8_HANDLER( sr_work_ram2_w ) { SR_WRAM_BANK_W(2); }
-static WRITE8_HANDLER( sr_work_ram3_w ) { SR_WRAM_BANK_W(3); }
-static WRITE8_HANDLER( sr_work_ram4_w ) { SR_WRAM_BANK_W(4); }
-static WRITE8_HANDLER( sr_work_ram5_w ) { SR_WRAM_BANK_W(5); }
-static WRITE8_HANDLER( sr_work_ram6_w ) { SR_WRAM_BANK_W(6); }
-static WRITE8_HANDLER( sr_work_ram7_w ) { SR_WRAM_BANK_W(7); }
-
-static WRITE8_HANDLER( pc6001sr_mode_w )
+WRITE8_MEMBER(pc6001_state::pc6001sr_mode_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	state->m_sr_video_mode = data;
+	m_sr_video_mode = data;
 
 	if(data & 1)
 		assert("PC-6001SR in Mk-2 compatibility mode not yet supported!\n");
 }
 
-static WRITE8_HANDLER( pc6001sr_vram_bank_w )
+WRITE8_MEMBER(pc6001_state::pc6001sr_vram_bank_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	UINT8 *work_ram = space->machine().region("maincpu")->base();
+	UINT8 *work_ram = m_region_maincpu->base();
 
-	state->m_video_ram = work_ram + 0x70000 + ((data & 0x0f)*0x1000);
+	m_video_ram = work_ram + 0x70000 + ((data & 0x0f)*0x1000);
 }
 
-static WRITE8_HANDLER ( pc6001sr_system_latch_w )
+WRITE8_MEMBER(pc6001_state::pc6001sr_system_latch_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
-	if((!(state->m_sys_latch & 8)) && data & 0x8) //PLAY tape cmd
+	if((!(m_sys_latch & 8)) && data & 0x8) //PLAY tape cmd
 	{
-		state->m_cas_switch = 1;
-		//space->machine().device(CASSETTE_TAG )->change_state(CASSETTE_MOTOR_ENABLED,CASSETTE_MASK_MOTOR);
-		//space->machine().device(CASSETTE_TAG )->change_state(CASSETTE_PLAY,CASSETTE_MASK_UISTATE);
+		m_cas_switch = 1;
+		//m_cassette->change_state(CASSETTE_MOTOR_ENABLED,CASSETTE_MASK_MOTOR);
+		//m_cassette->change_state(CASSETTE_PLAY,CASSETTE_MASK_UISTATE);
 	}
-	if((state->m_sys_latch & 8) && ((data & 0x8) == 0)) //STOP tape cmd
+	if((m_sys_latch & 8) && ((data & 0x8) == 0)) //STOP tape cmd
 	{
-		state->m_cas_switch = 0;
-		//space->machine().device(CASSETTE_TAG )->change_state(CASSETTE_MOTOR_DISABLED,CASSETTE_MASK_MOTOR);
-		//space->machine().device(CASSETTE_TAG )->change_state(CASSETTE_STOPPED,CASSETTE_MASK_UISTATE);
-		//state->m_irq_vector = 0x00;
-		//cputag_set_input_line(space->machine(),"maincpu", 0, ASSERT_LINE);
+		m_cas_switch = 0;
+		//m_cassette->change_state(CASSETTE_MOTOR_DISABLED,CASSETTE_MASK_MOTOR);
+		//m_cassette->change_state(CASSETTE_STOPPED,CASSETTE_MASK_UISTATE);
+		//m_irq_vector = 0x00;
+		//m_maincpu->set_input_line(0, ASSERT_LINE);
 	}
 
-	state->m_sys_latch = data;
+	m_sys_latch = data;
 
-	state->m_timer_irq_mask = data & 1;
-	//vram_bank_change(space->machine(),(state->m_ex_vram_bank & 0x06) | ((state->m_sys_latch & 0x06) << 4));
+	m_timer_irq_mask = data & 1;
+	//vram_bank_change((m_ex_vram_bank & 0x06) | ((m_sys_latch & 0x06) << 4));
 
 	//printf("%02x B0\n",data);
 }
 
-static WRITE8_HANDLER(necsr_ppi8255_w)
+WRITE8_MEMBER(pc6001_state::necsr_ppi8255_w)
 {
-	pc6001_state *state = space->machine().driver_data<pc6001_state>();
 	if (offset==3)
 	{
 		if(data & 1)
-			state->m_port_c_8255 |=   1<<((data>>1)&0x07);
+			m_port_c_8255 |=   1<<((data>>1)&0x07);
 		else
-			state->m_port_c_8255 &= ~(1<<((data>>1)&0x07));
+			m_port_c_8255 &= ~(1<<((data>>1)&0x07));
 
 		switch(data) {
-        	case 0x08: state->m_port_c_8255 |= 0x88; break;
-        	case 0x09: state->m_port_c_8255 &= 0xf7; break;
-        	case 0x0c: state->m_port_c_8255 |= 0x28; break;
-        	case 0x0d: state->m_port_c_8255 &= 0xf7; break;
-        	default: break;
+			case 0x08: m_port_c_8255 |= 0x88; break;
+			case 0x09: m_port_c_8255 &= 0xf7; break;
+			case 0x0c: m_port_c_8255 |= 0x28; break;
+			case 0x0d: m_port_c_8255 &= 0xf7; break;
+			default: break;
 		}
 
-		state->m_port_c_8255 |= 0xa8;
+		m_port_c_8255 |= 0xa8;
 
 		if(0)
 		{
-			UINT8 *gfx_data = space->machine().region("gfx1")->base();
-			UINT8 *ext_rom = space->machine().region("cart_img")->base();
+			UINT8 *gfx_data = m_region_gfx1->base();
+			UINT8 *ext_rom = m_region_cart_img->base();
 
 			//printf("%02x\n",data);
 
 			if((data & 0x0f) == 0x05)
-				memory_set_bankptr(space->machine(), "bank1", &ext_rom[0x2000]);
+				m_bank1->set_base(&ext_rom[0x2000]);
 			if((data & 0x0f) == 0x04)
-				memory_set_bankptr(space->machine(), "bank1", &gfx_data[0]);
+				m_bank1->set_base(&gfx_data[0]);
 		}
 	}
-	state->m_ppi->write(*space,offset,data);
+	m_ppi->write(space,offset,data);
 }
 
 
-static ADDRESS_MAP_START(pc6001sr_map, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(pc6001sr_map, AS_PROGRAM, 8, pc6001_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x1fff) AM_ROMBANK("bank1") AM_WRITE(sr_work_ram0_w)
 	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK("bank2") AM_WRITE(sr_work_ram1_w)
@@ -1604,19 +1664,19 @@ static ADDRESS_MAP_START(pc6001sr_map, AS_PROGRAM, 8)
 	AM_RANGE(0xe000, 0xffff) AM_ROMBANK("bank8") AM_WRITE(sr_work_ram7_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc6001sr_io , AS_IO, 8)
+static ADDRESS_MAP_START( pc6001sr_io , AS_IO, 8, pc6001_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x60, 0x67) AM_READWRITE(pc6001sr_bank_rn_r,pc6001sr_bank_rn_w)
 	AM_RANGE(0x68, 0x6f) AM_READWRITE(pc6001sr_bank_wn_r,pc6001sr_bank_wn_w)
-	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("uart", msm8251_data_r,msm8251_data_w)
-	AM_RANGE(0x81, 0x81) AM_DEVREADWRITE("uart", msm8251_status_r,msm8251_control_w)
+	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("uart", i8251_device, data_r, data_w)
+	AM_RANGE(0x81, 0x81) AM_DEVREADWRITE("uart", i8251_device, status_r, control_w)
 
 	AM_RANGE(0x90, 0x93) AM_MIRROR(0x0c) AM_READWRITE(nec_ppi8255_r, necsr_ppi8255_w)
 
-	AM_RANGE(0xa0, 0xa0) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_address_w)
-	AM_RANGE(0xa1, 0xa1) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_data_w)
-	AM_RANGE(0xa2, 0xa2) AM_MIRROR(0x0c) AM_DEVREAD("ay8910", ay8910_r)
+	AM_RANGE(0xa0, 0xa0) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_device, address_w)
+	AM_RANGE(0xa1, 0xa1) AM_MIRROR(0x0c) AM_DEVWRITE("ay8910", ay8910_device, data_w)
+	AM_RANGE(0xa2, 0xa2) AM_MIRROR(0x0c) AM_DEVREAD("ay8910", ay8910_device, data_r)
 	AM_RANGE(0xa3, 0xa3) AM_MIRROR(0x0c) AM_NOP
 
 	AM_RANGE(0xb0, 0xb0) AM_WRITE(pc6001sr_system_latch_w)
@@ -1634,7 +1694,7 @@ static ADDRESS_MAP_START( pc6001sr_io , AS_IO, 8)
 
 	AM_RANGE(0xd0, 0xdf) AM_READWRITE(pc6601_fdc_r,pc6601_fdc_w) // disk device
 
-	AM_RANGE(0xe0, 0xe3) AM_MIRROR(0x0c) AM_READWRITE(upd7752_reg_r,upd7752_reg_w)
+	AM_RANGE(0xe0, 0xe3) AM_MIRROR(0x0c) AM_DEVREADWRITE("upd7752", upd7752_device, read, write)
 
 //  AM_RANGE(0xf0, 0xf0) AM_READWRITE(pc6001m2_bank_r0_r,pc6001m2_bank_r0_w)
 //  AM_RANGE(0xf1, 0xf1) AM_READWRITE(pc6001m2_bank_r1_r,pc6001m2_bank_r1_w)
@@ -1729,7 +1789,7 @@ static INPUT_PORTS_START( pc6001 )
 	PORT_BIT(0x00001000,IP_ACTIVE_HIGH,IPT_KEYBOARD) PORT_NAME(",") PORT_CODE(KEYCODE_COMMA) PORT_CHAR(',') //0x2c
 	PORT_BIT(0x00002000,IP_ACTIVE_HIGH,IPT_KEYBOARD) PORT_NAME("-") PORT_CODE(KEYCODE_MINUS) PORT_CHAR('-')
 	PORT_BIT(0x00004000,IP_ACTIVE_HIGH,IPT_KEYBOARD) PORT_NAME(".") PORT_CODE(KEYCODE_STOP) PORT_CHAR('.') //0x2e
-	PORT_BIT(0x00008000,IP_ACTIVE_HIGH,IPT_UNUSED) //0x2f /
+	PORT_BIT(0x00008000,IP_ACTIVE_HIGH,IPT_KEYBOARD) PORT_NAME("/") PORT_CODE(KEYCODE_SLASH) PORT_CHAR('/') //0x2f
 
 	PORT_BIT(0x00010000,IP_ACTIVE_HIGH,IPT_KEYBOARD) PORT_NAME("0") PORT_CODE(KEYCODE_0) PORT_CHAR('0')
 	PORT_BIT(0x00020000,IP_ACTIVE_HIGH,IPT_KEYBOARD) PORT_NAME("1") PORT_CODE(KEYCODE_1) PORT_CHAR('1')
@@ -1791,62 +1851,57 @@ static INPUT_PORTS_START( pc6001 )
 	PORT_BIT(0x00000020,IP_ACTIVE_HIGH,IPT_KEYBOARD) PORT_NAME("STOP") PORT_CODE(KEYCODE_ESC)
 INPUT_PORTS_END
 
-static UINT8 check_joy_press(running_machine &machine);
-
-static INTERRUPT_GEN( pc6001_interrupt )
+INTERRUPT_GEN_MEMBER(pc6001_state::pc6001_interrupt)
 {
-	pc6001_state *state = device->machine().driver_data<pc6001_state>();
-	state->m_cur_keycode = check_joy_press(device->machine());
+	m_cur_keycode = check_joy_press();
 	if(IRQ_LOG) printf("Stick IRQ called 0x16\n");
-	state->m_irq_vector = 0x16;
-	device_set_input_line(device, 0, ASSERT_LINE);
+	m_irq_vector = 0x16;
+	device.execute().set_input_line(0, ASSERT_LINE);
 }
 
-static INTERRUPT_GEN( pc6001sr_interrupt )
+INTERRUPT_GEN_MEMBER(pc6001_state::pc6001sr_interrupt)
 {
-	pc6001_state *state = device->machine().driver_data<pc6001_state>();
-	state->m_kludge^= 1;
+	m_kludge^= 1;
 
-	state->m_cur_keycode = check_joy_press(device->machine());
+	m_cur_keycode = check_joy_press();
 	if(IRQ_LOG) printf("VRTC IRQ called 0x16\n");
-	state->m_irq_vector = (state->m_kludge) ? 0x22 : 0x16;
-	device_set_input_line(device, 0, ASSERT_LINE);
+	m_irq_vector = (m_kludge) ? 0x22 : 0x16;
+	device.execute().set_input_line(0, ASSERT_LINE);
 }
 
-static IRQ_CALLBACK ( pc6001_irq_callback )
+IRQ_CALLBACK_MEMBER(pc6001_state::pc6001_irq_callback)
 {
-	pc6001_state *state = device->machine().driver_data<pc6001_state>();
-	device_set_input_line(device, 0, CLEAR_LINE);
-	return state->m_irq_vector;
+	device.execute().set_input_line(0, CLEAR_LINE);
+	return m_irq_vector;
 }
 
-static READ8_DEVICE_HANDLER (pc6001_8255_porta_r )
+READ8_MEMBER(pc6001_state::pc6001_8255_porta_r)
 {
 	return 0;
 }
 
-static WRITE8_DEVICE_HANDLER (pc6001_8255_porta_w )
+WRITE8_MEMBER(pc6001_state::pc6001_8255_porta_w)
 {
 //  if(data != 0x06)
 //      printf("pc6001_8255_porta_w %02x\n",data);
 }
 
-static READ8_DEVICE_HANDLER (pc6001_8255_portb_r )
+READ8_MEMBER(pc6001_state::pc6001_8255_portb_r)
 {
 	return 0;
 }
 
-static WRITE8_DEVICE_HANDLER (pc6001_8255_portb_w )
+WRITE8_MEMBER(pc6001_state::pc6001_8255_portb_w)
 {
 	//printf("pc6001_8255_portb_w %02x\n",data);
 }
 
-static WRITE8_DEVICE_HANDLER (pc6001_8255_portc_w )
+WRITE8_MEMBER(pc6001_state::pc6001_8255_portc_w)
 {
 	//printf("pc6001_8255_portc_w %02x\n",data);
 }
 
-static READ8_DEVICE_HANDLER (pc6001_8255_portc_r )
+READ8_MEMBER(pc6001_state::pc6001_8255_portc_r)
 {
 	return 0x88;
 }
@@ -1855,15 +1910,15 @@ static READ8_DEVICE_HANDLER (pc6001_8255_portc_r )
 
 static I8255_INTERFACE( pc6001_ppi8255_interface )
 {
-	DEVCB_HANDLER(pc6001_8255_porta_r),
-	DEVCB_HANDLER(pc6001_8255_porta_w),
-	DEVCB_HANDLER(pc6001_8255_portb_r),
-	DEVCB_HANDLER(pc6001_8255_portb_w),
-	DEVCB_HANDLER(pc6001_8255_portc_r),
-	DEVCB_HANDLER(pc6001_8255_portc_w)
+	DEVCB_DRIVER_MEMBER(pc6001_state,pc6001_8255_porta_r),
+	DEVCB_DRIVER_MEMBER(pc6001_state,pc6001_8255_porta_w),
+	DEVCB_DRIVER_MEMBER(pc6001_state,pc6001_8255_portb_r),
+	DEVCB_DRIVER_MEMBER(pc6001_state,pc6001_8255_portb_w),
+	DEVCB_DRIVER_MEMBER(pc6001_state,pc6001_8255_portc_r),
+	DEVCB_DRIVER_MEMBER(pc6001_state,pc6001_8255_portc_w)
 };
 
-static const msm8251_interface pc6001_usart_interface=
+static const i8251_interface pc6001_usart_interface=
 {
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -1887,21 +1942,21 @@ static const ay8910_interface pc6001_ay_interface =
 	DEVCB_NULL
 };
 
-static UINT8 check_keyboard_press(running_machine &machine)
+UINT8 pc6001_state::check_keyboard_press()
 {
-	static const char *const portnames[3] = { "key1","key2","key3" };
+	ioport_port *ports[3] = { m_io_key1, m_io_key2, m_io_key3 };
 	int i,port_i,scancode;
 	UINT8 shift_pressed,caps_lock;
 	scancode = 0;
 
-	shift_pressed = (input_port_read(machine,"key_modifiers") & 2)>>1;
-	caps_lock = (input_port_read(machine,"key_modifiers") & 8)>>3;
+	shift_pressed = (m_io_key_modifiers->read() & 2)>>1;
+	caps_lock = (m_io_key_modifiers->read() & 8)>>3;
 
 	for(port_i=0;port_i<3;port_i++)
 	{
 		for(i=0;i<32;i++)
 		{
-			if((input_port_read(machine,portnames[port_i])>>i) & 1)
+			if((ports[port_i]->read()>>i) & 1)
 			{
 				if((shift_pressed != caps_lock) && scancode >= 0x41 && scancode <= 0x5f)
 					scancode+=0x20;
@@ -1915,6 +1970,9 @@ static UINT8 check_keyboard_press(running_machine &machine)
 				if(shift_pressed && scancode == 0x2c) // ',' / ';'
 					scancode = 0x3b;
 
+				if(shift_pressed && scancode == 0x2f) // '/' / '?'
+					scancode = 0x3f;
+
 				if(shift_pressed && scancode == 0x2e) // '.' / ':'
 					scancode = 0x3a;
 
@@ -1927,23 +1985,23 @@ static UINT8 check_keyboard_press(running_machine &machine)
 	return 0;
 }
 
-static UINT8 check_joy_press(running_machine &machine)
+UINT8 pc6001_state::check_joy_press()
 {
-	UINT8 p1_key = input_port_read(machine,"P1") ^ 0xff;
-	UINT8 shift_key = input_port_read(machine,"key_modifiers") & 0x02;
-	UINT8 space_key = input_port_read(machine,"key2") & 0x01;
+	UINT8 p1_key = m_io_p1->read() ^ 0xff;
+	UINT8 shift_key = m_io_key_modifiers->read() & 0x02;
+	UINT8 space_key = m_io_key2->read() & 0x01;
 	UINT8 joy_press;
 
 		/*
-            PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY
-            PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY
-            PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
-            PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
-            PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 )
-            PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
-            PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-            PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
-        */
+		    PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY
+		    PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY
+		    PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
+		    PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
+		    PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 )
+		    PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
+		    PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
+		    PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+		*/
 
 	joy_press = 0;
 
@@ -1965,250 +2023,243 @@ static UINT8 check_joy_press(running_machine &machine)
 	return joy_press;
 }
 
-static TIMER_DEVICE_CALLBACK(cassette_callback)
+TIMER_DEVICE_CALLBACK_MEMBER(pc6001_state::cassette_callback)
 {
-	pc6001_state *state = timer.machine().driver_data<pc6001_state>();
-	if(state->m_cas_switch == 1)
+	if(m_cas_switch == 1)
 	{
 		#if 0
 		static UINT8 cas_data_i = 0x80,cas_data_poll;
-		//state->m_cur_keycode = gfx_data[state->m_cas_offset++];
-		if((timer.machine().device<cassette_image_device>(CASSETTE_TAG))->input() > 0.03)
+		//m_cur_keycode = gfx_data[m_cas_offset++];
+		if(m_cassette->input() > 0.03)
 			cas_data_poll|= cas_data_i;
 		else
 			cas_data_poll&=~cas_data_i;
 		if(cas_data_i == 1)
 		{
-			state->m_cur_keycode = cas_data_poll;
+			m_cur_keycode = cas_data_poll;
 			cas_data_i = 0x80;
 			/* data ready, poll irq */
-			state->m_irq_vector = 0x08;
-			cputag_set_input_line(timer.machine(),"maincpu", 0, ASSERT_LINE);
+			m_irq_vector = 0x08;
+			m_maincpu->set_input_line(0, ASSERT_LINE);
 		}
 		else
 			cas_data_i>>=1;
 		#else
-			UINT8 *cas_data = timer.machine().region("cas")->base();
+			UINT8 *cas_data = m_region_cas->base();
 
-			state->m_cur_keycode = cas_data[state->m_cas_offset++];
-			popmessage("%04x %04x",state->m_cas_offset,state->m_cas_maxsize);
-			if(state->m_cas_offset > state->m_cas_maxsize)
+			m_cur_keycode = cas_data[m_cas_offset++];
+			popmessage("%04x %04x",m_cas_offset,m_cas_maxsize);
+			if(m_cas_offset > m_cas_maxsize)
 			{
-				state->m_cas_offset = 0;
-				state->m_cas_switch = 0;
+				m_cas_offset = 0;
+				m_cas_switch = 0;
 				if(IRQ_LOG) printf("Tape-E IRQ 0x12\n");
-				state->m_irq_vector = 0x12;
-				cputag_set_input_line(timer.machine(),"maincpu", 0, ASSERT_LINE);
+				m_irq_vector = 0x12;
+				m_maincpu->set_input_line(0, ASSERT_LINE);
 			}
 			else
 			{
 				if(IRQ_LOG) printf("Tape-D IRQ 0x08\n");
-				state->m_irq_vector = 0x08;
-				cputag_set_input_line(timer.machine(),"maincpu", 0, ASSERT_LINE);
+				m_irq_vector = 0x08;
+				m_maincpu->set_input_line(0, ASSERT_LINE);
 			}
 		#endif
 	}
 }
 
-static TIMER_DEVICE_CALLBACK(keyboard_callback)
+TIMER_DEVICE_CALLBACK_MEMBER(pc6001_state::keyboard_callback)
 {
-	pc6001_state *state = timer.machine().driver_data<pc6001_state>();
-	address_space *space = timer.machine().device("maincpu")->memory().space(AS_PROGRAM);
-	UINT32 key1 = input_port_read(timer.machine(),"key1");
-	UINT32 key2 = input_port_read(timer.machine(),"key2");
-	UINT32 key3 = input_port_read(timer.machine(),"key3");
-//  UINT8 p1_key = input_port_read(timer.machine(), "P1");
+	UINT32 key1 = m_io_key1->read();
+	UINT32 key2 = m_io_key2->read();
+	UINT32 key3 = m_io_key3->read();
+//  UINT8 p1_key = m_io_p1->read();
 
-	if(state->m_cas_switch == 0)
+	if(m_cas_switch == 0)
 	{
-		if((key1 != state->m_old_key1) || (key2 != state->m_old_key2) || (key3 != state->m_old_key3))
+		if((key1 != m_old_key1) || (key2 != m_old_key2) || (key3 != m_old_key3))
 		{
-			state->m_cur_keycode = check_keyboard_press(space->machine());
+			m_cur_keycode = check_keyboard_press();
 			if(IRQ_LOG) printf("KEY IRQ 0x02\n");
-			state->m_irq_vector = 0x02;
-			cputag_set_input_line(timer.machine(),"maincpu", 0, ASSERT_LINE);
-			state->m_old_key1 = key1;
-			state->m_old_key2 = key2;
-			state->m_old_key3 = key3;
+			m_irq_vector = 0x02;
+			m_maincpu->set_input_line(0, ASSERT_LINE);
+			m_old_key1 = key1;
+			m_old_key2 = key2;
+			m_old_key3 = key3;
 		}
 		#if 0
 		else /* joypad polling */
 		{
-			state->m_cur_keycode = check_joy_press(space->machine());
-			if(state->m_cur_keycode)
+			m_cur_keycode = check_joy_press();
+			if(m_cur_keycode)
 			{
-				state->m_irq_vector = 0x16;
-				cputag_set_input_line(timer.machine(),"maincpu", 0, ASSERT_LINE);
+				m_irq_vector = 0x16;
+				m_maincpu->set_input_line(0, ASSERT_LINE);
 			}
 		}
 		#endif
 	}
 }
 
-static MACHINE_START(pc6001)
+void pc6001_state::machine_start()
 {
-	pc6001_state *state = machine.driver_data<pc6001_state>();
-	state->m_timer_hz_div = 3;
+	m_timer_hz_div = 3;
 	{
-		attotime period = attotime::from_hz((487.5*4)/(state->m_timer_hz_div+1));
-		state->m_timer_irq_timer = machine.scheduler().timer_alloc(FUNC(audio_callback));
-		state->m_timer_irq_timer->adjust(period,  0, period);
+		attotime period = attotime::from_hz((487.5*4)/(m_timer_hz_div+1));
+		m_timer_irq_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(pc6001_state::audio_callback),this));
+		m_timer_irq_timer->adjust(period,  0, period);
 	}
 }
 
-static MACHINE_RESET(pc6001)
+void pc6001_state::machine_reset()
 {
-	pc6001_state *state = machine.driver_data<pc6001_state>();
-	UINT8 *work_ram = machine.region("maincpu")->base();
+	UINT8 *work_ram = m_region_maincpu->base();
 
-	state->m_video_ram =  work_ram + 0xc000;
+	m_video_ram =  work_ram + 0xc000;
 
-	state->m_port_c_8255=0;
+	m_port_c_8255=0;
 
-	device_set_irq_callback(machine.device("maincpu"),pc6001_irq_callback);
-	state->m_cas_switch = 0;
-	state->m_cas_offset = 0;
-	state->m_timer_irq_mask = 1;
-	state->m_timer_irq_mask2 = 1;
-	state->m_timer_irq_vector = 0x06; // actually vector is fixed in plain PC-6001
-	state->m_timer_hz_div = 3;
+	m_maincpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(pc6001_state::pc6001_irq_callback),this));
+	m_cas_switch = 0;
+	m_cas_offset = 0;
+	m_timer_irq_mask = 1;
+	m_timer_irq_mask2 = 1;
+	m_timer_irq_vector = 0x06; // actually vector is fixed in plain PC-6001
+	m_timer_hz_div = 3;
 }
 
-static MACHINE_RESET(pc6001m2)
+MACHINE_RESET_MEMBER(pc6001_state,pc6001m2)
 {
-	pc6001_state *state = machine.driver_data<pc6001_state>();
-	UINT8 *work_ram = machine.region("maincpu")->base();
+	UINT8 *work_ram = m_region_maincpu->base();
 
-	state->m_video_ram = work_ram + 0xc000 + 0x28000;
+	m_video_ram = work_ram + 0xc000 + 0x28000;
 
-	state->m_port_c_8255=0;
+	m_port_c_8255=0;
 
-	device_set_irq_callback(machine.device("maincpu"),pc6001_irq_callback);
-	state->m_cas_switch = 0;
-	state->m_cas_offset = 0;
+	m_maincpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(pc6001_state::pc6001_irq_callback),this));
+	m_cas_switch = 0;
+	m_cas_offset = 0;
 
 	/* set default bankswitch */
 	{
-		UINT8 *ROM = machine.region("maincpu")->base();
-		state->m_bank_r0 = 0x71;
-		memory_set_bankptr(machine, "bank1", &ROM[BASICROM(0)]);
-		memory_set_bankptr(machine, "bank2", &ROM[BASICROM(1)]);
-		memory_set_bankptr(machine, "bank3", &ROM[EXROM(0)]);
-		memory_set_bankptr(machine, "bank4", &ROM[EXROM(1)]);
-		state->m_bank_r1 = 0xdd;
-		memory_set_bankptr(machine, "bank5", &ROM[WRAM(4)]);
-		memory_set_bankptr(machine, "bank6", &ROM[WRAM(5)]);
-		memory_set_bankptr(machine, "bank7", &ROM[WRAM(6)]);
-		memory_set_bankptr(machine, "bank8", &ROM[WRAM(7)]);
-		state->m_bank_opt = 0x02; //tv rom
-		state->m_bank_w = 0x50; //enable write to work ram 4,5,6,7
-		state->m_gfx_bank_on = 0;
+		UINT8 *ROM = m_region_maincpu->base();
+		m_bank_r0 = 0x71;
+		m_bank1->set_base(&ROM[BASICROM(0)]);
+		m_bank2->set_base(&ROM[BASICROM(1)]);
+		m_bank3->set_base(&ROM[EXROM(0)]);
+		m_bank4->set_base(&ROM[EXROM(1)]);
+		m_bank_r1 = 0xdd;
+		m_bank5->set_base(&ROM[WRAM(4)]);
+		m_bank6->set_base(&ROM[WRAM(5)]);
+		m_bank7->set_base(&ROM[WRAM(6)]);
+		m_bank8->set_base(&ROM[WRAM(7)]);
+		m_bank_opt = 0x02; //tv rom
+		m_bank_w = 0x50; //enable write to work ram 4,5,6,7
+		m_gfx_bank_on = 0;
 	}
 
-	state->m_timer_irq_mask = 1;
-	state->m_timer_irq_mask2 = 1;
-	state->m_timer_irq_vector = 0x06;
+	m_timer_irq_mask = 1;
+	m_timer_irq_mask2 = 1;
+	m_timer_irq_vector = 0x06;
 }
 
-static MACHINE_RESET(pc6001sr)
+MACHINE_RESET_MEMBER(pc6001_state,pc6001sr)
 {
-	pc6001_state *state = machine.driver_data<pc6001_state>();
-	UINT8 *work_ram = machine.region("maincpu")->base();
+	UINT8 *work_ram = m_region_maincpu->base();
 
-	state->m_video_ram = work_ram + 0x70000;
+	m_video_ram = work_ram + 0x70000;
 
-	state->m_port_c_8255=0;
+	m_port_c_8255=0;
 
-	device_set_irq_callback(machine.device("maincpu"),pc6001_irq_callback);
-	state->m_cas_switch = 0;
-	state->m_cas_offset = 0;
+	m_maincpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(pc6001_state::pc6001_irq_callback),this));
+	m_cas_switch = 0;
+	m_cas_offset = 0;
 
 	/* set default bankswitch */
 	{
-		UINT8 *ROM = machine.region("maincpu")->base();
-		state->m_sr_bank_r[0] = 0xf8; memory_set_bankptr(machine, "bank1", &ROM[SR_SYSROM_1(0x08)]);
-		state->m_sr_bank_r[1] = 0xfa; memory_set_bankptr(machine, "bank2", &ROM[SR_SYSROM_1(0x0a)]);
-		state->m_sr_bank_r[2] = 0xb0; memory_set_bankptr(machine, "bank3", &ROM[SR_EXROM1(0x00)]);
-		state->m_sr_bank_r[3] = 0xc0; memory_set_bankptr(machine, "bank4", &ROM[SR_EXROM0(0x00)]);
-		state->m_sr_bank_r[4] = 0x08; memory_set_bankptr(machine, "bank5", &ROM[SR_WRAM0(0x08)]);
-		state->m_sr_bank_r[5] = 0x0a; memory_set_bankptr(machine, "bank6", &ROM[SR_WRAM0(0x0a)]);
-		state->m_sr_bank_r[6] = 0x0c; memory_set_bankptr(machine, "bank7", &ROM[SR_WRAM0(0x0c)]);
-		state->m_sr_bank_r[7] = 0x0e; memory_set_bankptr(machine, "bank8", &ROM[SR_WRAM0(0x0e)]);
-//      state->m_bank_opt = 0x02; //tv rom
+		UINT8 *ROM = m_region_maincpu->base();
+		m_sr_bank_r[0] = 0xf8; m_bank1->set_base(&ROM[SR_SYSROM_1(0x08)]);
+		m_sr_bank_r[1] = 0xfa; m_bank2->set_base(&ROM[SR_SYSROM_1(0x0a)]);
+		m_sr_bank_r[2] = 0xb0; m_bank3->set_base(&ROM[SR_EXROM1(0x00)]);
+		m_sr_bank_r[3] = 0xc0; m_bank4->set_base(&ROM[SR_EXROM0(0x00)]);
+		m_sr_bank_r[4] = 0x08; m_bank5->set_base(&ROM[SR_WRAM0(0x08)]);
+		m_sr_bank_r[5] = 0x0a; m_bank6->set_base(&ROM[SR_WRAM0(0x0a)]);
+		m_sr_bank_r[6] = 0x0c; m_bank7->set_base(&ROM[SR_WRAM0(0x0c)]);
+		m_sr_bank_r[7] = 0x0e; m_bank8->set_base(&ROM[SR_WRAM0(0x0e)]);
+//      m_bank_opt = 0x02; //tv rom
 
 		/* enable default work RAM writes */
-		state->m_sr_bank_w[0] = 0x00;
-		state->m_sr_bank_w[1] = 0x02;
-		state->m_sr_bank_w[2] = 0x04;
-		state->m_sr_bank_w[3] = 0x06;
-		state->m_sr_bank_w[4] = 0x08;
-		state->m_sr_bank_w[5] = 0x0a;
-		state->m_sr_bank_w[6] = 0x0c;
-		state->m_sr_bank_w[7] = 0x0e;
+		m_sr_bank_w[0] = 0x00;
+		m_sr_bank_w[1] = 0x02;
+		m_sr_bank_w[2] = 0x04;
+		m_sr_bank_w[3] = 0x06;
+		m_sr_bank_w[4] = 0x08;
+		m_sr_bank_w[5] = 0x0a;
+		m_sr_bank_w[6] = 0x0c;
+		m_sr_bank_w[7] = 0x0e;
 
-		state->m_gfx_bank_on = 0;
+		m_gfx_bank_on = 0;
 	}
 
-	state->m_timer_irq_mask = 1;
-	state->m_timer_irq_mask2 = 1;
-	state->m_timer_irq_vector = 0x06;
+	m_timer_irq_mask = 1;
+	m_timer_irq_mask2 = 1;
+	m_timer_irq_vector = 0x06;
 }
 
 static const rgb_t defcolors[] =
 {
 	MAKE_RGB(0x07, 0xff, 0x00), /* GREEN */
-	MAKE_RGB(0xff, 0xff, 0x00),	/* YELLOW */
+	MAKE_RGB(0xff, 0xff, 0x00), /* YELLOW */
 	MAKE_RGB(0x3b, 0x08, 0xff), /* BLUE */
 	MAKE_RGB(0xcc, 0x00, 0x3b), /* RED */
-	MAKE_RGB(0xff, 0xff, 0xff),	/* BUFF */
-	MAKE_RGB(0x07, 0xe3, 0x99),	/* CYAN */
-	MAKE_RGB(0xff, 0x1c, 0xff),	/* MAGENTA */
-	MAKE_RGB(0xff, 0x81, 0x00),	/* ORANGE */
+	MAKE_RGB(0xff, 0xff, 0xff), /* BUFF */
+	MAKE_RGB(0x07, 0xe3, 0x99), /* CYAN */
+	MAKE_RGB(0xff, 0x1c, 0xff), /* MAGENTA */
+	MAKE_RGB(0xff, 0x81, 0x00), /* ORANGE */
 
 	/* MC6847 specific */
-	MAKE_RGB(0x00, 0x7c, 0x00),	/* ALPHANUMERIC DARK GREEN */
-	MAKE_RGB(0x07, 0xff, 0x00),	/* ALPHANUMERIC BRIGHT GREEN */
-	MAKE_RGB(0x91, 0x00, 0x00),	/* ALPHANUMERIC DARK ORANGE */
-	MAKE_RGB(0xff, 0x81, 0x00)	/* ALPHANUMERIC BRIGHT ORANGE */
+	MAKE_RGB(0x00, 0x7c, 0x00), /* ALPHANUMERIC DARK GREEN */
+	MAKE_RGB(0x07, 0xff, 0x00), /* ALPHANUMERIC BRIGHT GREEN */
+	MAKE_RGB(0x91, 0x00, 0x00), /* ALPHANUMERIC DARK ORANGE */
+	MAKE_RGB(0xff, 0x81, 0x00)  /* ALPHANUMERIC BRIGHT ORANGE */
 };
 
 static const rgb_t mk2_defcolors[] =
 {
-	MAKE_RGB(0x00, 0x00, 0x00),	/* BLACK */
-	MAKE_RGB(0xff, 0xaf, 0x00),	/* ORANGE */
-	MAKE_RGB(0x00, 0xff, 0xaf),	/* tone of GREEN */
-	MAKE_RGB(0xaf, 0xff, 0x00),	/* tone of GREEN */
-	MAKE_RGB(0xaf, 0x00, 0xff),	/* VIOLET */
-	MAKE_RGB(0xff, 0x00, 0xaf),	/* SCARLET */
-	MAKE_RGB(0x00, 0xaf, 0xff),	/* LIGHT BLUE */
-	MAKE_RGB(0xaf, 0xaf, 0xaf),	/* GRAY */
-	MAKE_RGB(0x00, 0x00, 0x00),	/* BLACK */
-	MAKE_RGB(0xff, 0x00, 0x00),	/* RED */
-	MAKE_RGB(0x00, 0xff, 0x00),	/* GREEN */
-	MAKE_RGB(0xff, 0xff, 0x00),	/* YELLOW */
-	MAKE_RGB(0x00, 0x00, 0xff),	/* BLUE */
-	MAKE_RGB(0xff, 0x00, 0xff),	/* PINK */
-	MAKE_RGB(0x00, 0xff, 0xff),	/* CYAN */
-	MAKE_RGB(0xff, 0xff, 0xff)	/* WHITE */
+	MAKE_RGB(0x00, 0x00, 0x00), /* BLACK */
+	MAKE_RGB(0xff, 0xaf, 0x00), /* ORANGE */
+	MAKE_RGB(0x00, 0xff, 0xaf), /* tone of GREEN */
+	MAKE_RGB(0xaf, 0xff, 0x00), /* tone of GREEN */
+	MAKE_RGB(0xaf, 0x00, 0xff), /* VIOLET */
+	MAKE_RGB(0xff, 0x00, 0xaf), /* SCARLET */
+	MAKE_RGB(0x00, 0xaf, 0xff), /* LIGHT BLUE */
+	MAKE_RGB(0xaf, 0xaf, 0xaf), /* GRAY */
+	MAKE_RGB(0x00, 0x00, 0x00), /* BLACK */
+	MAKE_RGB(0xff, 0x00, 0x00), /* RED */
+	MAKE_RGB(0x00, 0xff, 0x00), /* GREEN */
+	MAKE_RGB(0xff, 0xff, 0x00), /* YELLOW */
+	MAKE_RGB(0x00, 0x00, 0xff), /* BLUE */
+	MAKE_RGB(0xff, 0x00, 0xff), /* PINK */
+	MAKE_RGB(0x00, 0xff, 0xff), /* CYAN */
+	MAKE_RGB(0xff, 0xff, 0xff)  /* WHITE */
 };
 
-static PALETTE_INIT(pc6001)
+void pc6001_state::palette_init()
 {
 	int i;
 
 	for(i=0;i<8+4;i++)
-		palette_set_color(machine, i+8,defcolors[i]);
+		palette_set_color(machine(), i+8,defcolors[i]);
 }
 
-static PALETTE_INIT(pc6001m2)
+PALETTE_INIT_MEMBER(pc6001_state,pc6001m2)
 {
 	int i;
 
 	for(i=0;i<8;i++)
-		palette_set_color(machine, i+8,defcolors[i]);
+		palette_set_color(machine(), i+8,defcolors[i]);
 
 	for(i=0x10;i<0x20;i++)
-		palette_set_color(machine, i,mk2_defcolors[i-0x10]);
+		palette_set_color(machine(), i,mk2_defcolors[i-0x10]);
 }
 
 static const cassette_interface pc6001_cassette_interface =
@@ -2220,10 +2271,9 @@ static const cassette_interface pc6001_cassette_interface =
 	NULL
 };
 
-static DEVICE_IMAGE_LOAD( pc6001_cass )
+DEVICE_IMAGE_LOAD_MEMBER( pc6001_state,pc6001_cass )
 {
-	pc6001_state *state = image.device().machine().driver_data<pc6001_state>();
-	UINT8 *cas = image.device().machine().region("cas")->base();
+	UINT8 *cas = m_region_cas->base();
 	UINT32 size;
 
 	size = image.length();
@@ -2233,7 +2283,7 @@ static DEVICE_IMAGE_LOAD( pc6001_cass )
 		return IMAGE_INIT_FAIL;
 	}
 
-	state->m_cas_maxsize = size;
+	m_cas_maxsize = size;
 
 	return IMAGE_INIT_PASS;
 }
@@ -2274,68 +2324,62 @@ static MACHINE_CONFIG_START( pc6001, pc6001_state )
 	MCFG_CPU_ADD("maincpu",Z80, PC6001_MAIN_CLOCK / 2) // ~4 Mhz
 	MCFG_CPU_PROGRAM_MAP(pc6001_map)
 	MCFG_CPU_IO_MAP(pc6001_io)
-	MCFG_CPU_VBLANK_INT("screen", pc6001_interrupt)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", pc6001_state,  pc6001_interrupt)
 
 //  MCFG_CPU_ADD("subcpu", I8049, 7987200)
 
-	MCFG_MACHINE_START(pc6001)
-	MCFG_MACHINE_RESET(pc6001)
 
 	MCFG_GFXDECODE(pc6001m2)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_UPDATE(pc6001)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(pc6001_state, screen_update_pc6001)
 //  MCFG_SCREEN_REFRESH_RATE(M6847_NTSC_FRAMES_PER_SECOND)
-//  MCFG_SCREEN_UPDATE(m6847)
-//  MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+//  MCFG_SCREEN_UPDATE_STATIC(m6847)
 	MCFG_SCREEN_SIZE(320, 25+192+26)
 	MCFG_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
-	MCFG_VIDEO_START(pc6001)
 
 	MCFG_PALETTE_LENGTH(16+4)
-	MCFG_PALETTE_INIT(pc6001)
 
 	MCFG_I8255_ADD( "ppi8255", pc6001_ppi8255_interface )
 	/* uart */
-	MCFG_MSM8251_ADD("uart", pc6001_usart_interface)
+	MCFG_I8251_ADD("uart", pc6001_usart_interface)
 
 	MCFG_CARTSLOT_ADD("cart")
 	MCFG_CARTSLOT_EXTENSION_LIST("bin")
 	MCFG_CARTSLOT_NOT_MANDATORY
 
-//  MCFG_CASSETTE_ADD(CASSETTE_TAG,pc6001_cassette_interface)
-	MCFG_CARTSLOT_ADD(CASSETTE_TAG)
+//  MCFG_CASSETTE_ADD("cassette",pc6001_cassette_interface)
+	MCFG_CARTSLOT_ADD("cassette")
 	MCFG_CARTSLOT_EXTENSION_LIST("cas,p6")
 	MCFG_CARTSLOT_NOT_MANDATORY
 	MCFG_CARTSLOT_INTERFACE("pc6001_cass")
-	MCFG_CARTSLOT_LOAD(pc6001_cass)
+	MCFG_CARTSLOT_LOAD(pc6001_state,pc6001_cass)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 	MCFG_SOUND_ADD("ay8910", AY8910, PC6001_MAIN_CLOCK/4)
 	MCFG_SOUND_CONFIG(pc6001_ay_interface)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
-//  MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
+//  MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
 //  MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	/* TODO: accurate timing on this */
-	MCFG_TIMER_ADD_PERIODIC("keyboard_timer", keyboard_callback, attotime::from_hz(250))
-	MCFG_TIMER_ADD_PERIODIC("cassette_timer", cassette_callback, attotime::from_hz(1200/12)) //1200 bauds / (1 start bit -> 8 data bits -> 3 stop bits)
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("keyboard_timer", pc6001_state, keyboard_callback, attotime::from_hz(250))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("cassette_timer", pc6001_state, cassette_callback, attotime::from_hz(1200/12))
 MACHINE_CONFIG_END
 
 
 
 static MACHINE_CONFIG_DERIVED( pc6001m2, pc6001 )
 
-	MCFG_MACHINE_RESET(pc6001m2)
+	MCFG_MACHINE_RESET_OVERRIDE(pc6001_state,pc6001m2)
 
 	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_UPDATE(pc6001m2)
+	MCFG_SCREEN_UPDATE_DRIVER(pc6001_state, screen_update_pc6001m2)
 	MCFG_PALETTE_LENGTH(16+16)
-	MCFG_PALETTE_INIT(pc6001m2)
+	MCFG_PALETTE_INIT_OVERRIDE(pc6001_state,pc6001m2)
 
 	/* basic machine hardware */
 	MCFG_CPU_MODIFY("maincpu")
@@ -2343,6 +2387,9 @@ static MACHINE_CONFIG_DERIVED( pc6001m2, pc6001 )
 	MCFG_CPU_IO_MAP(pc6001m2_io)
 
 	MCFG_GFXDECODE(pc6001m2)
+
+	MCFG_SOUND_ADD("upd7752", UPD7752, PC6001_MAIN_CLOCK/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 
 MACHINE_CONFIG_END
 
@@ -2352,21 +2399,21 @@ static MACHINE_CONFIG_DERIVED( pc6601, pc6001m2 )
 	MCFG_CPU_REPLACE("maincpu", Z80, PC6001_MAIN_CLOCK / 2)
 	MCFG_CPU_PROGRAM_MAP(pc6001m2_map)
 	MCFG_CPU_IO_MAP(pc6601_io)
-	MCFG_CPU_VBLANK_INT("screen", pc6001_interrupt)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", pc6001_state,  pc6001_interrupt)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( pc6001sr, pc6001m2 )
 
-	MCFG_MACHINE_RESET(pc6001sr)
+	MCFG_MACHINE_RESET_OVERRIDE(pc6001_state,pc6001sr)
 
 	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_UPDATE(pc6001sr)
+	MCFG_SCREEN_UPDATE_DRIVER(pc6001_state, screen_update_pc6001sr)
 
 	/* basic machine hardware */
 	MCFG_CPU_REPLACE("maincpu", Z80, XTAL_3_579545MHz) //*Yes*, PC-6001 SR Z80 CPU is actually slower than older models
 	MCFG_CPU_PROGRAM_MAP(pc6001sr_map)
 	MCFG_CPU_IO_MAP(pc6001sr_io)
-	MCFG_CPU_VBLANK_INT("screen", pc6001sr_interrupt)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", pc6001_state,  pc6001sr_interrupt)
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -2434,7 +2481,7 @@ ROM_START( pc6001mk2 )
 	ROM_COPY( "maincpu", 0x48000, 0x0000, 0x4000 )
 ROM_END
 
-ROM_START( pc6601 )	/* Variant of pc6001m2 */
+ROM_START( pc6601 ) /* Variant of pc6001m2 */
 	ROM_REGION( 0x50000, "maincpu", ROMREGION_ERASEFF )
 	ROM_LOAD( "basicrom.66", 0x10000, 0x8000, CRC(c0b01772) SHA1(9240bb6b97fe06f5f07b5d65541c4d2f8758cc2a) )
 	ROM_LOAD( "voicerom.66", 0x18000, 0x4000, CRC(91d078c1) SHA1(6a93bd7723ef67f461394530a9feee57c8caf7b7) )
@@ -2485,8 +2532,8 @@ ROM_START( pc6001sr )
 ROM_END
 
 /*    YEAR  NAME      PARENT   COMPAT MACHINE   INPUT     INIT    COMPANY  FULLNAME          FLAGS */
-COMP( 1981, pc6001,   0,       0,     pc6001,   pc6001,   0,      "Nippon Electronic Company",   "PC-6001 (Japan)",    GAME_NOT_WORKING )
-COMP( 1981, pc6001a,  pc6001,  0,     pc6001,   pc6001,   0,      "Nippon Electronic Company",   "PC-6001A (US)",      GAME_NOT_WORKING ) // This version is also known as the NEC Trek
-COMP( 1983, pc6001mk2,pc6001,  0,     pc6001m2, pc6001,   0,      "Nippon Electronic Company",   "PC-6001mkII (Japan)",   GAME_NOT_WORKING )
-COMP( 1983, pc6601,   pc6001,  0,     pc6601,   pc6001,   0,      "Nippon Electronic Company",   "PC-6601 (Japan)",       GAME_NOT_WORKING )
-COMP( 1984, pc6001sr, pc6001,  0,     pc6001sr, pc6001,   0,      "Nippon Electronic Company",   "PC-6001mkIISR (Japan)", GAME_NOT_WORKING )
+COMP( 1981, pc6001,   0,       0,     pc6001,   pc6001, driver_device,   0,      "Nippon Electronic Company",   "PC-6001 (Japan)",    GAME_NOT_WORKING )
+COMP( 1981, pc6001a,  pc6001,  0,     pc6001,   pc6001, driver_device,   0,      "Nippon Electronic Company",   "PC-6001A (US)",      GAME_NOT_WORKING ) // This version is also known as the NEC Trek
+COMP( 1983, pc6001mk2,pc6001,  0,     pc6001m2, pc6001, driver_device,   0,      "Nippon Electronic Company",   "PC-6001mkII (Japan)",   GAME_NOT_WORKING )
+COMP( 1983, pc6601,   pc6001,  0,     pc6601,   pc6001, driver_device,   0,      "Nippon Electronic Company",   "PC-6601 (Japan)",       GAME_NOT_WORKING )
+COMP( 1984, pc6001sr, pc6001,  0,     pc6001sr, pc6001, driver_device,   0,      "Nippon Electronic Company",   "PC-6001mkIISR (Japan)", GAME_NOT_WORKING )

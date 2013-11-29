@@ -18,7 +18,7 @@
     CONSTANTS
 ***************************************************************************/
 
-#define MAX_LINE_LENGTH			250
+#define MAX_LINE_LENGTH         250
 
 
 
@@ -26,19 +26,18 @@
     TYPE DEFINITIONS
 ***************************************************************************/
 
-/* typedef struct _text_buffer text_buffer; -- declared in textbuf.h */
-struct _text_buffer
+struct text_buffer
 {
-	char *					buffer;
-	INT32 *					lineoffs;
-	INT32					bufsize;
-	INT32					bufstart;
-	INT32					bufend;
-	INT32					linesize;
-	INT32					linestart;
-	INT32					lineend;
-	UINT32					linestartseq;
-	INT32					maxwidth;
+	char *                  buffer;
+	INT32 *                 lineoffs;
+	INT32                   bufsize;
+	INT32                   bufstart;
+	INT32                   bufend;
+	INT32                   linesize;
+	INT32                   linestart;
+	INT32                   lineend;
+	UINT32                  linestartseq;
+	INT32                   maxwidth;
 };
 
 

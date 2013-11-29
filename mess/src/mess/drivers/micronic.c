@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Sandro Ronco
 /***************************************************************************
 
     Micronics 1000
@@ -11,7 +13,6 @@
     TODO:
     - IR I/O port
     - LCD contrast and backlight
-    - Periodic IRQ handling should be done into MC146818 device
 
     NOTE:
     The display shows "TESTING..." for about 2 min before showing the information screen
@@ -111,21 +112,28 @@
 
 */
 
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "includes/micronic.h"
 #include "rendlay.h"
+#include "mcfglgcy.h"
 
 READ8_MEMBER( micronic_state::keypad_r )
 {
-	static const char *const bitnames[] = {"BIT0", "BIT1", "BIT2", "BIT3", "BIT4", "BIT5"};
-	UINT8 port, bit, data = 0;
+	UINT8 data = 0;
 
-	for (bit = 0; bit < 8; bit++)
+	for (UINT8 bit = 0; bit < 8; bit++)
+	{
 		if (m_kp_matrix & (1 << bit))
-			for (port = 0; port < 6; port++)
-				data |= input_port_read(machine(), bitnames[port]) & (0x01 << bit) ? 0x01 << port : 0x00;
+		{
+			data |= m_bit0->read() & (0x01 << bit) ? 0x01 : 0x00;
+			data |= m_bit1->read() & (0x01 << bit) ? 0x02 : 0x00;
+			data |= m_bit2->read() & (0x01 << bit) ? 0x04 : 0x00;
+			data |= m_bit3->read() & (0x01 << bit) ? 0x08 : 0x00;
+			data |= m_bit4->read() & (0x01 << bit) ? 0x10 : 0x00;
+			data |= m_bit5->read() & (0x01 << bit) ? 0x20 : 0x00;
+		}
+	}
 	return data;
 }
 
@@ -146,48 +154,32 @@ WRITE8_MEMBER( micronic_state::kp_matrix_w )
 
 WRITE8_MEMBER( micronic_state::beep_w )
 {
-	UINT16 frequency = 0;
-
-	switch(data)
+	UINT16 frequency[16] =
 	{
-		case 0x00:		frequency = 0;		break;
-		case 0x01:		frequency = 4000;	break;
-		case 0x02:		frequency = 2000;	break;
-		case 0x03:		frequency = 1333;	break;
-		case 0x04:		frequency = 1000;	break;
-		case 0x05:		frequency = 800;	break;
-		case 0x06:		frequency = 667;	break;
-		case 0x07:		frequency = 571;	break;
-		case 0x08:		frequency = 500;	break;
-		case 0x09:		frequency = 444;	break;
-		case 0x0a:		frequency = 400;	break;
-		case 0x0b:		frequency = 364;	break;
-		case 0x0c:		frequency = 333;	break;
-		case 0x0d:		frequency = 308;	break;
-		case 0x0e:		frequency = 286;	break;
-		case 0x0f:		frequency = 267;	break;
-	}
+			0, 4000, 2000, 1333, 1000, 800, 667, 571,
+		500,  444,  400,  364,  333, 308, 286, 267
+	};
 
-	beep_set_frequency(m_beep, frequency);
-	beep_set_state(m_beep, (data) ? 1 : 0);
+	m_beep->set_frequency(frequency[data & 0x0f]);
+	m_beep->set_state((data & 0x0f) ? 1 : 0);
 }
 
 READ8_MEMBER( micronic_state::irq_flag_r )
 {
-	return (input_port_read(machine(), "BACKBATTERY")<<4) | (input_port_read(machine(), "MAINBATTERY")<<3) | (keypad_r(space, offset) ? 0 : 1);
+	return (m_backbattery->read()<<4) | (m_mainbattery->read()<<3) | (keypad_r(space, offset) ? 0 : 1);
 }
 
 WRITE8_MEMBER( micronic_state::bank_select_w )
 {
 	if (data < 2)
 	{
-		memory_set_bank(machine(), "bank1", data);
-		m_maincpu->memory().space(AS_PROGRAM)->unmap_write(0x0000, 0x7fff);
+		m_bank1->set_entry(data);
+		m_maincpu->space(AS_PROGRAM).unmap_write(0x0000, 0x7fff);
 	}
 	else
 	{
-		memory_set_bank(machine(), "bank1", (data <= m_banks_num) ? data : m_banks_num);
-		m_maincpu->memory().space(AS_PROGRAM)->install_write_bank(0x0000, 0x7fff, "bank1");
+		m_bank1->set_entry((data <= m_banks_num) ? data : m_banks_num);
+		m_maincpu->space(AS_PROGRAM).install_write_bank(0x0000, 0x7fff, "bank1");
 	}
 }
 
@@ -206,78 +198,19 @@ WRITE8_MEMBER( micronic_state::port_2c_w )
     RTC-146818
 ***************************************************************************/
 
-void micronic_state::set_146818_periodic_irq(UINT8 data)
-{
-	attotime timer_per = attotime::from_seconds(0);
-
-	switch(data & 0xf)
-	{
-		case 0:		timer_per = attotime::from_nsec(0);					break;
-		case 1:		timer_per = attotime::from_nsec((data & 0x20) ? 30517 : 3906250);	break;
-		case 2:		timer_per = attotime::from_nsec((data & 0x20) ? 61035 : 7812500);	break;
-		case 3:		timer_per = attotime::from_nsec(122070);			break;
-		case 4:		timer_per = attotime::from_nsec(244141);			break;
-		case 5:		timer_per = attotime::from_nsec(488281);			break;
-		case 6:		timer_per = attotime::from_nsec(976562);			break;
-		case 7:		timer_per = attotime::from_nsec(1953125);			break;
-		case 8:		timer_per = attotime::from_nsec(3906250);			break;
-		case 9:		timer_per = attotime::from_nsec(7812500);			break;
-		case 10:	timer_per = attotime::from_usec(15625);				break;
-		case 11:	timer_per = attotime::from_usec(31250);				break;
-		case 12:	timer_per = attotime::from_usec(62500);				break;
-		case 13:	timer_per = attotime::from_usec(62500);				break;
-		case 14:	timer_per = attotime::from_msec(250);				break;
-		case 15:	timer_per = attotime::from_msec(500);				break;
-	}
-
-	m_rtc_periodic_irq->adjust(timer_per, 0, timer_per);
-}
-
 WRITE8_MEMBER( micronic_state::rtc_address_w )
 {
-	m_rtc_address = data;
 	m_rtc->write(space, 0, data);
 }
 
 READ8_MEMBER( micronic_state::rtc_data_r )
 {
-	UINT8 data = 0;
-
-	switch(m_rtc_address & 0x3f)
-	{
-		case 0x0c:
-			data = m_irq_flags | m_rtc->read(space, 1);
-			m_irq_flags = 0;
-			break;
-		default:
-			data = m_rtc->read(space, 1);
-	}
-
-	return data;
+	return m_rtc->read(space, 1);
 }
 
 WRITE8_MEMBER( micronic_state::rtc_data_w )
 {
 	m_rtc->write(space, 1, data);
-
-	switch(m_rtc_address & 0x3f)
-	{
-		case 0x0a:
-			set_146818_periodic_irq(data);
-			break;
-		case 0x0b:
-			m_periodic_irq = (data & 0x40) ? 1 : 0;
-	}
-}
-
-static TIMER_CALLBACK( rtc_per_irq )
-{
-	micronic_state *state = machine.driver_data<micronic_state>();
-
-	if (state->m_periodic_irq)
-		device_set_input_line(state->m_maincpu, 0, HOLD_LINE);
-
-	state->m_irq_flags = (state->m_periodic_irq<<7) | 0x40;
 }
 
 /***************************************************************************
@@ -286,7 +219,7 @@ static TIMER_CALLBACK( rtc_per_irq )
 
 static ADDRESS_MAP_START(micronic_mem, AS_PROGRAM, 8, micronic_state)
 	AM_RANGE(0x0000, 0x7fff) AM_RAMBANK("bank1")
-	AM_RANGE(0x8000, 0xffff) AM_RAM	 AM_BASE(m_ram_base)
+	AM_RANGE(0x8000, 0xffff) AM_RAM  AM_SHARE("ram_base")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START(micronic_io, AS_IO, 8, micronic_state)
@@ -374,24 +307,14 @@ static NVRAM_HANDLER( micronic )
 	if (read_or_write)
 	{
 		file->write(state->m_ram_base, 0x8000);
-		file->write(ram_get_ptr(state->m_ram), ram_get_size(state->m_ram));
+		file->write(state->m_ram->pointer(), state->m_ram->size());
 	}
 	else
 	{
 		if (file)
 		{
-			UINT8 reg_a = 0, reg_b = 0;
-
 			file->read(state->m_ram_base, 0x8000);
-			file->read(ram_get_ptr(state->m_ram), ram_get_size(state->m_ram));
-
-			// reload register A and B for restore the periodic irq state
-			file->seek(0x4000a, SEEK_SET);
-			file->read(&reg_a, 0x01);
-			file->read(&reg_b, 0x01);
-
-			state->set_146818_periodic_irq(reg_a);
-			state->m_periodic_irq = (reg_b & 0x40) ? 1 : 0;
+			file->read(state->m_ram->pointer(), state->m_ram->size());
 			state->m_status_flag = 0x01;
 		}
 		else
@@ -401,69 +324,65 @@ static NVRAM_HANDLER( micronic )
 	}
 }
 
-static PALETTE_INIT( micronic )
+void micronic_state::palette_init()
 {
-	palette_set_color(machine, 0, MAKE_RGB(138, 146, 148));
-	palette_set_color(machine, 1, MAKE_RGB(92, 83, 88));
-}
-
-bool micronic_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
-{
-	m_lcdc->update_screen(&bitmap, &cliprect);
-
-	return 0;
+	palette_set_color(machine(), 0, MAKE_RGB(138, 146, 148));
+	palette_set_color(machine(), 1, MAKE_RGB(92, 83, 88));
 }
 
 static HD61830_INTERFACE( lcdc_intf )
 {
-	SCREEN_TAG,
 	DEVCB_NULL
 };
 
 void micronic_state::machine_start()
 {
 	/* ROM banks */
-	memory_configure_bank(machine(), "bank1", 0x00, 0x02, machine().region(Z80_TAG)->base(), 0x10000);
+	m_bank1->configure_entries(0x00, 0x02, memregion(Z80_TAG)->base(), 0x10000);
 
 	/* RAM banks */
-	m_banks_num = (ram_get_size(m_ram)>>15) + 1;
-	memory_configure_bank(machine(), "bank1", 0x02, m_banks_num - 1, ram_get_ptr(m_ram), 0x8000);
-
-	m_rtc_periodic_irq = machine().scheduler().timer_alloc(FUNC(rtc_per_irq));
+	m_banks_num = (m_ram->size()>>15) + 1;
+	m_bank1->configure_entries(0x02, m_banks_num - 1, m_ram->pointer(), 0x8000);
 
 	/* register for state saving */
-//  state_save_register_global(machine(), state->);
+//  save_item(NAME(state->));
 }
 
 void micronic_state::machine_reset()
 {
-	memory_set_bank(machine(), "bank1", 0);
-	m_maincpu->memory().space(AS_PROGRAM)->unmap_write(0x0000, 0x7fff);
+	m_bank1->set_entry(0);
+	m_maincpu->space(AS_PROGRAM).unmap_write(0x0000, 0x7fff);
 }
+
+
+WRITE_LINE_MEMBER( micronic_state::mc146818_irq )
+{
+	m_maincpu->set_input_line(0, !state ? HOLD_LINE : CLEAR_LINE);
+}
+
 
 static MACHINE_CONFIG_START( micronic, micronic_state )
 	/* basic machine hardware */
-    MCFG_CPU_ADD(Z80_TAG, Z80, XTAL_3_579545MHz)
-    MCFG_CPU_PROGRAM_MAP(micronic_mem)
-    MCFG_CPU_IO_MAP(micronic_io)
+	MCFG_CPU_ADD(Z80_TAG, Z80, XTAL_3_579545MHz)
+	MCFG_CPU_PROGRAM_MAP(micronic_mem)
+	MCFG_CPU_IO_MAP(micronic_io)
 
-    /* video hardware */
+	/* video hardware */
 	MCFG_SCREEN_ADD(SCREEN_TAG, LCD)
 	MCFG_SCREEN_REFRESH_RATE(80)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MCFG_SCREEN_SIZE(120, 64)	//6x20, 8x8
+	MCFG_SCREEN_UPDATE_DEVICE(HD61830_TAG, hd61830_device, screen_update)
+	MCFG_SCREEN_SIZE(120, 64)   //6x20, 8x8
 	MCFG_SCREEN_VISIBLE_AREA(0, 120-1, 0, 64-1)
 
 	MCFG_DEFAULT_LAYOUT(layout_lcd)
 
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(micronic)
 
 	MCFG_HD61830_ADD(HD61830_TAG, XTAL_4_9152MHz/2/2, lcdc_intf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO( "mono" )
-	MCFG_SOUND_ADD( BEEPER_TAG, BEEP, 0 )
+	MCFG_SOUND_ADD( "beeper", BEEP, 0 )
 	MCFG_SOUND_ROUTE( ALL_OUTPUTS, "mono", 1.00 )
 
 	/* ram banks */
@@ -472,12 +391,13 @@ static MACHINE_CONFIG_START( micronic, micronic_state )
 
 	MCFG_NVRAM_HANDLER(micronic)
 
-	MCFG_MC146818_ADD( MC146818_TAG, MC146818_IGNORE_CENTURY )
+	MCFG_MC146818_ADD( MC146818_TAG, XTAL_32_768kHz )
+	MCFG_MC146818_IRQ_HANDLER(WRITELINE(micronic_state, mc146818_irq))
 MACHINE_CONFIG_END
 
 /* ROM definition */
 ROM_START( micronic )
-    ROM_REGION( 0x18000, Z80_TAG, 0 )
+	ROM_REGION( 0x18000, Z80_TAG, 0 )
 	ROM_SYSTEM_BIOS(0, "v228", "Micronic 1000")
 	ROMX_LOAD( "micron1.bin", 0x0000, 0x8000, CRC(5632c8b7) SHA1(d1c9cf691848e9125f9ea352e4ffa41c288f3e29), ROM_BIOS(1))
 	ROMX_LOAD( "micron2.bin", 0x10000, 0x8000, CRC(dc8e7341) SHA1(927dddb3914a50bb051256d126a047a29eff7c65), ROM_BIOS(1))
@@ -488,4 +408,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 198?, micronic,  0,       0,	micronic,	micronic,	 0,  "Victor Micronic",   "Micronic 1000",		GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 198?, micronic,  0,       0,  micronic,   micronic, driver_device,     0,  "Victor Micronic",   "Micronic 1000",      GAME_NOT_WORKING | GAME_NO_SOUND)

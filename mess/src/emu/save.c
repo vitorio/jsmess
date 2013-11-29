@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     save.c
 
     Save state management functions.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ****************************************************************************
 
@@ -70,8 +41,8 @@
 //  CONSTANTS
 //**************************************************************************
 
-const int SAVE_VERSION		= 2;
-const int HEADER_SIZE		= 32;
+const int SAVE_VERSION      = 2;
+const int HEADER_SIZE       = 32;
 
 // Available flags
 enum
@@ -79,13 +50,6 @@ enum
 	SS_MSB_FIRST = 0x02
 };
 
-
-
-//**************************************************************************
-//  GLOBAL VARIABLES
-//**************************************************************************
-
-const char save_manager::s_magic_num[8] = { STATE_MAGIC_NUM };
 
 //**************************************************************************
 //  INITIALIZATION
@@ -97,11 +61,11 @@ const char save_manager::s_magic_num[8] = { STATE_MAGIC_NUM };
 
 save_manager::save_manager(running_machine &machine)
 	: m_machine(machine),
-	  m_reg_allowed(true),
-	  m_illegal_regs(0),
-	  m_entry_list(machine.respool()),
-	  m_presave_list(machine.respool()),
-	  m_postload_list(machine.respool())
+		m_reg_allowed(true),
+		m_illegal_regs(0),
+		m_entry_list(machine.respool()),
+		m_presave_list(machine.respool()),
+		m_postload_list(machine.respool())
 {
 }
 
@@ -148,12 +112,12 @@ void save_manager::register_presave(save_prepost_delegate func)
 {
 	// check for invalid timing
 	if (!m_reg_allowed)
-		fatalerror("Attempt to register callback function after state registration is closed!");
+		fatalerror("Attempt to register callback function after state registration is closed!\n");
 
 	// scan for duplicates and push through to the end
 	for (state_callback *cb = m_presave_list.first(); cb != NULL; cb = cb->next())
 		if (cb->m_func == func)
-			fatalerror("Duplicate save state function (%s/%s)", cb->m_func.name(), func.name());
+			fatalerror("Duplicate save state function (%s/%s)\n", cb->m_func.name(), func.name());
 
 	// allocate a new entry
 	m_presave_list.append(*auto_alloc(machine(), state_callback(func)));
@@ -169,12 +133,12 @@ void save_manager::register_postload(save_prepost_delegate func)
 {
 	// check for invalid timing
 	if (!m_reg_allowed)
-		fatalerror("Attempt to register callback function after state registration is closed!");
+		fatalerror("Attempt to register callback function after state registration is closed!\n");
 
 	// scan for duplicates and push through to the end
 	for (state_callback *cb = m_postload_list.first(); cb != NULL; cb = cb->next())
 		if (cb->m_func == func)
-			fatalerror("Duplicate save state function (%s/%s)", cb->m_func.name(), func.name());
+			fatalerror("Duplicate save state function (%s/%s)\n", cb->m_func.name(), func.name());
 
 	// allocate a new entry
 	m_postload_list.append(*auto_alloc(machine(), state_callback(func)));
@@ -218,7 +182,7 @@ void save_manager::save_memory(const char *module, const char *tag, UINT32 index
 
 		// error if we are equal
 		if (entry->m_name == totalname)
-			fatalerror("Duplicate save state registration entry (%s)", totalname.cstr());
+			fatalerror("Duplicate save state registration entry (%s)\n", totalname.cstr());
 	}
 
 	// insert us into the list
@@ -244,7 +208,7 @@ save_error save_manager::check_file(running_machine &machine, emu_file &file, co
 	if (file.read(header, sizeof(header)) != sizeof(header))
 	{
 		if (errormsg != NULL)
-			(*errormsg)("Could not read " APPNAME " save file header");
+			(*errormsg)("Could not read %s save file header",emulator_info::get_appname());
 		return STATERR_READ_ERROR;
 	}
 
@@ -311,7 +275,7 @@ save_error save_manager::write_file(emu_file &file)
 
 	// generate the header
 	UINT8 header[HEADER_SIZE];
-	memcpy(&header[0], s_magic_num, 8);
+	memcpy(&header[0], emulator_info::get_state_magic_num(), 8);
 	header[8] = SAVE_VERSION;
 	header[9] = NATIVE_ENDIAN_VALUE_LE_BE(0, SS_MSB_FIRST);
 	strncpy((char *)&header[0x0a], machine().system().name, 0x1c - 0x0a);
@@ -385,10 +349,10 @@ save_error save_manager::validate_header(const UINT8 *header, const char *gamena
 	void (CLIB_DECL *errormsg)(const char *fmt, ...), const char *error_prefix)
 {
 	// check magic number
-	if (memcmp(header, s_magic_num, 8))
+	if (memcmp(header, emulator_info::get_state_magic_num(), 8))
 	{
 		if (errormsg != NULL)
-			(*errormsg)("%sThis is not a " APPNAME " save file", error_prefix);
+			(*errormsg)("%sThis is not a %s save file", error_prefix,emulator_info::get_appname());
 		return STATERR_INVALID_HEADER;
 	}
 
@@ -429,7 +393,7 @@ save_error save_manager::validate_header(const UINT8 *header, const char *gamena
 
 save_manager::state_callback::state_callback(save_prepost_delegate callback)
 	: m_next(NULL),
-	  m_func(callback)
+		m_func(callback)
 {
 }
 
@@ -440,11 +404,11 @@ save_manager::state_callback::state_callback(save_prepost_delegate callback)
 
 save_manager::state_entry::state_entry(void *data, const char *name, UINT8 size, UINT32 count)
 	: m_next(NULL),
-	  m_data(data),
-	  m_name(name),
-	  m_typesize(size),
-	  m_typecount(count),
-	  m_offset(0)
+		m_data(data),
+		m_name(name),
+		m_typesize(size),
+		m_typecount(count),
+		m_offset(0)
 {
 }
 

@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     SMC CRT9021 Video Attributes Controller (VAC) emulation
@@ -49,7 +51,7 @@ const device_type CRT9021 = &device_creator<crt9021_device>;
 //  MACROS / CONSTANTS
 //**************************************************************************
 
-#define LOG 1
+#define LOG 0
 
 
 // attributes
@@ -82,7 +84,8 @@ enum
 //-------------------------------------------------
 
 crt9021_device::crt9021_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, CRT9021, "SMC CRT9021", tag, owner, clock)
+	: device_t(mconfig, CRT9021, "SMC CRT9021", tag, owner, clock, "crt9021", __FILE__),
+		device_video_interface(mconfig, *this)
 {
 }
 
@@ -122,10 +125,6 @@ void crt9021_device::device_start()
 	m_in_data_func.resolve(in_data_cb, *this);
 	m_in_attr_func.resolve(in_attr_cb, *this);
 	m_in_atten_func.resolve(in_atten_cb, *this);
-
-	// get the screen device
-	m_screen = machine().device<screen_device>(screen_tag);
-	assert(m_screen != NULL);
 
 	// register for state saving
 	save_item(NAME(m_slg));
@@ -219,9 +218,10 @@ WRITE_LINE_MEMBER( crt9021_device::vsync_w )
 
 
 //-------------------------------------------------
-//  update_screen - update screen
+//  screen_update - update screen
 //-------------------------------------------------
 
-void crt9021_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
+UINT32 crt9021_device::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
+	return 0;
 }

@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     Motorola MC68901 Multi Function Peripheral emulation
@@ -55,7 +57,7 @@
 //**************************************************************************
 
 #define MCFG_MC68901_ADD(_tag, _clock, _config) \
-	MCFG_DEVICE_ADD((_tag), MC68901, _clock)	\
+	MCFG_DEVICE_ADD((_tag), MC68901, _clock)    \
 	MCFG_DEVICE_CONFIG(_config)
 
 #define MC68901_INTERFACE(name) \
@@ -71,39 +73,40 @@
 
 struct mc68901_interface
 {
-	int	m_timer_clock;		/* timer clock */
-	int	m_rx_clock;			/* serial receive clock */
-	int	m_tx_clock;			/* serial transmit clock */
+	int m_timer_clock;      /* timer clock */
+	int m_rx_clock;         /* serial receive clock */
+	int m_tx_clock;         /* serial transmit clock */
 
-	devcb_write_line		m_out_irq_cb;
+	devcb_write_line        m_out_irq_cb;
 
-	devcb_read8				m_in_gpio_cb;
-	devcb_write8			m_out_gpio_cb;
+	devcb_read8             m_in_gpio_cb;
+	devcb_write8            m_out_gpio_cb;
 
-	devcb_write_line		m_out_tao_cb;
-	devcb_write_line		m_out_tbo_cb;
-	devcb_write_line		m_out_tco_cb;
-	devcb_write_line		m_out_tdo_cb;
+	devcb_write_line        m_out_tao_cb;
+	devcb_write_line        m_out_tbo_cb;
+	devcb_write_line        m_out_tco_cb;
+	devcb_write_line        m_out_tdo_cb;
 
-	devcb_read_line			m_in_si_cb;
-	devcb_write_line		m_out_so_cb;
-	devcb_write_line		m_out_rr_cb;
-	devcb_write_line		m_out_tr_cb;
+	devcb_read_line         m_in_si_cb;
+	devcb_write_line        m_out_so_cb;
+	devcb_write_line        m_out_rr_cb;
+	devcb_write_line        m_out_tr_cb;
 };
 
 
 
 // ======================> mc68901_device
 
-class mc68901_device :	public device_t,
-                        public mc68901_interface
+class mc68901_device :  public device_t,
+						public device_serial_interface,
+						public mc68901_interface
 {
 public:
-    // construction/destruction
-    mc68901_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	// construction/destruction
+	mc68901_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
-    DECLARE_READ8_MEMBER( read );
-    DECLARE_WRITE8_MEMBER( write );
+	DECLARE_READ8_MEMBER( read );
+	DECLARE_WRITE8_MEMBER( write );
 
 	int get_vector();
 
@@ -123,11 +126,18 @@ public:
 	DECLARE_WRITE_LINE_MEMBER( tc_w );
 
 protected:
-    // device-level overrides
+	// device-level overrides
 	virtual void device_config_complete();
-    virtual void device_start();
-    virtual void device_reset();
+	virtual void device_start();
+	virtual void device_reset();
 	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
+
+	// device_serial_interface overrides
+	virtual void tra_callback();
+	virtual void tra_complete();
+	virtual void rcv_callback();
+	virtual void rcv_complete();
+	virtual void input_callback(UINT8 state);
 
 	void check_interrupts();
 	void take_interrupt(UINT16 mask);
@@ -148,79 +158,160 @@ protected:
 	void register_w(offs_t offset, UINT8 data);
 
 private:
-	static const device_timer_id TIMER_A = 0;
-	static const device_timer_id TIMER_B = 1;
-	static const device_timer_id TIMER_C = 2;
-	static const device_timer_id TIMER_D = 3;
-	static const device_timer_id TIMER_RX = 4;
-	static const device_timer_id TIMER_TX = 5;
+	enum
+	{
+		TIMER_A = 0,
+		TIMER_B,
+		TIMER_C,
+		TIMER_D
+	};
 
-	devcb_resolved_read8		m_in_gpio_func;
-	devcb_resolved_write8		m_out_gpio_func;
-	devcb_resolved_read_line	m_in_si_func;
-	devcb_resolved_write_line	m_out_so_func;
-	devcb_resolved_write_line	m_out_tao_func;
-	devcb_resolved_write_line	m_out_tbo_func;
-	devcb_resolved_write_line	m_out_tco_func;
-	devcb_resolved_write_line	m_out_tdo_func;
-	devcb_resolved_write_line	m_out_irq_func;
+	enum
+	{
+		REGISTER_GPIP = 0,
+		REGISTER_AER,
+		REGISTER_DDR,
+		REGISTER_IERA,
+		REGISTER_IERB,
+		REGISTER_IPRA,
+		REGISTER_IPRB,
+		REGISTER_ISRA,
+		REGISTER_ISRB,
+		REGISTER_IMRA,
+		REGISTER_IMRB,
+		REGISTER_VR,
+		REGISTER_TACR,
+		REGISTER_TBCR,
+		REGISTER_TCDCR,
+		REGISTER_TADR,
+		REGISTER_TBDR,
+		REGISTER_TCDR,
+		REGISTER_TDDR,
+		REGISTER_SCR,
+		REGISTER_UCR,
+		REGISTER_RSR,
+		REGISTER_TSR,
+		REGISTER_UDR
+	};
 
-	int m_device_type;						/* device type */
+	enum
+	{
+		INT_GPI0 = 0,
+		INT_GPI1,
+		INT_GPI2,
+		INT_GPI3,
+		INT_TIMER_D,
+		INT_TIMER_C,
+		INT_GPI4,
+		INT_GPI5,
+		INT_TIMER_B,
+		INT_XMIT_ERROR,
+		INT_XMIT_BUFFER_EMPTY,
+		INT_RCV_ERROR,
+		INT_RCV_BUFFER_FULL,
+		INT_TIMER_A,
+		INT_GPI6,
+		INT_GPI7
+	};
+
+	enum
+	{
+		GPIP_0 = 0,
+		GPIP_1,
+		GPIP_2,
+		GPIP_3,
+		GPIP_4,
+		GPIP_5,
+		GPIP_6,
+		GPIP_7
+	};
+
+	enum
+	{
+		SERIAL_START = 0,
+		SERIAL_DATA,
+		SERIAL_PARITY,
+		SERIAL_STOP
+	};
+
+	enum
+	{
+		XMIT_OFF = 0,
+		XMIT_STARTING,
+		XMIT_ON,
+		XMIT_BREAK,
+		XMIT_STOPPING
+	};
+
+	static const int INT_MASK_GPIO[];
+	static const int INT_MASK_TIMER[];
+	static const int GPIO_TIMER[];
+	static const int PRESCALER[];
+
+	devcb_resolved_read8        m_in_gpio_func;
+	devcb_resolved_write8       m_out_gpio_func;
+	devcb_resolved_read_line    m_in_si_func;
+	devcb_resolved_write_line   m_out_so_func;
+	devcb_resolved_write_line   m_out_tao_func;
+	devcb_resolved_write_line   m_out_tbo_func;
+	devcb_resolved_write_line   m_out_tco_func;
+	devcb_resolved_write_line   m_out_tdo_func;
+	devcb_resolved_write_line   m_out_irq_func;
+
+	//int m_device_type;                      /* device type */
 
 	/* registers */
-	UINT8 m_gpip;							/* general purpose I/O register */
-	UINT8 m_aer;							/* active edge register */
-	UINT8 m_ddr;							/* data direction register */
+	UINT8 m_gpip;                           /* general purpose I/O register */
+	UINT8 m_aer;                            /* active edge register */
+	UINT8 m_ddr;                            /* data direction register */
 
-	UINT16 m_ier;							/* interrupt enable register */
-	UINT16 m_ipr;							/* interrupt pending register */
-	UINT16 m_isr;							/* interrupt in-service register */
-	UINT16 m_imr;							/* interrupt mask register */
-	UINT8 m_vr;								/* vector register */
+	UINT16 m_ier;                           /* interrupt enable register */
+	UINT16 m_ipr;                           /* interrupt pending register */
+	UINT16 m_isr;                           /* interrupt in-service register */
+	UINT16 m_imr;                           /* interrupt mask register */
+	UINT8 m_vr;                             /* vector register */
 
-	UINT8 m_tacr;							/* timer A control register */
-	UINT8 m_tbcr;							/* timer B control register */
-	UINT8 m_tcdcr;							/* timers C and D control register */
-	UINT8 m_tdr[4];		/* timer data registers */
+	UINT8 m_tacr;                           /* timer A control register */
+	UINT8 m_tbcr;                           /* timer B control register */
+	UINT8 m_tcdcr;                          /* timers C and D control register */
+	UINT8 m_tdr[4];     /* timer data registers */
 
-	UINT8 m_scr;							/* synchronous character register */
-	UINT8 m_ucr;							/* USART control register */
-	UINT8 m_tsr;							/* transmitter status register */
-	UINT8 m_rsr;							/* receiver status register */
-	UINT8 m_udr;							/* USART data register */
+	UINT8 m_scr;                            /* synchronous character register */
+	UINT8 m_ucr;                            /* USART control register */
+	UINT8 m_tsr;                            /* transmitter status register */
+	UINT8 m_rsr;                            /* receiver status register */
+	UINT8 m_udr;                            /* USART data register */
 
 	/* counter timer state */
-	UINT8 m_tmc[4];		/* timer main counters */
-	int m_ti[4];			/* timer in latch */
-	int m_to[4];			/* timer out latch */
+	UINT8 m_tmc[4];     /* timer main counters */
+	int m_ti[4];            /* timer in latch */
+	int m_to[4];            /* timer out latch */
 
 	/* interrupt state */
-	int m_irqlevel;							/* interrupt level latch */
+	//int m_irqlevel;                         /* interrupt level latch */
 
 	/* serial state */
-	UINT8 m_next_rsr;						/* receiver status register latch */
-	int m_rsr_read;							/* receiver status register read flag */
-	int m_rxtx_word;						/* word length */
-	int m_rxtx_start;						/* start bits */
-	int m_rxtx_stop;						/* stop bits */
+	UINT8 m_next_rsr;                       /* receiver status register latch */
+	int m_rsr_read;                         /* receiver status register read flag */
+	int m_rxtx_word;                        /* word length */
+	int m_rxtx_start;                       /* start bits */
+	int m_rxtx_stop;                        /* stop bits */
 
 	/* receive state */
-	UINT8 m_rx_buffer;						/* receive buffer */
-	int	m_rx_bits;							/* receive bit count */
-	int	m_rx_parity;						/* receive parity bit */
-	int	m_rx_state;							/* receive state */
+	UINT8 m_rx_buffer;                      /* receive buffer */
+	int m_rx_bits;                          /* receive bit count */
+	int m_rx_parity;                        /* receive parity bit */
+	int m_rx_state;                         /* receive state */
 
 	/* transmit state */
-	UINT8 m_tx_buffer;						/* transmit buffer */
-	int m_tx_bits;							/* transmit bit count */
-	int m_tx_parity;						/* transmit parity bit */
-	int m_tx_state;							/* transmit state */
-	int m_xmit_state;						/* transmitter state */
+	UINT8 m_tx_buffer;                      /* transmit buffer */
+	int m_tx_bits;                          /* transmit bit count */
+	int m_tx_parity;                        /* transmit parity bit */
+	int m_tx_state;                         /* transmit state */
+	int m_xmit_state;                       /* transmitter state */
 
 	// timers
 	emu_timer *m_timer[4]; /* counter timers */
-	emu_timer *m_rx_timer;					/* receive timer */
-	emu_timer *m_tx_timer;					/* transmit timer */
 };
 
 

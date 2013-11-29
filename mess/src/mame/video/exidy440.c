@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     Exidy 440 video system
@@ -8,28 +10,22 @@
 #include "includes/exidy440.h"
 
 
-#define PIXEL_CLOCK			(EXIDY440_MASTER_CLOCK / 2)
-#define HTOTAL				(0x1a0)
-#define HBEND				(0x000)
-#define HBSTART				(0x140)
-#define HSEND				(0x178)
-#define HSSTART				(0x160)
-#define VTOTAL				(0x104)
-#define VBEND				(0x000)
-#define VBSTART				(0x0f0)
-#define VSEND				(0x0f8)
-#define VSSTART				(0x0f0)
+#define PIXEL_CLOCK         (EXIDY440_MASTER_CLOCK / 2)
+#define HTOTAL              (0x1a0)
+#define HBEND               (0x000)
+#define HBSTART             (0x140)
+#define HSEND               (0x178)
+#define HSSTART             (0x160)
+#define VTOTAL              (0x104)
+#define VBEND               (0x000)
+#define VBSTART             (0x0f0)
+#define VSEND               (0x0f8)
+#define VSSTART             (0x0f0)
 
 /* Top Secret has a larger VBLANK area */
-#define TOPSECEX_VBSTART	(0x0ec)
+#define TOPSECEX_VBSTART    (0x0ec)
 
-#define SPRITE_COUNT		(0x28)
-
-
-/* function prototypes */
-static void exidy440_update_firq(running_machine &machine);
-
-
+#define SPRITE_COUNT        (0x28)
 
 /*************************************
  *
@@ -37,33 +33,31 @@ static void exidy440_update_firq(running_machine &machine);
  *
  *************************************/
 
-static VIDEO_START( exidy440 )
+VIDEO_START_MEMBER(exidy440_state,exidy440)
 {
-	exidy440_state *state = machine.driver_data<exidy440_state>();
 	/* reset the system */
-	state->m_firq_enable = 0;
-	state->m_firq_select = 0;
-	state->m_palettebank_io = 0;
-	state->m_palettebank_vis = 0;
-	state->m_firq_vblank = 0;
-	state->m_firq_beam = 0;
+	m_firq_enable = 0;
+	m_firq_select = 0;
+	m_palettebank_io = 0;
+	m_palettebank_vis = 0;
+	m_firq_vblank = 0;
+	m_firq_beam = 0;
 
 	/* allocate a buffer for VRAM */
-	state->m_local_videoram = auto_alloc_array(machine, UINT8, 256 * 256 * 2);
-	memset(state->m_local_videoram, 0, 256 * 256 * 2);
+	m_local_videoram = auto_alloc_array(machine(), UINT8, 256 * 256 * 2);
+	memset(m_local_videoram, 0, 256 * 256 * 2);
 
 	/* allocate a buffer for palette RAM */
-	state->m_local_paletteram = auto_alloc_array(machine, UINT8, 512 * 2);
-	memset(state->m_local_paletteram, 0, 512 * 2);
+	m_local_paletteram = auto_alloc_array(machine(), UINT8, 512 * 2);
+	memset(m_local_paletteram, 0, 512 * 2);
 }
 
 
-static VIDEO_START( topsecex )
+VIDEO_START_MEMBER(exidy440_state,topsecex)
 {
-	exidy440_state *state = machine.driver_data<exidy440_state>();
-	VIDEO_START_CALL(exidy440);
+	VIDEO_START_CALL_MEMBER(exidy440);
 
-	*state->m_topsecex_yscroll = 0;
+	*m_topsecex_yscroll = 0;
 }
 
 
@@ -74,20 +68,18 @@ static VIDEO_START( topsecex )
  *
  *************************************/
 
-READ8_HANDLER( exidy440_videoram_r )
+READ8_MEMBER(exidy440_state::exidy440_videoram_r)
 {
-	exidy440_state *state = space->machine().driver_data<exidy440_state>();
-	UINT8 *base = &state->m_local_videoram[(*state->m_scanline * 256 + offset) * 2];
+	UINT8 *base = &m_local_videoram[(*m_scanline * 256 + offset) * 2];
 
 	/* combine the two pixel values into one byte */
 	return (base[0] << 4) | base[1];
 }
 
 
-WRITE8_HANDLER( exidy440_videoram_w )
+WRITE8_MEMBER(exidy440_state::exidy440_videoram_w)
 {
-	exidy440_state *state = space->machine().driver_data<exidy440_state>();
-	UINT8 *base = &state->m_local_videoram[(*state->m_scanline * 256 + offset) * 2];
+	UINT8 *base = &m_local_videoram[(*m_scanline * 256 + offset) * 2];
 
 	/* expand the two pixel values into two bytes */
 	base[0] = (data >> 4) & 15;
@@ -102,30 +94,28 @@ WRITE8_HANDLER( exidy440_videoram_w )
  *
  *************************************/
 
-READ8_HANDLER( exidy440_paletteram_r )
+READ8_MEMBER(exidy440_state::exidy440_paletteram_r)
 {
-	exidy440_state *state = space->machine().driver_data<exidy440_state>();
-	return state->m_local_paletteram[state->m_palettebank_io * 512 + offset];
+	return m_local_paletteram[m_palettebank_io * 512 + offset];
 }
 
 
-WRITE8_HANDLER( exidy440_paletteram_w )
+WRITE8_MEMBER(exidy440_state::exidy440_paletteram_w)
 {
-	exidy440_state *state = space->machine().driver_data<exidy440_state>();
 	/* update palette ram in the I/O bank */
-	state->m_local_paletteram[state->m_palettebank_io * 512 + offset] = data;
+	m_local_paletteram[m_palettebank_io * 512 + offset] = data;
 
 	/* if we're modifying the active palette, change the color immediately */
-	if (state->m_palettebank_io == state->m_palettebank_vis)
+	if (m_palettebank_io == m_palettebank_vis)
 	{
 		int word;
 
 		/* combine two bytes into a word */
-		offset = state->m_palettebank_vis * 512 + (offset & 0x1fe);
-		word = (state->m_local_paletteram[offset] << 8) + state->m_local_paletteram[offset + 1];
+		offset = m_palettebank_vis * 512 + (offset & 0x1fe);
+		word = (m_local_paletteram[offset] << 8) + m_local_paletteram[offset + 1];
 
 		/* extract the 5-5-5 RGB colors */
-		palette_set_color_rgb(space->machine(), offset / 2, pal5bit(word >> 10), pal5bit(word >> 5), pal5bit(word >> 0));
+		palette_set_color_rgb(machine(), offset / 2, pal5bit(word >> 10), pal5bit(word >> 5), pal5bit(word >> 0));
 	}
 }
 
@@ -137,28 +127,27 @@ WRITE8_HANDLER( exidy440_paletteram_w )
  *
  *************************************/
 
-READ8_HANDLER( exidy440_horizontal_pos_r )
+READ8_MEMBER(exidy440_state::exidy440_horizontal_pos_r)
 {
-	exidy440_state *state = space->machine().driver_data<exidy440_state>();
 	/* clear the FIRQ on a read here */
-	state->m_firq_beam = 0;
-	exidy440_update_firq(space->machine());
+	m_firq_beam = 0;
+	exidy440_update_firq();
 
 	/* according to the schems, this value is only latched on an FIRQ
-     * caused by collision or beam */
-	return state->m_latched_x;
+	 * caused by collision or beam */
+	return m_latched_x;
 }
 
 
-READ8_HANDLER( exidy440_vertical_pos_r )
+READ8_MEMBER(exidy440_state::exidy440_vertical_pos_r)
 {
 	int result;
 
 	/* according to the schems, this value is latched on any FIRQ
-     * caused by collision or beam, ORed together with CHRCLK,
-     * which probably goes off once per scanline; for now, we just
-     * always return the current scanline */
-	result = space->machine().primary_screen->vpos();
+	 * caused by collision or beam, ORed together with CHRCLK,
+	 * which probably goes off once per scanline; for now, we just
+	 * always return the current scanline */
+	result = m_screen->vpos();
 	return (result < 255) ? result : 255;
 }
 
@@ -170,11 +159,10 @@ READ8_HANDLER( exidy440_vertical_pos_r )
  *
  *************************************/
 
-WRITE8_HANDLER( exidy440_spriteram_w )
+WRITE8_MEMBER(exidy440_state::exidy440_spriteram_w)
 {
-	exidy440_state *state = space->machine().driver_data<exidy440_state>();
-	space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
-	state->m_spriteram[offset] = data;
+	m_screen->update_partial(m_screen->vpos());
+	m_spriteram[offset] = data;
 }
 
 
@@ -185,44 +173,42 @@ WRITE8_HANDLER( exidy440_spriteram_w )
  *
  *************************************/
 
-WRITE8_HANDLER( exidy440_control_w )
+WRITE8_MEMBER(exidy440_state::exidy440_control_w)
 {
-	exidy440_state *state = space->machine().driver_data<exidy440_state>();
-	int oldvis = state->m_palettebank_vis;
+	int oldvis = m_palettebank_vis;
 
 	/* extract the various bits */
-	exidy440_bank_select(space->machine(), data >> 4);
-	state->m_firq_enable = (data >> 3) & 1;
-	state->m_firq_select = (data >> 2) & 1;
-	state->m_palettebank_io = (data >> 1) & 1;
-	state->m_palettebank_vis = data & 1;
+	exidy440_bank_select(data >> 4);
+	m_firq_enable = (data >> 3) & 1;
+	m_firq_select = (data >> 2) & 1;
+	m_palettebank_io = (data >> 1) & 1;
+	m_palettebank_vis = data & 1;
 
 	/* update the FIRQ in case we enabled something */
-	exidy440_update_firq(space->machine());
+	exidy440_update_firq();
 
 	/* if we're swapping palettes, change all the colors */
-	if (oldvis != state->m_palettebank_vis)
+	if (oldvis != m_palettebank_vis)
 	{
 		int i;
 
 		/* pick colors from the visible bank */
-		offset = state->m_palettebank_vis * 512;
+		offset = m_palettebank_vis * 512;
 		for (i = 0; i < 256; i++, offset += 2)
 		{
 			/* extract a word and the 5-5-5 RGB components */
-			int word = (state->m_local_paletteram[offset] << 8) + state->m_local_paletteram[offset + 1];
-			palette_set_color_rgb(space->machine(), i, pal5bit(word >> 10), pal5bit(word >> 5), pal5bit(word >> 0));
+			int word = (m_local_paletteram[offset] << 8) + m_local_paletteram[offset + 1];
+			palette_set_color_rgb(machine(), i, pal5bit(word >> 10), pal5bit(word >> 5), pal5bit(word >> 0));
 		}
 	}
 }
 
 
-WRITE8_HANDLER( exidy440_interrupt_clear_w )
+WRITE8_MEMBER(exidy440_state::exidy440_interrupt_clear_w)
 {
-	exidy440_state *state = space->machine().driver_data<exidy440_state>();
 	/* clear the VBLANK FIRQ on a write here */
-	state->m_firq_vblank = 0;
-	exidy440_update_firq(space->machine());
+	m_firq_vblank = 0;
+	exidy440_update_firq();
 }
 
 
@@ -233,22 +219,20 @@ WRITE8_HANDLER( exidy440_interrupt_clear_w )
  *
  *************************************/
 
-static void exidy440_update_firq(running_machine &machine)
+void exidy440_state::exidy440_update_firq()
 {
-	exidy440_state *state = machine.driver_data<exidy440_state>();
-	if (state->m_firq_vblank || (state->m_firq_enable && state->m_firq_beam))
-		cputag_set_input_line(machine, "maincpu", 1, ASSERT_LINE);
+	if (m_firq_vblank || (m_firq_enable && m_firq_beam))
+		m_maincpu->set_input_line(1, ASSERT_LINE);
 	else
-		cputag_set_input_line(machine, "maincpu", 1, CLEAR_LINE);
+		m_maincpu->set_input_line(1, CLEAR_LINE);
 }
 
 
-INTERRUPT_GEN( exidy440_vblank_interrupt )
+INTERRUPT_GEN_MEMBER(exidy440_state::exidy440_vblank_interrupt)
 {
-	exidy440_state *state = device->machine().driver_data<exidy440_state>();
 	/* set the FIRQ line on a VBLANK */
-	state->m_firq_vblank = 1;
-	exidy440_update_firq(device->machine());
+	m_firq_vblank = 1;
+	exidy440_update_firq();
 }
 
 
@@ -259,39 +243,37 @@ INTERRUPT_GEN( exidy440_vblank_interrupt )
  *
  *************************************/
 
-static TIMER_CALLBACK( beam_firq_callback )
+TIMER_CALLBACK_MEMBER(exidy440_state::beam_firq_callback)
 {
-	exidy440_state *state = machine.driver_data<exidy440_state>();
 	/* generate the interrupt, if we're selected */
-	if (state->m_firq_select && state->m_firq_enable)
+	if (m_firq_select && m_firq_enable)
 	{
-		state->m_firq_beam = 1;
-		exidy440_update_firq(machine);
+		m_firq_beam = 1;
+		exidy440_update_firq();
 	}
 
 	/* round the x value to the nearest byte */
 	param = (param + 1) / 2;
 
 	/* latch the x value; this convolution comes from the read routine */
-	state->m_latched_x = (param + 3) ^ 2;
+	m_latched_x = (param + 3) ^ 2;
 }
 
 
-static TIMER_CALLBACK( collide_firq_callback )
+TIMER_CALLBACK_MEMBER(exidy440_state::collide_firq_callback)
 {
-	exidy440_state *state = machine.driver_data<exidy440_state>();
 	/* generate the interrupt, if we're selected */
-	if (!state->m_firq_select && state->m_firq_enable)
+	if (!m_firq_select && m_firq_enable)
 	{
-		state->m_firq_beam = 1;
-		exidy440_update_firq(machine);
+		m_firq_beam = 1;
+		exidy440_update_firq();
 	}
 
 	/* round the x value to the nearest byte */
 	param = (param + 1) / 2;
 
 	/* latch the x value; this convolution comes from the read routine */
-	state->m_latched_x = (param + 3) ^ 2;
+	m_latched_x = (param + 3) ^ 2;
 }
 
 
@@ -302,8 +284,8 @@ static TIMER_CALLBACK( collide_firq_callback )
  *
  *************************************/
 
-static void draw_sprites(screen_device &screen, bitmap_t *bitmap, const rectangle *cliprect,
-						 int scroll_offset, int check_collision)
+static void draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect,
+							int scroll_offset, int check_collision)
 {
 	exidy440_state *state = screen.machine().driver_data<exidy440_state>();
 	int i;
@@ -324,7 +306,7 @@ static void draw_sprites(screen_device &screen, bitmap_t *bitmap, const rectangl
 		UINT8 *src;
 
 		/* skip if out of range */
-		if (yoffs < cliprect->min_y || yoffs >= cliprect->max_y + 16)
+		if (yoffs < cliprect.min_y || yoffs >= cliprect.max_y + 16)
 			continue;
 
 		/* get a pointer to the source image */
@@ -345,11 +327,11 @@ static void draw_sprites(screen_device &screen, bitmap_t *bitmap, const rectangl
 				sy += (VBSTART - VBEND);
 
 			/* stop if we get before the current scanline */
-			if (yoffs < cliprect->min_y)
+			if (yoffs < cliprect.min_y)
 				break;
 
 			/* only draw scanlines that are in this cliprect */
-			if (yoffs <= cliprect->max_y)
+			if (yoffs <= cliprect.max_y)
 			{
 				UINT8 *old = &state->m_local_videoram[sy * 512 + xoffs];
 				int currx = xoffs;
@@ -367,11 +349,11 @@ static void draw_sprites(screen_device &screen, bitmap_t *bitmap, const rectangl
 					{
 						/* combine with the background */
 						pen = left | old[0];
-						*BITMAP_ADDR16(bitmap, yoffs, currx) = pen;
+						bitmap.pix16(yoffs, currx) = pen;
 
 						/* check the collisions bit */
 						if (check_collision && (palette[2 * pen] & 0x80) && (count++ < 128))
-							screen.machine().scheduler().timer_set(screen.time_until_pos(yoffs, currx), FUNC(collide_firq_callback), currx);
+							screen.machine().scheduler().timer_set(screen.time_until_pos(yoffs, currx), timer_expired_delegate(FUNC(exidy440_state::collide_firq_callback),state), currx);
 					}
 					currx++;
 
@@ -380,11 +362,11 @@ static void draw_sprites(screen_device &screen, bitmap_t *bitmap, const rectangl
 					{
 						/* combine with the background */
 						pen = right | old[1];
-						*BITMAP_ADDR16(bitmap, yoffs, currx) = pen;
+						bitmap.pix16(yoffs, currx) = pen;
 
 						/* check the collisions bit */
 						if (check_collision && (palette[2 * pen] & 0x80) && (count++ < 128))
-							screen.machine().scheduler().timer_set(screen.time_until_pos(yoffs, currx), FUNC(collide_firq_callback), currx);
+							screen.machine().scheduler().timer_set(screen.time_until_pos(yoffs, currx), timer_expired_delegate(FUNC(exidy440_state::collide_firq_callback),state), currx);
 					}
 					currx++;
 				}
@@ -403,15 +385,15 @@ static void draw_sprites(screen_device &screen, bitmap_t *bitmap, const rectangl
  *
  *************************************/
 
-static void update_screen(screen_device &screen, bitmap_t *bitmap, const rectangle *cliprect,
-						  int scroll_offset, int check_collision)
+static void update_screen(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect,
+							int scroll_offset, int check_collision)
 {
 	exidy440_state *state = screen.machine().driver_data<exidy440_state>();
 	int y, sy;
 
 	/* draw any dirty scanlines from the VRAM directly */
-	sy = scroll_offset + cliprect->min_y;
-	for (y = cliprect->min_y; y <= cliprect->max_y; y++, sy++)
+	sy = scroll_offset + cliprect.min_y;
+	for (y = cliprect.min_y; y <= cliprect.max_y; y++, sy++)
 	{
 		/* wrap at the bottom of the screen */
 		if (sy >= VBSTART)
@@ -433,30 +415,30 @@ static void update_screen(screen_device &screen, bitmap_t *bitmap, const rectang
  *
  *************************************/
 
-static SCREEN_UPDATE( exidy440 )
+UINT32 exidy440_state::screen_update_exidy440(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	/* redraw the screen */
-	update_screen(*screen, bitmap, cliprect, 0, TRUE);
+	update_screen(screen, bitmap, cliprect, 0, TRUE);
 
 	/* generate an interrupt once/frame for the beam */
-	if (cliprect->max_y == screen->visible_area().max_y)
+	if (cliprect.max_y == screen.visible_area().max_y)
 	{
 		int i;
 
-		int beamx = ((input_port_read(screen->machine(), "AN0") & 0xff) * (HBSTART - HBEND)) >> 8;
-		int beamy = ((input_port_read(screen->machine(), "AN1") & 0xff) * (VBSTART - VBEND)) >> 8;
+		int beamx = ((ioport("AN0")->read() & 0xff) * (HBSTART - HBEND)) >> 8;
+		int beamy = ((ioport("AN1")->read() & 0xff) * (VBSTART - VBEND)) >> 8;
 
 		/* The timing of this FIRQ is very important. The games look for an FIRQ
-            and then wait about 650 cycles, clear the old FIRQ, and wait a
-            very short period of time (~130 cycles) for another one to come in.
-            From this, it appears that they are expecting to get beams over
-            a 12 scanline period, and trying to pick roughly the middle one.
-            This is how it is implemented. */
-		attotime increment = screen->scan_period();
-		attotime time = screen->time_until_pos(beamy, beamx) - increment * 6;
+		    and then wait about 650 cycles, clear the old FIRQ, and wait a
+		    very short period of time (~130 cycles) for another one to come in.
+		    From this, it appears that they are expecting to get beams over
+		    a 12 scanline period, and trying to pick roughly the middle one.
+		    This is how it is implemented. */
+		attotime increment = screen.scan_period();
+		attotime time = screen.time_until_pos(beamy, beamx) - increment * 6;
 		for (i = 0; i <= 12; i++)
 		{
-			screen->machine().scheduler().timer_set(time, FUNC(beam_firq_callback), beamx);
+			machine().scheduler().timer_set(time, timer_expired_delegate(FUNC(exidy440_state::beam_firq_callback),this), beamx);
 			time += increment;
 		}
 	}
@@ -465,11 +447,10 @@ static SCREEN_UPDATE( exidy440 )
 }
 
 
-static SCREEN_UPDATE( topsecex )
+UINT32 exidy440_state::screen_update_topsecex(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	exidy440_state *state = screen->machine().driver_data<exidy440_state>();
 	/* redraw the screen */
-	update_screen(*screen, bitmap, cliprect, *state->m_topsecex_yscroll, FALSE);
+	update_screen(screen, bitmap, cliprect, *m_topsecex_yscroll, FALSE);
 
 	return 0;
 }
@@ -484,21 +465,20 @@ static SCREEN_UPDATE( topsecex )
 
 MACHINE_CONFIG_FRAGMENT( exidy440_video )
 	MCFG_VIDEO_ATTRIBUTES(VIDEO_ALWAYS_UPDATE)
-	MCFG_VIDEO_START(exidy440)
+	MCFG_VIDEO_START_OVERRIDE(exidy440_state,exidy440)
 	MCFG_PALETTE_LENGTH(256)
 
 	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
-	MCFG_SCREEN_UPDATE(exidy440)
+	MCFG_SCREEN_UPDATE_DRIVER(exidy440_state, screen_update_exidy440)
 MACHINE_CONFIG_END
 
 
 MACHINE_CONFIG_FRAGMENT( topsecex_video )
 	MCFG_VIDEO_ATTRIBUTES(0)
-	MCFG_VIDEO_START(topsecex)
+	MCFG_VIDEO_START_OVERRIDE(exidy440_state,topsecex)
 
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, TOPSECEX_VBSTART)
-	MCFG_SCREEN_UPDATE(topsecex)
+	MCFG_SCREEN_UPDATE_DRIVER(exidy440_state, screen_update_topsecex)
 MACHINE_CONFIG_END

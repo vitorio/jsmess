@@ -10,14 +10,14 @@
 //============================================================
 
 // standard sdl header
-#include <SDL/SDL.h>
-
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include <mach/mach.h>
 #include <mach/mach_time.h>
 #include <Carbon/Carbon.h>
+
+#include "sdlinc.h"
 
 // MAME headers
 #include "osdcore.h"
@@ -33,9 +33,9 @@ static osd_ticks_t mach_cycle_counter(void);
 //  STATIC VARIABLES
 //============================================================
 
-static osd_ticks_t		(*cycle_counter)(void) = init_cycle_counter;
-static osd_ticks_t		(*ticks_counter)(void) = init_cycle_counter;
-static osd_ticks_t		ticks_per_second;
+static osd_ticks_t      (*cycle_counter)(void) = init_cycle_counter;
+static osd_ticks_t      (*ticks_counter)(void) = init_cycle_counter;
+static osd_ticks_t      ticks_per_second;
 
 //============================================================
 //  init_cycle_counter
@@ -107,7 +107,7 @@ osd_ticks_t osd_ticks_per_second(void)
 {
 	if (ticks_per_second == 0)
 	{
-		return 1;	// this isn't correct, but it prevents the crash
+		return 1;   // this isn't correct, but it prevents the crash
 	}
 	return ticks_per_second;
 }
@@ -142,7 +142,7 @@ void osd_sleep(osd_ticks_t duration)
 //  osd_num_processors
 //============================================================
 
-int osd_num_processors(void)
+int osd_get_num_processors(void)
 {
 	int processors = 1;
 
@@ -238,7 +238,7 @@ char *osd_get_clipboard_text(void)
 	CFIndex flavor_index;
 	ItemCount item_count;
 	UInt32 item_index;
-	Boolean	success = false;
+	Boolean success = false;
 
 	err = PasteboardCreate(kPasteboardClipboard, &pasteboard_ref);
 

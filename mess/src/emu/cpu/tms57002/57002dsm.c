@@ -1,14 +1,18 @@
+// license:BSD-3-Clause
+// copyright-holders:Olivier Galibert
+/***************************************************************************
+
+    57002dsm.c
+
+    TMS57002 "DASP" emulator.
+
+***************************************************************************/
+
 #include "emu.h"
 #include "debugger.h"
 #include "tms57002.h"
 
-#ifdef __GNUC__
-#define noinline __attribute__((noinline))
-#else
-#define noinline /* */
-#endif
-
-static const char *tms57002_get_memadr(UINT32 opcode, char type)
+static const char *get_memadr(UINT32 opcode, char type)
 {
 	static char buff[2][10];
 	static int index = 0;

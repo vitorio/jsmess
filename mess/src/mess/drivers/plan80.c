@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Miodrag Milanovic, Robbbert
 /***************************************************************************
 
         Plan-80
@@ -20,32 +22,38 @@
         - Picture of unit shows graphics, possibly a PCG
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i8085/i8085.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define VIDEO_START_MEMBER(name) void name::video_start()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
 class plan80_state : public driver_device
 {
 public:
+	enum
+	{
+		TIMER_BOOT
+	};
+
 	plan80_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag),
-	m_maincpu(*this, "maincpu")
+		: driver_device(mconfig, type, tag)
+		, m_maincpu(*this, "maincpu")
+		, m_p_videoram(*this, "p_videoram")
 	{ }
 
 	required_device<cpu_device> m_maincpu;
 	DECLARE_READ8_MEMBER(plan80_04_r);
 	DECLARE_WRITE8_MEMBER(plan80_09_w);
-	UINT8* m_p_videoram;
+	required_shared_ptr<UINT8> m_p_videoram;
 	const UINT8* m_p_chargen;
 	UINT8 m_kbd_row;
 	virtual void machine_reset();
 	virtual void video_start();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	DECLARE_DRIVER_INIT(plan80);
+
+protected:
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 };
 
 READ8_MEMBER( plan80_state::plan80_04_r )
@@ -53,19 +61,19 @@ READ8_MEMBER( plan80_state::plan80_04_r )
 	UINT8 data = 0xff;
 
 	if (m_kbd_row == 0xfe)
-		data = input_port_read(machine(), "LINE0");
+		data = ioport("LINE0")->read();
 	else
 	if (m_kbd_row == 0xfd)
-		data = input_port_read(machine(), "LINE1");
+		data = ioport("LINE1")->read();
 	else
 	if (m_kbd_row == 0xfb)
-		data = input_port_read(machine(), "LINE2");
+		data = ioport("LINE2")->read();
 	else
 	if (m_kbd_row == 0xf7)
-		data = input_port_read(machine(), "LINE3");
+		data = ioport("LINE3")->read();
 	else
 	if (m_kbd_row == 0xef)
-		data = input_port_read(machine(), "LINE4");
+		data = ioport("LINE4")->read();
 
 	return data;
 }
@@ -80,7 +88,7 @@ static ADDRESS_MAP_START(plan80_mem, AS_PROGRAM, 8, plan80_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x07ff) AM_RAMBANK("boot")
 	AM_RANGE(0x0800, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_BASE(m_p_videoram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_SHARE("p_videoram")
 	AM_RANGE(0xf800, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -93,7 +101,7 @@ ADDRESS_MAP_END
 
 /* Input ports */
 static INPUT_PORTS_START( plan80 ) // Keyboard was worked out by trial & error;'F' keys produce foreign symbols
-	PORT_START("LINE0")	/* FE */
+	PORT_START("LINE0") /* FE */
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("??") PORT_CODE(KEYCODE_F1)
 	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("??") PORT_CODE(KEYCODE_F2)
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Shift") PORT_CODE(KEYCODE_LSHIFT)
@@ -102,7 +110,7 @@ static INPUT_PORTS_START( plan80 ) // Keyboard was worked out by trial & error;'
 	PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("F-shift") PORT_CODE(KEYCODE_RSHIFT)
 	PORT_BIT(0x40, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Enter") PORT_CODE(KEYCODE_ENTER) PORT_CHAR(13)
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("P ?? 0") PORT_CODE(KEYCODE_P) PORT_CHAR('P') PORT_CHAR('0')
-	PORT_START("LINE1")	/* FD */
+	PORT_START("LINE1") /* FD */
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Backspace") PORT_CODE(KEYCODE_BACKSPACE) PORT_CHAR(8)
 	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Numbers") PORT_CODE(KEYCODE_LCONTROL)
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("X /") PORT_CODE(KEYCODE_X) PORT_CHAR('X') PORT_CHAR('/')
@@ -111,7 +119,7 @@ static INPUT_PORTS_START( plan80 ) // Keyboard was worked out by trial & error;'
 	PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("M .") PORT_CODE(KEYCODE_M) PORT_CHAR('M') PORT_CHAR('.')
 	PORT_BIT(0x40, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("K [") PORT_CODE(KEYCODE_K) PORT_CHAR('K') PORT_CHAR('[')
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("I ( 8") PORT_CODE(KEYCODE_I) PORT_CHAR('I') PORT_CHAR('(') PORT_CHAR('8')
-	PORT_START("LINE2")	/* FB */
+	PORT_START("LINE2") /* FB */
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_UNUSED)
 	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_UNUSED)
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("V ;") PORT_CODE(KEYCODE_V) PORT_CHAR('V') PORT_CHAR(';')
@@ -120,7 +128,7 @@ static INPUT_PORTS_START( plan80 ) // Keyboard was worked out by trial & error;'
 	PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("B ?") PORT_CODE(KEYCODE_B) PORT_CHAR('B') PORT_CHAR('?')
 	PORT_BIT(0x40, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("H <") PORT_CODE(KEYCODE_H) PORT_CHAR('H') PORT_CHAR('<')
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Y & 6") PORT_CODE(KEYCODE_Y) PORT_CHAR('Y') PORT_CHAR('&') PORT_CHAR('6')
-	PORT_START("LINE3")	/* F7 */
+	PORT_START("LINE3") /* F7 */
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Space") PORT_CODE(KEYCODE_SPACE) PORT_CHAR(' ')
 	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_UNUSED)
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("C :") PORT_CODE(KEYCODE_C) PORT_CHAR('C') PORT_CHAR(':')
@@ -129,7 +137,7 @@ static INPUT_PORTS_START( plan80 ) // Keyboard was worked out by trial & error;'
 	PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("N ,") PORT_CODE(KEYCODE_N) PORT_CHAR('N') PORT_CHAR(',')
 	PORT_BIT(0x40, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("J >") PORT_CODE(KEYCODE_J) PORT_CHAR('J') PORT_CHAR('>')
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("U \' 7") PORT_CODE(KEYCODE_U) PORT_CHAR('U') PORT_CHAR('\'') PORT_CHAR('7')
-	PORT_START("LINE4")	/* EF */
+	PORT_START("LINE4") /* EF */
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("??") PORT_CODE(KEYCODE_F3)
 	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("??") PORT_CODE(KEYCODE_F4)
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("Z *") PORT_CODE(KEYCODE_Z) PORT_CHAR('Z') PORT_CHAR('*')
@@ -141,30 +149,37 @@ static INPUT_PORTS_START( plan80 ) // Keyboard was worked out by trial & error;'
 INPUT_PORTS_END
 
 
-/* after the first 4 bytes have been read from ROM, switch the ram back in */
-static TIMER_CALLBACK( plan80_boot )
+void plan80_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	memory_set_bank(machine, "boot", 0);
+	switch (id)
+	{
+	case TIMER_BOOT:
+		/* after the first 4 bytes have been read from ROM, switch the ram back in */
+		membank("boot")->set_entry(0);
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in plan80_state::device_timer");
+	}
 }
 
-MACHINE_RESET_MEMBER( plan80_state )
+void plan80_state::machine_reset()
 {
-	memory_set_bank(machine(), "boot", 1);
-	machine().scheduler().timer_set(attotime::from_usec(10), FUNC(plan80_boot));
+	membank("boot")->set_entry(1);
+	timer_set(attotime::from_usec(10), TIMER_BOOT);
 }
 
-DRIVER_INIT( plan80 )
+DRIVER_INIT_MEMBER(plan80_state,plan80)
 {
-	UINT8 *RAM = machine.region("maincpu")->base();
-	memory_configure_bank(machine, "boot", 0, 2, &RAM[0x0000], 0xf800);
+	UINT8 *RAM = memregion("maincpu")->base();
+	membank("boot")->configure_entries(0, 2, &RAM[0x0000], 0xf800);
 }
 
-VIDEO_START_MEMBER( plan80_state )
+void plan80_state::video_start()
 {
-	m_p_chargen = machine().region("chargen")->base();
+	m_p_chargen = memregion("chargen")->base();
 }
 
-SCREEN_UPDATE_MEMBER( plan80_state )
+UINT32 plan80_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	UINT8 y,ra,chr,gfx;
 	UINT16 sy=0,ma=0,x;
@@ -173,7 +188,7 @@ SCREEN_UPDATE_MEMBER( plan80_state )
 	{
 		for (ra = 0; ra < 8; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(&bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma+48; x++)
 			{
@@ -197,15 +212,15 @@ SCREEN_UPDATE_MEMBER( plan80_state )
 /* F4 Character Displayer */
 static const gfx_layout plan80_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	256,					/* 256 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	256,                    /* 256 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( plan80 )
@@ -223,12 +238,12 @@ static MACHINE_CONFIG_START( plan80, plan80_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(plan80_state, screen_update)
 	MCFG_SCREEN_SIZE(48*6, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 48*6-1, 0, 32*8-1)
 	MCFG_GFXDECODE(plan80)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(monochrome_green)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, monochrome_green)
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -246,5 +261,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT     COMPANY          FULLNAME       FLAGS */
-COMP( 1988, plan80,  0,       0,     plan80,    plan80, plan80,   "Tesla Eltos",   "Plan-80", GAME_NOT_WORKING | GAME_NO_SOUND)
-
+COMP( 1988, plan80,  0,       0,     plan80,    plan80, plan80_state, plan80,   "Tesla Eltos",   "Plan-80", GAME_NOT_WORKING | GAME_NO_SOUND)

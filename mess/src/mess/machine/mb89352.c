@@ -100,7 +100,6 @@
  */
 
 #include "emu.h"
-#include "machine/devhelpr.h"
 #include "mb89352.h"
 
 /*
@@ -112,18 +111,17 @@ const device_type MB89352A = &device_creator<mb89352_device>;
 
 void mb89352_device::device_config_complete()
 {
-    // copy static configuration if present
+	// copy static configuration if present
 	const mb89352_interface *intf = reinterpret_cast<const mb89352_interface *>(static_config());
 	if (intf != NULL)
 		*static_cast<mb89352_interface *>(this) = *intf;
 
-    // otherwise, initialize it to defaults
-    else
-    {
-		scsidevs = NULL;
+	// otherwise, initialize it to defaults
+	else
+	{
 		memset(&irq_callback,0,sizeof(irq_callback));
 		memset(&drq_callback,0,sizeof(drq_callback));
-    }
+	}
 }
 
 /*
@@ -131,64 +129,56 @@ void mb89352_device::device_config_complete()
  */
 
 mb89352_device::mb89352_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, MB89352A, "MB89352A", tag, owner, clock)
+	: device_t(mconfig, MB89352A, "MB89352A", tag, owner, clock, "mb89352", __FILE__)
 {
 }
 
 void mb89352_device::device_start()
 {
-	int x;
+	m_phase = SCSI_PHASE_BUS_FREE;
+	m_target = 0;
+	m_command_index = 0;
+	m_line_status = 0x00;
+	m_spc_status = 0x01;  // presumably the data reg is empty to start with
+	m_error_status = 0x00;
+	m_transfer_count = 0;
+	if(m_transfer_count == 0)
+		m_spc_status |= SSTS_TC_ZERO;
+	m_ints = 0x00;
 
-    m_phase = SCSI_PHASE_BUS_FREE;
-    m_target = 0;
-    m_command_index = 0;
-    m_line_status = 0x00;
-    m_spc_status = 0x01;  // presumably the data reg is empty to start with
-    m_error_status = 0x00;
-    if(m_transfer_count == 0)
-    	m_spc_status |= SSTS_TC_ZERO;
-    m_ints = 0x00;
+	m_irq_func.resolve(irq_callback,*this);
+	m_drq_func.resolve(drq_callback,*this);
 
-    m_irq_func.resolve(irq_callback,*this);
-    m_drq_func.resolve(drq_callback,*this);
+	memset(m_SCSIdevices,0,sizeof(m_SCSIdevices));
 
-    memset(m_SCSIdevices,0,sizeof(m_SCSIdevices));
+	// allocate read timer
+	m_transfer_timer = timer_alloc(TIMER_TRANSFER);
 
-    // initialise SCSI devices, if any present
-    for(x=0;x<scsidevs->devs_present;x++)
-    {
-    	SCSIAllocInstance(machine(), scsidevs->devices[x].scsiClass,
-				&m_SCSIdevices[scsidevs->devices[x].scsiID],
-				scsidevs->devices[x].diskregion );
-    }
-
-    // allocate read timer
-    m_transfer_timer = timer_alloc(TIMER_TRANSFER);
+	// try to open the devices
+	for( device_t *device = owner()->first_subdevice(); device != NULL; device = device->next() )
+	{
+		scsihle_device *scsidev = dynamic_cast<scsihle_device *>(device);
+		if( scsidev != NULL )
+		{
+			m_SCSIdevices[scsidev->GetDeviceID()] = scsidev;
+		}
+	}
 }
 
 void mb89352_device::device_reset()
 {
-    m_phase = SCSI_PHASE_BUS_FREE;
-    m_target = 0;
-    m_command_index = 0;
-    m_line_status = 0x00;
-    m_error_status = 0x00;
-    m_transfer_count = 0;
-    m_spc_status = 0x05;  // presumably the data reg is empty to start with
-    m_ints = 0x00;
-
-    mb89352_rescan();
+	m_phase = SCSI_PHASE_BUS_FREE;
+	m_target = 0;
+	m_command_index = 0;
+	m_line_status = 0x00;
+	m_error_status = 0x00;
+	m_transfer_count = 0;
+	m_spc_status = 0x05;  // presumably the data reg is empty to start with
+	m_busfree_int_enable = 0;
 }
 
 void mb89352_device::device_stop()
 {
-	int x;
-
-	// clean up the devices
-	for (x=0;x<scsidevs->devs_present;x++)
-	{
-		SCSIDeleteInstance( m_SCSIdevices[scsidevs->devices[x].scsiID] );
-	}
 }
 
 // get the length of a SCSI command based on it's command byte type
@@ -202,28 +192,9 @@ int mb89352_device::get_scsi_cmd_len(UINT8 cbyte)
 	if (group == 1 || group == 2) return 10;
 	if (group == 5) return 12;
 
-	fatalerror("MB89352: Unknown SCSI command group %d", group);
+	fatalerror("MB89352: Unknown SCSI command group %d\n", group);
 
 	return 6;
-}
-
-void mb89352_device::mb89352_rescan()
-{
-	int i;
-
-	// try to open the devices
-	for (i = 0; i < scsidevs->devs_present; i++)
-	{
-		// if a device wasn't already allocated
-//      if (!m_SCSIdevices[scsidevs->devices[i].scsiID])
-		{
-			SCSIDeleteInstance( m_SCSIdevices[scsidevs->devices[i].scsiID] );
-			SCSIAllocInstance( machine(),
-					scsidevs->devices[i].scsiClass,
-					&m_SCSIdevices[scsidevs->devices[i].scsiID],
-					scsidevs->devices[i].diskregion );
-		}
-	}
 }
 
 void mb89352_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
@@ -246,6 +217,7 @@ void mb89352_device::set_phase(int phase)
 	{
 	case SCSI_PHASE_BUS_FREE:
 		m_line_status = 0;
+		m_spc_status &= ~SSTS_XFER_IN_PROGRESS;
 		break;
 	case SCSI_PHASE_COMMAND:
 		m_line_status |= MB89352_LINE_REQ;
@@ -328,27 +300,41 @@ READ8_MEMBER( mb89352_device::mb89352_r )
 		return m_line_status;  // active low -- but Human68k expects it to be zero?
 	case 0x06:  // SSTS - SPC Status
 		return m_spc_status;
+	case 0x07:  // SERR - SPC Error Status
+		/*  #define SERR_SCSI_PAR   0x80
+		    #define SERR_SPC_PAR    0x40
+		    #define SERR_TC_PAR     0x08
+		    #define SERR_PHASE_ERR  0x04
+		    #define SERR_SHORT_XFR  0x02
+		    #define SERR_OFFSET     0x01*/
+		return 0;
 	case 0x08:  // PCTL - Phase Control
-		return ((m_busfree_int_enable) ? 0x80 : 0x00);
+		return ((m_busfree_int_enable) ? (m_line_status & 0x07) | 0x80 : (m_line_status & 0x07));
 	case 0x0a:  // DREG - Data register (for data transfers)
-		if(m_spc_status | SSTS_XFER_IN_PROGRESS)
+		if(m_spc_status & SSTS_XFER_IN_PROGRESS)
 		{
 			m_data = m_buffer[m_transfer_index % 512];
 			m_transfer_index++;
 			m_transfer_count--;
 			if(m_transfer_index % 512 == 0)
-				SCSIReadData(m_SCSIdevices[m_target],m_buffer,512);
+				m_SCSIdevices[m_target]->ReadData(m_buffer,512);
 			if(m_transfer_count == 0)
 			{
 				// End of transfer
 				m_spc_status &= ~SSTS_XFER_IN_PROGRESS;
 				m_spc_status |= SSTS_DREG_EMPTY;
 				m_ints |= INTS_COMMAND_COMPLETE;
-				set_phase(SCSI_PHASE_STATUS);
+				if(m_int_enable != 0)
+					m_irq_func(1);
+				if(m_phase == SCSI_PHASE_MESSAGE_IN)
+					set_phase(SCSI_PHASE_BUS_FREE);
+				else if(m_phase == SCSI_PHASE_DATAIN)
+					set_phase(SCSI_PHASE_STATUS);
 			}
 		}
 		return m_data;
 	case 0x0b:  // TEMP - Temporary
+		logerror("mb89352: read temporary register.\n");
 		return m_temp;
 	case 0x0c:  // TCH - Transfer Counter High
 		return (m_transfer_count & 0x00ff0000) >> 16;
@@ -364,8 +350,6 @@ READ8_MEMBER( mb89352_device::mb89352_r )
 
 WRITE8_MEMBER( mb89352_device::mb89352_w )
 {
-	device_image_interface* image;
-
 	switch(offset & 0x0f)
 	{
 	case 0x00:  // BDID - Bus Device ID
@@ -377,7 +361,6 @@ WRITE8_MEMBER( mb89352_device::mb89352_w )
 	case 0x01:  // SCTL - SPC Control
 		if(data & 0x80)  // reset and disable
 		{
-			m_ints |= INTS_RESET;
 			device_reset();
 			logerror("mb89352: SCTL: Reset and disable.\n");
 		}
@@ -397,18 +380,18 @@ WRITE8_MEMBER( mb89352_device::mb89352_w )
 			m_parity_enable = 0;
 		if(data & 0x04)
 		{
-			m_resel_enable = 1;
-			logerror("mb89352: SCTL: Reselection enabled.\n");
-		}
-		else
-			m_resel_enable = 0;
-		if(data & 0x02)
-		{
 			m_sel_enable = 1;
 			logerror("mb89352: SCTL: Selection enabled.\n");
 		}
 		else
 			m_sel_enable = 0;
+		if(data & 0x02)
+		{
+			m_resel_enable = 1;
+			logerror("mb89352: SCTL: Reselection enabled.\n");
+		}
+		else
+			m_resel_enable = 0;
 		if(data & 0x01)
 		{
 			m_int_enable = 1;
@@ -421,6 +404,16 @@ WRITE8_MEMBER( mb89352_device::mb89352_w )
 		}
 		break;
 	case 0x02:  // SCMD - Command
+		/* From NetBSD/x68k source
+		#define SCMD_BUS_REL    0x00
+		#define SCMD_SELECT     0x20
+		#define SCMD_RST_ATN    0x40
+		#define SCMD_SET_ATN    0x60
+		#define SCMD_XFR        0x80
+		#define SCMD_XFR_PAUSE  0xa0
+		#define SCMD_RST_ACK    0xc0
+		#define SCMD_SET_ACK    0xe0
+		 */
 		m_scmd = data;
 		switch((data & 0xe0) >> 5)
 		{
@@ -429,6 +422,13 @@ WRITE8_MEMBER( mb89352_device::mb89352_w )
 			m_line_status = 0;
 			m_spc_status &= ~SSTS_TARG_CONNECTED;
 			m_spc_status &= ~SSTS_INIT_CONNECTED;
+			m_spc_status &= ~SSTS_XFER_IN_PROGRESS;
+			set_phase(SCSI_PHASE_BUS_FREE);
+			if(m_busfree_int_enable)
+			{
+				if(m_int_enable != 0)
+					m_irq_func(1);
+			}
 			logerror("mb89352: SCMD: Bus free\n");
 			break;
 		case 0x01:
@@ -448,24 +448,43 @@ WRITE8_MEMBER( mb89352_device::mb89352_w )
 			}
 			if(m_sel_enable != 0)
 			{
-				m_ints |= INTS_SELECTION;
+				//m_ints |= INTS_SELECTION;
 			}
-			set_phase(SCSI_PHASE_COMMAND); // straight to command phase, may need a delay betweem selection and command phases
+			set_phase(SCSI_PHASE_COMMAND); // straight to command phase, may need a delay between selection and command phases
 			m_line_status |= MB89352_LINE_SEL;
 			m_line_status |= MB89352_LINE_BSY;
 			m_spc_status &= ~SSTS_TARG_CONNECTED;
 			m_spc_status |= SSTS_INIT_CONNECTED;
 			m_spc_status |= SSTS_SPC_BSY;
 			m_ints |= INTS_COMMAND_COMPLETE;
+			if(m_int_enable != 0)
+				m_irq_func(1);
 			logerror("mb89352: SCMD: Selection (SCSI ID%i)\n",m_target);
+			break;
+		case 0x02:  // Reset ATN
+			m_line_status &= ~MB89352_LINE_ATN;
+			logerror("mb89352: SCMD: Reset ATN\n");
+			break;
+		case 0x03:  // Set ATN
+			m_line_status |= MB89352_LINE_ATN;
+			logerror("mb89352: SCMD: Set ATN\n");
 			break;
 		case 0x04:   // Transfer
 			m_transfer_index = 0;
 			m_spc_status |= SSTS_XFER_IN_PROGRESS;
 			if(m_phase == SCSI_PHASE_DATAIN)  // if we are reading data...
 			{
-				m_spc_status &= ~SSTS_DREG_EMPTY;  // DREG is no longer empty, but apparently it's not full either.
-				SCSIReadData(m_SCSIdevices[m_target],m_buffer,512);
+				m_spc_status &= ~SSTS_DREG_EMPTY;  // DREG is no longer empty
+				m_SCSIdevices[m_target]->ReadData(m_buffer,512);
+			}
+			if(m_phase == SCSI_PHASE_MESSAGE_IN)
+			{
+				m_spc_status &= ~SSTS_DREG_EMPTY;  // DREG is no longer empty
+				m_data = 0;
+				m_temp = 0x00;
+				set_phase(SCSI_PHASE_BUS_FREE);
+				m_spc_status &= ~SSTS_XFER_IN_PROGRESS;
+				m_command_index = 0;
 			}
 			logerror("mb89352: SCMD: Start Transfer\n");
 			break;
@@ -498,9 +517,10 @@ WRITE8_MEMBER( mb89352_device::mb89352_w )
 					int x;
 					int phase;
 					// execute SCSI command
-					SCSISetCommand(m_SCSIdevices[m_target],m_command,m_command_index);
-					SCSIExecCommand(m_SCSIdevices[m_target],&m_result_length);
-					SCSIGetPhase(m_SCSIdevices[m_target],&phase);
+					m_SCSIdevices[m_target]->SetCommand(m_command,m_command_index);
+					m_SCSIdevices[m_target]->ExecCommand();
+					m_SCSIdevices[m_target]->GetLength(&m_result_length);
+					m_SCSIdevices[m_target]->GetPhase(&phase);
 					if(m_command[0] == 1) // Rezero Unit - not implemented in SCSI code
 						set_phase(SCSI_PHASE_STATUS);
 					else
@@ -514,8 +534,9 @@ WRITE8_MEMBER( mb89352_device::mb89352_w )
 			}
 			if(m_phase == SCSI_PHASE_STATUS)
 			{
-				image = dynamic_cast<device_image_interface*>(machine().device(scsidevs->devices[m_target].diskregion));
-				if(image->exists())
+				void *image;
+				m_SCSIdevices[m_target]->GetDevice(&image);
+				if (image != NULL)
 					m_temp = 0x00;
 				else
 					m_temp = 0x02;
@@ -548,25 +569,51 @@ WRITE8_MEMBER( mb89352_device::mb89352_w )
 			logerror("mb89352: PCTL selection cancelled\n");
 		}
 		// writing to the low 3 bits sets the phase
-		m_phase = data & 0x07;
-		m_line_status |= (data & 0x07);
+		if((m_phase & 0x07) != (data & 0x07))
+			set_phase(data & 0x07);
+		m_busfree_int_enable = data & 0x80;
 		logerror("mb89352: PCTL write %02x\n",data);
 		break;
 	case 0x0a:  // DREG - Data register
-		if(m_spc_status | SSTS_XFER_IN_PROGRESS)
+		if(m_phase == SCSI_PHASE_COMMAND)
+		{
+			m_command[m_command_index++] = data;
+			if(m_command_index >= get_scsi_cmd_len(m_command[0]))
+			{
+				int x;
+				int phase;
+				// execute SCSI command
+				m_SCSIdevices[m_target]->SetCommand(m_command,m_command_index);
+				m_SCSIdevices[m_target]->ExecCommand();
+				m_SCSIdevices[m_target]->GetLength(&m_result_length);
+				m_SCSIdevices[m_target]->GetPhase(&phase);
+				if(m_command[0] == 1) // Rezero Unit - not implemented in SCSI code
+					set_phase(SCSI_PHASE_STATUS);
+				else
+					set_phase(phase);
+				logerror("Command executed: ");
+				for(x=0;x<m_command_index;x++)
+					logerror(" %02x",m_command[x]);
+				logerror("\n");
+			}
+			return;
+		}
+		if(m_spc_status & SSTS_XFER_IN_PROGRESS)
 		{
 			m_buffer[m_transfer_index % 512] = data;
 			m_spc_status |= SSTS_DREG_EMPTY;  // DREG is empty once sent
 			m_transfer_index++;
 			m_transfer_count--;
 			if(m_transfer_index % 512 == 0)
-				SCSIWriteData(m_SCSIdevices[m_target],m_buffer,512);
+				m_SCSIdevices[m_target]->WriteData(m_buffer,512);
 			if(m_transfer_count == 0)
 			{
 				// End of transfer
 				m_spc_status &= ~SSTS_XFER_IN_PROGRESS;
 				m_spc_status |= SSTS_DREG_EMPTY;
 				m_ints |= INTS_COMMAND_COMPLETE;
+				if(m_int_enable != 0)
+					m_irq_func(1);
 				set_phase(SCSI_PHASE_STATUS);
 			}
 		}
@@ -577,26 +624,26 @@ WRITE8_MEMBER( mb89352_device::mb89352_w )
 		break;
 	case 0x0c:  // TCH - Transfer Counter High
 		m_transfer_count = (m_transfer_count & 0x0000ffff) | (data << 16);
-	    if(m_transfer_count == 0)
-	    	m_spc_status |= SSTS_TC_ZERO;
-	    else
-	    	m_spc_status &= ~SSTS_TC_ZERO;
+		if(m_transfer_count == 0)
+			m_spc_status |= SSTS_TC_ZERO;
+		else
+			m_spc_status &= ~SSTS_TC_ZERO;
 		logerror("mb89352: TCH: Write %02x [%06x]\n",data,m_transfer_count);
 		break;
 	case 0x0d:  // TCM - Transfer Counter Mid
 		m_transfer_count = (m_transfer_count & 0x00ff00ff) | (data << 8);
-	    if(m_transfer_count == 0)
-	    	m_spc_status |= SSTS_TC_ZERO;
-	    else
-	    	m_spc_status &= ~SSTS_TC_ZERO;
+		if(m_transfer_count == 0)
+			m_spc_status |= SSTS_TC_ZERO;
+		else
+			m_spc_status &= ~SSTS_TC_ZERO;
 		logerror("mb89352: TCM: Write %02x [%06x]\n",data,m_transfer_count);
 		break;
 	case 0x0e:  // TCL - Transfer Counter Low
 		m_transfer_count = (m_transfer_count & 0x00ffff00) | data;
-	    if(m_transfer_count == 0)
-	    	m_spc_status |= SSTS_TC_ZERO;
-	    else
-	    	m_spc_status &= ~SSTS_TC_ZERO;
+		if(m_transfer_count == 0)
+			m_spc_status |= SSTS_TC_ZERO;
+		else
+			m_spc_status &= ~SSTS_TC_ZERO;
 		logerror("mb89352: TCL: Write %02x [%06x]\n",data,m_transfer_count);
 		break;
 	default:

@@ -9,47 +9,139 @@
 #ifndef __TAITOIO_H__
 #define __TAITOIO_H__
 
-#include "devlegcy.h"
-
 /***************************************************************************
     TYPE DEFINITIONS
 ***************************************************************************/
 
-typedef struct _tc0220ioc_interface tc0220ioc_interface;
-struct _tc0220ioc_interface
+struct tc0220ioc_interface
 {
-	devcb_read8 read_0;
-	devcb_read8 read_1;
-	devcb_read8 read_2;
-	devcb_read8 read_3;
-	devcb_read8 read_7;
+	devcb_read8 m_read_0;
+	devcb_read8 m_read_1;
+	devcb_read8 m_read_2;
+	devcb_read8 m_read_3;
+	devcb_read8 m_read_7;
 };
 
 
-typedef struct _tc0510nio_interface tc0510nio_interface;
-struct _tc0510nio_interface
+struct tc0510nio_interface
 {
-	devcb_read8 read_0;
-	devcb_read8 read_1;
-	devcb_read8 read_2;
-	devcb_read8 read_3;
-	devcb_read8 read_7;
+	devcb_read8 m_read_0;
+	devcb_read8 m_read_1;
+	devcb_read8 m_read_2;
+	devcb_read8 m_read_3;
+	devcb_read8 m_read_7;
 };
 
 
-typedef struct _tc0640fio_interface tc0640fio_interface;
-struct _tc0640fio_interface
+struct tc0640fio_interface
 {
-	devcb_read8 read_0;
-	devcb_read8 read_1;
-	devcb_read8 read_2;
-	devcb_read8 read_3;
-	devcb_read8 read_7;
+	devcb_read8 m_read_0;
+	devcb_read8 m_read_1;
+	devcb_read8 m_read_2;
+	devcb_read8 m_read_3;
+	devcb_read8 m_read_7;
 };
 
-DECLARE_LEGACY_DEVICE(TC0220IOC, tc0220ioc);
-DECLARE_LEGACY_DEVICE(TC0510NIO, tc0510nio);
-DECLARE_LEGACY_DEVICE(TC0640FIO, tc0640fio);
+class tc0220ioc_device : public device_t,
+										public tc0220ioc_interface
+{
+public:
+	tc0220ioc_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	~tc0220ioc_device() {}
+
+	DECLARE_READ8_MEMBER( read );
+	DECLARE_WRITE8_MEMBER( write );
+	DECLARE_READ8_MEMBER( port_r );
+	DECLARE_WRITE8_MEMBER( port_w );
+	DECLARE_READ8_MEMBER( portreg_r );
+	DECLARE_WRITE8_MEMBER( portreg_w );
+
+protected:
+	// device-level overrides
+	virtual void device_config_complete();
+	virtual void device_start();
+	virtual void device_reset();
+
+private:
+	// internal state
+	UINT8      m_regs[8];
+	UINT8      m_port;
+
+	devcb_resolved_read8    m_read_0_func;
+	devcb_resolved_read8    m_read_1_func;
+	devcb_resolved_read8    m_read_2_func;
+	devcb_resolved_read8    m_read_3_func;
+	devcb_resolved_read8    m_read_7_func;
+};
+
+extern const device_type TC0220IOC;
+
+class tc0510nio_device : public device_t,
+										public tc0510nio_interface
+{
+public:
+	tc0510nio_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	~tc0510nio_device() {}
+
+	DECLARE_READ8_MEMBER( read );
+	DECLARE_WRITE8_MEMBER( write );
+	DECLARE_READ16_MEMBER( halfword_r );
+	DECLARE_WRITE16_MEMBER( halfword_w );
+	DECLARE_READ16_MEMBER( halfword_wordswap_r );
+	DECLARE_WRITE16_MEMBER( halfword_wordswap_w );
+
+protected:
+	// device-level overrides
+	virtual void device_config_complete();
+	virtual void device_start();
+	virtual void device_reset();
+
+private:
+	// internal state
+	UINT8   m_regs[8];
+
+	devcb_resolved_read8    m_read_0_func;
+	devcb_resolved_read8    m_read_1_func;
+	devcb_resolved_read8    m_read_2_func;
+	devcb_resolved_read8    m_read_3_func;
+	devcb_resolved_read8    m_read_7_func;
+};
+
+extern const device_type TC0510NIO;
+
+class tc0640fio_device : public device_t,
+										public tc0640fio_interface
+{
+public:
+	tc0640fio_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	~tc0640fio_device() {}
+
+	DECLARE_READ8_MEMBER( read );
+	DECLARE_WRITE8_MEMBER( write );
+	DECLARE_READ16_MEMBER( halfword_r );
+	DECLARE_WRITE16_MEMBER( halfword_w );
+	DECLARE_READ16_MEMBER( halfword_byteswap_r );
+	DECLARE_WRITE16_MEMBER( halfword_byteswap_w );
+
+protected:
+	// device-level overrides
+	virtual void device_config_complete();
+	virtual void device_start();
+	virtual void device_reset();
+
+	private:
+	// internal state
+	UINT8   m_regs[8];
+
+	devcb_resolved_read8    m_read_0_func;
+	devcb_resolved_read8    m_read_1_func;
+	devcb_resolved_read8    m_read_2_func;
+	devcb_resolved_read8    m_read_3_func;
+	devcb_resolved_read8    m_read_7_func;
+};
+
+extern const device_type TC0640FIO;
+
 
 /***************************************************************************
     DEVICE CONFIGURATION MACROS
@@ -68,35 +160,4 @@ DECLARE_LEGACY_DEVICE(TC0640FIO, tc0640fio);
 	MCFG_DEVICE_CONFIG(_interface)
 
 
-/***************************************************************************
-    DEVICE I/O FUNCTIONS
-***************************************************************************/
-
-/** TC0220IOC **/
-READ8_DEVICE_HANDLER( tc0220ioc_r );
-WRITE8_DEVICE_HANDLER( tc0220ioc_w );
-READ8_DEVICE_HANDLER( tc0220ioc_port_r );
-WRITE8_DEVICE_HANDLER( tc0220ioc_port_w );
-READ8_DEVICE_HANDLER( tc0220ioc_portreg_r );
-WRITE8_DEVICE_HANDLER( tc0220ioc_portreg_w );
-
-
-/** TC0510NIO **/
-READ8_DEVICE_HANDLER( tc0510nio_r );
-WRITE8_DEVICE_HANDLER( tc0510nio_w );
-READ16_DEVICE_HANDLER( tc0510nio_halfword_r );
-WRITE16_DEVICE_HANDLER( tc0510nio_halfword_w );
-READ16_DEVICE_HANDLER( tc0510nio_halfword_wordswap_r );
-WRITE16_DEVICE_HANDLER( tc0510nio_halfword_wordswap_w );
-
-
-/** TC0640FIO**/
-READ8_DEVICE_HANDLER( tc0640fio_r );
-WRITE8_DEVICE_HANDLER( tc0640fio_w );
-READ16_DEVICE_HANDLER( tc0640fio_halfword_r );
-WRITE16_DEVICE_HANDLER( tc0640fio_halfword_w );
-READ16_DEVICE_HANDLER( tc0640fio_halfword_byteswap_r );
-WRITE16_DEVICE_HANDLER( tc0640fio_halfword_byteswap_w );
-
-
-#endif	/* __TAITOIO_H__ */
+#endif  /* __TAITOIO_H__ */

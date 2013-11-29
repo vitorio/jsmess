@@ -21,142 +21,128 @@
 
 
 
-void pc1401_outa(device_t *device, int data)
+WRITE8_MEMBER(pc1401_state::pc1401_outa)
 {
-	pc1401_state *state = device->machine().driver_data<pc1401_state>();
-	state->m_outa = data;
+	m_outa = data;
 }
 
-void pc1401_outb(device_t *device, int data)
+WRITE8_MEMBER(pc1401_state::pc1401_outb)
 {
-	pc1401_state *state = device->machine().driver_data<pc1401_state>();
-	state->m_outb = data;
+	m_outb = data;
 }
 
-void pc1401_outc(device_t *device, int data)
+WRITE8_MEMBER(pc1401_state::pc1401_outc)
 {
-	pc1401_state *state = device->machine().driver_data<pc1401_state>();
 	//logerror("%g outc %.2x\n", machine.time().as_double(), data);
-	state->m_portc = data;
+	m_portc = data;
 }
 
-int pc1401_ina(device_t *device)
+READ8_MEMBER(pc1401_state::pc1401_ina)
 {
-	pc1401_state *state = device->machine().driver_data<pc1401_state>();
-	int data = state->m_outa;
+	int data = m_outa;
 
-	if (state->m_outb & 0x01)
-		data |= input_port_read(device->machine(), "KEY0");
+	if (m_outb & 0x01)
+		data |= ioport("KEY0")->read();
 
-	if (state->m_outb & 0x02)
-		data |= input_port_read(device->machine(), "KEY1");
+	if (m_outb & 0x02)
+		data |= ioport("KEY1")->read();
 
-	if (state->m_outb & 0x04)
-		data |= input_port_read(device->machine(), "KEY2");
+	if (m_outb & 0x04)
+		data |= ioport("KEY2")->read();
 
-	if (state->m_outb & 0x08)
-		data |= input_port_read(device->machine(), "KEY3");
+	if (m_outb & 0x08)
+		data |= ioport("KEY3")->read();
 
-	if (state->m_outb & 0x10)
-		data |= input_port_read(device->machine(), "KEY4");
+	if (m_outb & 0x10)
+		data |= ioport("KEY4")->read();
 
-	if (state->m_outb & 0x20)
+	if (m_outb & 0x20)
 	{
-		data |= input_port_read(device->machine(), "KEY5");
+		data |= ioport("KEY5")->read();
 
 		/* At Power Up we fake a 'C-CE' pressure */
-		if (state->m_power)
+		if (m_power)
 			data |= 0x01;
 	}
 
-	if (state->m_outa & 0x01)
-		data |= input_port_read(device->machine(), "KEY6");
+	if (m_outa & 0x01)
+		data |= ioport("KEY6")->read();
 
-	if (state->m_outa & 0x02)
-		data |= input_port_read(device->machine(), "KEY7");
+	if (m_outa & 0x02)
+		data |= ioport("KEY7")->read();
 
-	if (state->m_outa & 0x04)
-		data |= input_port_read(device->machine(), "KEY8");
+	if (m_outa & 0x04)
+		data |= ioport("KEY8")->read();
 
-	if (state->m_outa & 0x08)
-		data |= input_port_read(device->machine(), "KEY9");
+	if (m_outa & 0x08)
+		data |= ioport("KEY9")->read();
 
-	if (state->m_outa & 0x10)
-		data |= input_port_read(device->machine(), "KEY10");
+	if (m_outa & 0x10)
+		data |= ioport("KEY10")->read();
 
-	if (state->m_outa & 0x20)
-		data |= input_port_read(device->machine(), "KEY11");
+	if (m_outa & 0x20)
+		data |= ioport("KEY11")->read();
 
-	if (state->m_outa & 0x40)
-		data |= input_port_read(device->machine(), "KEY12");
+	if (m_outa & 0x40)
+		data |= ioport("KEY12")->read();
 
 	return data;
 }
 
-int pc1401_inb(device_t *device)
+READ8_MEMBER(pc1401_state::pc1401_inb)
 {
-	pc1401_state *state = device->machine().driver_data<pc1401_state>();
-	int data=state->m_outb;
+	int data=m_outb;
 
-	if (input_port_read(device->machine(), "EXTRA") & 0x04)
+	if (ioport("EXTRA")->read() & 0x04)
 		data |= 0x01;
 
 	return data;
 }
 
-int pc1401_brk(device_t *device)
+READ_LINE_MEMBER(pc1401_state::pc1401_brk)
 {
-	return (input_port_read(device->machine(), "EXTRA") & 0x01);
+	return (ioport("EXTRA")->read() & 0x01);
 }
 
-int pc1401_reset(device_t *device)
+READ_LINE_MEMBER(pc1401_state::pc1401_reset)
 {
-	return (input_port_read(device->machine(), "EXTRA") & 0x02);
+	return (ioport("EXTRA")->read() & 0x02);
 }
 
-/* currently enough to save the external ram */
-NVRAM_HANDLER( pc1401 )
+void pc1401_state::machine_start()
 {
-	device_t *main_cpu = machine.device("maincpu");
-	UINT8 *ram = machine.region("maincpu")->base()+0x2000;
+	device_t *main_cpu = m_maincpu;
+	UINT8 *ram = memregion("maincpu")->base() + 0x2000;
 	UINT8 *cpu = sc61860_internal_ram(main_cpu);
 
-	if (read_or_write)
+	machine().device<nvram_device>("cpu_nvram")->set_base(cpu, 96);
+	machine().device<nvram_device>("ram_nvram")->set_base(ram, 0x2800);
+}
+
+void pc1401_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+{
+	switch (id)
 	{
-		file->write(cpu, 96);
-		file->write(ram, 0x2800);
-	}
-	else if (file)
-	{
-		file->read(cpu, 96);
-		file->read(ram, 0x2800);
-	}
-	else
-	{
-		memset(cpu, 0, 96);
-		memset(ram, 0, 0x2800);
+	case TIMER_POWER_UP:
+		m_power = 0;
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in pc1401_state::device_timer");
 	}
 }
 
-static TIMER_CALLBACK(pc1401_power_up)
+DRIVER_INIT_MEMBER(pc1401_state,pc1401)
 {
-	pc1401_state *state = machine.driver_data<pc1401_state>();
-	state->m_power = 0;
-}
-
-DRIVER_INIT( pc1401 )
-{
-	pc1401_state *state = machine.driver_data<pc1401_state>();
 	int i;
-	UINT8 *gfx=machine.region("gfx1")->base();
+	UINT8 *gfx=memregion("gfx1")->base();
 #if 0
 	static const char sucker[]={
 		/* this routine dump the memory (start 0)
-           in an endless loop,
-           the pc side must be started before this
-           its here to allow verification of the decimal data
-           in mame disassembler
-        */
+		   in an endless loop,
+		   the pc side must be started before this
+		   its here to allow verification of the decimal data
+		   in mame disassembler
+		*/
 #if 1
 		18,4,/*lip xl */
 		2,0,/*lia 0 startaddress low */
@@ -248,6 +234,6 @@ DRIVER_INIT( pc1401 )
 	for (i=0; i<128; i++)
 		gfx[i]=i;
 
-	state->m_power = 1;
-	machine.scheduler().timer_set(attotime::from_seconds(1), FUNC(pc1401_power_up));
+	m_power = 1;
+	timer_set(attotime::from_seconds(1), TIMER_POWER_UP);
 }

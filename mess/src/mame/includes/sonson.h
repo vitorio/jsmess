@@ -8,14 +8,17 @@ class sonson_state : public driver_device
 {
 public:
 	sonson_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_videoram(*this, "videoram"),
+		m_colorram(*this, "colorram"),
+		m_spriteram(*this, "spriteram"),
+		m_audiocpu(*this, "audiocpu"),
+		m_maincpu(*this, "maincpu") { }
 
 	/* memory pointers */
-	UINT8 *    m_videoram;
-	UINT8 *    m_colorram;
-	UINT8 *    m_spriteram;
-	size_t     m_videoram_size;
-	size_t     m_spriteram_size;
+	required_shared_ptr<UINT8> m_videoram;
+	required_shared_ptr<UINT8> m_colorram;
+	required_shared_ptr<UINT8> m_spriteram;
 
 	/* video-related */
 	tilemap_t    *m_bg_tilemap;
@@ -24,17 +27,20 @@ public:
 	int        m_last_irq;
 
 	/* devices */
-	device_t *m_audiocpu;
+	required_device<cpu_device> m_audiocpu;
+	DECLARE_WRITE8_MEMBER(sonson_sh_irqtrigger_w);
+	DECLARE_WRITE8_MEMBER(sonson_coin1_counter_w);
+	DECLARE_WRITE8_MEMBER(sonson_coin2_counter_w);
+	DECLARE_WRITE8_MEMBER(sonson_videoram_w);
+	DECLARE_WRITE8_MEMBER(sonson_colorram_w);
+	DECLARE_WRITE8_MEMBER(sonson_scrollx_w);
+	DECLARE_WRITE8_MEMBER(sonson_flipscreen_w);
+	TILE_GET_INFO_MEMBER(get_bg_tile_info);
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void video_start();
+	virtual void palette_init();
+	UINT32 screen_update_sonson(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void draw_sprites( bitmap_ind16 &bitmap, const rectangle &cliprect );
+	required_device<cpu_device> m_maincpu;
 };
-
-
-/*----------- defined in video/sonson.c -----------*/
-
-WRITE8_HANDLER( sonson_videoram_w );
-WRITE8_HANDLER( sonson_colorram_w );
-WRITE8_HANDLER( sonson_scrollx_w );
-WRITE8_HANDLER( sonson_flipscreen_w );
-
-PALETTE_INIT( sonson );
-VIDEO_START( sonson );
-SCREEN_UPDATE( sonson );

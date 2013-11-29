@@ -41,12 +41,12 @@ struct d88_tag
 	UINT8 heads;
 };
 
-static struct d88_tag *get_d88_tag(floppy_image *floppy)
+static struct d88_tag *get_d88_tag(floppy_image_legacy *floppy)
 {
 	return (d88_tag *)floppy_tag(floppy);
 }
 
-static int d88_get_sector_id(floppy_image *floppy, int head, int track, int sector_index)
+static int d88_get_sector_id(floppy_image_legacy *floppy, int head, int track, int sector_index)
 {
 	struct d88_tag* tag = get_d88_tag(floppy);
 	UINT32 offset;
@@ -73,18 +73,18 @@ static int d88_get_sector_id(floppy_image *floppy, int head, int track, int sect
 	return sector_hdr[2];
 }
 
-static int d88_get_tracks_per_disk(floppy_image *floppy)
+static int d88_get_tracks_per_disk(floppy_image_legacy *floppy)
 {
 	return 82;  // 82 tracks per side
 }
 
-static int d88_get_heads_per_disk(floppy_image *floppy)
+static int d88_get_heads_per_disk(floppy_image_legacy *floppy)
 {
 	struct d88_tag* tag = get_d88_tag(floppy);
 	return tag->heads;
 }
 
-static int d88_get_sectors_per_track(floppy_image *floppy, int head, int track)
+static int d88_get_sectors_per_track(floppy_image_legacy *floppy, int head, int track)
 {
 	struct d88_tag* tag = get_d88_tag(floppy);
 	UINT32 offset;
@@ -97,7 +97,7 @@ static int d88_get_sectors_per_track(floppy_image *floppy, int head, int track)
 	return sector_hdr[4];
 }
 
-static floperr_t d88_get_sector_length(floppy_image *floppy, int head, int track, int sector, UINT32 *sector_length)
+static floperr_t d88_get_sector_length(floppy_image_legacy *floppy, int head, int track, int sector, UINT32 *sector_length)
 {
 	struct d88_tag* tag = get_d88_tag(floppy);
 	UINT32 offset;
@@ -127,14 +127,14 @@ static floperr_t d88_get_sector_length(floppy_image *floppy, int head, int track
 	return FLOPPY_ERROR_SEEKERROR;
 }
 
-static floperr_t d88_read_track(floppy_image *floppy, int head, int track, UINT64 offset, void *buffer, size_t buflen)
+static floperr_t d88_read_track(floppy_image_legacy *floppy, int head, int track, UINT64 offset, void *buffer, size_t buflen)
 {
 //  floperr_t err;
 
 	return FLOPPY_ERROR_UNSUPPORTED;
 }
 
-static UINT32 d88_get_sector_offset(floppy_image* floppy, int head, int track, int sector)
+static UINT32 d88_get_sector_offset(floppy_image_legacy* floppy, int head, int track, int sector)
 {
 	struct d88_tag* tag = get_d88_tag(floppy);
 	UINT32 offset = 0;
@@ -165,7 +165,7 @@ static UINT32 d88_get_sector_offset(floppy_image* floppy, int head, int track, i
 	return 0;
 }
 
-static floperr_t d88_get_indexed_sector_info(floppy_image *floppy, int head, int track, int sector_index, int *cylinder, int *side, int *sector, UINT32 *sector_length, unsigned long *flags)
+static floperr_t d88_get_indexed_sector_info(floppy_image_legacy *floppy, int head, int track, int sector_index, int *cylinder, int *side, int *sector, UINT32 *sector_length, unsigned long *flags)
 {
 	struct d88_tag* tag = get_d88_tag(floppy);
 	UINT32 offset;
@@ -210,7 +210,7 @@ static floperr_t d88_get_indexed_sector_info(floppy_image *floppy, int head, int
 	return FLOPPY_ERROR_SUCCESS;
 }
 
-static floperr_t d88_read_sector(floppy_image *floppy, int head, int track, int sector, void *buffer, size_t buflen)
+static floperr_t d88_read_sector(floppy_image_legacy *floppy, int head, int track, int sector, void *buffer, size_t buflen)
 {
 	UINT64 offset;
 	UINT32 sector_length;
@@ -231,7 +231,7 @@ static floperr_t d88_read_sector(floppy_image *floppy, int head, int track, int 
 	return FLOPPY_ERROR_SUCCESS;
 }
 
-static floperr_t d88_read_indexed_sector(floppy_image *floppy, int head, int track, int sector, void *buffer, size_t buffer_len)
+static floperr_t d88_read_indexed_sector(floppy_image_legacy *floppy, int head, int track, int sector, void *buffer, size_t buffer_len)
 {
 	int sec;
 
@@ -239,7 +239,7 @@ static floperr_t d88_read_indexed_sector(floppy_image *floppy, int head, int tra
 	return d88_read_sector(floppy,head,track,sec,buffer,buffer_len);
 }
 
-static floperr_t d88_write_sector(floppy_image *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
+static floperr_t d88_write_sector(floppy_image_legacy *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
 {
 	UINT64 offset;
 	UINT32 sector_length;
@@ -260,7 +260,7 @@ static floperr_t d88_write_sector(floppy_image *floppy, int head, int track, int
 	return FLOPPY_ERROR_SUCCESS;
 }
 
-static floperr_t d88_write_indexed_sector(floppy_image *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
+static floperr_t d88_write_indexed_sector(floppy_image_legacy *floppy, int head, int track, int sector, const void *buffer, size_t buflen, int ddam)
 {
 	int sec;
 
@@ -268,7 +268,7 @@ static floperr_t d88_write_indexed_sector(floppy_image *floppy, int head, int tr
 	return d88_write_sector(floppy,head,track,sec,buffer,buflen,ddam);
 }
 
-static void d88_get_header(floppy_image* floppy,UINT32* size, UINT8* prot, UINT8* type, UINT32* offsets)
+static void d88_get_header(floppy_image_legacy* floppy,UINT32* size, UINT8* prot, UINT8* type, UINT32* offsets)
 {
 	UINT8 header[D88_HEADER_LEN];
 	int x,s;
@@ -376,3 +376,158 @@ FLOPPY_CONSTRUCT(d88_dsk_construct)
 
 	return FLOPPY_ERROR_SUCCESS;
 }
+
+
+
+// license:BSD-3-Clause
+// copyright-holders:Olivier Galibert
+/*********************************************************************
+
+    formats/d88_dsk.h
+
+    D88 disk images
+
+*********************************************************************/
+
+#include "emu.h"
+#include "d88_dsk.h"
+
+d88_format::d88_format()
+{
+}
+
+const char *d88_format::name() const
+{
+	return "d88";
+}
+
+const char *d88_format::description() const
+{
+	return "D88 disk image";
+}
+
+const char *d88_format::extensions() const
+{
+	return "d77,d88,1dd";
+}
+
+int d88_format::identify(io_generic *io, UINT32 form_factor)
+{
+	UINT64 size = io_generic_size(io);
+	UINT8 h[32];
+
+	io_generic_read(io, h, 0, 32);
+	if((LITTLE_ENDIANIZE_INT32(*(UINT32 *)(h+0x1c)) == size) &&
+		(h[0x1b] == 0x00 || h[0x1b] == 0x10 || h[0x1b] == 0x20 || h[0x1b] == 0x30 || h[0x1b] == 0x40))
+		return 100;
+
+	return 0;
+}
+
+bool d88_format::load(io_generic *io, UINT32 form_factor, floppy_image *image)
+{
+	UINT8 h[32];
+
+	io_generic_read(io, h, 0, 32);
+
+	int cell_count = 0;
+	int track_count = 0;
+	int head_count = 0;
+	switch(h[0x1b]) {
+	case 0x00:
+		cell_count = 100000;
+		track_count = 42;
+		head_count = 2;
+		image->set_variant(floppy_image::DSDD);
+		break;
+
+	case 0x10:
+		cell_count = 100000;
+		track_count = 82;
+		head_count = 2;
+		image->set_variant(floppy_image::DSQD);
+		break;
+
+	case 0x20:
+		cell_count = form_factor == floppy_image::FF_35 ? 200000 : 166666;
+		track_count = 82;
+		head_count = 2;
+		image->set_variant(floppy_image::DSHD);
+		break;
+
+	case 0x30:
+		cell_count = 100000;
+		track_count = 42;
+		head_count = 1;
+		image->set_variant(floppy_image::SSDD);
+		break;
+
+	case 0x40:
+		cell_count = 100000;
+		track_count = 82;
+		head_count = 1;
+		image->set_variant(floppy_image::SSQD);
+		break;
+	}
+
+	if(!head_count)
+		return false;
+
+	UINT32 track_pos[164];
+	io_generic_read(io, track_pos, 32, 164*4);
+
+	for(int track=0; track < track_count; track++)
+		for(int head=0; head < head_count; head++) {
+			int pos = LITTLE_ENDIANIZE_INT32(track_pos[track * head_count + head]);
+			if(!pos)
+				continue;
+
+			desc_pc_sector sects[256];
+			UINT8 sect_data[65536];
+			int sdatapos = 0;
+			int sector_count = 1;
+			for(int i=0; i<sector_count; i++) {
+				UINT8 hs[16];
+				io_generic_read(io, hs, pos, 16);
+				pos += 16;
+
+				UINT16 size = LITTLE_ENDIANIZE_INT16(*(UINT16 *)(hs+14));
+				if(i == 0)
+					sector_count = LITTLE_ENDIANIZE_INT16(*(UINT16 *)(hs+4));
+
+				sects[i].track       = hs[0];
+				sects[i].head        = hs[1];
+				sects[i].sector      = hs[2];
+				sects[i].size        = hs[3];
+				sects[i].actual_size = size;
+				sects[i].deleted     = hs[7] != 0;
+				sects[i].bad_crc     = false;
+
+				if(size) {
+					sects[i].data    = sect_data + sdatapos;
+					io_generic_read(io, sects[i].data, pos, size);
+					pos += size;
+					sdatapos += size;
+
+				} else
+					sects[i].data    = NULL;
+			}
+
+			build_pc_track_mfm(track, head, image, cell_count, sector_count, sects, calc_default_pc_gap3_size(form_factor, sects[0].actual_size));
+		}
+
+	return true;
+}
+
+
+bool d88_format::save(io_generic *io, floppy_image *image)
+{
+	return false;
+}
+
+bool d88_format::supports_save() const
+{
+	return false;
+}
+
+const floppy_format_type FLOPPY_D88_FORMAT = &floppy_image_format_creator<d88_format>;

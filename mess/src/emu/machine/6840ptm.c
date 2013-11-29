@@ -35,7 +35,6 @@
 
 #include "emu.h"
 #include "6840ptm.h"
-#include "devhelpr.h"
 
 
 #define PTMVERBOSE 0
@@ -69,7 +68,7 @@ const device_type PTM6840 = &device_creator<ptm6840_device>;
 //-------------------------------------------------
 
 ptm6840_device::ptm6840_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, PTM6840, "6840 PTM", tag, owner, clock)
+	: device_t(mconfig, PTM6840, "6840 PTM", tag, owner, clock, "ptm6840", __FILE__)
 {
 	memset(static_cast<ptm6840_interface *>(this), 0, sizeof(ptm6840_interface));
 }
@@ -153,19 +152,22 @@ void ptm6840_device::device_start()
 
 void ptm6840_device::device_reset()
 {
-	m_control_reg[2]		 = 0;
-	m_control_reg[1]		 = 0;
-	m_control_reg[0]		 = 1;
-	m_status_reg			 = 0;
-	m_t3_divisor			 = 1;
+	m_control_reg[2]         = 0;
+	m_control_reg[1]         = 0;
+	m_control_reg[0]         = 1;
+	m_status_reg             = 0;
+	m_t3_divisor             = 1;
 	m_status_read_since_int = 0;
 	m_IRQ                   = 0;
+	m_t3_scaler             = 0;
 	for (int i = 0; i < 3; i++)
 	{
 		m_counter[i] = 0xffff;
 		m_latch[i]   = 0xffff;
 		m_output[i]  = 0;
 		m_fired[i]   = 0;
+		m_enabled[i] = 0;
+		m_mode[i] = 0;
 	}
 }
 

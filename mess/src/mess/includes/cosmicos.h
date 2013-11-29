@@ -1,9 +1,9 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 #pragma once
 
 #ifndef __COSMICOS__
 #define __COSMICOS__
-
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/cosmac/cosmac.h"
@@ -15,10 +15,10 @@
 #include "sound/speaker.h"
 #include "video/dm9368.h"
 
-#define CDP1802_TAG		"ic19"
-#define CDP1864_TAG		"ic3"
-#define DM9368_TAG		"ic10"
-#define SCREEN_TAG		"screen"
+#define CDP1802_TAG     "ic19"
+#define CDP1864_TAG     "ic3"
+#define DM9368_TAG      "ic10"
+#define SCREEN_TAG      "screen"
 
 enum
 {
@@ -43,26 +43,42 @@ class cosmicos_state : public driver_device
 public:
 	cosmicos_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, CDP1802_TAG),
-		  m_cti(*this, CDP1864_TAG),
-		  m_led(*this, DM9368_TAG),
-		  m_cassette(*this, CASSETTE_TAG),
-		  m_speaker(*this, SPEAKER_TAG),
-		  m_ram(*this, RAM_TAG)
+			m_maincpu(*this, CDP1802_TAG),
+			m_cti(*this, CDP1864_TAG),
+			m_led(*this, DM9368_TAG),
+			m_cassette(*this, "cassette"),
+			m_speaker(*this, "speaker"),
+			m_ram(*this, RAM_TAG),
+			m_rom(*this, CDP1802_TAG),
+			m_y1(*this, "Y1"),
+			m_y2(*this, "Y2"),
+			m_y3(*this, "Y3"),
+			m_y4(*this, "Y4"),
+			m_io_data(*this, "DATA"),
+			m_special(*this, "SPECIAL"),
+			m_buttons(*this, "BUTTONS")
 	{ }
 
 	required_device<cosmac_device> m_maincpu;
 	required_device<cdp1864_device> m_cti;
 	required_device<dm9368_device> m_led;
 	required_device<cassette_image_device> m_cassette;
-	required_device<device_t> m_speaker;
-	required_device<device_t> m_ram;
+	required_device<speaker_sound_device> m_speaker;
+	required_device<ram_device> m_ram;
+	required_memory_region m_rom;
+	required_ioport m_y1;
+	required_ioport m_y2;
+	required_ioport m_y3;
+	required_ioport m_y4;
+	required_ioport m_io_data;
+	required_ioport m_special;
+	required_ioport m_buttons;
 
 	virtual void machine_start();
 	virtual void machine_reset();
 
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
-
+	DECLARE_READ8_MEMBER( read );
+	DECLARE_WRITE8_MEMBER( write );
 	DECLARE_READ8_MEMBER( video_off_r );
 	DECLARE_READ8_MEMBER( video_on_r );
 	DECLARE_WRITE8_MEMBER( audio_latch_w );
@@ -82,11 +98,21 @@ public:
 	DECLARE_READ_LINE_MEMBER( ef4_r );
 	DECLARE_WRITE_LINE_MEMBER( q_w );
 	DECLARE_READ8_MEMBER( dma_r );
+	DECLARE_INPUT_CHANGED_MEMBER( data );
+	DECLARE_INPUT_CHANGED_MEMBER( enter );
+	DECLARE_INPUT_CHANGED_MEMBER( single_step );
+	DECLARE_INPUT_CHANGED_MEMBER( run );
+	DECLARE_INPUT_CHANGED_MEMBER( load );
+	DECLARE_INPUT_CHANGED_MEMBER( cosmicos_pause );
+	DECLARE_INPUT_CHANGED_MEMBER( reset );
+	DECLARE_INPUT_CHANGED_MEMBER( clear_data );
+	DECLARE_INPUT_CHANGED_MEMBER( memory_protect );
+	DECLARE_INPUT_CHANGED_MEMBER( memory_disable );
+
+	DECLARE_QUICKLOAD_LOAD_MEMBER( cosmicos );
 
 	void set_cdp1802_mode(int mode);
 	void clear_input_data();
-	void set_ram_mode();
-
 
 	/* CPU state */
 	int m_wait;
@@ -100,6 +126,7 @@ public:
 	int m_ram_disable;
 
 	/* keyboard state */
+	ioport_port* m_key_row[4];
 	UINT8 m_keylatch;
 
 	/* display state */
@@ -110,6 +137,10 @@ public:
 	int m_dmaout;
 	int m_efx;
 	int m_video_on;
+
+	DECLARE_DRIVER_INIT(cosmicos);
+	TIMER_DEVICE_CALLBACK_MEMBER(digit_tick);
+	TIMER_DEVICE_CALLBACK_MEMBER(int_tick);
 };
 
 #endif

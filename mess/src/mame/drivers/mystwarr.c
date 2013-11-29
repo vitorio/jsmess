@@ -22,50 +22,22 @@
  */
 
 #include "emu.h"
-#include "deprecat.h"
-
-#include "video/konamiic.h"
 #include "video/k053250.h"
-#include "machine/k053252.h"
 #include "includes/konamigx.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
-#include "machine/eeprom.h"
+#include "machine/eepromser.h"
 #include "sound/k054539.h"
 #include "includes/konamipt.h"
 #include "includes/mystwarr.h"
 
 
 
-static const eeprom_interface eeprom_intf =
-{
-	7,			/* address bits */
-	8,			/* data bits */
-	"011000",		/*  read command */
-	"011100",		/* write command */
-	"0100100000000",/* erase command */
-	"0100000000000",/* lock command */
-	"0100110000000" /* unlock command */
-};
-
-/* Gaiapolis and Polygonet Commanders use the ER5911,
-   but the command formats are slightly different.  Why? */
-static const eeprom_interface gaia_eeprom_intf =
-{
-	7,			/* address bits */
-	8,			/* data bits */
-	"011000",		/*  read command */
-	"010100",		/* write command */
-	"0100100000000",/* erase command */
-	"0100000000000",/* lock command */
-	"0100110000000" /* unlock command */
-};
-
-static READ16_HANDLER( eeprom_r )
+READ16_MEMBER(mystwarr_state::eeprom_r)
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		return input_port_read(space->machine(), "IN1");
+		return ioport("IN1")->read();
 	}
 
 //  logerror("msb access to eeprom port\n");
@@ -73,32 +45,32 @@ static READ16_HANDLER( eeprom_r )
 	return 0;
 }
 
-static WRITE16_HANDLER( mweeprom_w )
+WRITE16_MEMBER(mystwarr_state::mweeprom_w)
 {
 	if (ACCESSING_BITS_8_15)
 	{
-		input_port_write(space->machine(), "EEPROMOUT", data, 0xffff);
+		ioport("EEPROMOUT")->write(data, 0xffff);
 	}
 
 //  logerror("unknown LSB write %x to eeprom\n", data);
 
 }
 
-static READ16_HANDLER( dddeeprom_r )
+READ16_MEMBER(mystwarr_state::dddeeprom_r)
 {
 	if (ACCESSING_BITS_8_15)
 	{
-		return input_port_read(space->machine(), "IN1") << 8;
+		return ioport("IN1")->read() << 8;
 	}
 
-	return input_port_read(space->machine(), "P2");
+	return ioport("P2")->read();
 }
 
-static WRITE16_HANDLER( mmeeprom_w )
+WRITE16_MEMBER(mystwarr_state::mmeeprom_w)
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		input_port_write(space->machine(), "EEPROMOUT", data, 0xff);
+		ioport("EEPROMOUT")->write(data, 0xff);
 	}
 }
 
@@ -106,123 +78,111 @@ static WRITE16_HANDLER( mmeeprom_w )
 /**********************************************************************************/
 /* IRQ controllers */
 
-static INTERRUPT_GEN(mystwarr_interrupt)
+TIMER_DEVICE_CALLBACK_MEMBER(mystwarr_state::mystwarr_interrupt)
 {
-	mystwarr_state *state = device->machine().driver_data<mystwarr_state>();
-	if (!(state->m_mw_irq_control & 0x01)) return;
+	int scanline = param;
 
-	switch (cpu_getiloops(device))
-	{
-		case 0:
-			device_set_input_line(device, M68K_IRQ_2, HOLD_LINE);
-		break;
+	if (!(m_mw_irq_control & 0x01)) return;
 
-		case 1:
-			device_set_input_line(device, M68K_IRQ_4, HOLD_LINE);
-		break;
+	if(scanline == 240)
+		m_maincpu->set_input_line(M68K_IRQ_2, HOLD_LINE);
 
-		case 2:
-			device_set_input_line(device, M68K_IRQ_6, HOLD_LINE);
-		break;
-	}
+	if(scanline == 0)
+		m_maincpu->set_input_line(M68K_IRQ_4, HOLD_LINE);
+
+	/* writes to LSB of 0x410000 port and clears a work RAM flag, almost likely not really necessary. */
+//  m_maincpu->set_input_line(M68K_IRQ_6, HOLD_LINE);
 }
 
-static INTERRUPT_GEN(metamrph_interrupt)
+TIMER_DEVICE_CALLBACK_MEMBER(mystwarr_state::metamrph_interrupt)
 {
-	switch (cpu_getiloops(device))
-	{
-		case 0:
-			device_set_input_line(device, M68K_IRQ_4, HOLD_LINE);
-		break;
+	int scanline = param;
 
-		case 15:
-			device_set_input_line(device, M68K_IRQ_6, HOLD_LINE);
-		break;
+	/* irq 4 has an irq routine in metamrph, but it's not really called */
+//  m_maincpu->set_input_line(M68K_IRQ_4, HOLD_LINE);
 
-		case 39:
-			if (K053246_is_IRQ_enabled()) device_set_input_line(device, M68K_IRQ_5, HOLD_LINE);
-		break;
-	}
+	if(scanline == 24)
+		m_maincpu->set_input_line(M68K_IRQ_6, HOLD_LINE);
+
+	if(scanline == 248)
+		if (m_k055673->k053246_is_irq_enabled()) m_maincpu->set_input_line(M68K_IRQ_5, HOLD_LINE);
 }
 
-static INTERRUPT_GEN(mchamp_interrupt)
+TIMER_DEVICE_CALLBACK_MEMBER(mystwarr_state::mchamp_interrupt)
 {
-	mystwarr_state *state = device->machine().driver_data<mystwarr_state>();
-	if (!(state->m_mw_irq_control & 0x02)) return;
+	int scanline = param;
 
-	switch (cpu_getiloops(device))
+	if (!(m_mw_irq_control & 0x02)) return;
+
+	if(scanline == 247)
 	{
-		case 0:
-			if (K053246_is_IRQ_enabled()) device_set_input_line(device, M68K_IRQ_6, HOLD_LINE);
-		break;
-
-		case 1:
-			device_set_input_line(device, M68K_IRQ_2, HOLD_LINE);
-		break;
+		if (m_k055673->k053246_is_irq_enabled()) m_maincpu->set_input_line(M68K_IRQ_6, HOLD_LINE);
 	}
+
+	if(scanline == 23)
+		m_maincpu->set_input_line(M68K_IRQ_2, HOLD_LINE);
 }
 
-static INTERRUPT_GEN(ddd_interrupt)
+INTERRUPT_GEN_MEMBER(mystwarr_state::ddd_interrupt)
 {
-	device_set_input_line(device, M68K_IRQ_5, HOLD_LINE);
+	device.execute().set_input_line(M68K_IRQ_5, HOLD_LINE);
 }
 
 
 /**********************************************************************************/
 
-static WRITE16_HANDLER( sound_cmd1_w )
+WRITE16_MEMBER(mystwarr_state::sound_cmd1_w)
 {
-	soundlatch_w(space, 0, data&0xff);
+	soundlatch_byte_w(space, 0, data&0xff);
 }
 
-static WRITE16_HANDLER( sound_cmd1_msb_w )
+WRITE16_MEMBER(mystwarr_state::sound_cmd1_msb_w)
 {
-	soundlatch_w(space, 0, data>>8);
+	soundlatch_byte_w(space, 0, data>>8);
 }
 
-static WRITE16_HANDLER( sound_cmd2_w )
+WRITE16_MEMBER(mystwarr_state::sound_cmd2_w)
 {
-	soundlatch2_w(space, 0, data&0xff);
+	soundlatch2_byte_w(space, 0, data&0xff);
 	return;
 }
 
-static WRITE16_HANDLER( sound_cmd2_msb_w )
+WRITE16_MEMBER(mystwarr_state::sound_cmd2_msb_w)
 {
-	soundlatch2_w(space, 0, data>>8);
+	soundlatch2_byte_w(space, 0, data>>8);
 	return;
 }
 
-static WRITE16_HANDLER( sound_irq_w )
+WRITE16_MEMBER(mystwarr_state::sound_irq_w)
 {
-	cputag_set_input_line(space->machine(), "soundcpu", 0, HOLD_LINE);
+	m_soundcpu->set_input_line(0, HOLD_LINE);
 }
 
-static READ16_HANDLER( sound_status_r )
+READ16_MEMBER(mystwarr_state::sound_status_r)
 {
-	int latch = soundlatch3_r(space,0);
+	int latch = soundlatch3_byte_r(space,0);
 
 	if ((latch & 0xf) == 0xe) latch |= 1;
 
 	return latch;
 }
 
-static READ16_HANDLER( sound_status_msb_r )
+READ16_MEMBER(mystwarr_state::sound_status_msb_r)
 {
-	int latch = soundlatch3_r(space,0);
+	int latch = soundlatch3_byte_r(space,0);
 
 	if ((latch & 0xf) == 0xe) latch |= 1;
 
 	return latch<<8;
 }
 
-static WRITE16_HANDLER( irq_ack_w )
+WRITE16_MEMBER(mystwarr_state::irq_ack_w)
 {
-	mystwarr_state *state = space->machine().driver_data<mystwarr_state>();
-	K056832_b_word_w(space, offset, data, mem_mask);
+	m_k056832->b_word_w(space, offset, data, mem_mask);
 
 	if (offset == 3 && ACCESSING_BITS_0_7)
 	{
-		state->m_mw_irq_control = data&0xff;
+		m_mw_irq_control = data&0xff;
 
 //      if ((data &0xf0) != 0xd0) logerror("Unknown write to IRQ reg: %x\n", data);
 
@@ -231,48 +191,46 @@ static WRITE16_HANDLER( irq_ack_w )
 
 /* the interface with the 053247 is weird. The chip can address only 0x1000 bytes */
 /* of RAM, but they put 0x10000 there. The CPU can access them all. */
-static READ16_HANDLER( K053247_scattered_word_r )
+READ16_MEMBER(mystwarr_state::k053247_scattered_word_r)
 {
-	mystwarr_state *state = space->machine().driver_data<mystwarr_state>();
 	if (offset & 0x0078)
-		return state->m_spriteram[offset];
+		return m_spriteram[offset];
 	else
 	{
 		offset = (offset & 0x0007) | ((offset & 0x7f80) >> 4);
-		return K053247_word_r(space,offset,mem_mask);
+		return m_k055673->k053247_word_r(space,offset,mem_mask);
 	}
 }
 
-static WRITE16_HANDLER( K053247_scattered_word_w )
+WRITE16_MEMBER(mystwarr_state::k053247_scattered_word_w)
 {
-	mystwarr_state *state = space->machine().driver_data<mystwarr_state>();
 	if (offset & 0x0078)
 	{
-//      mame_printf_debug("spr write %x to %x (PC=%x)\n", data, offset, cpu_get_pc(&space->device()));
-		COMBINE_DATA(state->m_spriteram+offset);
+//      mame_printf_debug("spr write %x to %x (PC=%x)\n", data, offset, space.device().safe_pc());
+		COMBINE_DATA(m_spriteram+offset);
 	}
 	else
 	{
 		offset = (offset & 0x0007) | ((offset & 0x7f80) >> 4);
 
-		K053247_word_w(space,offset,data,mem_mask);
+		m_k055673->k053247_word_w(space,offset,data,mem_mask);
 	}
 }
 
 /* 68000 memory handlers */
 /* Mystic Warriors */
-static ADDRESS_MAP_START( mystwarr_map, AS_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x1fffff) AM_ROM	// main program
-	AM_RANGE(0x200000, 0x20ffff) AM_RAM AM_BASE_MEMBER(mystwarr_state, m_gx_workram)
-	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(K053247_scattered_word_r,K053247_scattered_word_w) AM_BASE_MEMBER(mystwarr_state, m_spriteram)
-	AM_RANGE(0x480000, 0x4800ff) AM_WRITE(K055555_word_w)
-	AM_RANGE(0x482000, 0x48200f) AM_READ(K055673_rom_word_r)
-	AM_RANGE(0x482010, 0x48201f) AM_WRITE(K053247_reg_word_w)
-	AM_RANGE(0x484000, 0x484007) AM_WRITE(K053246_word_w)
-	AM_RANGE(0x48a000, 0x48a01f) AM_WRITE(K054338_word_w)
-	AM_RANGE(0x48c000, 0x48c03f) AM_WRITE(K056832_word_w)
+static ADDRESS_MAP_START( mystwarr_map, AS_PROGRAM, 16, mystwarr_state )
+	AM_RANGE(0x000000, 0x1fffff) AM_ROM // main program
+	AM_RANGE(0x200000, 0x20ffff) AM_RAM AM_SHARE("gx_workram")
+	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(k053247_scattered_word_r,k053247_scattered_word_w) AM_SHARE("spriteram")
+	AM_RANGE(0x480000, 0x4800ff) AM_DEVWRITE("k055555", k055555_device, K055555_word_w)
+	AM_RANGE(0x482000, 0x48200f) AM_DEVWRITE("k055673", k055673_device, k053246_word_w)
+	AM_RANGE(0x482010, 0x48201f) AM_DEVWRITE("k055673", k055673_device,k053247_reg_word_w)
+	AM_RANGE(0x484000, 0x484007) AM_DEVWRITE("k055673", k055673_device, k053246_word_w)
+	AM_RANGE(0x48a000, 0x48a01f) AM_WRITE_LEGACY(K054338_word_w)
+	AM_RANGE(0x48c000, 0x48c03f) AM_DEVWRITE("k056832", k056832_device,word_w)
 	AM_RANGE(0x490000, 0x490001) AM_WRITE(mweeprom_w)
-	AM_RANGE(0x492000, 0x492001) AM_WRITENOP	// watchdog
+	AM_RANGE(0x492000, 0x492001) AM_WRITENOP    // watchdog
 	AM_RANGE(0x494000, 0x494001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x494002, 0x494003) AM_READ_PORT("P3_P4")
 	AM_RANGE(0x496000, 0x496001) AM_READ_PORT("IN0")
@@ -282,151 +240,147 @@ static ADDRESS_MAP_START( mystwarr_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x498014, 0x498015) AM_READ(sound_status_r)
 	AM_RANGE(0x498000, 0x49801f) AM_RAM
 	AM_RANGE(0x49a000, 0x49a001) AM_WRITE(sound_irq_w)
-	AM_RANGE(0x49c000, 0x49c01f) AM_DEVREADWRITE8("k053252",k053252_r,k053252_w,0x00ff)
-	AM_RANGE(0x49e000, 0x49e007) AM_WRITE(irq_ack_w)	// VSCCS (custom)
-	AM_RANGE(0x600000, 0x601fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)
-	AM_RANGE(0x602000, 0x603fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)	// tilemap RAM mirror read(essential)
-	AM_RANGE(0x680000, 0x683fff) AM_READ(K056832_mw_rom_word_r)
-	AM_RANGE(0x700000, 0x701fff) AM_RAM_WRITE(paletteram16_xrgb_word_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x49c000, 0x49c01f) AM_DEVREADWRITE8("k053252", k053252_device, read, write, 0x00ff)
+	AM_RANGE(0x49e000, 0x49e007) AM_WRITE(irq_ack_w)    // VSCCS (custom)
+	AM_RANGE(0x600000, 0x601fff) AM_DEVREADWRITE("k056832", k056832_device,ram_word_r,ram_word_w)
+	AM_RANGE(0x602000, 0x603fff) AM_DEVREADWRITE("k056832", k056832_device,ram_word_r,ram_word_w) // tilemap RAM mirror read(essential)
+	AM_RANGE(0x680000, 0x683fff) AM_DEVREAD("k056832", k056832_device, mw_rom_word_r)
+	AM_RANGE(0x700000, 0x701fff) AM_RAM_WRITE(paletteram_xrgb_word_be_w) AM_SHARE("paletteram")
 #if MW_DEBUG
-	AM_RANGE(0x480000, 0x4800ff) AM_READ(K055555_word_r)
-	AM_RANGE(0x482010, 0x48201f) AM_READ(K053247_reg_word_r)
-	AM_RANGE(0x484000, 0x484007) AM_READ(K053246_reg_word_r)
-	AM_RANGE(0x48a000, 0x48a01f) AM_READ(K054338_word_r)
-	AM_RANGE(0x48c000, 0x48c03f) AM_READ(K056832_word_r)
+	AM_RANGE(0x480000, 0x4800ff) AM_DEVREAD("k055555", k055555_device, k055555_word_r)
+	AM_RANGE(0x482010, 0x48201f) AM_DEVREAD("k055673", k055673_device, k053247_reg_word_r)
+	AM_RANGE(0x484000, 0x484007) AM_DEVREAD("k055673", k055673_device, k053246_reg_word_r)
+	AM_RANGE(0x48a000, 0x48a01f) AM_DEVREAD("k054338", k054338_device, word_r)
+	AM_RANGE(0x48c000, 0x48c03f) AM_DEVREAD("k056832", k056832_device, word_r)
 #endif
 ADDRESS_MAP_END
 
 /* Metamorphic Force */
-static ADDRESS_MAP_START( metamrph_map, AS_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x1fffff) AM_ROM	// main program
-	AM_RANGE(0x200000, 0x20ffff) AM_RAM AM_BASE_MEMBER(mystwarr_state, m_gx_workram)
-	AM_RANGE(0x210000, 0x210fff) AM_READWRITE(K053247_word_r,K053247_word_w)
+static ADDRESS_MAP_START( metamrph_map, AS_PROGRAM, 16, mystwarr_state )
+	AM_RANGE(0x000000, 0x1fffff) AM_ROM // main program
+	AM_RANGE(0x200000, 0x20ffff) AM_RAM AM_SHARE("gx_workram")
+	AM_RANGE(0x210000, 0x210fff) AM_DEVREADWRITE("k055673", k055673_device,k053247_word_r,k053247_word_w)
 	AM_RANGE(0x211000, 0x21ffff) AM_RAM
-	AM_RANGE(0x240000, 0x240007) AM_WRITE(K053246_word_w)
-	AM_RANGE(0x244000, 0x24400f) AM_READ(K055673_rom_word_r)
-	AM_RANGE(0x244010, 0x24401f) AM_WRITE(K053247_reg_word_w)
-	AM_RANGE(0x24c000, 0x24ffff) AM_DEVREADWRITE_MODERN("k053250_1", k053250_t, ram_r, ram_w)
-	AM_RANGE(0x250000, 0x25000f) AM_DEVREADWRITE_MODERN("k053250_1", k053250_t, reg_r, reg_w)
-	AM_RANGE(0x254000, 0x25401f) AM_WRITE(K054338_word_w)
-	AM_RANGE(0x258000, 0x2580ff) AM_WRITE(K055555_word_w)
-	AM_RANGE(0x260000, 0x26001f) AM_DEVREADWRITE8("k053252",k053252_r,k053252_w,0x00ff)
+	AM_RANGE(0x240000, 0x240007) AM_DEVWRITE("k055673", k055673_device, k053246_word_w)
+	AM_RANGE(0x244000, 0x24400f) AM_DEVWRITE("k055673", k055673_device, k053246_word_w)
+	AM_RANGE(0x244010, 0x24401f) AM_DEVWRITE("k055673", k055673_device,k053247_reg_word_w)
+	AM_RANGE(0x24c000, 0x24ffff) AM_DEVREADWRITE("k053250_1", k053250_device, ram_r, ram_w)
+	AM_RANGE(0x250000, 0x25000f) AM_DEVREADWRITE("k053250_1", k053250_device, reg_r, reg_w)
+	AM_RANGE(0x254000, 0x25401f) AM_WRITE_LEGACY(K054338_word_w)
+	AM_RANGE(0x258000, 0x2580ff) AM_DEVWRITE("k055555", k055555_device, K055555_word_w)
+	AM_RANGE(0x260000, 0x26001f) AM_DEVREADWRITE8("k053252", k053252_device, read, write, 0x00ff)
 	AM_RANGE(0x264000, 0x264001) AM_WRITE(sound_irq_w)
 	AM_RANGE(0x26800c, 0x26800d) AM_WRITE(sound_cmd1_w)
 	AM_RANGE(0x26800e, 0x26800f) AM_WRITE(sound_cmd2_w)
 	AM_RANGE(0x268014, 0x268015) AM_READ(sound_status_r)
 	AM_RANGE(0x268000, 0x26801f) AM_RAM
-	AM_RANGE(0x26c000, 0x26c007) AM_WRITE(K056832_b_word_w)
-	AM_RANGE(0x270000, 0x27003f) AM_WRITE(K056832_word_w)
+	AM_RANGE(0x26c000, 0x26c007) AM_DEVWRITE("k056832", k056832_device,b_word_w)
+	AM_RANGE(0x270000, 0x27003f) AM_DEVWRITE("k056832", k056832_device,word_w)
 	AM_RANGE(0x274000, 0x274001) AM_READ_PORT("P1_P3")
 	AM_RANGE(0x274002, 0x274003) AM_READ_PORT("P2_P4")
 	AM_RANGE(0x278000, 0x278001) AM_READ_PORT("IN0")
 	AM_RANGE(0x278002, 0x278003) AM_READ(eeprom_r)
-	AM_RANGE(0x27c000, 0x27c001) AM_READNOP	// watchdog lives here
+	AM_RANGE(0x27c000, 0x27c001) AM_READNOP // watchdog lives here
 	AM_RANGE(0x27c000, 0x27c001) AM_WRITE(mmeeprom_w)
-	AM_RANGE(0x300000, 0x301fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)
-	AM_RANGE(0x302000, 0x303fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)	// tilemap RAM mirror read/write (essential)
-	AM_RANGE(0x310000, 0x311fff) AM_READ(K056832_mw_rom_word_r)
-	AM_RANGE(0x320000, 0x321fff) AM_DEVREAD_MODERN("k053250_1", k053250_t, rom_r)
-	AM_RANGE(0x330000, 0x331fff) AM_RAM_WRITE(paletteram16_xrgb_word_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x300000, 0x301fff) AM_DEVREADWRITE("k056832", k056832_device,ram_word_r,ram_word_w)
+	AM_RANGE(0x302000, 0x303fff) AM_DEVREADWRITE("k056832", k056832_device,ram_word_r,ram_word_w) // tilemap RAM mirror read/write (essential)
+	AM_RANGE(0x310000, 0x311fff) AM_DEVREAD("k056832", k056832_device, mw_rom_word_r)
+	AM_RANGE(0x320000, 0x321fff) AM_DEVREAD("k053250_1", k053250_device, rom_r)
+	AM_RANGE(0x330000, 0x331fff) AM_RAM_WRITE(paletteram_xrgb_word_be_w) AM_SHARE("paletteram")
 #if MW_DEBUG
-	AM_RANGE(0x240000, 0x240007) AM_READ(K053246_reg_word_r)
-	AM_RANGE(0x244010, 0x24401f) AM_READ(K053247_reg_word_r)
-	AM_RANGE(0x254000, 0x25401f) AM_READ(K054338_word_r)
-	AM_RANGE(0x258000, 0x2580ff) AM_READ(K055555_word_r)
-	AM_RANGE(0x26C000, 0x26C007) AM_READ(K056832_b_word_r)
-	AM_RANGE(0x270000, 0x27003f) AM_READ(K056832_word_r)
+	AM_RANGE(0x240000, 0x240007) AM_DEVREAD("k055673", k055673_device, k053246_reg_word_r)
+	AM_RANGE(0x244010, 0x24401f) AM_DEVREAD("k055673", k055673_device, k053247_reg_word_r)
+	AM_RANGE(0x254000, 0x25401f) AM_DEVREAD("k054338", k054338_device, word_r)
+	AM_RANGE(0x258000, 0x2580ff) AM_DEVREAD("k055555", k055555_device, k055555_word_r)
+	AM_RANGE(0x26C000, 0x26C007) AM_DEVREAD("k056832", k056832_device, b_word_r)
+	AM_RANGE(0x270000, 0x27003f) AM_DEVREAD("k056832", k056832_device, word_r)
 #endif
 ADDRESS_MAP_END
 
 /* Violent Storm */
-static ADDRESS_MAP_START( viostorm_map, AS_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x1fffff) AM_ROM		// main program
-	AM_RANGE(0x200000, 0x20ffff) AM_RAM AM_BASE_MEMBER(mystwarr_state, m_gx_workram)
-	AM_RANGE(0x210000, 0x210fff) AM_READWRITE(K053247_word_r,K053247_word_w)
+static ADDRESS_MAP_START( viostorm_map, AS_PROGRAM, 16, mystwarr_state )
+	AM_RANGE(0x000000, 0x1fffff) AM_ROM     // main program
+	AM_RANGE(0x200000, 0x20ffff) AM_RAM AM_SHARE("gx_workram")
+	AM_RANGE(0x210000, 0x210fff) AM_DEVREADWRITE("k055673", k055673_device, k053247_word_r,k053247_word_w)
 	AM_RANGE(0x211000, 0x21ffff) AM_RAM
-	AM_RANGE(0x240000, 0x240007) AM_WRITE(K053246_word_w)
-	AM_RANGE(0x244000, 0x24400f) AM_READ(K055673_rom_word_r)
-	AM_RANGE(0x244010, 0x24401f) AM_WRITE(K053247_reg_word_w)
-	AM_RANGE(0x24c000, 0x24ffff) AM_RAM		// K053250 ram
-	AM_RANGE(0x250000, 0x25000f) AM_RAM		// K053250 reg
-	AM_RANGE(0x254000, 0x25401f) AM_WRITE(K054338_word_w)
-	AM_RANGE(0x258000, 0x2580ff) AM_WRITE(K055555_word_w)
+	AM_RANGE(0x240000, 0x240007) AM_DEVWRITE("k055673", k055673_device, k053246_word_w)
+	AM_RANGE(0x244000, 0x24400f) AM_DEVREAD("k055673", k055673_device, k055673_rom_word_r)
+	AM_RANGE(0x244010, 0x24401f) AM_DEVWRITE("k055673", k055673_device,k053247_reg_word_w)
+	AM_RANGE(0x24c000, 0x24ffff) AM_RAM     // K053250 ram
+	AM_RANGE(0x250000, 0x25000f) AM_RAM     // K053250 reg
+	AM_RANGE(0x254000, 0x25401f) AM_WRITE_LEGACY(K054338_word_w)
+	AM_RANGE(0x258000, 0x2580ff) AM_DEVWRITE("k055555", k055555_device, K055555_word_w)
 	AM_RANGE(0x25c000, 0x25c03f) AM_READWRITE(K055550_word_r,K055550_word_w)
-	AM_RANGE(0x260000, 0x26001f) AM_DEVREADWRITE8("k053252",k053252_r,k053252_w,0x00ff)
+	AM_RANGE(0x260000, 0x26001f) AM_DEVREADWRITE8("k053252", k053252_device, read, write, 0x00ff)
 	AM_RANGE(0x264000, 0x264001) AM_WRITE(sound_irq_w)
 	AM_RANGE(0x26800c, 0x26800d) AM_WRITE(sound_cmd1_w)
 	AM_RANGE(0x26800e, 0x26800f) AM_WRITE(sound_cmd2_w)
 	AM_RANGE(0x268014, 0x268015) AM_READ(sound_status_r)
 	AM_RANGE(0x268000, 0x26801f) AM_RAM
-	AM_RANGE(0x26c000, 0x26c007) AM_WRITE(K056832_b_word_w)
-	AM_RANGE(0x270000, 0x27003f) AM_WRITE(K056832_word_w)
+	AM_RANGE(0x26c000, 0x26c007) AM_DEVWRITE("k056832", k056832_device,b_word_w)
+	AM_RANGE(0x270000, 0x27003f) AM_DEVWRITE("k056832", k056832_device,word_w)
 	AM_RANGE(0x274000, 0x274001) AM_READ_PORT("P1_P3")
 	AM_RANGE(0x274002, 0x274003) AM_READ_PORT("P2_P4")
 	AM_RANGE(0x278000, 0x278001) AM_READ_PORT("IN0")
 	AM_RANGE(0x278002, 0x278003) AM_READ(eeprom_r)
-	AM_RANGE(0x27c000, 0x27c001) AM_READNOP		// watchdog lives here
+	AM_RANGE(0x27c000, 0x27c001) AM_READNOP     // watchdog lives here
 	AM_RANGE(0x27c000, 0x27c001) AM_WRITE(mmeeprom_w)
-	AM_RANGE(0x300000, 0x301fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)
-	AM_RANGE(0x302000, 0x303fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w) // tilemap RAM mirror read(essential)
+	AM_RANGE(0x300000, 0x301fff) AM_DEVREADWRITE("k056832", k056832_device,ram_word_r,ram_word_w)
+	AM_RANGE(0x302000, 0x303fff) AM_DEVREADWRITE("k056832", k056832_device,ram_word_r,ram_word_w) // tilemap RAM mirror read(essential)
 	AM_RANGE(0x304000, 0x3041ff) AM_RAM
-	AM_RANGE(0x310000, 0x311fff) AM_READ(K056832_mw_rom_word_r)
-	AM_RANGE(0x330000, 0x331fff) AM_RAM_WRITE(paletteram16_xrgb_word_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x310000, 0x311fff) AM_DEVREAD("k056832", k056832_device, mw_rom_word_r)
+	AM_RANGE(0x330000, 0x331fff) AM_RAM_WRITE(paletteram_xrgb_word_be_w) AM_SHARE("paletteram")
 #if MW_DEBUG
-	AM_RANGE(0x240000, 0x240007) AM_READ(K053246_reg_word_r)
-	AM_RANGE(0x244010, 0x24401f) AM_READ(K053247_reg_word_r)
-	AM_RANGE(0x254000, 0x25401f) AM_READ(K054338_word_r)
-	AM_RANGE(0x258000, 0x2580ff) AM_READ(K055555_word_r)
-	AM_RANGE(0x26C000, 0x26C007) AM_READ(K056832_b_word_r)
-	AM_RANGE(0x270000, 0x27003f) AM_READ(K056832_word_r)
+	AM_RANGE(0x240000, 0x240007) AM_DEVREAD("k055673", k055673_device, k053246_reg_word_r)
+	AM_RANGE(0x244010, 0x24401f) AM_DEVREAD("k055673", k055673_device, k053247_reg_word_r)
+	AM_RANGE(0x254000, 0x25401f) AM_DEVREAD("k054338", k054338_device, word_r)
+	AM_RANGE(0x258000, 0x2580ff) AM_DEVREAD("k055555", k055555_device, k055555_word_r)
+	AM_RANGE(0x26C000, 0x26C007) AM_DEVREAD("k056832", k056832_device, b_word_r)
+	AM_RANGE(0x270000, 0x27003f) AM_DEVREAD("k056832", k056832_device, word_r)
 #endif
 ADDRESS_MAP_END
 
 // Martial Champion specific interfaces
-static READ16_HANDLER( K053247_martchmp_word_r )
+READ16_MEMBER(mystwarr_state::k053247_martchmp_word_r)
 {
-	mystwarr_state *state = space->machine().driver_data<mystwarr_state>();
 	if (offset & 0x0018)
-		return state->m_spriteram[offset];
+		return m_spriteram[offset];
 	else
 	{
 		offset = (offset & 0x0007) | ((offset & 0x1fe0) >> 2);
-		return K053247_word_r(space,offset,mem_mask);
+		return m_k055673->k053247_word_r(space,offset,mem_mask);
 	}
 }
 
-static WRITE16_HANDLER( K053247_martchmp_word_w )
+WRITE16_MEMBER(mystwarr_state::k053247_martchmp_word_w)
 {
-	mystwarr_state *state = space->machine().driver_data<mystwarr_state>();
 	if (offset & 0x0018)
 	{
-		COMBINE_DATA(state->m_spriteram+offset);
+		COMBINE_DATA(m_spriteram+offset);
 	}
 	else
 	{
 		offset = (offset & 0x0007) | ((offset & 0x1fe0) >> 2);
 
-		K053247_word_w(space,offset,data,mem_mask);
+		m_k055673->k053247_word_w(space,offset,data,mem_mask);
 	}
 }
 
-static READ16_HANDLER( mccontrol_r )
+READ16_MEMBER(mystwarr_state::mccontrol_r)
 {
-	mystwarr_state *state = space->machine().driver_data<mystwarr_state>();
-	return state->m_mw_irq_control<<8;
+	return m_mw_irq_control<<8;
 }
 
-static WRITE16_HANDLER( mccontrol_w )
+WRITE16_MEMBER(mystwarr_state::mccontrol_w)
 {
-	mystwarr_state *state = space->machine().driver_data<mystwarr_state>();
 	if (ACCESSING_BITS_8_15)
 	{
-		state->m_mw_irq_control = data>>8;
+		m_mw_irq_control = data>>8;
 		// bit 0 = watchdog
 		// bit 1 = IRQ enable
 		// bit 2 = OBJCHA
 
-		K053246_set_OBJCHA_line((data&0x04) ? ASSERT_LINE : CLEAR_LINE);
+		m_k055673->k053246_set_objcha_line((data&0x04) ? ASSERT_LINE : CLEAR_LINE);
 
 //      if (data & 0xf8) logerror("Unk write %x to mccontrol\n", data);
 
@@ -437,87 +391,86 @@ static WRITE16_HANDLER( mccontrol_w )
 }
 
 /* Martial Champion */
-static ADDRESS_MAP_START( martchmp_map, AS_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x0fffff) AM_ROM									// main program
-	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_BASE_MEMBER(mystwarr_state, m_gx_workram)			// work RAM
-	AM_RANGE(0x300000, 0x3fffff) AM_ROM									// data ROM
-	AM_RANGE(0x400000, 0x4000ff) AM_WRITE(K055555_word_w)				// PCU2
-	AM_RANGE(0x402000, 0x40200f) AM_READ(K055673_rom_word_r)			// sprite ROM readback
-	AM_RANGE(0x402010, 0x40201f) AM_WRITE(K053247_reg_word_w)			// OBJSET2
-	AM_RANGE(0x404000, 0x404007) AM_WRITE(K053246_word_w)				// OBJSET1
-	AM_RANGE(0x40a000, 0x40a01f) AM_WRITE(K054338_word_w)				// CLTC
-	AM_RANGE(0x40c000, 0x40c03f) AM_WRITE(K056832_word_w)				// VACSET
-	AM_RANGE(0x40e000, 0x40e03f) AM_WRITE(K053990_martchmp_word_w)		// protection
+static ADDRESS_MAP_START( martchmp_map, AS_PROGRAM, 16, mystwarr_state )
+	AM_RANGE(0x000000, 0x0fffff) AM_ROM                                 // main program
+	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_SHARE("gx_workram")          // work RAM
+	AM_RANGE(0x300000, 0x3fffff) AM_ROM                                 // data ROM
+	AM_RANGE(0x400000, 0x4000ff) AM_DEVWRITE("k055555", k055555_device, K055555_word_w)                // PCU2
+	AM_RANGE(0x402000, 0x40200f) AM_DEVWRITE("k055673", k055673_device, k053246_word_w)         // sprite ROM readback
+	AM_RANGE(0x402010, 0x40201f) AM_DEVWRITE("k055673", k055673_device,k053247_reg_word_w)            // OBJSET2
+	AM_RANGE(0x404000, 0x404007) AM_DEVWRITE("k055673", k055673_device, k053246_word_w)                // OBJSET1
+	AM_RANGE(0x40a000, 0x40a01f) AM_WRITE_LEGACY(K054338_word_w)                // CLTC
+	AM_RANGE(0x40c000, 0x40c03f) AM_DEVWRITE("k056832", k056832_device,word_w)                // VACSET
+	AM_RANGE(0x40e000, 0x40e03f) AM_WRITE(K053990_martchmp_word_w)      // protection
 	AM_RANGE(0x410000, 0x410001) AM_WRITE(mweeprom_w)
 	AM_RANGE(0x412000, 0x412001) AM_READWRITE(mccontrol_r,mccontrol_w)
 	AM_RANGE(0x414000, 0x414001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x414002, 0x414003) AM_READ_PORT("P3_P4")
 	AM_RANGE(0x416000, 0x416001) AM_READ_PORT("IN0")
-	AM_RANGE(0x416002, 0x416003) AM_READ(eeprom_r)					// eeprom read
-	AM_RANGE(0x418014, 0x418015) AM_READ(sound_status_r)				// z80 status
+	AM_RANGE(0x416002, 0x416003) AM_READ(eeprom_r)                  // eeprom read
+	AM_RANGE(0x418014, 0x418015) AM_READ(sound_status_r)                // z80 status
 	AM_RANGE(0x41800c, 0x41800d) AM_WRITE(sound_cmd1_w)
 	AM_RANGE(0x41800e, 0x41800f) AM_WRITE(sound_cmd2_w)
-	AM_RANGE(0x418000, 0x41801f) AM_RAM									// sound regs fall through
+	AM_RANGE(0x418000, 0x41801f) AM_RAM                                 // sound regs fall through
 	AM_RANGE(0x41a000, 0x41a001) AM_WRITE(sound_irq_w)
-	AM_RANGE(0x41c000, 0x41c01f) AM_DEVREADWRITE8("k053252",k053252_r,k053252_w,0x00ff)				// CCU
-	AM_RANGE(0x41e000, 0x41e007) AM_WRITE(K056832_b_word_w)				// VSCCS
-	AM_RANGE(0x480000, 0x483fff) AM_READWRITE(K053247_martchmp_word_r,K053247_martchmp_word_w) AM_BASE_MEMBER(mystwarr_state, m_spriteram)	// sprite RAM
-	AM_RANGE(0x600000, 0x601fff) AM_RAM_WRITE(paletteram16_xrgb_word_be_w) AM_BASE_GENERIC(paletteram)						// palette RAM
-	AM_RANGE(0x680000, 0x681fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)	// tilemap RAM
-	AM_RANGE(0x682000, 0x683fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)	// tilemap RAM mirror read/write (essential)
-	AM_RANGE(0x700000, 0x703fff) AM_READ(K056832_mw_rom_word_r)			// tile ROM readback
+	AM_RANGE(0x41c000, 0x41c01f) AM_DEVREADWRITE8("k053252", k053252_device, read, write, 0x00ff)              // CCU
+	AM_RANGE(0x41e000, 0x41e007) AM_DEVWRITE("k056832", k056832_device,b_word_w)              // VSCCS
+	AM_RANGE(0x480000, 0x483fff) AM_READWRITE(k053247_martchmp_word_r,k053247_martchmp_word_w) AM_SHARE("spriteram")    // sprite RAM
+	AM_RANGE(0x600000, 0x601fff) AM_RAM_WRITE(paletteram_xrgb_word_be_w) AM_SHARE("paletteram")                     // palette RAM
+	AM_RANGE(0x680000, 0x681fff) AM_DEVREADWRITE("k056832", k056832_device,ram_word_r,ram_word_w) // tilemap RAM
+	AM_RANGE(0x682000, 0x683fff) AM_DEVREADWRITE("k056832", k056832_device,ram_word_r,ram_word_w) // tilemap RAM mirror read/write (essential)
+	AM_RANGE(0x700000, 0x703fff) AM_DEVREAD("k056832", k056832_device, mw_rom_word_r)          // tile ROM readback
 #if MW_DEBUG
-	AM_RANGE(0x400000, 0x4000ff) AM_READ(K055555_word_r)
-	AM_RANGE(0x402010, 0x40201f) AM_READ(K053247_reg_word_r)
-	AM_RANGE(0x404000, 0x404007) AM_READ(K053246_reg_word_r)
-	AM_RANGE(0x40a000, 0x40a01f) AM_READ(K054338_word_r)
-	AM_RANGE(0x40c000, 0x40c03f) AM_READ(K056832_word_r)
-	AM_RANGE(0x41c000, 0x41c01f) AM_READ(K053252_word_r)
-	AM_RANGE(0x41e000, 0x41e007) AM_READ(K056832_b_word_r)
+	AM_RANGE(0x400000, 0x4000ff) AM_DEVREAD("k055555", k055555_device, k055555_word_r)
+	AM_RANGE(0x402010, 0x40201f) AM_DEVREAD("k055673", k055673_device, k053247_reg_word_r)
+	AM_RANGE(0x404000, 0x404007) AM_DEVREAD("k055673", k055673_device, k053246_reg_word_r)
+	AM_RANGE(0x40a000, 0x40a01f) AM_DEVREAD("k054338", k054338_device, word_r)
+	AM_RANGE(0x40c000, 0x40c03f) AM_DEVREAD("k056832", k056832_device, word_r)
+	AM_RANGE(0x41e000, 0x41e007) AM_DEVREAD("k056832", k056832_device, b_word_r)
 #endif
 ADDRESS_MAP_END
 
 /* Ultimate Battler Dadandarn */
-static ADDRESS_MAP_START( dadandrn_map, AS_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x1fffff) AM_ROM							// main program and data ROM
-	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(K053247_scattered_word_r,K053247_scattered_word_w) AM_BASE_MEMBER(mystwarr_state, m_spriteram)
-	AM_RANGE(0x410000, 0x411fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)	// tilemap RAM
-	AM_RANGE(0x412000, 0x413fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)	// tilemap RAM mirror read/write (essential)
-	AM_RANGE(0x420000, 0x421fff) AM_RAM_WRITE(paletteram16_xrgb_word_be_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x430000, 0x430007) AM_WRITE(K053246_word_w)
-	AM_RANGE(0x440000, 0x443fff) AM_READ(K056832_mw_rom_word_r)
-	AM_RANGE(0x450000, 0x45000f) AM_READ(K055673_rom_word_r)
-	AM_RANGE(0x450010, 0x45001f) AM_WRITE(K053247_reg_word_w)
-	AM_RANGE(0x460000, 0x46001f) AM_WRITEONLY AM_BASE(&K053936_0_ctrl)
-	AM_RANGE(0x470000, 0x470fff) AM_RAM AM_BASE(&K053936_0_linectrl)
-	AM_RANGE(0x480000, 0x48003f) AM_WRITE(K056832_word_w)		// VACSET
-	AM_RANGE(0x482000, 0x482007) AM_WRITE(K056832_b_word_w)	// VSCCS
+static ADDRESS_MAP_START( dadandrn_map, AS_PROGRAM, 16, mystwarr_state )
+	AM_RANGE(0x000000, 0x1fffff) AM_ROM                         // main program and data ROM
+	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(k053247_scattered_word_r,k053247_scattered_word_w) AM_SHARE("spriteram")
+	AM_RANGE(0x410000, 0x411fff) AM_DEVREADWRITE("k056832", k056832_device,ram_word_r,ram_word_w) // tilemap RAM
+	AM_RANGE(0x412000, 0x413fff) AM_DEVREADWRITE("k056832", k056832_device,ram_word_r,ram_word_w) // tilemap RAM mirror read/write (essential)
+	AM_RANGE(0x420000, 0x421fff) AM_RAM_WRITE(paletteram_xrgb_word_be_w) AM_SHARE("paletteram")
+	AM_RANGE(0x430000, 0x430007) AM_DEVWRITE("k055673", k055673_device, k053246_word_w)
+	AM_RANGE(0x440000, 0x443fff) AM_DEVREAD("k056832", k056832_device, mw_rom_word_r)
+	AM_RANGE(0x450000, 0x45000f) AM_DEVWRITE("k055673", k055673_device, k053246_word_w)
+	AM_RANGE(0x450010, 0x45001f) AM_DEVWRITE("k055673", k055673_device,k053247_reg_word_w)
+	AM_RANGE(0x460000, 0x46001f) AM_WRITEONLY AM_SHARE("k053936_0_ct16")
+	AM_RANGE(0x470000, 0x470fff) AM_RAM AM_SHARE("k053936_0_li16")
+	AM_RANGE(0x480000, 0x48003f) AM_DEVWRITE("k056832", k056832_device,word_w)        // VACSET
+	AM_RANGE(0x482000, 0x482007) AM_DEVWRITE("k056832", k056832_device,b_word_w)  // VSCCS
 	AM_RANGE(0x484000, 0x484003) AM_WRITE(ddd_053936_clip_w)
-	AM_RANGE(0x486000, 0x48601f) AM_DEVREADWRITE8("k053252",k053252_r,k053252_w,0x00ff)
-	AM_RANGE(0x488000, 0x4880ff) AM_WRITE(K055555_word_w)
+	AM_RANGE(0x486000, 0x48601f) AM_DEVREADWRITE8("k053252", k053252_device, read, write, 0x00ff)
+	AM_RANGE(0x488000, 0x4880ff) AM_DEVWRITE("k055555", k055555_device, K055555_word_w)
 	AM_RANGE(0x48a00c, 0x48a00d) AM_WRITE(sound_cmd1_msb_w)
 	AM_RANGE(0x48a00e, 0x48a00f) AM_WRITE(sound_cmd2_msb_w)
 	AM_RANGE(0x48a014, 0x48a015) AM_READ(sound_status_msb_r)
-	AM_RANGE(0x48a000, 0x48a01f) AM_RAM					// sound regs fall-through
-	AM_RANGE(0x48c000, 0x48c01f) AM_WRITE(K054338_word_w)
-	AM_RANGE(0x48e000, 0x48e001) AM_READ_PORT("IN0_P1")	// bit 3 (0x8) is test switch
+	AM_RANGE(0x48a000, 0x48a01f) AM_RAM                 // sound regs fall-through
+	AM_RANGE(0x48c000, 0x48c01f) AM_WRITE_LEGACY(K054338_word_w)
+	AM_RANGE(0x48e000, 0x48e001) AM_READ_PORT("IN0_P1") // bit 3 (0x8) is test switch
 	AM_RANGE(0x48e020, 0x48e021) AM_READ(dddeeprom_r)
-	AM_RANGE(0x600000, 0x60ffff) AM_RAM AM_BASE_MEMBER(mystwarr_state, m_gx_workram)
+	AM_RANGE(0x600000, 0x60ffff) AM_RAM AM_SHARE("gx_workram")
 	AM_RANGE(0x680000, 0x68003f) AM_READWRITE(K055550_word_r,K055550_word_w)
 	AM_RANGE(0x6a0000, 0x6a0001) AM_WRITE(mmeeprom_w)
 	AM_RANGE(0x6c0000, 0x6c0001) AM_WRITE(ddd_053936_enable_w)
 	AM_RANGE(0x6e0000, 0x6e0001) AM_WRITE(sound_irq_w)
-	AM_RANGE(0x800000, 0x87ffff) AM_READ(ddd_053936_tilerom_0_r)	// 256k tilemap readback
+	AM_RANGE(0x800000, 0x87ffff) AM_READ(ddd_053936_tilerom_0_r)    // 256k tilemap readback
 	AM_RANGE(0xa00000, 0xa7ffff) AM_READ(ddd_053936_tilerom_1_r) // 128k tilemap readback
-	AM_RANGE(0xc00000, 0xdfffff) AM_READ(ddd_053936_tilerom_2_r)	// tile character readback
-	AM_RANGE(0xe00000, 0xe00001) AM_WRITENOP	// watchdog
+	AM_RANGE(0xc00000, 0xdfffff) AM_READ(ddd_053936_tilerom_2_r)    // tile character readback
+	AM_RANGE(0xe00000, 0xe00001) AM_WRITENOP    // watchdog
 #if MW_DEBUG
-	AM_RANGE(0x430000, 0x430007) AM_READ(K053246_reg_word_r)
-	AM_RANGE(0x450010, 0x45001f) AM_READ(K053247_reg_word_r)
-	AM_RANGE(0x480000, 0x48003f) AM_READ(K056832_word_r)
-	AM_RANGE(0x482000, 0x482007) AM_READ(K056832_b_word_r)
-	AM_RANGE(0x488000, 0x4880ff) AM_READ(K055555_word_r)
-	AM_RANGE(0x48c000, 0x48c01f) AM_READ(K054338_word_r)
+	AM_RANGE(0x430000, 0x430007) AM_DEVREAD("k055673", k055673_device, k053246_reg_word_r)
+	AM_RANGE(0x450010, 0x45001f) AM_DEVREAD("k055673", k055673_device, k053247_reg_word_r)
+	AM_RANGE(0x480000, 0x48003f) AM_DEVREAD("k056832", k056832_device, word_r)
+	AM_RANGE(0x482000, 0x482007) AM_DEVREAD("k056832", k056832_device, b_word_r)
+	AM_RANGE(0x488000, 0x4880ff) AM_DEVREAD("k055555", k055555_device, k055555_word_r)
+	AM_RANGE(0x48c000, 0x48c01f) AM_DEVREAD("k054338", k054338_device, word_r)
 #endif
 ADDRESS_MAP_END
 
@@ -525,63 +478,61 @@ ADDRESS_MAP_END
 // a00000 = the 128k tilemap
 // 800000 = the 256k tilemap
 // c00000 = 936 tiles (7fffff window)
-static ADDRESS_MAP_START( gaiapols_map, AS_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x2fffff) AM_ROM								// main program
-	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(K053247_scattered_word_r,K053247_scattered_word_w) AM_BASE_MEMBER(mystwarr_state, m_spriteram)
-	AM_RANGE(0x410000, 0x411fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)		// tilemap RAM
-	AM_RANGE(0x412000, 0x413fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)		// tilemap RAM mirror read / write (essential)
-	AM_RANGE(0x420000, 0x421fff) AM_RAM_WRITE(paletteram16_xrgb_word_be_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x430000, 0x430007) AM_WRITE(K053246_word_w)
-	AM_RANGE(0x440000, 0x441fff) AM_READ(K056832_mw_rom_word_r)
-	AM_RANGE(0x450000, 0x45000f) AM_READ(K055673_rom_word_r)
-	AM_RANGE(0x450010, 0x45001f) AM_WRITE(K053247_reg_word_w)
-	AM_RANGE(0x460000, 0x46001f) AM_WRITEONLY AM_BASE(&K053936_0_ctrl)
-	AM_RANGE(0x470000, 0x470fff) AM_RAM AM_BASE(&K053936_0_linectrl)
-	AM_RANGE(0x480000, 0x48003f) AM_WRITE(K056832_word_w)			// VACSET
-	AM_RANGE(0x482000, 0x482007) AM_WRITE(K056832_b_word_w)			// VSCCS
+static ADDRESS_MAP_START( gaiapols_map, AS_PROGRAM, 16, mystwarr_state )
+	AM_RANGE(0x000000, 0x2fffff) AM_ROM                             // main program
+	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(k053247_scattered_word_r,k053247_scattered_word_w) AM_SHARE("spriteram")
+	AM_RANGE(0x410000, 0x411fff) AM_DEVREADWRITE("k056832", k056832_device,ram_word_r,ram_word_w)     // tilemap RAM
+	AM_RANGE(0x412000, 0x413fff) AM_DEVREADWRITE("k056832", k056832_device,ram_word_r,ram_word_w)     // tilemap RAM mirror read / write (essential)
+	AM_RANGE(0x420000, 0x421fff) AM_RAM_WRITE(paletteram_xrgb_word_be_w) AM_SHARE("paletteram")
+	AM_RANGE(0x430000, 0x430007) AM_DEVWRITE("k055673", k055673_device, k053246_word_w)
+	AM_RANGE(0x440000, 0x441fff) AM_DEVREAD("k056832", k056832_device, mw_rom_word_r)
+	AM_RANGE(0x450000, 0x45000f) AM_DEVWRITE("k055673", k055673_device, k053246_word_w)
+	AM_RANGE(0x450010, 0x45001f) AM_DEVWRITE("k055673", k055673_device,k053247_reg_word_w)
+	AM_RANGE(0x460000, 0x46001f) AM_WRITEONLY AM_SHARE("k053936_0_ct16")
+	AM_RANGE(0x470000, 0x470fff) AM_RAM AM_SHARE("k053936_0_li16")
+	AM_RANGE(0x480000, 0x48003f) AM_DEVWRITE("k056832", k056832_device,word_w)            // VACSET
+	AM_RANGE(0x482000, 0x482007) AM_DEVWRITE("k056832", k056832_device,b_word_w)          // VSCCS
 	AM_RANGE(0x484000, 0x484003) AM_WRITE(ddd_053936_clip_w)
-	AM_RANGE(0x486000, 0x48601f) AM_DEVREADWRITE8("k053252",k053252_r,k053252_w,0x00ff)
-	AM_RANGE(0x488000, 0x4880ff) AM_WRITE(K055555_word_w)
+	AM_RANGE(0x486000, 0x48601f) AM_DEVREADWRITE8("k053252", k053252_device, read, write, 0x00ff)
+	AM_RANGE(0x488000, 0x4880ff) AM_DEVWRITE("k055555", k055555_device, K055555_word_w)
 	AM_RANGE(0x48a00c, 0x48a00d) AM_WRITE(sound_cmd1_msb_w)
 	AM_RANGE(0x48a00e, 0x48a00f) AM_WRITE(sound_cmd2_msb_w)
 	AM_RANGE(0x48a014, 0x48a015) AM_READ(sound_status_msb_r)
-	AM_RANGE(0x48a000, 0x48a01f) AM_RAM								// sound regs fall-through
-	AM_RANGE(0x48c000, 0x48c01f) AM_WRITE(K054338_word_w)
-	AM_RANGE(0x48e000, 0x48e001) AM_READ_PORT("IN0_P1")				// bit 3 (0x8) is test switch
+	AM_RANGE(0x48a000, 0x48a01f) AM_RAM                             // sound regs fall-through
+	AM_RANGE(0x48c000, 0x48c01f) AM_WRITE_LEGACY(K054338_word_w)
+	AM_RANGE(0x48e000, 0x48e001) AM_READ_PORT("IN0_P1")             // bit 3 (0x8) is test switch
 	AM_RANGE(0x48e020, 0x48e021) AM_READ(dddeeprom_r)
-	AM_RANGE(0x600000, 0x60ffff) AM_RAM AM_BASE_MEMBER(mystwarr_state, m_gx_workram)
-	AM_RANGE(0x660000, 0x6600ff) AM_READWRITE(K054000_lsb_r,K054000_lsb_w)
+	AM_RANGE(0x600000, 0x60ffff) AM_RAM AM_SHARE("gx_workram")
+	AM_RANGE(0x660000, 0x6600ff) AM_READWRITE_LEGACY(K054000_lsb_r,K054000_lsb_w)
 	AM_RANGE(0x6a0000, 0x6a0001) AM_WRITE(mmeeprom_w)
 	AM_RANGE(0x6c0000, 0x6c0001) AM_WRITE(ddd_053936_enable_w)
 	AM_RANGE(0x6e0000, 0x6e0001) AM_WRITE(sound_irq_w)
-	AM_RANGE(0x800000, 0x87ffff) AM_READ(gai_053936_tilerom_0_r)	// 256k tilemap readback
-	AM_RANGE(0xa00000, 0xa7ffff) AM_READ(ddd_053936_tilerom_1_r)	// 128k tilemap readback
-	AM_RANGE(0xc00000, 0xdfffff) AM_READ(gai_053936_tilerom_2_r)	// tile character readback
-	AM_RANGE(0xe00000, 0xe00001) AM_WRITENOP	// watchdog
+	AM_RANGE(0x800000, 0x87ffff) AM_READ(gai_053936_tilerom_0_r)    // 256k tilemap readback
+	AM_RANGE(0xa00000, 0xa7ffff) AM_READ(ddd_053936_tilerom_1_r)    // 128k tilemap readback
+	AM_RANGE(0xc00000, 0xdfffff) AM_READ(gai_053936_tilerom_2_r)    // tile character readback
+	AM_RANGE(0xe00000, 0xe00001) AM_WRITENOP    // watchdog
 #if MW_DEBUG
-	AM_RANGE(0x430000, 0x430007) AM_READ(K053246_reg_word_r)
-	AM_RANGE(0x450010, 0x45001f) AM_READ(K053247_reg_word_r)
-	AM_RANGE(0x480000, 0x48003f) AM_READ(K056832_word_r)
-	AM_RANGE(0x482000, 0x482007) AM_READ(K056832_b_word_r)
-	AM_RANGE(0x488000, 0x4880ff) AM_READ(K055555_word_r)
-	AM_RANGE(0x48c000, 0x48c01f) AM_READ(K054338_word_r)
+	AM_RANGE(0x430000, 0x430007) AM_DEVREAD("k055673", k055673_device, k053246_reg_word_r)
+	AM_RANGE(0x450010, 0x45001f) AM_DEVREAD("k055673", k055673_device, k053247_reg_word_r)
+	AM_RANGE(0x480000, 0x48003f) AM_DEVREAD("k056832", k056832_device, word_r)
+	AM_RANGE(0x482000, 0x482007) AM_DEVREAD("k056832", k056832_device, b_word_r)
+	AM_RANGE(0x488000, 0x4880ff) AM_DEVREAD("k055555", k055555_device, k055555_word_r)
+	AM_RANGE(0x48c000, 0x48c01f) AM_DEVREAD("k054338", k054338_device, word_r)
 #endif
 ADDRESS_MAP_END
 
 /**********************************************************************************/
 
 
-static void reset_sound_region(running_machine &machine)
+void mystwarr_state::reset_sound_region()
 {
-	mystwarr_state *state = machine.driver_data<mystwarr_state>();
-	memory_set_bankptr(machine, "bank2", machine.region("soundcpu")->base() + 0x10000 + state->m_cur_sound_region*0x4000);
+	membank("bank2")->set_base(memregion("soundcpu")->base() + 0x10000 + m_cur_sound_region*0x4000);
 }
 
-static WRITE8_HANDLER( sound_bankswitch_w )
+WRITE8_MEMBER(mystwarr_state::sound_bankswitch_w)
 {
-	mystwarr_state *state = space->machine().driver_data<mystwarr_state>();
-	state->m_cur_sound_region = (data & 0xf);
-	reset_sound_region(space->machine());
+	m_cur_sound_region = (data & 0xf);
+	reset_sound_region();
 }
 
 /* sound memory maps
@@ -592,20 +543,20 @@ static WRITE8_HANDLER( sound_bankswitch_w )
    quite similar to xexex/gijoe/asterix's sound.
  */
 
-static ADDRESS_MAP_START( mystwarr_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mystwarr_sound_map, AS_PROGRAM, 8, mystwarr_state )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank2")
 	AM_RANGE(0x0000, 0xbfff) AM_WRITENOP
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe22f) AM_DEVREADWRITE("konami1", k054539_r,k054539_w)
+	AM_RANGE(0xe000, 0xe22f) AM_DEVREADWRITE("k054539_1", k054539_device, read, write)
 	AM_RANGE(0xe230, 0xe3ff) AM_RAM
-	AM_RANGE(0xe400, 0xe62f) AM_DEVREADWRITE("konami2", k054539_r,k054539_w)
+	AM_RANGE(0xe400, 0xe62f) AM_DEVREADWRITE("k054539_2", k054539_device, read, write)
 	AM_RANGE(0xe630, 0xe7ff) AM_RAM
-	AM_RANGE(0xf000, 0xf000) AM_WRITE(soundlatch3_w)
-	AM_RANGE(0xf002, 0xf002) AM_READ(soundlatch_r)
-	AM_RANGE(0xf003, 0xf003) AM_READ(soundlatch2_r)
+	AM_RANGE(0xf000, 0xf000) AM_WRITE(soundlatch3_byte_w)
+	AM_RANGE(0xf002, 0xf002) AM_READ(soundlatch_byte_r)
+	AM_RANGE(0xf003, 0xf003) AM_READ(soundlatch2_byte_r)
 	AM_RANGE(0xf800, 0xf800) AM_WRITE(sound_bankswitch_w)
-	AM_RANGE(0xfff0, 0xfff3) AM_WRITENOP	// unknown write
+	AM_RANGE(0xfff0, 0xfff3) AM_WRITENOP    // unknown write
 ADDRESS_MAP_END
 
 
@@ -628,17 +579,17 @@ static INPUT_PORTS_START( mystwarr )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SPECIAL )	/* EEPROM ready (always 1) */
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, do_read)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, ready_read)
 	PORT_SERVICE_NO_TOGGLE( 0x04, IP_ACTIVE_LOW )
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_SPECIAL )   /* game loops if this is set */
-	PORT_DIPNAME( 0x10, 0x00, "Sound Output" )		PORT_DIPLOCATION("SW1:1")
+	PORT_DIPNAME( 0x10, 0x00, "Sound Output" )      PORT_DIPLOCATION("SW1:1")
 	PORT_DIPSETTING(    0x10, DEF_STR( Mono ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Stereo ) )
-	PORT_DIPNAME( 0x20, 0x20, "Coin Mechanism" )		PORT_DIPLOCATION("SW1:2")
+	PORT_DIPNAME( 0x20, 0x20, "Coin Mechanism" )        PORT_DIPLOCATION("SW1:2")
 	PORT_DIPSETTING(    0x20, "Common" )
 	PORT_DIPSETTING(    0x00, "Independent" )
-	PORT_DIPNAME( 0x40, 0x40, "Number of Players" ) 	PORT_DIPLOCATION("SW1:3")
+	PORT_DIPNAME( 0x40, 0x40, "Number of Players" )     PORT_DIPLOCATION("SW1:3")
 	PORT_DIPSETTING(    0x00, "4" )
 	PORT_DIPSETTING(    0x40, "2" )
 	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:4" )
@@ -652,9 +603,9 @@ static INPUT_PORTS_START( mystwarr )
 	KONAMI16_MSB(4, IPT_BUTTON3, IPT_START4 )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x0100, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
-	PORT_BIT( 0x0400, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x0100, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, di_write)
+	PORT_BIT( 0x0200, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, cs_write)
+	PORT_BIT( 0x0400, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, clk_write)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( metamrph )
@@ -669,20 +620,20 @@ static INPUT_PORTS_START( metamrph )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SPECIAL )	/* EEPROM ready (always 1) */
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, do_read)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, ready_read)
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_SPECIAL )
 	PORT_SERVICE_NO_TOGGLE( 0x08, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x10, 0x00, "Sound Output" )			PORT_DIPLOCATION("SW1:1")
+	PORT_DIPNAME( 0x10, 0x00, "Sound Output" )          PORT_DIPLOCATION("SW1:1")
 	PORT_DIPSETTING(    0x10, DEF_STR( Mono ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Stereo ) )
-	PORT_DIPNAME( 0x20, 0x20, "Coin Mechanism" )			PORT_DIPLOCATION("SW1:2")
+	PORT_DIPNAME( 0x20, 0x20, "Coin Mechanism" )            PORT_DIPLOCATION("SW1:2")
 	PORT_DIPSETTING(    0x20, "Common" )
 	PORT_DIPSETTING(    0x00, "Independent" )
-	PORT_DIPNAME( 0x40, 0x40, "Number of Players" ) 		PORT_DIPLOCATION("SW1:3")
+	PORT_DIPNAME( 0x40, 0x40, "Number of Players" )         PORT_DIPLOCATION("SW1:3")
 	PORT_DIPSETTING(    0x00, "4" )
 	PORT_DIPSETTING(    0x40, "2" )
-	PORT_DIPNAME( 0x80, 0x80, "Continuous Energy Increment" )	PORT_DIPLOCATION("SW1:4")
+	PORT_DIPNAME( 0x80, 0x80, "Continuous Energy Increment" )   PORT_DIPLOCATION("SW1:4")
 	PORT_DIPSETTING(    0x80, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
 
@@ -695,9 +646,9 @@ static INPUT_PORTS_START( metamrph )
 	KONAMI16_MSB(4, IPT_BUTTON3, IPT_START4 )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, di_write)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, cs_write)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, clk_write)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( viostorm )
@@ -712,20 +663,20 @@ static INPUT_PORTS_START( viostorm )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SPECIAL )	/* EEPROM ready (always 1) */
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, do_read)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, ready_read)
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_SPECIAL )
 	PORT_SERVICE_NO_TOGGLE( 0x08, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x10, 0x00, "Sound Output" )			PORT_DIPLOCATION("SW1:1")
+	PORT_DIPNAME( 0x10, 0x00, "Sound Output" )          PORT_DIPLOCATION("SW1:1")
 	PORT_DIPSETTING(    0x10, DEF_STR( Mono ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Stereo ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Flip_Screen ) )		PORT_DIPLOCATION("SW1:2")
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Flip_Screen ) )      PORT_DIPLOCATION("SW1:2")
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, "Coin Mechanism" )			PORT_DIPLOCATION("SW1:3")
+	PORT_DIPNAME( 0x40, 0x40, "Coin Mechanism" )            PORT_DIPLOCATION("SW1:3")
 	PORT_DIPSETTING(    0x40, "Common" )
 	PORT_DIPSETTING(    0x00, "Independent" )
-	PORT_DIPNAME( 0x80, 0x80, "Number of Players" ) 		PORT_DIPLOCATION("SW1:4")
+	PORT_DIPNAME( 0x80, 0x80, "Number of Players" )         PORT_DIPLOCATION("SW1:4")
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x80, "2" )
 
@@ -738,9 +689,9 @@ static INPUT_PORTS_START( viostorm )
 	KONAMI16_MSB(4, IPT_BUTTON3, IPT_START4 )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, di_write)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, cs_write)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, clk_write)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( dadandrn )
@@ -749,21 +700,21 @@ static INPUT_PORTS_START( dadandrn )
 	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_SERVICE_NO_TOGGLE( 0x0800, IP_ACTIVE_LOW )	/* duplicate required for use */
+	PORT_SERVICE_NO_TOGGLE( 0x0800, IP_ACTIVE_LOW ) /* duplicate required for use */
 	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_SERVICE2 )
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SPECIAL )	/* EEPROM ready (always 1) */
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, do_read)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, ready_read)
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_SPECIAL )
 	PORT_SERVICE_NO_TOGGLE( 0x08, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x10, 0x00, "Sound Output" )			PORT_DIPLOCATION("SW1:1")
+	PORT_DIPNAME( 0x10, 0x00, "Sound Output" )          PORT_DIPLOCATION("SW1:1")
 	PORT_DIPSETTING(    0x10, DEF_STR( Mono ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Stereo ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Flip_Screen ) )		PORT_DIPLOCATION("SW1:2")
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Flip_Screen ) )      PORT_DIPLOCATION("SW1:2")
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:3" )
@@ -779,9 +730,9 @@ static INPUT_PORTS_START( dadandrn )
 	KONAMI8_B123_START(4)
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, di_write)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, cs_write)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, clk_write)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( martchmp )
@@ -796,14 +747,14 @@ static INPUT_PORTS_START( martchmp )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SPECIAL )	/* EEPROM ready (always 1) */
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, do_read)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, ready_read)
 	PORT_SERVICE_NO_TOGGLE( 0x04, IP_ACTIVE_LOW )
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_SPECIAL )   /* game loops if this is set */
-	PORT_DIPNAME( 0x10, 0x00, "Sound Output" )			PORT_DIPLOCATION("SW1:1")
+	PORT_DIPNAME( 0x10, 0x00, "Sound Output" )          PORT_DIPLOCATION("SW1:1")
 	PORT_DIPSETTING(    0x10, DEF_STR( Mono ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Stereo ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Flip_Screen ) )		PORT_DIPLOCATION("SW1:2")
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Flip_Screen ) )      PORT_DIPLOCATION("SW1:2")
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:3" )
@@ -818,9 +769,9 @@ static INPUT_PORTS_START( martchmp )
 	KONAMI16_MSB(4, IPT_BUTTON3, IPT_START4 )
 
 	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x0100, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
-	PORT_BIT( 0x0400, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x0100, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, di_write)
+	PORT_BIT( 0x0200, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, cs_write)
+	PORT_BIT( 0x0400, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_serial_er5911_device, clk_write)
 INPUT_PORTS_END
 
 /**********************************************************************************/
@@ -855,94 +806,84 @@ static GFXDECODE_START( dadandrn )
 	GFXDECODE_ENTRY( "gfx3", 0, bglayout_8bpp, 0x0000, 8 )
 GFXDECODE_END
 
-static MACHINE_START( mystwarr )
+MACHINE_START_MEMBER(mystwarr_state,mystwarr)
 {
-	mystwarr_state *state = machine.driver_data<mystwarr_state>();
 	/* set default bankswitch */
-	state->m_cur_sound_region = 2;
-	reset_sound_region(machine);
+	m_cur_sound_region = 2;
+	reset_sound_region();
 
-	state->m_mw_irq_control = 0;
+	m_mw_irq_control = 0;
 
-	state_save_register_global(machine, state->m_mw_irq_control);
-	state_save_register_global(machine, state->m_cur_sound_region);
-	machine.save().register_postload(save_prepost_delegate(FUNC(reset_sound_region), &machine));
+	save_item(NAME(m_mw_irq_control));
+	save_item(NAME(m_cur_sound_region));
+	machine().save().register_postload(save_prepost_delegate(FUNC(mystwarr_state::reset_sound_region), this));
 }
 
-static MACHINE_RESET(mystwarr)
+MACHINE_RESET_MEMBER(mystwarr_state,mystwarr)
 {
-	device_t *k054539_1 = machine.device("konami1");
-	device_t *k054539_2 = machine.device("konami2");
 	int i;
 
 	// soften chorus(chip 0 channel 0-3), boost voice(chip 0 channel 4-7)
 	for (i=0; i<=3; i++)
 	{
-		k054539_set_gain(k054539_1, i, 0.8);
-		k054539_set_gain(k054539_1, i+4, 2.0);
+		m_k054539_1->set_gain(i, 0.8);
+		m_k054539_1->set_gain(i+4, 2.0);
 	}
 
 	// soften percussions(chip 1 channel 0-7)
-	for (i=0; i<=7; i++) k054539_set_gain(k054539_2, i, 0.5);
+	for (i=0; i<=7; i++) m_k054539_2->set_gain(i, 0.5);
 }
 
-static MACHINE_RESET(dadandrn)
+MACHINE_RESET_MEMBER(mystwarr_state,dadandrn)
 {
-	device_t *k054539_1 = machine.device("konami1");
 	int i;
 
 	// boost voice(chip 0 channel 4-7)
-	for (i=4; i<=7; i++) k054539_set_gain(k054539_1, i, 2.0);
+	for (i=4; i<=7; i++) m_k054539_1->set_gain(i, 2.0);
 }
 
-static MACHINE_RESET(viostorm)
+MACHINE_RESET_MEMBER(mystwarr_state,viostorm)
 {
-	device_t *k054539_1 = machine.device("konami1");
 	int i;
 
 	// boost voice(chip 0 channel 4-7)
-	for (i=4; i<=7; i++) k054539_set_gain(k054539_1, i, 2.0);
+	for (i=4; i<=7; i++) m_k054539_1->set_gain(i, 2.0);
 }
 
-static MACHINE_RESET(metamrph)
+MACHINE_RESET_MEMBER(mystwarr_state,metamrph)
 {
-	device_t *k054539_1 = machine.device("konami1");
-	device_t *k054539_2 = machine.device("konami2");
 	int i;
 
 	// boost voice(chip 0 channel 4-7) and soften other channels
 	for (i=0; i<=3; i++)
 	{
-		k054539_set_gain(k054539_1, i,   0.8);
-		k054539_set_gain(k054539_1, i+4, 1.8);
-		k054539_set_gain(k054539_2, i,   0.8);
-		k054539_set_gain(k054539_2, i+4, 0.8);
+		m_k054539_1->set_gain(i,   0.8);
+		m_k054539_1->set_gain(i+4, 1.8);
+		m_k054539_2->set_gain(i,   0.8);
+		m_k054539_2->set_gain(i+4, 0.8);
 	}
 }
 
-static MACHINE_RESET(martchmp)
+MACHINE_RESET_MEMBER(mystwarr_state,martchmp)
 {
-	device_t *k054539_1 = machine.device("konami1");
 	int i;
 
-	k054539_init_flags(k054539_1, K054539_REVERSE_STEREO);
+	m_k054539_1->init_flags(k054539_device::REVERSE_STEREO);
 
 	// boost voice(chip 0 channel 4-7)
-	for (i=4; i<=7; i++) k054539_set_gain(k054539_1, i, 1.4);
+	for (i=4; i<=7; i++) m_k054539_1->set_gain(i, 1.4);
 }
 
-static MACHINE_RESET(gaiapols)
+MACHINE_RESET_MEMBER(mystwarr_state,gaiapols)
 {
-	device_t *k054539_1 = machine.device("konami1");
 	int i;
 
 	// boost voice(chip 0 channel 5-7)
-	for (i=5; i<=7; i++) k054539_set_gain(k054539_1, i, 2.0);
+	for (i=5; i<=7; i++) m_k054539_1->set_gain(i, 2.0);
 }
 
 static const k053252_interface mystwarr_k053252_intf =
 {
-	"screen",
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -952,7 +893,6 @@ static const k053252_interface mystwarr_k053252_intf =
 
 static const k053252_interface viostorm_k053252_intf =
 {
-	"screen",
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -962,7 +902,6 @@ static const k053252_interface viostorm_k053252_intf =
 
 static const k053252_interface metamrph_k053252_intf =
 {
-	"screen",
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -972,7 +911,6 @@ static const k053252_interface metamrph_k053252_intf =
 
 static const k053252_interface martchmp_k053252_intf =
 {
-	"screen",
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -982,7 +920,6 @@ static const k053252_interface martchmp_k053252_intf =
 
 static const k053252_interface dadandrm_k053252_intf =
 {
-	"screen",
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -992,7 +929,6 @@ static const k053252_interface dadandrm_k053252_intf =
 
 static const k053252_interface gaiapols_k053252_intf =
 {
-	"screen",
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -1003,21 +939,21 @@ static const k053252_interface gaiapols_k053252_intf =
 static MACHINE_CONFIG_START( mystwarr, mystwarr_state )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz (confirmed) */
+	MCFG_CPU_ADD("maincpu", M68000, 16000000)   /* 16 MHz (confirmed) */
 	MCFG_CPU_PROGRAM_MAP(mystwarr_map)
-	MCFG_CPU_VBLANK_INT_HACK(mystwarr_interrupt, 3)
+	MCFG_TIMER_DRIVER_ADD_SCANLINE("scantimer", mystwarr_state, mystwarr_interrupt, "screen", 0, 1)
 
 	MCFG_CPU_ADD("soundcpu", Z80, 8000000)
 	MCFG_CPU_PROGRAM_MAP(mystwarr_sound_map)
-	MCFG_CPU_PERIODIC_INT(nmi_line_pulse, 480)
+	MCFG_CPU_PERIODIC_INT_DRIVER(mystwarr_state, nmi_line_pulse,  480)
 
 	MCFG_QUANTUM_TIME(attotime::from_hz(1920))
 
-	MCFG_EEPROM_ADD("eeprom", eeprom_intf)
+	MCFG_EEPROM_SERIAL_ER5911_8BIT_ADD("eeprom")
 	MCFG_K053252_ADD("k053252", 6000000, mystwarr_k053252_intf) // 6 MHz?
 
-	MCFG_MACHINE_START(mystwarr)
-	MCFG_MACHINE_RESET(mystwarr)
+	MCFG_MACHINE_START_OVERRIDE(mystwarr_state,mystwarr)
+	MCFG_MACHINE_RESET_OVERRIDE(mystwarr_state,mystwarr)
 
 	/* video hardware */
 	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS | VIDEO_HAS_HIGHLIGHTS | VIDEO_UPDATE_AFTER_VBLANK)
@@ -1026,32 +962,32 @@ static MACHINE_CONFIG_START( mystwarr, mystwarr_state )
 //  MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_RAW_PARAMS(6000000, 288+16+32+48, 0, 287, 224+16+8+16, 0, 223)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(600))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(24, 24+288-1, 16, 16+224-1)
-	MCFG_SCREEN_UPDATE(mystwarr)
+	MCFG_SCREEN_UPDATE_DRIVER(mystwarr_state, screen_update_mystwarr)
 
 	MCFG_PALETTE_LENGTH(2048)
+	MCFG_K056832_ADD_NOINTF("k056832"/*, mystwarr_k056832_intf*/)
+	MCFG_K055555_ADD("k055555")
+	MCFG_K055673_ADD_NOINTF("k055673")
 
-	MCFG_VIDEO_START(mystwarr)
+	MCFG_VIDEO_START_OVERRIDE(mystwarr_state,mystwarr)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("konami1", K054539, 48000)
-	MCFG_SOUND_CONFIG(k054539_config)
-	MCFG_SOUND_ROUTE(0, "rspeaker", 1.0)	/* stereo channels are inverted */
+	MCFG_K054539_ADD("k054539_1", 48000, k054539_config)
+	MCFG_SOUND_ROUTE(0, "rspeaker", 1.0)    /* stereo channels are inverted */
 	MCFG_SOUND_ROUTE(1, "lspeaker", 1.0)
 
-	MCFG_SOUND_ADD("konami2", K054539, 48000)
-	MCFG_SOUND_CONFIG(k054539_config)
-	MCFG_SOUND_ROUTE(0, "rspeaker", 1.0)	/* stereo channels are inverted */
+	MCFG_K054539_ADD("k054539_2", 48000, k054539_config)
+	MCFG_SOUND_ROUTE(0, "rspeaker", 1.0)    /* stereo channels are inverted */
 	MCFG_SOUND_ROUTE(1, "lspeaker", 1.0)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( viostorm, mystwarr )
 
-	MCFG_MACHINE_RESET(viostorm)
+	MCFG_MACHINE_RESET_OVERRIDE(mystwarr_state,viostorm)
 
 	MCFG_DEVICE_REMOVE("k053252")
 	MCFG_K053252_ADD("k053252", 16000000/2, viostorm_k053252_intf)
@@ -1059,12 +995,13 @@ static MACHINE_CONFIG_DERIVED( viostorm, mystwarr )
 	/* basic machine hardware */
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_PROGRAM_MAP(viostorm_map)
-	MCFG_CPU_VBLANK_INT_HACK(metamrph_interrupt, 40)
+	MCFG_TIMER_MODIFY("scantimer")
+	MCFG_TIMER_DRIVER_CALLBACK(mystwarr_state, metamrph_interrupt)
 
 	/* video hardware */
-	MCFG_VIDEO_START(viostorm)
+	MCFG_VIDEO_START_OVERRIDE(mystwarr_state,viostorm)
 	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_UPDATE(metamrph)
+	MCFG_SCREEN_UPDATE_DRIVER(mystwarr_state, screen_update_metamrph)
 
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(900))
@@ -1074,21 +1011,22 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( metamrph, mystwarr )
 
-	MCFG_MACHINE_RESET(metamrph)
+	MCFG_MACHINE_RESET_OVERRIDE(mystwarr_state,metamrph)
 
 	/* basic machine hardware */
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_PROGRAM_MAP(metamrph_map)
-	MCFG_CPU_VBLANK_INT_HACK(metamrph_interrupt, 40)
+	MCFG_TIMER_MODIFY("scantimer")
+	MCFG_TIMER_DRIVER_CALLBACK(mystwarr_state, metamrph_interrupt)
 
 	MCFG_DEVICE_REMOVE("k053252")
 	MCFG_K053252_ADD("k053252", 6000000, metamrph_k053252_intf) // 6 MHz?
 	MCFG_K053250_ADD("k053250_1", "screen", -7, 0)
 
 	/* video hardware */
-	MCFG_VIDEO_START(metamrph)
+	MCFG_VIDEO_START_OVERRIDE(mystwarr_state,metamrph)
 	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_UPDATE(metamrph)
+	MCFG_SCREEN_UPDATE_DRIVER(mystwarr_state, screen_update_metamrph)
 
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(900))
@@ -1098,12 +1036,13 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( dadandrn, mystwarr )
 
-	MCFG_MACHINE_RESET(dadandrn)
+	MCFG_MACHINE_RESET_OVERRIDE(mystwarr_state,dadandrn)
 
 	/* basic machine hardware */
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_PROGRAM_MAP(dadandrn_map)
-	MCFG_CPU_VBLANK_INT("screen", ddd_interrupt)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", mystwarr_state,  ddd_interrupt)
+	MCFG_DEVICE_REMOVE("scantimer")
 
 	MCFG_DEVICE_REMOVE("k053252")
 	MCFG_K053252_ADD("k053252", 6000000, dadandrm_k053252_intf) // 6 MHz?
@@ -1111,9 +1050,9 @@ static MACHINE_CONFIG_DERIVED( dadandrn, mystwarr )
 	MCFG_GFXDECODE(dadandrn)
 
 	/* video hardware */
-	MCFG_VIDEO_START(dadandrn)
+	MCFG_VIDEO_START_OVERRIDE(mystwarr_state,dadandrn)
 	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_UPDATE(dadandrn)
+	MCFG_SCREEN_UPDATE_DRIVER(mystwarr_state, screen_update_dadandrn)
 
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(600))
@@ -1123,25 +1062,23 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( gaiapols, mystwarr )
 
-	MCFG_MACHINE_RESET(gaiapols)
+	MCFG_MACHINE_RESET_OVERRIDE(mystwarr_state,gaiapols)
 
 	/* basic machine hardware */
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_PROGRAM_MAP(gaiapols_map)
-	MCFG_CPU_VBLANK_INT("screen", ddd_interrupt)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", mystwarr_state,  ddd_interrupt)
+	MCFG_DEVICE_REMOVE("scantimer")
 
 	MCFG_DEVICE_REMOVE("k053252")
 	MCFG_K053252_ADD("k053252", 6000000, gaiapols_k053252_intf) // 6 MHz?
 
 	MCFG_GFXDECODE(gaiapols)
 
-	MCFG_DEVICE_REMOVE("eeprom")
-	MCFG_EEPROM_ADD("eeprom", gaia_eeprom_intf)
-
 	/* video hardware */
-	MCFG_VIDEO_START(gaiapols)
+	MCFG_VIDEO_START_OVERRIDE(mystwarr_state,gaiapols)
 	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_UPDATE(dadandrn)
+	MCFG_SCREEN_UPDATE_DRIVER(mystwarr_state, screen_update_dadandrn)
 
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_RAW_PARAMS(8000000, 384+24+64+40, 0, 383, 224+16+8+16, 0, 223)
@@ -1152,24 +1089,23 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( martchmp, mystwarr )
 
-	MCFG_MACHINE_RESET(martchmp)
+	MCFG_MACHINE_RESET_OVERRIDE(mystwarr_state,martchmp)
 
 	/* basic machine hardware */
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_PROGRAM_MAP(martchmp_map)
-	MCFG_CPU_VBLANK_INT_HACK(mchamp_interrupt, 2)
+	MCFG_TIMER_MODIFY("scantimer")
+	MCFG_TIMER_DRIVER_CALLBACK(mystwarr_state, mchamp_interrupt)
 
 	MCFG_DEVICE_REMOVE("k053252")
 	MCFG_K053252_ADD("k053252", 16000000/2, martchmp_k053252_intf)
 
 	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS | VIDEO_HAS_HIGHLIGHTS | VIDEO_UPDATE_BEFORE_VBLANK)
 
-	MCFG_VIDEO_START(martchmp)
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_UPDATE(martchmp)
+	MCFG_VIDEO_START_OVERRIDE(mystwarr_state,martchmp)
 
 	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MCFG_SCREEN_UPDATE_DRIVER(mystwarr_state, screen_update_martchmp)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(32, 32+384-1, 16, 16+224-1)
@@ -1343,13 +1279,13 @@ ROM_END
 ROM_START( viostorm )
 	/* main program */
 	ROM_REGION( 0x200000, "maincpu", 0)
-	ROM_LOAD16_BYTE( "168eab01.15h", 0x000001, 0x80000, CRC(4eee6a8e) SHA1(5c83ed2011aa77f590abca4c469fdb565f35dde5) )
-	ROM_LOAD16_BYTE( "168eab02.15f", 0x000000, 0x80000, CRC(8dd8aa4c) SHA1(e7937fe1272b635807ffff08a45a0338d48c376c) )
+	ROM_LOAD16_BYTE( "168eac01.15h", 0x000001, 0x80000, CRC(9f6b5c81) SHA1(39faf7a5748c68f39915556c909a1a465c9cf003) ) /* 1993. 8.30 Europe */
+	ROM_LOAD16_BYTE( "168eac02.15f", 0x000000, 0x80000, CRC(126ecf03) SHA1(0b29f7a00f0c27dc28150ce852adbc8ed9224662) )
 
 	/* sound program */
 	ROM_REGION( 0x030000, "soundcpu", 0 )
 	ROM_LOAD("168a05.7c", 0x000000, 0x020000, CRC(507fb3eb) SHA1(a4f676e3caaafe86918c76ded08d0c202969adf6) )
-	ROM_RELOAD(         0x010000, 0x020000 )
+	ROM_RELOAD(           0x010000, 0x020000 )
 
 	/* tiles */
 	ROM_REGION( 0x600000, "gfx1", ROMREGION_ERASE00)
@@ -1372,19 +1308,54 @@ ROM_START( viostorm )
 	ROM_LOAD( "168a07.1e", 0x200000, 2*1024*1024, CRC(fdbbf8cc) SHA1(a8adf72a25fe2b9c4c338350d02c92deb5f8c8e9) )
 
 	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting upside down with error
-	ROM_LOAD( "viostorm.nv", 0x0000, 0x080, CRC(28b5fe49) SHA1(0ef51ae4b012a7d680543747fd4b6dd9dfb5f560) )
+	ROM_LOAD( "viostorm.nv", 0x0000, 0x080, CRC(3cb1c96c) SHA1(56ed6633e7108925a13ad6bc32381bfde592f70b) )
+ROM_END
+
+ROM_START( viostormeb )
+	/* main program */
+	ROM_REGION( 0x200000, "maincpu", 0)
+	ROM_LOAD16_BYTE( "168eab01.15h", 0x000001, 0x80000, CRC(4eee6a8e) SHA1(5c83ed2011aa77f590abca4c469fdb565f35dde5) ) /* 1993. 7.26 Europe */
+	ROM_LOAD16_BYTE( "168eab02.15f", 0x000000, 0x80000, CRC(8dd8aa4c) SHA1(e7937fe1272b635807ffff08a45a0338d48c376c) )
+
+	/* sound program */
+	ROM_REGION( 0x030000, "soundcpu", 0 )
+	ROM_LOAD("168a05.7c", 0x000000, 0x020000, CRC(507fb3eb) SHA1(a4f676e3caaafe86918c76ded08d0c202969adf6) )
+	ROM_RELOAD(           0x010000, 0x020000 )
+
+	/* tiles */
+	ROM_REGION( 0x600000, "gfx1", ROMREGION_ERASE00)
+	ROM_LOADTILE_WORD( "168a09.1h", 0x000000, 2*1024*1024, CRC(1b34a881) SHA1(5de20f7ee7f90d4f6dea349ca5000bfcf74253b1) )
+	ROM_LOADTILE_WORD( "168a08.1k", 0x000002, 2*1024*1024, CRC(db0ce743) SHA1(dfe24a1e3e72da188a92668928e79afd6c5d22ee) )
+
+	/* sprites */
+	ROM_REGION( 0x800000, "gfx2", ROMREGION_ERASE00)
+	ROM_LOAD64_WORD( "168a10.22k", 0x000000, 2*1024*1024, CRC(bd2bbdea) SHA1(54faf2ded16e66d675bbbec4ebd42b4708edfaef) )
+	ROM_LOAD64_WORD( "168a11.19k", 0x000002, 2*1024*1024, CRC(7a57c9e7) SHA1(8763c310f7b515aef52d4e007bc949e8803690f4) )
+	ROM_LOAD64_WORD( "168a12.20k", 0x000004, 2*1024*1024, CRC(b6b1c4ef) SHA1(064ab4db884c8f98ab9e631b7034996d4b92ab7b) )
+	ROM_LOAD64_WORD( "168a13.17k", 0x000006, 2*1024*1024, CRC(cdec3650) SHA1(949bc06bb38a2d5315ee4f6db19e043655b90e6e) )
+
+	/* road generator */
+	ROM_REGION( 0x40000, "gfx3", ROMREGION_ERASE00)
+
+	/* sound data */
+	ROM_REGION( 0x400000, "shared", 0)
+	ROM_LOAD( "168a06.1c", 0x000000, 2*1024*1024, CRC(25404fd7) SHA1(282cf523728b38d0bf14d765dd7257aa1fb2af39) )
+	ROM_LOAD( "168a07.1e", 0x200000, 2*1024*1024, CRC(fdbbf8cc) SHA1(a8adf72a25fe2b9c4c338350d02c92deb5f8c8e9) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting upside down with error
+	ROM_LOAD( "viostormeb.nv", 0x0000, 0x080, CRC(28b5fe49) SHA1(0ef51ae4b012a7d680543747fd4b6dd9dfb5f560) )
 ROM_END
 
 ROM_START( viostormu )
 	/* main program */
 	ROM_REGION( 0x200000, "maincpu", 0)
-	ROM_LOAD16_BYTE( "168uac01.15h", 0x000001, 0x80000, CRC(49853530) SHA1(dc8fa1a929848949cb0ad02f5a2a8a5f820fd6c1) )
+	ROM_LOAD16_BYTE( "168uac01.15h", 0x000001, 0x80000, CRC(49853530) SHA1(dc8fa1a929848949cb0ad02f5a2a8a5f820fd6c1) ) /* 1993. 8.30 U.S.A. */
 	ROM_LOAD16_BYTE( "168uac02.15f", 0x000000, 0x80000, CRC(055ca6fe) SHA1(31565ea515120555f94c4358b8e1a719c7d092d7) )
 
 	/* sound program */
 	ROM_REGION( 0x030000, "soundcpu", 0 )
 	ROM_LOAD("168a05.7c", 0x000000, 0x020000, CRC(507fb3eb) SHA1(a4f676e3caaafe86918c76ded08d0c202969adf6) )
-	ROM_RELOAD(         0x010000, 0x020000 )
+	ROM_RELOAD(           0x010000, 0x020000 )
 
 	/* tiles */
 	ROM_REGION( 0x600000, "gfx1", ROMREGION_ERASE00)
@@ -1413,13 +1384,13 @@ ROM_END
 ROM_START( viostormub )
 	/* main program */
 	ROM_REGION( 0x200000, "maincpu", 0)
-	ROM_LOAD16_BYTE( "168uab01.15h", 0x000001, 0x80000, CRC(2d6a9fa3) SHA1(a2f82702896eddb11cd2b2f9ed5fff730f6baf0f) )
+	ROM_LOAD16_BYTE( "168uab01.15h", 0x000001, 0x80000, CRC(2d6a9fa3) SHA1(a2f82702896eddb11cd2b2f9ed5fff730f6baf0f) ) /* 1993. 7.26 U.S.A. */
 	ROM_LOAD16_BYTE( "168uab02.15f", 0x000000, 0x80000, CRC(0e75f7cc) SHA1(57af86703dc728ba83ca12889246c93b9f8d4576) )
 
 	/* sound program */
 	ROM_REGION( 0x030000, "soundcpu", 0 )
 	ROM_LOAD("168a05.7c", 0x000000, 0x020000, CRC(507fb3eb) SHA1(a4f676e3caaafe86918c76ded08d0c202969adf6) )
-	ROM_RELOAD(         0x010000, 0x020000 )
+	ROM_RELOAD(           0x010000, 0x020000 )
 
 	/* tiles */
 	ROM_REGION( 0x600000, "gfx1", ROMREGION_ERASE00)
@@ -1448,13 +1419,13 @@ ROM_END
 ROM_START( viostorma )
 	/* main program */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "168aac01.15h", 0x000001, 0x80000, CRC(3620635c) SHA1(d296ba707a131bd78b401608d6b165b214f4fe61) )
+	ROM_LOAD16_BYTE( "168aac01.15h", 0x000001, 0x80000, CRC(3620635c) SHA1(d296ba707a131bd78b401608d6b165b214f4fe61) ) /* 1993. 8.30 Asia */
 	ROM_LOAD16_BYTE( "168aac02.15f", 0x000000, 0x80000, CRC(db679aec) SHA1(233f3ab54125db1035cb0afadb06312ef7bd3e09) )
 
 	/* sound program */
 	ROM_REGION( 0x030000, "soundcpu", 0 )
 	ROM_LOAD("168a05.7c", 0x000000, 0x020000, CRC(507fb3eb) SHA1(a4f676e3caaafe86918c76ded08d0c202969adf6) )
-	ROM_RELOAD(         0x010000, 0x020000 )
+	ROM_RELOAD(           0x010000, 0x020000 )
 
 	/* tiles */
 	ROM_REGION( 0x600000, "gfx1", ROMREGION_ERASE00 )
@@ -1483,13 +1454,13 @@ ROM_END
 ROM_START( viostormab )
 	/* main program */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "168aab01.15h", 0x000001, 0x80000, CRC(14f78423) SHA1(13a44e13b9dc1e31e8268485cded3385a84e3482) )
+	ROM_LOAD16_BYTE( "168aab01.15h", 0x000001, 0x80000, CRC(14f78423) SHA1(13a44e13b9dc1e31e8268485cded3385a84e3482) ) /* 1993. 7.26 Asia */
 	ROM_LOAD16_BYTE( "168aab02.15f", 0x000000, 0x80000, CRC(3dd1cc83) SHA1(f0d289912994a5dbfc0711fe9aa0a2969f7f8d8e) )
 
 	/* sound program */
 	ROM_REGION( 0x030000, "soundcpu", 0 )
 	ROM_LOAD("168a05.7c", 0x000000, 0x020000, CRC(507fb3eb) SHA1(a4f676e3caaafe86918c76ded08d0c202969adf6) )
-	ROM_RELOAD(         0x010000, 0x020000 )
+	ROM_RELOAD(           0x010000, 0x020000 )
 
 	/* tiles */
 	ROM_REGION( 0x600000, "gfx1", ROMREGION_ERASE00 )
@@ -1519,13 +1490,13 @@ ROM_END
 ROM_START( viostormj )
 	/* main program */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "168jac01.b01", 0x000001, 0x80000, CRC(f8be1225) SHA1(8c38ca218c0005c60a48cd3a43b5460b63a851e7) )
+	ROM_LOAD16_BYTE( "168jac01.b01", 0x000001, 0x80000, CRC(f8be1225) SHA1(8c38ca218c0005c60a48cd3a43b5460b63a851e7) ) /* 1993. 8.30 Japan */
 	ROM_LOAD16_BYTE( "168jac02.b02", 0x000000, 0x80000, CRC(f42fd1e5) SHA1(3b17c3039d800487f6117595050e7896a413db04) )
 
 	/* sound program */
 	ROM_REGION( 0x030000, "soundcpu", 0 )
 	ROM_LOAD("168a05.7c", 0x000000, 0x020000, CRC(507fb3eb) SHA1(a4f676e3caaafe86918c76ded08d0c202969adf6) )
-	ROM_RELOAD(         0x010000, 0x020000 )
+	ROM_RELOAD(           0x010000, 0x020000 )
 
 	/* tiles */
 	ROM_REGION( 0x600000, "gfx1", ROMREGION_ERASE00 )
@@ -1816,6 +1787,43 @@ ROM_END
 ROM_START( mtlchampu )
 	/* main program */
 	ROM_REGION( 0x400000, "maincpu", 0 )
+	ROM_LOAD16_BYTE( "234uae01.20f", 0x000000, 0x40000, CRC(acecfec9) SHA1(656e76037338c81d543308572bb59664933809be) )
+	ROM_LOAD16_BYTE( "234uae02.20g", 0x000001, 0x40000, CRC(c54ccf65) SHA1(538e70e607c26ce3be4534a1c0195d411ecbeff4) )
+	ROM_LOAD16_BYTE( "234_d03.19f",  0x300000, 0x80000, CRC(abb577c6) SHA1(493f11a10a4d5b62d755ff8274e77d898544944f) )
+	ROM_LOAD16_BYTE( "234_d04.19g",  0x300001, 0x80000, CRC(030a1925) SHA1(03783488950c9f27af5948e7b9f6a609c2df6e0b) )
+
+	/* sound program */
+	ROM_REGION( 0x040000, "soundcpu", 0 )
+	ROM_LOAD("234_d05.6b", 0x000000, 0x020000, CRC(efb6bcaa) SHA1(4fb24b89a50b341871945547859278a6e2f5e002) )
+	ROM_RELOAD(           0x010000, 0x020000 )
+
+	/* tiles */
+	ROM_REGION( 0x600000, "gfx1", ROMREGION_ERASE00 )
+	ROM_LOADTILE_WORD( "234a08.1h", 0x000000, 1*1024*1024, CRC(27e94288) SHA1(a92b03adf7beea6a1ceb74f659c87c628a7ab8e4) )
+	ROM_LOADTILE_WORD( "234a09.1k", 0x000002, 1*1024*1024, CRC(03aad28f) SHA1(e7d9d788822ac9666e089b58288e3fcdba1b89da) )
+	ROM_LOADTILE_BYTE( "234a10.3h", 0x000004, 512*1024, CRC(51f50fe2) SHA1(164fc975feff442d93f1917727c159051dcd3a55) )
+
+	/* sprites */
+	ROM_REGION( 0xa00000, "gfx2", ROMREGION_ERASE00 )
+	ROM_LOAD64_WORD( "234a16.22k", 0x000000, 2*1024*1024, CRC(14d909a5) SHA1(15da356852fc0c63ecd924ac37ebe24bf3ba0760) )
+	ROM_LOAD64_WORD( "234a15.20k", 0x000002, 2*1024*1024, CRC(a5028418) SHA1(ec6fc7b38fb1d27490a5a9310ecac2d1049e197c) )
+	ROM_LOAD64_WORD( "234a14.19k", 0x000004, 2*1024*1024, CRC(d7921f47) SHA1(3fc97b308ad2ca25a376373ddfe08c8a375c424e) )
+	ROM_LOAD64_WORD( "234a13.17k", 0x000006, 2*1024*1024, CRC(5974392e) SHA1(7c380419244439804797a9510846d273ebe99d02) )
+	ROM_LOAD16_BYTE( "234a12.12k", 0x800000, 1024*1024, CRC(c7f2b099) SHA1(b72b80feb52560a5a42a1db39b059ac8bca27c10) )
+	ROM_LOAD16_BYTE( "234a11.10k", 0x800001, 1024*1024, CRC(82923713) SHA1(a36cd3b2c9d36e93a3c25ba1d4e162f3d92e06ae) )
+
+	/* sound data */
+	ROM_REGION( 0x400000, "shared", 0 )
+	ROM_LOAD( "234a06.2d", 0x000000, 2*1024*1024, CRC(12d32384) SHA1(ecd6cd752b0e20339e17a7652ed843fbb43f7595) )
+	ROM_LOAD( "234a07.1d", 0x200000, 2*1024*1024, CRC(05ee239f) SHA1(f4e6e7568dc73666a2b5e0c3fe743432e0436464) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting upside down with error
+	ROM_LOAD( "mtlchampu.nv", 0x0000, 0x080, CRC(182f146a) SHA1(e938324a5c24f53f19759388ec85d2ae603b8a5b) )
+ROM_END
+
+ROM_START( mtlchampu1 )
+	/* main program */
+	ROM_REGION( 0x400000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "234uad01.20f", 0x000000, 0x40000, CRC(5f6c8d09) SHA1(5850398cb9582973b400eaa82d84b7d07c87f779) )
 	ROM_LOAD16_BYTE( "234uad02.20g", 0x000001, 0x40000, CRC(15ca4fb2) SHA1(f3025f0d54ce20717207ce219fd9e07b808eda34) )
 	ROM_LOAD16_BYTE( "234_d03.19f",  0x300000, 0x80000, CRC(abb577c6) SHA1(493f11a10a4d5b62d755ff8274e77d898544944f) )
@@ -1847,7 +1855,7 @@ ROM_START( mtlchampu )
 	ROM_LOAD( "234a07.1d", 0x200000, 2*1024*1024, CRC(05ee239f) SHA1(f4e6e7568dc73666a2b5e0c3fe743432e0436464) )
 
 	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting upside down with error
-	ROM_LOAD( "mtlchampu.nv", 0x0000, 0x080, CRC(f5d84df7) SHA1(a14dca3ca275a754f1f46eab220a24b77ada23a5) )
+	ROM_LOAD( "mtlchampu1.nv", 0x0000, 0x080, CRC(f5d84df7) SHA1(a14dca3ca275a754f1f46eab220a24b77ada23a5) )
 ROM_END
 
 ROM_START( gaiapols )
@@ -2091,31 +2099,33 @@ ROM_START( dadandrn )
 ROM_END
 
 /*           ROM       parent    machine   inp       init */
-GAME( 1993, mystwarr,  0,        mystwarr, mystwarr, 0, ROT0,  "Konami", "Mystic Warriors (ver EAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, mystwarru, mystwarr, mystwarr, mystwarr, 0, ROT0,  "Konami", "Mystic Warriors (ver UAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, mystwarrj, mystwarr, mystwarr, mystwarr, 0, ROT0,  "Konami", "Mystic Warriors (ver JAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, mystwarra, mystwarr, mystwarr, mystwarr, 0, ROT0,  "Konami", "Mystic Warriors (ver AAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, mystwarr,   0,        mystwarr, mystwarr, driver_device, 0, ROT0,  "Konami", "Mystic Warriors (ver EAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, mystwarru,  mystwarr, mystwarr, mystwarr, driver_device, 0, ROT0,  "Konami", "Mystic Warriors (ver UAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, mystwarrj,  mystwarr, mystwarr, mystwarr, driver_device, 0, ROT0,  "Konami", "Mystic Warriors (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, mystwarra,  mystwarr, mystwarr, mystwarr, driver_device, 0, ROT0,  "Konami", "Mystic Warriors (ver AAA)", GAME_IMPERFECT_GRAPHICS )
 
-GAME( 1993, mmaulers,  0,        dadandrn, dadandrn, 0, ROT0,  "Konami", "Monster Maulers (ver EAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, dadandrn,  mmaulers, dadandrn, dadandrn, 0, ROT0,  "Konami", "Kyukyoku Sentai Dadandarn (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, mmaulers,   0,        dadandrn, dadandrn, driver_device, 0, ROT0,  "Konami", "Monster Maulers (ver EAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, dadandrn,   mmaulers, dadandrn, dadandrn, driver_device, 0, ROT0,  "Konami", "Kyukyoku Sentai Dadandarn (ver JAA)", GAME_IMPERFECT_GRAPHICS )
 
-GAME( 1993, viostorm,  0,        viostorm, viostorm, 0, ROT0,  "Konami", "Violent Storm (ver EAB)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, viostormu, viostorm, viostorm, viostorm, 0, ROT0,  "Konami", "Violent Storm (ver UAC)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, viostormub,viostorm, viostorm, viostorm, 0, ROT0,  "Konami", "Violent Storm (ver UAB)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, viostormj, viostorm, viostorm, viostorm, 0, ROT0,  "Konami", "Violent Storm (ver JAC)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, viostorma, viostorm, viostorm, viostorm, 0, ROT0,  "Konami", "Violent Storm (ver AAC)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, viostormab, viostorm, viostorm, viostorm, 0,ROT0,  "Konami", "Violent Storm (ver AAB)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, viostorm,   0,        viostorm, viostorm, driver_device, 0, ROT0,  "Konami", "Violent Storm (ver EAC)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, viostormeb, viostorm, viostorm, viostorm, driver_device, 0, ROT0,  "Konami", "Violent Storm (ver EAB)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, viostormu,  viostorm, viostorm, viostorm, driver_device, 0, ROT0,  "Konami", "Violent Storm (ver UAC)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, viostormub, viostorm, viostorm, viostorm, driver_device, 0, ROT0,  "Konami", "Violent Storm (ver UAB)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, viostormj,  viostorm, viostorm, viostorm, driver_device, 0, ROT0,  "Konami", "Violent Storm (ver JAC)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, viostorma,  viostorm, viostorm, viostorm, driver_device, 0, ROT0,  "Konami", "Violent Storm (ver AAC)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, viostormab, viostorm, viostorm, viostorm, driver_device, 0, ROT0,  "Konami", "Violent Storm (ver AAB)", GAME_IMPERFECT_GRAPHICS )
 
-GAME( 1993, metamrph,  0,        metamrph, metamrph, 0, ROT0,  "Konami", "Metamorphic Force (ver EAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, metamrphu, metamrph, metamrph, metamrph, 0, ROT0,  "Konami", "Metamorphic Force (ver UAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, metamrphj, metamrph, metamrph, metamrph, 0, ROT0,  "Konami", "Metamorphic Force (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, metamrph,   0,        metamrph, metamrph, driver_device, 0, ROT0,  "Konami", "Metamorphic Force (ver EAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, metamrphu,  metamrph, metamrph, metamrph, driver_device, 0, ROT0,  "Konami", "Metamorphic Force (ver UAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, metamrphj,  metamrph, metamrph, metamrph, driver_device, 0, ROT0,  "Konami", "Metamorphic Force (ver JAA)", GAME_IMPERFECT_GRAPHICS )
 
-GAME( 1993, mtlchamp,  0,        martchmp, martchmp, 0, ROT0,  "Konami", "Martial Champion (ver EAB)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, mtlchamp1, mtlchamp, martchmp, martchmp, 0, ROT0,  "Konami", "Martial Champion (ver EAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, mtlchampu, mtlchamp, martchmp, martchmp, 0, ROT0,  "Konami", "Martial Champion (ver UAD)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, mtlchampj, mtlchamp, martchmp, martchmp, 0, ROT0,  "Konami", "Martial Champion (ver JAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, mtlchampa, mtlchamp, martchmp, martchmp, 0, ROT0,  "Konami", "Martial Champion (ver AAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, mtlchamp,   0,        martchmp, martchmp, driver_device, 0, ROT0,  "Konami", "Martial Champion (ver EAB)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, mtlchamp1,  mtlchamp, martchmp, martchmp, driver_device, 0, ROT0,  "Konami", "Martial Champion (ver EAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, mtlchampu,  mtlchamp, martchmp, martchmp, driver_device, 0, ROT0,  "Konami", "Martial Champion (ver UAE)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, mtlchampu1, mtlchamp, martchmp, martchmp, driver_device, 0, ROT0,  "Konami", "Martial Champion (ver UAD)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, mtlchampj,  mtlchamp, martchmp, martchmp, driver_device, 0, ROT0,  "Konami", "Martial Champion (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, mtlchampa,  mtlchamp, martchmp, martchmp, driver_device, 0, ROT0,  "Konami", "Martial Champion (ver AAA)", GAME_IMPERFECT_GRAPHICS )
 
-GAME( 1993, gaiapols,  0,        gaiapols, dadandrn, 0, ROT90, "Konami", "Gaiapolis (ver EAF)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, gaiapolsu, gaiapols, gaiapols, dadandrn, 0, ROT90, "Konami", "Gaiapolis (ver UAF)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, gaiapolsj, gaiapols, gaiapols, dadandrn, 0, ROT90, "Konami", "Gaiapolis (ver JAF)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, gaiapols,   0,        gaiapols, dadandrn, driver_device, 0, ROT90, "Konami", "Gaiapolis (ver EAF)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, gaiapolsu,  gaiapols, gaiapols, dadandrn, driver_device, 0, ROT90, "Konami", "Gaiapolis (ver UAF)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, gaiapolsj,  gaiapols, gaiapols, dadandrn, driver_device, 0, ROT90, "Konami", "Gaiapolis (ver JAF)", GAME_IMPERFECT_GRAPHICS )

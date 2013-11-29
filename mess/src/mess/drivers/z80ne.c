@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Roberto Lavarone
 /******************************************************************************
     Nuova Elettronica Z80NE system driver
 
@@ -93,14 +95,11 @@
 #include "cpu/z80/z80.h"
 #include "includes/z80ne.h"
 #include "imagedev/flopdrv.h"
-#include "imagedev/cassette.h"
 #include "formats/z80ne_dsk.h"
 #include "machine/ram.h"
 
 /* peripheral chips */
-#include "machine/ay31015.h"
 #include "machine/kr2376.h"
-#include "video/m6847.h"
 #include "machine/wd17xx.h"
 
 /* Layout */
@@ -117,66 +116,66 @@
 
 /* LX.382 CPU Board RAM */
 /* LX.382 CPU Board EPROM */
-static ADDRESS_MAP_START( z80ne_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80ne_mem, AS_PROGRAM, 8, z80ne_state )
 	AM_RANGE( 0x0000, 0x03ff ) AM_RAMBANK("bank1")
 	AM_RANGE( 0x0400, 0x7fff ) AM_RAM
 	AM_RANGE( 0x8000, 0x83ff ) AM_ROMBANK("bank2")
 	AM_RANGE( 0x8400, 0xffff ) AM_READNOP AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80net_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80net_mem, AS_PROGRAM, 8, z80ne_state )
 	AM_RANGE( 0x0000, 0x03ff ) AM_RAMBANK("bank1")
 	AM_RANGE( 0x0400, 0x7fff ) AM_RAM
 	AM_RANGE( 0x8000, 0x83ff ) AM_ROMBANK("bank2")
 	AM_RANGE( 0x8400, 0xebff ) AM_RAM
-	AM_RANGE( 0xec00, 0xedff ) AM_RAM AM_BASE_MEMBER(z80ne_state, m_videoram) /* (6847) */
+	AM_RANGE( 0xec00, 0xedff ) AM_RAM AM_SHARE("videoram") /* (6847) */
 	AM_RANGE( 0xee00, 0xffff ) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80netb_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80netb_mem, AS_PROGRAM, 8, z80ne_state )
 	AM_RANGE( 0x0000, 0x3fff ) AM_ROM
 	AM_RANGE( 0x4000, 0xebff ) AM_RAM
-	AM_RANGE( 0xec00, 0xedff ) AM_RAM AM_BASE_MEMBER(z80ne_state, m_videoram) /* (6847) */
+	AM_RANGE( 0xec00, 0xedff ) AM_RAM AM_SHARE("videoram") /* (6847) */
 	AM_RANGE( 0xee00, 0xffff ) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80ne_io, AS_IO, 8 )
+static ADDRESS_MAP_START( z80ne_io, AS_IO, 8, z80ne_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0xee, 0xee) AM_READWRITE( lx385_data_r, lx385_data_w )
-	AM_RANGE(0xef, 0xef) AM_READWRITE( lx385_ctrl_r, lx385_ctrl_w )
-	AM_RANGE(0xf0, 0xff) AM_READWRITE( lx383_r, lx383_w )
+	AM_RANGE(0xee, 0xee) AM_READWRITE(lx385_data_r, lx385_data_w )
+	AM_RANGE(0xef, 0xef) AM_READWRITE(lx385_ctrl_r, lx385_ctrl_w )
+	AM_RANGE(0xf0, 0xff) AM_READWRITE(lx383_r, lx383_w )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80net_io, AS_IO, 8 )
+static ADDRESS_MAP_START( z80net_io, AS_IO, 8, z80ne_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0xea, 0xea) AM_READ( lx388_data_r )
-	AM_RANGE(0xeb, 0xeb) AM_READ( lx388_read_field_sync )
-	AM_RANGE(0xee, 0xee) AM_READWRITE( lx385_data_r, lx385_data_w )
-	AM_RANGE(0xef, 0xef) AM_READWRITE( lx385_ctrl_r, lx385_ctrl_w )
-	AM_RANGE(0xf0, 0xff) AM_READWRITE( lx383_r, lx383_w )
+	AM_RANGE(0xea, 0xea) AM_READ(lx388_data_r )
+	AM_RANGE(0xeb, 0xeb) AM_READ(lx388_read_field_sync )
+	AM_RANGE(0xee, 0xee) AM_READWRITE(lx385_data_r, lx385_data_w )
+	AM_RANGE(0xef, 0xef) AM_READWRITE(lx385_ctrl_r, lx385_ctrl_w )
+	AM_RANGE(0xf0, 0xff) AM_READWRITE(lx383_r, lx383_w )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80netf_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80netf_mem, AS_PROGRAM, 8, z80ne_state )
 	AM_RANGE( 0x0000, 0x03ff ) AM_RAMBANK("bank1")
 	AM_RANGE( 0x0400, 0x3fff ) AM_RAMBANK("bank2")
 	AM_RANGE( 0x4000, 0x7fff ) AM_RAM
 	AM_RANGE( 0x8000, 0x83ff ) AM_RAMBANK("bank3")
 	AM_RANGE( 0x8400, 0xdfff ) AM_RAM
 	AM_RANGE( 0xe000, 0xebff ) AM_READNOP AM_WRITENOP
-	AM_RANGE( 0xec00, 0xedff ) AM_RAM AM_BASE_MEMBER(z80ne_state, m_videoram) /* (6847) */
+	AM_RANGE( 0xec00, 0xedff ) AM_RAM AM_SHARE("videoram") /* (6847) */
 	AM_RANGE( 0xee00, 0xefff ) AM_READNOP AM_WRITENOP
 	AM_RANGE( 0xf000, 0xf3ff ) AM_RAMBANK("bank4")
 	AM_RANGE( 0xf400, 0xffff ) AM_READNOP AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80netf_io, AS_IO, 8 )
+static ADDRESS_MAP_START( z80netf_io, AS_IO, 8, z80ne_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0xd0, 0xd7) AM_DEVREADWRITE("wd1771", lx390_fdc_r, lx390_fdc_w)
-	AM_RANGE(0xea, 0xea) AM_READ( lx388_data_r )
-	AM_RANGE(0xeb, 0xeb) AM_READ( lx388_read_field_sync )
-	AM_RANGE(0xee, 0xee) AM_READWRITE( lx385_data_r, lx385_data_w )
-	AM_RANGE(0xef, 0xef) AM_READWRITE( lx385_ctrl_r, lx385_ctrl_w )
-	AM_RANGE(0xf0, 0xff) AM_READWRITE( lx383_r, lx383_w )
+	AM_RANGE(0xd0, 0xd7) AM_READWRITE(lx390_fdc_r, lx390_fdc_w)
+	AM_RANGE(0xea, 0xea) AM_READ(lx388_data_r )
+	AM_RANGE(0xeb, 0xeb) AM_READ(lx388_read_field_sync )
+	AM_RANGE(0xee, 0xee) AM_READWRITE(lx385_data_r, lx385_data_w )
+	AM_RANGE(0xef, 0xef) AM_READWRITE(lx385_ctrl_r, lx385_ctrl_w )
+	AM_RANGE(0xf0, 0xff) AM_READWRITE(lx383_r, lx383_w )
 ADDRESS_MAP_END
 
 
@@ -191,7 +190,7 @@ static INPUT_PORTS_START( z80ne )
 /*
  * In natural mode the CTRL key is mapped on shift
  */
-PORT_START("ROW0")			/* IN0 keys row 0 */
+PORT_START("ROW0")          /* IN0 keys row 0 */
 PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 0") PORT_CODE(KEYCODE_0)          //PORT_CHAR('0') PORT_CHAR('=')
 PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 1") PORT_CODE(KEYCODE_1)          //PORT_CHAR('1') PORT_CHAR('!')
 PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 2") PORT_CODE(KEYCODE_2)          //PORT_CHAR('2') PORT_CHAR('"')
@@ -201,7 +200,7 @@ PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 5") PORT_CODE(KE
 PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 6") PORT_CODE(KEYCODE_6)          //PORT_CHAR('6') PORT_CHAR('&')
 PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 7") PORT_CODE(KEYCODE_7)          //PORT_CHAR('7') PORT_CHAR('/')
 
-PORT_START("ROW1")			/* IN1 keys row 1 */
+PORT_START("ROW1")          /* IN1 keys row 1 */
 PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 8") PORT_CODE(KEYCODE_8)          //PORT_CHAR('8') PORT_CHAR('(')
 PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 9") PORT_CODE(KEYCODE_9)          //PORT_CHAR('9') PORT_CHAR(')')
 PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 A") PORT_CODE(KEYCODE_A)          //PORT_CHAR('a') PORT_CHAR('A')
@@ -211,7 +210,7 @@ PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 D") PORT_CODE(KE
 PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 E") PORT_CODE(KEYCODE_E)          //PORT_CHAR('e') PORT_CHAR('E')
 PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 F") PORT_CODE(KEYCODE_F)          //PORT_CHAR('f') PORT_CHAR('F')
 
-PORT_START("CTRL")			/* CONTROL key */
+PORT_START("CTRL")          /* CONTROL key */
 PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
 PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -221,12 +220,12 @@ PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
 PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )
 PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
 
-PORT_START("RST")			/* RESET key */
-PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 Reset")  PORT_CODE(KEYCODE_F3) PORT_CHANGED(z80ne_reset, NULL)
+PORT_START("RST")           /* RESET key */
+PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LX.384 Reset")  PORT_CODE(KEYCODE_F3) PORT_CHANGED_MEMBER(DEVICE_SELF, z80ne_state, z80ne_reset, NULL)
 
 /* Settings */
 PORT_START("LX.385")
-PORT_CONFNAME(0x07, 0x01	, "LX.385 Cassette: P1,P3 Data Rate")
+PORT_CONFNAME(0x07, 0x01    , "LX.385 Cassette: P1,P3 Data Rate")
 PORT_CONFSETTING( 0x01, "A-B: 300 bps")
 PORT_CONFSETTING( 0x02, "A-C: 600 bps")
 PORT_CONFSETTING( 0x04, "A-D: 1200 bps")
@@ -243,7 +242,7 @@ PORT_INCLUDE( z80ne )
 
 /* LX.388 Keyboard BREAK key */
 PORT_START("LX388_BRK")
-PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Break") PORT_CODE(KEYCODE_INSERT) PORT_CHAR(UCHAR_MAMEKEY(INSERT)) PORT_CHANGED(z80ne_nmi, NULL)
+PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Break") PORT_CODE(KEYCODE_INSERT) PORT_CHAR(UCHAR_MAMEKEY(INSERT)) PORT_CHANGED_MEMBER(DEVICE_SELF, z80ne_state, z80ne_nmi, NULL)
 
 /* LX.388 Keyboard (Encoded by KR2376) */
 
@@ -385,34 +384,33 @@ INPUT_PORTS_END
 
 static const UINT32 lx388palette[] =
 {
-	MAKE_RGB(0x00, 0xff, 0x00),	/* GREEN */
-	MAKE_RGB(0x00, 0xff, 0x00),	/* YELLOW in original, here GREEN */
-	MAKE_RGB(0x00, 0x00, 0xff),	/* BLUE */
-	MAKE_RGB(0xff, 0x00, 0x00),	/* RED */
-	MAKE_RGB(0xff, 0xff, 0xff),	/* BUFF */
-	MAKE_RGB(0x00, 0xff, 0xff),	/* CYAN */
-	MAKE_RGB(0xff, 0x00, 0xff),	/* MAGENTA */
-	MAKE_RGB(0xff, 0x80, 0x00),	/* ORANGE */
+	MAKE_RGB(0x00, 0xff, 0x00), /* GREEN */
+	MAKE_RGB(0x00, 0xff, 0x00), /* YELLOW in original, here GREEN */
+	MAKE_RGB(0x00, 0x00, 0xff), /* BLUE */
+	MAKE_RGB(0xff, 0x00, 0x00), /* RED */
+	MAKE_RGB(0xff, 0xff, 0xff), /* BUFF */
+	MAKE_RGB(0x00, 0xff, 0xff), /* CYAN */
+	MAKE_RGB(0xff, 0x00, 0xff), /* MAGENTA */
+	MAKE_RGB(0xff, 0x80, 0x00), /* ORANGE */
 
-	MAKE_RGB(0x00, 0x20, 0x00),	/* BLACK in original, here DARK green */
-	MAKE_RGB(0x00, 0xff, 0x00),	/* GREEN */
-	MAKE_RGB(0x00, 0x00, 0x00),	/* BLACK */
-	MAKE_RGB(0xff, 0xff, 0xff),	/* BUFF */
+	MAKE_RGB(0x00, 0x20, 0x00), /* BLACK in original, here DARK green */
+	MAKE_RGB(0x00, 0xff, 0x00), /* GREEN */
+	MAKE_RGB(0x00, 0x00, 0x00), /* BLACK */
+	MAKE_RGB(0xff, 0xff, 0xff), /* BUFF */
 
-	MAKE_RGB(0x00, 0x20, 0x00),	/* ALPHANUMERIC DARK GREEN */
-	MAKE_RGB(0x00, 0xff, 0x00),	/* ALPHANUMERIC BRIGHT GREEN */
-	MAKE_RGB(0x40, 0x10, 0x00),	/* ALPHANUMERIC DARK ORANGE */
-	MAKE_RGB(0xff, 0xc4, 0x18)		/* ALPHANUMERIC BRIGHT ORANGE */
+	MAKE_RGB(0x00, 0x20, 0x00), /* ALPHANUMERIC DARK GREEN */
+	MAKE_RGB(0x00, 0xff, 0x00), /* ALPHANUMERIC BRIGHT GREEN */
+	MAKE_RGB(0x40, 0x10, 0x00), /* ALPHANUMERIC DARK ORANGE */
+	MAKE_RGB(0xff, 0xc4, 0x18)      /* ALPHANUMERIC BRIGHT ORANGE */
 };
 
 static const ay31015_config z80ne_ay31015_config =
 {
-	AY_3_1015,
 	4800.0,
 	4800.0,
-	NULL,
-	NULL,
-	NULL
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
 };
 
 static const cassette_interface z80ne_cassettea_config =
@@ -436,7 +434,7 @@ static const cassette_interface z80ne_cassetteb_config =
 static const kr2376_interface lx388_kr2376_interface =
 {
 	50000,
-	NULL
+	DEVCB_NULL
 };
 
 static const floppy_interface z80netf_floppy_interface =
@@ -447,25 +445,26 @@ static const floppy_interface z80netf_floppy_interface =
 	DEVCB_NULL,
 	DEVCB_NULL,
 	FLOPPY_STANDARD_5_25_DSHD,
-	FLOPPY_OPTIONS_NAME(z80ne),
+	LEGACY_FLOPPY_OPTIONS_NAME(z80ne),
 	NULL,
 	NULL
 };
 
 static const mc6847_interface z80net_mc6847_intf =
 {
-	DEVCB_HANDLER(lx388_mc6847_videoram_r),
-	DEVCB_LINE_GND,
-	DEVCB_LINE_GND,
-	DEVCB_LINE_GND,
+	"lx388",
+	DEVCB_DRIVER_MEMBER(z80ne_state, lx388_mc6847_videoram_r),
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_LINE_GND,
-	DEVCB_LINE_GND,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL
+
+	DEVCB_LINE_GND,             /* AG */
+	DEVCB_LINE_GND,             /* GM2 */
+	DEVCB_LINE_GND,             /* GM1 */
+	DEVCB_LINE_GND,             /* GM0 */
+	DEVCB_LINE_GND,             /* CSS */
+	DEVCB_NULL,                 /* AS */
+	DEVCB_NULL,                 /* INTEXT */
+	DEVCB_NULL,                 /* INV */
 };
 
 static MACHINE_CONFIG_START( z80ne, z80ne_state )
@@ -474,13 +473,13 @@ static MACHINE_CONFIG_START( z80ne, z80ne_state )
 	MCFG_CPU_PROGRAM_MAP(z80ne_mem)
 	MCFG_CPU_IO_MAP(z80ne_io)
 
-	MCFG_MACHINE_START(z80ne)
-	MCFG_MACHINE_RESET(z80ne)
+	MCFG_MACHINE_START_OVERRIDE(z80ne_state,z80ne)
+	MCFG_MACHINE_RESET_OVERRIDE(z80ne_state,z80ne)
 
 	MCFG_AY31015_ADD( "ay_3_1015", z80ne_ay31015_config )
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, z80ne_cassettea_config )
-	MCFG_CASSETTE_ADD( CASSETTE2_TAG, z80ne_cassetteb_config )
+	MCFG_CASSETTE_ADD( "cassette", z80ne_cassettea_config )
+	MCFG_CASSETTE_ADD( "cassette2", z80ne_cassetteb_config )
 
 	MCFG_DEFAULT_LAYOUT(layout_z80ne)
 
@@ -495,22 +494,14 @@ static MACHINE_CONFIG_DERIVED( z80net, z80ne )
 	MCFG_CPU_PROGRAM_MAP(z80net_mem)
 	MCFG_CPU_IO_MAP(z80net_io)
 
-	MCFG_MACHINE_START( z80net )
-	MCFG_MACHINE_RESET( z80net )
+	MCFG_MACHINE_START_OVERRIDE(z80ne_state, z80net )
+	MCFG_MACHINE_RESET_OVERRIDE(z80ne_state, z80net )
 
 	MCFG_KR2376_ADD( "lx388_kr2376", lx388_kr2376_interface)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("lx388", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(M6847_PAL_FRAMES_PER_SECOND)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MCFG_SCREEN_SIZE(320, 25+192+26)
-	MCFG_SCREEN_VISIBLE_AREA(0, 319, 1, 239)
-	MCFG_SCREEN_UPDATE(lx388)
-
-	MCFG_MC6847_ADD("mc6847", z80net_mc6847_intf)
-	MCFG_MC6847_TYPE(M6847_VERSION_ORIGINAL_PAL)
-	MCFG_MC6847_PALETTE(lx388palette)
+	MCFG_SCREEN_MC6847_PAL_ADD("lx388", "mc6847")
+	MCFG_MC6847_ADD("mc6847", MC6847_PAL, XTAL_4_433619MHz, z80net_mc6847_intf)
 
 	MCFG_DEFAULT_LAYOUT(layout_z80net)
 
@@ -526,29 +517,21 @@ static MACHINE_CONFIG_START( z80netb, z80ne_state )
 	MCFG_CPU_PROGRAM_MAP(z80netb_mem)
 	MCFG_CPU_IO_MAP(z80net_io)
 
-	MCFG_MACHINE_START(z80netb)
-	MCFG_MACHINE_RESET(z80netb)
+	MCFG_MACHINE_START_OVERRIDE(z80ne_state,z80netb)
+	MCFG_MACHINE_RESET_OVERRIDE(z80ne_state,z80netb)
 
 	MCFG_AY31015_ADD( "ay_3_1015", z80ne_ay31015_config )
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, z80ne_cassettea_config )
-	MCFG_CASSETTE_ADD( CASSETTE2_TAG, z80ne_cassetteb_config )
+	MCFG_CASSETTE_ADD( "cassette", z80ne_cassettea_config )
+	MCFG_CASSETTE_ADD( "cassette2", z80ne_cassetteb_config )
 
 	MCFG_KR2376_ADD( "lx388_kr2376", lx388_kr2376_interface)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("lx388", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(M6847_PAL_FRAMES_PER_SECOND)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MCFG_SCREEN_SIZE(320, 25+192+26)
-	MCFG_SCREEN_VISIBLE_AREA(0, 319, 1, 239)
-	MCFG_SCREEN_UPDATE(lx388)
+	MCFG_SCREEN_MC6847_PAL_ADD("lx388", "mc6847")
+	MCFG_MC6847_ADD("mc6847", MC6847_PAL, XTAL_4_433619MHz, z80net_mc6847_intf)
 
 	MCFG_DEFAULT_LAYOUT(layout_z80netb)
-
-	MCFG_MC6847_ADD("mc6847", z80net_mc6847_intf)
-	MCFG_MC6847_TYPE(M6847_VERSION_ORIGINAL_PAL)
-	MCFG_MC6847_PALETTE(lx388palette)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -562,30 +545,22 @@ static MACHINE_CONFIG_START( z80netf, z80ne_state )
 	MCFG_CPU_PROGRAM_MAP(z80netf_mem)
 	MCFG_CPU_IO_MAP(z80netf_io)
 
-	MCFG_MACHINE_START(z80netf)
-	MCFG_MACHINE_RESET(z80netf)
+	MCFG_MACHINE_START_OVERRIDE(z80ne_state,z80netf)
+	MCFG_MACHINE_RESET_OVERRIDE(z80ne_state,z80netf)
 
 	MCFG_AY31015_ADD( "ay_3_1015", z80ne_ay31015_config )
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, z80ne_cassettea_config )
-	MCFG_CASSETTE_ADD( CASSETTE2_TAG, z80ne_cassetteb_config )
+	MCFG_CASSETTE_ADD( "cassette", z80ne_cassettea_config )
+	MCFG_CASSETTE_ADD( "cassette2", z80ne_cassetteb_config )
 
 	MCFG_KR2376_ADD( "lx388_kr2376", lx388_kr2376_interface)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("lx388", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(M6847_PAL_FRAMES_PER_SECOND)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MCFG_SCREEN_SIZE(320, 25+192+26)
-	MCFG_SCREEN_VISIBLE_AREA(0, 319, 1, 239)
-	MCFG_SCREEN_UPDATE(lx388)
-
-	MCFG_MC6847_ADD("mc6847", z80net_mc6847_intf)
-	MCFG_MC6847_TYPE(M6847_VERSION_ORIGINAL_PAL)
-	MCFG_MC6847_PALETTE(lx388palette)
+	MCFG_SCREEN_MC6847_PAL_ADD("lx388", "mc6847")
+	MCFG_MC6847_ADD("mc6847", MC6847_PAL, XTAL_4_433619MHz, z80net_mc6847_intf)
 
 	MCFG_FD1771_ADD("wd1771", default_wd17xx_interface)
-	MCFG_FLOPPY_4_DRIVES_ADD(z80netf_floppy_interface)
+	MCFG_LEGACY_FLOPPY_4_DRIVES_ADD(z80netf_floppy_interface)
 
 	MCFG_DEFAULT_LAYOUT(layout_z80netf)
 
@@ -648,7 +623,7 @@ ROM_START( z80netf )
 ROM_END
 
 /*    YEAR  NAME      PARENT    COMPAT  MACHINE   INPUT     INIT     COMPANY               FULLNAME                      FLAGS */
-COMP( 1980,	z80ne,    0,        0,      z80ne,    z80ne,    z80ne,   "Nuova Elettronica",	"Z80NE",                      GAME_NO_SOUND)
-COMP( 1980,	z80net,   z80ne,    0,      z80net,   z80net,   z80net,  "Nuova Elettronica",	"Z80NE + LX.388",             GAME_NO_SOUND)
-COMP( 1980,	z80netb,  z80ne,    0,      z80netb,  z80net,   z80netb, "Nuova Elettronica",	"Z80NE + LX.388 + Basic 16k", GAME_NO_SOUND)
-COMP( 1980,	z80netf,  z80ne,    0,      z80netf,  z80netf,  z80netf, "Nuova Elettronica",	"Z80NE + LX.388 + LX.390",    GAME_NO_SOUND)
+COMP( 1980, z80ne,    0,        0,      z80ne,    z80ne, z80ne_state,    z80ne,   "Nuova Elettronica",  "Z80NE",                      GAME_NO_SOUND_HW)
+COMP( 1980, z80net,   z80ne,    0,      z80net,   z80net, z80ne_state,   z80net,  "Nuova Elettronica",  "Z80NE + LX.388",             GAME_NO_SOUND_HW)
+COMP( 1980, z80netb,  z80ne,    0,      z80netb,  z80net, z80ne_state,   z80netb, "Nuova Elettronica",  "Z80NE + LX.388 + Basic 16k", GAME_NO_SOUND_HW)
+COMP( 1980, z80netf,  z80ne,    0,      z80netf,  z80netf, z80ne_state,  z80netf, "Nuova Elettronica",  "Z80NE + LX.388 + LX.390",    GAME_NO_SOUND_HW)

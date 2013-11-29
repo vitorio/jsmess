@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     fileio.h
 
     Core file I/O interface functions and definitions.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -45,16 +16,21 @@
 #include "corefile.h"
 #include "hash.h"
 
-
+// some systems use macros for getc/putc rather than functions
+#ifdef getc
+#undef getc
+#endif
 
 //**************************************************************************
 //  TYPE DEFINITIONS
 //**************************************************************************
 
 // forward declarations
-typedef struct _zip_file_header zip_file_header;
-typedef struct _zip_file zip_file;
+struct zip_file_header;
+struct zip_file;
 
+struct _7z_file_header;
+struct _7z_file;
 
 // ======================> path_iterator
 
@@ -73,9 +49,9 @@ public:
 
 private:
 	// internal state
-	const char *	m_base;
-	const char *	m_current;
-	int				m_index;
+	const char *    m_base;
+	const char *    m_current;
+	int             m_index;
 };
 
 
@@ -95,10 +71,10 @@ public:
 
 private:
 	// internal state
-	path_iterator	m_iterator;
-	osd_directory *	m_curdir;
-	astring			m_pathbuffer;
-	int				m_buflen;
+	path_iterator   m_iterator;
+	osd_directory * m_curdir;
+	astring         m_pathbuffer;
+	//int             m_buflen;
 };
 
 
@@ -159,25 +135,36 @@ public:
 	int printf(const char *fmt, ...);
 
 private:
+	bool compressed_file_ready(void);
+
 	// internal helpers
 	file_error attempt_zipped();
 	file_error load_zipped_file();
 	bool zip_filename_match(const zip_file_header &header, const astring &filename);
 	bool zip_header_is_path(const zip_file_header &header);
 
+	file_error attempt__7zped();
+	file_error load__7zped_file();
+
 	// internal state
-	astring			m_filename;						// original filename provided
-	astring			m_fullpath;						// full filename
-	core_file *		m_file;							// core file pointer
-	path_iterator	m_iterator;						// iterator for paths
-	UINT32			m_crc;							// iterator for paths
-	UINT32			m_openflags;					// flags we used for the open
-	hash_collection m_hashes;						// collection of hashes
-	zip_file *		m_zipfile;						// ZIP file pointer
-	UINT8 *			m_zipdata;						// ZIP file data
-	UINT64			m_ziplength;					// ZIP file length
-	bool			m_remove_on_close;				// flag: remove the file when closing
+	astring         m_filename;                     // original filename provided
+	astring         m_fullpath;                     // full filename
+	core_file *     m_file;                         // core file pointer
+	path_iterator   m_iterator;                     // iterator for paths
+	UINT32          m_crc;                          // iterator for paths
+	UINT32          m_openflags;                    // flags we used for the open
+	hash_collection m_hashes;                       // collection of hashes
+
+	zip_file *      m_zipfile;                      // ZIP file pointer
+	UINT8 *         m_zipdata;                      // ZIP file data
+	UINT64          m_ziplength;                    // ZIP file length
+
+	_7z_file *      m__7zfile;                      // 7Z file pointer
+	UINT8 *         m__7zdata;                      // 7Z file data
+	UINT64          m__7zlength;                    // 7Z file length
+
+	bool            m_remove_on_close;              // flag: remove the file when closing
 };
 
 
-#endif	/* __FILEIO_H__ */
+#endif  /* __FILEIO_H__ */

@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     Atari Gauntlet hardware
@@ -17,24 +19,22 @@
  *
  *************************************/
 
-static TILE_GET_INFO( get_alpha_tile_info )
+TILE_GET_INFO_MEMBER(gauntlet_state::get_alpha_tile_info)
 {
-	gauntlet_state *state = machine.driver_data<gauntlet_state>();
-	UINT16 data = state->m_alpha[tile_index];
+	UINT16 data = tilemap.basemem_read(tile_index);
 	int code = data & 0x3ff;
 	int color = ((data >> 10) & 0x0f) | ((data >> 9) & 0x20);
 	int opaque = data & 0x8000;
-	SET_TILE_INFO(1, code, color, opaque ? TILE_FORCE_LAYER0 : 0);
+	SET_TILE_INFO_MEMBER(1, code, color, opaque ? TILE_FORCE_LAYER0 : 0);
 }
 
 
-static TILE_GET_INFO( get_playfield_tile_info )
+TILE_GET_INFO_MEMBER(gauntlet_state::get_playfield_tile_info)
 {
-	gauntlet_state *state = machine.driver_data<gauntlet_state>();
-	UINT16 data = state->m_playfield[tile_index];
-	int code = ((state->m_playfield_tile_bank * 0x1000) + (data & 0xfff)) ^ 0x800;
-	int color = 0x10 + (state->m_playfield_color_bank * 8) + ((data >> 12) & 7);
-	SET_TILE_INFO(0, code, color, (data >> 15) & 1);
+	UINT16 data = tilemap.basemem_read(tile_index);
+	int code = ((m_playfield_tile_bank * 0x1000) + (data & 0xfff)) ^ 0x800;
+	int color = 0x10 + (m_playfield_color_bank * 8) + ((data >> 12) & 7);
+	SET_TILE_INFO_MEMBER(0, code, color, (data >> 15) & 1);
 }
 
 
@@ -45,70 +45,53 @@ static TILE_GET_INFO( get_playfield_tile_info )
  *
  *************************************/
 
-VIDEO_START( gauntlet )
+const atari_motion_objects_config gauntlet_state::s_mob_config =
 {
-	static const atarimo_desc modesc =
-	{
-		0,					/* index to which gfx system */
-		1,					/* number of motion object banks */
-		1,					/* are the entries linked? */
-		1,					/* are the entries split? */
-		0,					/* render in reverse order? */
-		0,					/* render in swapped X/Y order? */
-		0,					/* does the neighbor bit affect the next object? */
-		8,					/* pixels per SLIP entry (0 for no-slip) */
-		1,					/* pixel offset for SLIPs */
-		0,					/* maximum number of links to visit/scanline (0=all) */
+	0,                  /* index to which gfx system */
+	1,                  /* number of motion object banks */
+	1,                  /* are the entries linked? */
+	1,                  /* are the entries split? */
+	0,                  /* render in reverse order? */
+	0,                  /* render in swapped X/Y order? */
+	0,                  /* does the neighbor bit affect the next object? */
+	8,                  /* pixels per SLIP entry (0 for no-slip) */
+	1,                  /* pixel offset for SLIPs */
+	0,                  /* maximum number of links to visit/scanline (0=all) */
 
-		0x100,				/* base palette entry */
-		0x100,				/* maximum number of colors */
-		0,					/* transparent pen index */
+	0x100,              /* base palette entry */
+	0x100,              /* maximum number of colors */
+	0,                  /* transparent pen index */
 
-		{{ 0,0,0,0x03ff }},	/* mask for the link */
-		{{ 0 }},			/* mask for the graphics bank */
-		{{ 0x7fff,0,0,0 }},	/* mask for the code index */
-		{{ 0 }},			/* mask for the upper code index */
-		{{ 0,0x000f,0,0 }},	/* mask for the color */
-		{{ 0,0xff80,0,0 }},	/* mask for the X position */
-		{{ 0,0,0xff80,0 }},	/* mask for the Y position */
-		{{ 0,0,0x0038,0 }},	/* mask for the width, in tiles*/
-		{{ 0,0,0x0007,0 }},	/* mask for the height, in tiles */
-		{{ 0,0,0x0040,0 }},	/* mask for the horizontal flip */
-		{{ 0 }},			/* mask for the vertical flip */
-		{{ 0 }},			/* mask for the priority */
-		{{ 0 }},			/* mask for the neighbor */
-		{{ 0 }},			/* mask for absolute coordinates */
+	{{ 0,0,0,0x03ff }}, /* mask for the link */
+	{{ 0x7fff,0,0,0 }}, /* mask for the code index */
+	{{ 0,0x000f,0,0 }}, /* mask for the color */
+	{{ 0,0xff80,0,0 }}, /* mask for the X position */
+	{{ 0,0,0xff80,0 }}, /* mask for the Y position */
+	{{ 0,0,0x0038,0 }}, /* mask for the width, in tiles*/
+	{{ 0,0,0x0007,0 }}, /* mask for the height, in tiles */
+	{{ 0,0,0x0040,0 }}, /* mask for the horizontal flip */
+	{{ 0 }},            /* mask for the vertical flip */
+	{{ 0 }},            /* mask for the priority */
+	{{ 0 }},            /* mask for the neighbor */
+	{{ 0 }},            /* mask for absolute coordinates */
 
-		{{ 0 }},			/* mask for the special value */
-		0,					/* resulting value to indicate "special" */
-		0					/* callback routine for special entries */
-	};
+	{{ 0 }},            /* mask for the special value */
+	0                   /* resulting value to indicate "special" */
+};
 
-	gauntlet_state *state = machine.driver_data<gauntlet_state>();
-	UINT16 *codelookup;
-	int i, size;
-
-	/* initialize the playfield */
-	state->m_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
-
-	/* initialize the motion objects */
-	atarimo_init(machine, 0, &modesc);
-
-	/* initialize the alphanumerics */
-	state->m_alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
-	tilemap_set_transparent_pen(state->m_alpha_tilemap, 0);
-
+VIDEO_START_MEMBER(gauntlet_state,gauntlet)
+{
 	/* modify the motion object code lookup table to account for the code XOR */
-	codelookup = atarimo_get_code_lookup(0, &size);
-	for (i = 0; i < size; i++)
+	dynamic_array<UINT16> &codelookup = m_mob->code_lookup();
+	for (int i = 0; i < codelookup.count(); i++)
 		codelookup[i] ^= 0x800;
 
 	/* set up the base color for the playfield */
-	state->m_playfield_color_bank = state->m_vindctr2_screen_refresh ? 0 : 1;
+	m_playfield_color_bank = m_vindctr2_screen_refresh ? 0 : 1;
 
 	/* save states */
-	state->save_item(NAME(state->m_playfield_tile_bank));
-	state->save_item(NAME(state->m_playfield_color_bank));
+	save_item(NAME(m_playfield_tile_bank));
+	save_item(NAME(m_playfield_color_bank));
 }
 
 
@@ -119,20 +102,19 @@ VIDEO_START( gauntlet )
  *
  *************************************/
 
-WRITE16_HANDLER( gauntlet_xscroll_w )
+WRITE16_MEMBER( gauntlet_state::gauntlet_xscroll_w )
 {
-	gauntlet_state *state = space->machine().driver_data<gauntlet_state>();
-	UINT16 oldxscroll = *state->m_xscroll;
-	COMBINE_DATA(state->m_xscroll);
+	UINT16 oldxscroll = *m_xscroll;
+	COMBINE_DATA(m_xscroll);
 
 	/* if something changed, force a partial update */
-	if (*state->m_xscroll != oldxscroll)
+	if (*m_xscroll != oldxscroll)
 	{
-		space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
+		m_screen->update_partial(m_screen->vpos());
 
 		/* adjust the scrolls */
-		tilemap_set_scrollx(state->m_playfield_tilemap, 0, *state->m_xscroll);
-		atarimo_set_xscroll(0, *state->m_xscroll & 0x1ff);
+		m_playfield_tilemap->set_scrollx(0, *m_xscroll);
+		m_mob->set_xscroll(*m_xscroll & 0x1ff);
 	}
 }
 
@@ -144,27 +126,26 @@ WRITE16_HANDLER( gauntlet_xscroll_w )
  *
  *************************************/
 
-WRITE16_HANDLER( gauntlet_yscroll_w )
+WRITE16_MEMBER( gauntlet_state::gauntlet_yscroll_w )
 {
-	gauntlet_state *state = space->machine().driver_data<gauntlet_state>();
-	UINT16 oldyscroll = *state->m_yscroll;
-	COMBINE_DATA(state->m_yscroll);
+	UINT16 oldyscroll = *m_yscroll;
+	COMBINE_DATA(m_yscroll);
 
 	/* if something changed, force a partial update */
-	if (*state->m_yscroll != oldyscroll)
+	if (*m_yscroll != oldyscroll)
 	{
-		space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
+		m_screen->update_partial(m_screen->vpos());
 
 		/* if the bank changed, mark all tiles dirty */
-		if (state->m_playfield_tile_bank != (*state->m_yscroll & 3))
+		if (m_playfield_tile_bank != (*m_yscroll & 3))
 		{
-			state->m_playfield_tile_bank = *state->m_yscroll & 3;
-			tilemap_mark_all_tiles_dirty(state->m_playfield_tilemap);
+			m_playfield_tile_bank = *m_yscroll & 3;
+			m_playfield_tilemap->mark_all_dirty();
 		}
 
 		/* adjust the scrolls */
-		tilemap_set_scrolly(state->m_playfield_tilemap, 0, *state->m_yscroll >> 7);
-		atarimo_set_yscroll(0, (*state->m_yscroll >> 7) & 0x1ff);
+		m_playfield_tilemap->set_scrolly(0, *m_yscroll >> 7);
+		m_mob->set_yscroll((*m_yscroll >> 7) & 0x1ff);
 	}
 }
 
@@ -176,45 +157,40 @@ WRITE16_HANDLER( gauntlet_yscroll_w )
  *
  *************************************/
 
-SCREEN_UPDATE( gauntlet )
+UINT32 gauntlet_state::screen_update_gauntlet(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	gauntlet_state *state = screen->machine().driver_data<gauntlet_state>();
-	atarimo_rect_list rectlist;
-	bitmap_t *mobitmap;
-	int x, y, r;
+	// start drawing
+	m_mob->draw_async(cliprect);
 
 	/* draw the playfield */
-	tilemap_draw(bitmap, cliprect, state->m_playfield_tilemap, 0, 0);
+	m_playfield_tilemap->draw(screen, bitmap, cliprect, 0, 0);
 
 	/* draw and merge the MO */
-	mobitmap = atarimo_render(0, cliprect, &rectlist);
-	for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
-		for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
+	bitmap_ind16 &mobitmap = m_mob->bitmap();
+	for (const sparse_dirty_rect *rect = m_mob->first_dirty_rect(cliprect); rect != NULL; rect = rect->next())
+		for (int y = rect->min_y; y <= rect->max_y; y++)
 		{
-			UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
-			UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
-			for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
-				if (mo[x])
+			UINT16 *mo = &mobitmap.pix16(y);
+			UINT16 *pf = &bitmap.pix16(y);
+			for (int x = rect->min_x; x <= rect->max_x; x++)
+				if (mo[x] != 0xffff)
 				{
 					/* verified via schematics:
 
-                        MO pen 1 clears PF color bit 0x80
-                    */
+					    MO pen 1 clears PF color bit 0x80
+					*/
 					if ((mo[x] & 0x0f) == 1)
 					{
 						/* Vindicators Part II has extra logic here for the bases */
-						if (!state->m_vindctr2_screen_refresh || (mo[x] & 0xf0) != 0)
+						if (!m_vindctr2_screen_refresh || (mo[x] & 0xf0) != 0)
 							pf[x] ^= 0x80;
 					}
 					else
 						pf[x] = mo[x];
-
-					/* erase behind ourselves */
-					mo[x] = 0;
 				}
 		}
 
 	/* add the alpha on top */
-	tilemap_draw(bitmap, cliprect, state->m_alpha_tilemap, 0, 0);
+	m_alpha_tilemap->draw(screen, bitmap, cliprect, 0, 0);
 	return 0;
 }

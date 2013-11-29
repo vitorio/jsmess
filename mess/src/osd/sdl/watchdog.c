@@ -1,6 +1,6 @@
 //============================================================
 //
-//  watchdog.h - watchdog handling
+//  watchdog.c - watchdog handling
 //
 //  Copyright (c) 1996-2011, Nicola Salmoria and the MAME Team.
 //  Visit http://mamedev.org for licensing and usage restrictions.
@@ -11,7 +11,11 @@
 
 #include "osdcomm.h"
 #include "osdcore.h"
+#ifdef SDLMAME_NOASM
+#include "eminline.h"
+#else
 #include "osinline.h"
+#endif
 
 #include "watchdog.h"
 

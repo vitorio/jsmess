@@ -8,7 +8,7 @@ void gamepock_state::hd44102ch_w( int which, int c_d, UINT8 data )
 {
 	if ( c_d )
 	{
-		UINT8	y;
+		UINT8   y;
 		/* Data */
 		m_hd44102ch[which].ram[ m_hd44102ch[which].address ] = data;
 
@@ -29,22 +29,22 @@ void gamepock_state::hd44102ch_w( int which, int c_d, UINT8 data )
 		/* Command */
 		switch ( data )
 		{
-		case 0x38:		/* Display off */
+		case 0x38:      /* Display off */
 			m_hd44102ch[which].enabled = 0;
 			break;
-		case 0x39:		/* Display on */
+		case 0x39:      /* Display on */
 			m_hd44102ch[which].enabled = 1;
 			break;
-		case 0x3A:		/* Y decrement mode */
+		case 0x3A:      /* Y decrement mode */
 			m_hd44102ch[which].y_inc = 0xFF;
 			break;
-		case 0x3B:		/* Y increment mode */
+		case 0x3B:      /* Y increment mode */
 			m_hd44102ch[which].y_inc = 0x01;
 			break;
-		case 0x3E:		/* Display start page #0 */
-		case 0x7E:		/* Display start page #1 */
-		case 0xBE:		/* Display start page #2 */
-		case 0xFE:		/* Display start page #3 */
+		case 0x3E:      /* Display start page #0 */
+		case 0x7E:      /* Display start page #1 */
+		case 0xBE:      /* Display start page #2 */
+		case 0xFE:      /* Display start page #3 */
 			m_hd44102ch[which].start_page = data & 0xC0;
 			break;
 		default:
@@ -89,7 +89,7 @@ void gamepock_state::lcd_update()
 
 WRITE8_MEMBER( gamepock_state::port_a_w )
 {
-	UINT8	old_port_a = m_port_a;
+	UINT8   old_port_a = m_port_a;
 
 	m_port_a = data;
 
@@ -115,16 +115,16 @@ READ8_MEMBER( gamepock_state::port_b_r )
 
 READ8_MEMBER( gamepock_state::port_c_r )
 {
-	UINT8	data = 0xFF;
+	UINT8   data = 0xFF;
 
 	if ( m_port_a & 0x80 )
 	{
-		data &= input_port_read(machine(), "IN0");
+		data &= ioport("IN0")->read();
 	}
 
 	if ( m_port_a & 0x40 )
 	{
-		data &= input_port_read(machine(), "IN1");
+		data &= ioport("IN1")->read();
 	}
 
 	return data;
@@ -138,73 +138,72 @@ void gamepock_state::machine_reset()
 	hd44102ch_init( 2 );
 }
 
-SCREEN_UPDATE( gamepock )
+UINT32 gamepock_state::screen_update_gamepock(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	gamepock_state *state = screen->machine().driver_data<gamepock_state>();
-	UINT8	ad;
-	int		i,j;
+	UINT8   ad;
+	int     i,j;
 
 	/* Handle HD44102CH #0 */
-	ad = state->m_hd44102ch[0].start_page;
+	ad = m_hd44102ch[0].start_page;
 	for ( i = 0; i < 4; i++ )
 	{
 		for ( j = 0; j < 50; j++ )
 		{
-			*BITMAP_ADDR16(bitmap, i * 8 + 0, 49 - j ) = ( state->m_hd44102ch[0].ram[ad+j] & 0x01 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 1, 49 - j ) = ( state->m_hd44102ch[0].ram[ad+j] & 0x02 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 2, 49 - j ) = ( state->m_hd44102ch[0].ram[ad+j] & 0x04 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 3, 49 - j ) = ( state->m_hd44102ch[0].ram[ad+j] & 0x08 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 4, 49 - j ) = ( state->m_hd44102ch[0].ram[ad+j] & 0x10 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 5, 49 - j ) = ( state->m_hd44102ch[0].ram[ad+j] & 0x20 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 6, 49 - j ) = ( state->m_hd44102ch[0].ram[ad+j] & 0x40 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 7, 49 - j ) = ( state->m_hd44102ch[0].ram[ad+j] & 0x80 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 0, 49 - j ) = ( m_hd44102ch[0].ram[ad+j] & 0x01 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 1, 49 - j ) = ( m_hd44102ch[0].ram[ad+j] & 0x02 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 2, 49 - j ) = ( m_hd44102ch[0].ram[ad+j] & 0x04 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 3, 49 - j ) = ( m_hd44102ch[0].ram[ad+j] & 0x08 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 4, 49 - j ) = ( m_hd44102ch[0].ram[ad+j] & 0x10 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 5, 49 - j ) = ( m_hd44102ch[0].ram[ad+j] & 0x20 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 6, 49 - j ) = ( m_hd44102ch[0].ram[ad+j] & 0x40 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 7, 49 - j ) = ( m_hd44102ch[0].ram[ad+j] & 0x80 ) ? 0 : 1;
 		}
 		ad += 0x40;
 	}
 
 	/* Handle HD44102CH #1 */
-	ad = state->m_hd44102ch[1].start_page;
+	ad = m_hd44102ch[1].start_page;
 	for ( i = 4; i < 8; i++ )
 	{
 		for ( j = 0; j < 50; j++ )
 		{
-			*BITMAP_ADDR16(bitmap, i * 8 + 0, j ) = ( state->m_hd44102ch[1].ram[ad+j] & 0x01 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 1, j ) = ( state->m_hd44102ch[1].ram[ad+j] & 0x02 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 2, j ) = ( state->m_hd44102ch[1].ram[ad+j] & 0x04 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 3, j ) = ( state->m_hd44102ch[1].ram[ad+j] & 0x08 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 4, j ) = ( state->m_hd44102ch[1].ram[ad+j] & 0x10 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 5, j ) = ( state->m_hd44102ch[1].ram[ad+j] & 0x20 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 6, j ) = ( state->m_hd44102ch[1].ram[ad+j] & 0x40 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 7, j ) = ( state->m_hd44102ch[1].ram[ad+j] & 0x80 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 0, j ) = ( m_hd44102ch[1].ram[ad+j] & 0x01 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 1, j ) = ( m_hd44102ch[1].ram[ad+j] & 0x02 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 2, j ) = ( m_hd44102ch[1].ram[ad+j] & 0x04 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 3, j ) = ( m_hd44102ch[1].ram[ad+j] & 0x08 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 4, j ) = ( m_hd44102ch[1].ram[ad+j] & 0x10 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 5, j ) = ( m_hd44102ch[1].ram[ad+j] & 0x20 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 6, j ) = ( m_hd44102ch[1].ram[ad+j] & 0x40 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 7, j ) = ( m_hd44102ch[1].ram[ad+j] & 0x80 ) ? 0 : 1;
 		}
 		ad += 0x40;
 	}
 
 	/* Handle HD44102CH #2 */
-	ad = state->m_hd44102ch[2].start_page;
+	ad = m_hd44102ch[2].start_page;
 	for ( i = 0; i < 4; i++ )
 	{
 		for ( j = 0; j < 25; j++ )
 		{
-			*BITMAP_ADDR16(bitmap, i * 8 + 0, 50 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x01 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 1, 50 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x02 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 2, 50 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x04 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 3, 50 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x08 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 4, 50 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x10 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 5, 50 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x20 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 6, 50 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x40 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, i * 8 + 7, 50 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x80 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 0, 50 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x01 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 1, 50 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x02 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 2, 50 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x04 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 3, 50 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x08 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 4, 50 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x10 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 5, 50 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x20 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 6, 50 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x40 ) ? 0 : 1;
+			bitmap.pix16(i * 8 + 7, 50 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x80 ) ? 0 : 1;
 		}
 		for ( j = 25; j < 50; j++ )
 		{
-			*BITMAP_ADDR16(bitmap, 32 + i * 8 + 0, 25 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x01 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, 32 + i * 8 + 1, 25 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x02 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, 32 + i * 8 + 2, 25 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x04 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, 32 + i * 8 + 3, 25 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x08 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, 32 + i * 8 + 4, 25 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x10 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, 32 + i * 8 + 5, 25 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x20 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, 32 + i * 8 + 6, 25 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x40 ) ? 0 : 1;
-			*BITMAP_ADDR16(bitmap, 32 + i * 8 + 7, 25 + j ) = ( state->m_hd44102ch[2].ram[ad+j] & 0x80 ) ? 0 : 1;
+			bitmap.pix16(32 + i * 8 + 0, 25 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x01 ) ? 0 : 1;
+			bitmap.pix16(32 + i * 8 + 1, 25 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x02 ) ? 0 : 1;
+			bitmap.pix16(32 + i * 8 + 2, 25 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x04 ) ? 0 : 1;
+			bitmap.pix16(32 + i * 8 + 3, 25 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x08 ) ? 0 : 1;
+			bitmap.pix16(32 + i * 8 + 4, 25 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x10 ) ? 0 : 1;
+			bitmap.pix16(32 + i * 8 + 5, 25 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x20 ) ? 0 : 1;
+			bitmap.pix16(32 + i * 8 + 6, 25 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x40 ) ? 0 : 1;
+			bitmap.pix16(32 + i * 8 + 7, 25 + j ) = ( m_hd44102ch[2].ram[ad+j] & 0x80 ) ? 0 : 1;
 		}
 		ad += 0x40;
 	}
@@ -215,12 +214,10 @@ SCREEN_UPDATE( gamepock )
 /* This is called whenever the T0 pin switches state */
 int gamepock_io_callback( device_t *device, int ioline, int state )
 {
-	device_t *speaker = device->machine().device(SPEAKER_TAG);
+	gamepock_state *driver_state = device->machine().driver_data<gamepock_state>();
 	if ( ioline == UPD7810_TO )
 	{
-		speaker_level_w(speaker, state & 1 );
+		driver_state->m_speaker->level_w(state & 1);
 	}
 	return 0;
 }
-
-

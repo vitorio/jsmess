@@ -4,19 +4,27 @@
 
         04/11/2010 Skeleton driver.
 
+        http://www.tubedata.info/phunsy/index.html
+
+        Cassette added 2012-05-24
+        Baud Rate ~ 6000 baud
+        W command to save data, eg 800-8FFW
+        R command to read data, eg 1100R to load the file at 1100,
+               or R to load the file where it came from.
+        The tape must already be playing the leader when you press the Enter
+        key, or it errors immediately.
+
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/s2650/s2650.h"
-#include "machine/terminal.h"
+#include "machine/keyboard.h"
 #include "sound/speaker.h"
+#include "imagedev/cassette.h"
+#include "sound/wave.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define VIDEO_START_MEMBER(name) void name::video_start()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
-#define LOG	1
+#define LOG 1
 
 
 class phunsy_state : public driver_device
@@ -25,29 +33,31 @@ public:
 	phunsy_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
 	m_maincpu(*this, "maincpu"),
-	m_terminal(*this, TERMINAL_TAG),
-	m_speaker(*this, SPEAKER_TAG)
-	{ }
+	m_speaker(*this, "speaker"),
+	m_cass(*this, "cassette"),
+	m_videoram(*this, "videoram") { }
 
-	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_terminal;
-	required_device<device_t> m_speaker;
 	DECLARE_READ8_MEMBER( phunsy_data_r );
-	DECLARE_READ8_MEMBER( phunsy_sense_r );
 	DECLARE_WRITE8_MEMBER( phunsy_1800_w );
 	DECLARE_WRITE8_MEMBER( phunsy_ctrl_w );
 	DECLARE_WRITE8_MEMBER( phunsy_data_w );
 	DECLARE_WRITE8_MEMBER( kbd_put );
-	const UINT8	*m_p_videoram;
-	const UINT8	*m_p_chargen;
-	UINT8		m_data_out;
-	UINT8		m_keyboard_input;
-	UINT8		m_q_bank;
-	UINT8		m_u_bank;
-	UINT8		m_ram_1800[0x800];
+	DECLARE_READ8_MEMBER(cass_r);
+	DECLARE_WRITE8_MEMBER(cass_w);
+	const UINT8 *m_p_chargen;
+	UINT8       m_data_out;
+	UINT8       m_keyboard_input;
+	UINT8       m_q_bank;
+	UINT8       m_u_bank;
+	UINT8       m_ram_1800[0x800];
 	virtual void machine_reset();
 	virtual void video_start();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
+	required_device<speaker_sound_device> m_speaker;
+	required_device<cassette_image_device> m_cass;
+	required_shared_ptr<UINT8> m_videoram;
+	virtual void palette_init();
 };
 
 
@@ -57,13 +67,22 @@ WRITE8_MEMBER( phunsy_state::phunsy_1800_w )
 		m_ram_1800[offset] = data;
 }
 
+WRITE8_MEMBER( phunsy_state::cass_w )
+{
+	m_cass->output(BIT(data, 0) ? -1.0 : +1.0);
+}
+
+READ8_MEMBER( phunsy_state::cass_r )
+{
+	return (m_cass->input() > 0.03) ? 0 : 1;
+}
 
 static ADDRESS_MAP_START(phunsy_mem, AS_PROGRAM, 8, phunsy_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE( 0x0000, 0x07ff) AM_ROM
 	AM_RANGE( 0x0800, 0x0fff) AM_RAM
-	AM_RANGE( 0x1000, 0x17ff) AM_RAM AM_BASE( m_p_videoram ) // Video RAM
-	AM_RANGE( 0x1800, 0x1fff) AM_RAM_WRITE( phunsy_1800_w ) AM_ROMBANK("bank1")	// Banked RAM/ROM
+	AM_RANGE( 0x1000, 0x17ff) AM_RAM AM_SHARE("videoram") // Video RAM
+	AM_RANGE( 0x1800, 0x1fff) AM_RAM_WRITE( phunsy_1800_w ) AM_ROMBANK("bank1") // Banked RAM/ROM
 	AM_RANGE( 0x4000, 0xffff) AM_RAMBANK("bank2") // Banked RAM
 ADDRESS_MAP_END
 
@@ -78,19 +97,19 @@ WRITE8_MEMBER( phunsy_state::phunsy_ctrl_w )
 
 	switch( m_u_bank )
 	{
-	case 0x00:	/* RAM */
-		memory_set_bankptr( machine(), "bank1", m_ram_1800 );
+	case 0x00:  /* RAM */
+		membank( "bank1" )->set_base( m_ram_1800 );
 		break;
-	case 0x01:	/* MDCR program */
-	case 0x02:	/* Disassembler */
-	case 0x03:	/* Label handler */
-		memory_set_bankptr( machine(), "bank1", machine().region("maincpu")->base() + ( 0x800 * m_u_bank ) );
+	case 0x01:  /* MDCR program */
+	case 0x02:  /* Disassembler */
+	case 0x03:  /* Label handler */
+		membank( "bank1" )->set_base( memregion("maincpu")->base() + ( 0x800 * m_u_bank ) );
 		break;
-	default:	/* Not used */
+	default:    /* Not used */
 		break;
 	}
 
-	memory_set_bankptr( machine(), "bank2", machine().region("ram_4000")->base() + 0x4000 * m_q_bank );
+	membank( "bank2" )->set_base( memregion("ram_4000")->base() + 0x4000 * m_q_bank );
 }
 
 
@@ -110,7 +129,7 @@ WRITE8_MEMBER( phunsy_state::phunsy_data_w )
 	}
 
 	/* b3 - speaker output (manual says it is bit 1)*/
-	speaker_level_w(m_speaker, BIT(data, 1));
+	m_speaker->level_w(BIT(data, 1));
 
 	/* b4 - -REV MDCR output */
 	/* b5 - -FWD MDCR output */
@@ -151,17 +170,11 @@ READ8_MEMBER( phunsy_state::phunsy_data_r )
 }
 
 
-READ8_MEMBER( phunsy_state::phunsy_sense_r )
-{
-	return 0;
-}
-
-
 static ADDRESS_MAP_START( phunsy_io, AS_IO, 8, phunsy_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE( S2650_CTRL_PORT, S2650_CTRL_PORT ) AM_WRITE( phunsy_ctrl_w )
 	AM_RANGE( S2650_DATA_PORT,S2650_DATA_PORT) AM_READWRITE( phunsy_data_r, phunsy_data_w )
-	AM_RANGE( S2650_SENSE_PORT,S2650_SENSE_PORT) AM_READ( phunsy_sense_r)
+	AM_RANGE(S2650_SENSE_PORT, S2650_FO_PORT) AM_READWRITE(cass_r, cass_w)
 ADDRESS_MAP_END
 
 
@@ -172,20 +185,21 @@ INPUT_PORTS_END
 
 WRITE8_MEMBER( phunsy_state::kbd_put )
 {
-	m_keyboard_input = data;
+	if (data)
+		m_keyboard_input = data;
 }
 
 
-static GENERIC_TERMINAL_INTERFACE( terminal_intf )
+static ASCII_KEYBOARD_INTERFACE( keyboard_intf )
 {
 	DEVCB_DRIVER_MEMBER(phunsy_state, kbd_put)
 };
 
 
-MACHINE_RESET_MEMBER(phunsy_state)
+void phunsy_state::machine_reset()
 {
-	memory_set_bankptr( machine(), "bank1", m_ram_1800 );
-	memory_set_bankptr( machine(), "bank2", machine().region("ram_4000")->base() );
+	membank( "bank1" )->set_base( m_ram_1800 );
+	membank( "bank2" )->set_base( memregion("ram_4000")->base() );
 
 	m_u_bank = 0;
 	m_q_bank = 0;
@@ -193,24 +207,24 @@ MACHINE_RESET_MEMBER(phunsy_state)
 }
 
 
-static PALETTE_INIT( phunsy )
+void phunsy_state::palette_init()
 {
 	for ( int i = 0; i < 8; i++ )
 	{
 		int j = ( i << 5 ) | ( i << 2 ) | ( i >> 1 );
 
-		palette_set_color_rgb( machine, i, j, j, j );
+		palette_set_color_rgb( machine(), i, j, j, j );
 	}
 }
 
 
-VIDEO_START_MEMBER( phunsy_state )
+void phunsy_state::video_start()
 {
-	m_p_chargen = machine().region( "chargen" )->base();
+	m_p_chargen = memregion( "chargen" )->base();
 }
 
 
-SCREEN_UPDATE_MEMBER( phunsy_state )
+UINT32 phunsy_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	UINT8 y,ra,chr,gfx,col;
 	UINT16 sy=0,ma=0,x;
@@ -219,11 +233,11 @@ SCREEN_UPDATE_MEMBER( phunsy_state )
 	{
 		for (ra = 0; ra < 8; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(&bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma+64; x++)
 			{
-				chr = m_p_videoram[x];
+				chr = m_videoram[x];
 
 				if (BIT(chr, 7))
 				{
@@ -259,15 +273,15 @@ SCREEN_UPDATE_MEMBER( phunsy_state )
 /* F4 Character Displayer */
 static const gfx_layout phunsy_charlayout =
 {
-	5, 7,					/* 6 x 8 characters */
-	128,					/* 128 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	5, 7,                   /* 6 x 8 characters */
+	128,                    /* 128 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( phunsy )
@@ -284,26 +298,26 @@ static MACHINE_CONFIG_START( phunsy, phunsy_state )
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	/* Display (page 12 of pdf)
-       - 8Mhz clock
-       - 64 6 pixel characters on a line.
-       - 16us not active, 48us active: ( 64 * 6 ) * 60 / 48 => 480 pixels wide
-       - 313 line display of which 256 are displayed.
-    */
+	   - 8Mhz clock
+	   - 64 6 pixel characters on a line.
+	   - 16us not active, 48us active: ( 64 * 6 ) * 60 / 48 => 480 pixels wide
+	   - 313 line display of which 256 are displayed.
+	*/
 	MCFG_SCREEN_RAW_PARAMS(XTAL_8MHz, 480, 0, 64*6, 313, 0, 256)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(phunsy_state, screen_update)
 	MCFG_GFXDECODE(phunsy)
 	MCFG_PALETTE_LENGTH(8)
-	MCFG_PALETTE_INIT(phunsy)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	//MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
-	//MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	/* Devices */
-	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
+	MCFG_ASCII_KEYBOARD_ADD(KEYBOARD_TAG, keyboard_intf)
+	MCFG_CASSETTE_ADD( "cassette", default_cassette_interface )
 MACHINE_CONFIG_END
 
 
@@ -327,6 +341,5 @@ ROM_END
 
 /* Driver */
 
-/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1980, phunsy,  0,       0,     phunsy,    phunsy,   0, "J.F.P. Philipse",   "PHUNSY", GAME_NOT_WORKING )
-
+/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY        FULLNAME       FLAGS */
+COMP( 1980, phunsy,  0,       0,     phunsy,    phunsy, driver_device,   0, "J.F.P. Philipse", "PHUNSY", GAME_NOT_WORKING )

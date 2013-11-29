@@ -45,20 +45,20 @@ icq3250a-d
 #include "imagedev/cartslot.h"
 
 #ifdef UNUSED_FUNCTION
-static  READ8_HANDLER(comquest_read)
+READ8_MEMBER(comquest_state::comquest_read)
 {
 	UINT8 data=0;
 	logerror("comquest read %.4x %.2x\n",offset,data);
 	return data;
 }
 
-static WRITE8_HANDLER(comquest_write)
+WRITE8_MEMBER(comquest_state::comquest_write)
 {
 	logerror("comquest read %.4x %.2x\n",offset,data);
 }
 #endif
 
-static ADDRESS_MAP_START( comquest_mem , AS_PROGRAM, 8)
+static ADDRESS_MAP_START( comquest_mem , AS_PROGRAM, 8, comquest_state )
 //  { 0x0000, 0x7fff, SMH_BANK(1) },
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xffff) AM_READONLY AM_WRITENOP
@@ -169,12 +169,12 @@ INPUT_PORTS_END
 
 static const gfx_layout comquest_charlayout =
 {
-        8,8,
-        256*8,                                    /* 256 characters */
-        1,                      /* 1 bits per pixel */
-        { 0 },                  /* no bitplanes; 1 bit per pixel */
-        /* x offsets */
-        {
+		8,8,
+		256*8,                                    /* 256 characters */
+		1,                      /* 1 bits per pixel */
+		{ 0 },                  /* no bitplanes; 1 bit per pixel */
+		/* x offsets */
+		{
 			0,
 			1,
 			2,
@@ -183,9 +183,9 @@ static const gfx_layout comquest_charlayout =
 			5,
 			6,
 			7,
-        },
-        /* y offsets */
-        {
+		},
+		/* y offsets */
+		{
 			0,
 			8,
 			16,
@@ -195,7 +195,7 @@ static const gfx_layout comquest_charlayout =
 			48,
 			56,
 		},
-        8*8
+		8*8
 };
 
 static GFXDECODE_START( comquest )
@@ -203,10 +203,10 @@ static GFXDECODE_START( comquest )
 GFXDECODE_END
 
 
-static MACHINE_RESET( comquest )
+void comquest_state::machine_reset()
 {
-//  UINT8 *mem=machine.region("user1")->base();
-//  memory_set_bankptr(machine, 1,mem+0x00000);
+//  UINT8 *mem=memregion("user1")->base();
+//  membank(1)->set_base(mem+0x00000);
 }
 
 static const UINT32 amask= 0xffff;
@@ -214,7 +214,7 @@ static const UINT32 amask= 0xffff;
 
 static MACHINE_CONFIG_START( comquest, comquest_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6805, 4000000)		/* 4000000? */
+	MCFG_CPU_ADD("maincpu", M6805, 4000000)     /* 4000000? */
 	/*MCFG_CPU_ADD("maincpu", HD63705, 4000000)    instruction set looks like m6805/m6808 */
 	/*MCFG_CPU_ADD("maincpu", M68705, 4000000) instruction set looks like m6805/m6808 */
 
@@ -245,22 +245,19 @@ static MACHINE_CONFIG_START( comquest, comquest_state )
 	MCFG_CPU_PROGRAM_MAP(comquest_mem)
 	MCFG_CPU_CONFIG( amask )
 
-	MCFG_MACHINE_RESET( comquest )
 
-    /* video hardware */
+	/* video hardware */
 	MCFG_SCREEN_ADD("screen", LCD)
 	MCFG_SCREEN_REFRESH_RATE(LCD_FRAMES_PER_SECOND)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MCFG_SCREEN_SIZE(64*4, 128)	/* 160 x 102 */
+	MCFG_SCREEN_SIZE(64*4, 128) /* 160 x 102 */
 	MCFG_SCREEN_VISIBLE_AREA(0, 64*4-1, 0, 128-1)
-	MCFG_SCREEN_UPDATE( comquest )
+	MCFG_SCREEN_UPDATE_DRIVER(comquest_state, screen_update_comquest)
 
 	MCFG_GFXDECODE( comquest )
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
-	MCFG_VIDEO_START( comquest )
 
 	/* sound hardware */
 	/* unknown ? */
@@ -309,4 +306,4 @@ ROM_END
 ***************************************************************************/
 
 /*    YEAR  NAME      PARENT    COMPAT  MACHINE   INPUT     INIT    MONITOR COMPANY   FULLNAME */
-CONS( 1995, comquest, 0,		0,		comquest, comquest, 0,		"Data Concepts",  "ComQuest Plus (German)", GAME_NOT_WORKING | GAME_NO_SOUND)
+CONS( 1995, comquest, 0,        0,      comquest, comquest, driver_device, 0,       "Data Concepts",  "ComQuest Plus (German)", GAME_NOT_WORKING | GAME_NO_SOUND)

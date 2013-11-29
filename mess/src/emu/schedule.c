@@ -1,44 +1,14 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     schedule.c
 
     Core device execution and scheduling engine.
 
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-
 ***************************************************************************/
 
 #include "emu.h"
-#include "profiler.h"
 #include "debugger.h"
 
 
@@ -48,7 +18,7 @@
 
 #define VERBOSE 0
 
-#define LOG(x)	do { if (VERBOSE) logerror x; } while (0)
+#define LOG(x)  do { if (VERBOSE) logerror x; } while (0)
 
 
 
@@ -59,8 +29,8 @@
 // internal trigger IDs
 enum
 {
-	TRIGGER_INT 		= -2000,
-	TRIGGER_YIELDTIME	= -3000,
+	TRIGGER_INT         = -2000,
+	TRIGGER_YIELDTIME   = -3000,
 	TRIGGER_SUSPENDTIME = -4000
 };
 
@@ -76,17 +46,17 @@ enum
 
 emu_timer::emu_timer()
 	: m_machine(NULL),
-	  m_next(NULL),
-	  m_prev(NULL),
-	  m_param(0),
-	  m_ptr(NULL),
-	  m_enabled(false),
-	  m_temporary(false),
-	  m_period(attotime::zero),
-	  m_start(attotime::zero),
-	  m_expire(attotime::never),
-	  m_device(NULL),
-	  m_id(0)
+		m_next(NULL),
+		m_prev(NULL),
+		m_param(0),
+		m_ptr(NULL),
+		m_enabled(false),
+		m_temporary(false),
+		m_period(attotime::zero),
+		m_start(attotime::zero),
+		m_expire(attotime::never),
+		m_device(NULL),
+		m_id(0)
 {
 }
 
@@ -252,7 +222,10 @@ attotime emu_timer::elapsed() const
 
 attotime emu_timer::remaining() const
 {
-	return m_expire - machine().time();
+	attotime curtime = machine().time();
+	if (curtime >= m_expire)
+		return attotime::zero;
+	return m_expire - curtime;
 }
 
 
@@ -299,7 +272,7 @@ void emu_timer::register_save()
 //  period
 //-------------------------------------------------
 
-void emu_timer::schedule_next_period()
+inline void emu_timer::schedule_next_period()
 {
 	// advance by one period
 	m_start = m_expire;
@@ -346,6 +319,7 @@ device_scheduler::device_scheduler(running_machine &machine) :
 	m_callback_timer(NULL),
 	m_callback_timer_modified(false),
 	m_callback_timer_expire_time(attotime::zero),
+	m_suspend_changes_pending(true),
 	m_quantum_list(machine.respool()),
 	m_quantum_allocator(machine.respool()),
 	m_quantum_minimum(ATTOSECONDS_IN_NSEC(1) / 1000)
@@ -398,7 +372,7 @@ bool device_scheduler::can_save() const
 {
 	// if any live temporary timers exit, fail
 	for (emu_timer *timer = m_timer_list; timer != NULL; timer = timer->next())
-		if (timer->m_temporary && timer->expire() != attotime::never)
+		if (timer->m_temporary && !timer->expire().is_never())
 		{
 			logerror("Failed save state attempt due to anonymous timers:\n");
 			dump_timers();
@@ -407,6 +381,30 @@ bool device_scheduler::can_save() const
 
 	// otherwise, we're good
 	return true;
+}
+
+
+//-------------------------------------------------
+//  apply_suspend_changes - applies suspend/resume
+//  changes to all device_execute_interfaces
+//-------------------------------------------------
+
+inline void device_scheduler::apply_suspend_changes()
+{
+	UINT32 suspendchanged = 0;
+	for (device_execute_interface *exec = m_execute_list; exec != NULL; exec = exec->m_nextexec)
+	{
+		suspendchanged |= exec->m_suspend ^ exec->m_nextsuspend;
+		exec->m_suspend = exec->m_nextsuspend;
+		exec->m_nextsuspend &= ~SUSPEND_REASON_TIMESLICE;
+		exec->m_eatcycles = exec->m_nexteatcycles;
+	}
+
+	// recompute the execute list if any CPUs changed their suspension state
+	if (suspendchanged != 0)
+		rebuild_execute_list();
+	else
+		m_suspend_changes_pending = false;
 }
 
 
@@ -439,19 +437,9 @@ void device_scheduler::timeslice()
 		LOG(("------------------\n"));
 		LOG(("cpu_timeslice: target = %s\n", target.as_string()));
 
-		// apply pending suspension changes
-		UINT32 suspendchanged = 0;
-		for (device_execute_interface *exec = m_execute_list; exec != NULL; exec = exec->m_nextexec)
-		{
-			suspendchanged |= exec->m_suspend ^ exec->m_nextsuspend;
-			exec->m_suspend = exec->m_nextsuspend;
-			exec->m_nextsuspend &= ~SUSPEND_REASON_TIMESLICE;
-			exec->m_eatcycles = exec->m_nexteatcycles;
-		}
-
-		// recompute the execute list if any CPUs changed their suspension state
-		if (suspendchanged != 0)
-			rebuild_execute_list();
+		// do we have pending suspension changes?
+		if (m_suspend_changes_pending)
+			apply_suspend_changes();
 
 		// loop over non-suspended CPUs
 		for (device_execute_interface *exec = m_execute_list; exec != NULL; exec = exec->m_nextexec)
@@ -463,7 +451,9 @@ void device_scheduler::timeslice()
 				attoseconds_t delta = target.attoseconds - exec->m_localtime.attoseconds;
 				if (delta < 0 && target.seconds > exec->m_localtime.seconds)
 					delta += ATTOSECONDS_PER_SECOND;
+#ifndef MAME_DEBUG_FAST
 				assert(delta == (target - exec->m_localtime).as_attoseconds());
+#endif
 
 				// if we have enough for at least 1 cycle, do the math
 				if (delta >= exec->m_attoseconds_per_cycle)
@@ -483,11 +473,11 @@ void device_scheduler::timeslice()
 						m_executing_device = exec;
 						*exec->m_icountptr = exec->m_cycles_running;
 						if (!call_debugger)
-							exec->execute_run();
+							exec->run();
 						else
 						{
 							debugger_start_cpu_hook(&exec->device(), target);
-							exec->execute_run();
+							exec->run();
 							debugger_stop_cpu_hook(&exec->device());
 						}
 
@@ -503,7 +493,9 @@ void device_scheduler::timeslice()
 					exec->m_totalcycles += ran;
 
 					// update the local time for this CPU
-					exec->m_localtime += attotime(0, exec->m_attoseconds_per_cycle * ran);
+					attotime delta = attotime(0, exec->m_attoseconds_per_cycle * ran);
+					assert(delta >= attotime::zero);
+					exec->m_localtime += delta;
 					LOG(("         %d ran, %d total, time = %s\n", ran, (INT32)exec->m_totalcycles, exec->m_localtime.as_string()));
 
 					// if the new local CPU time is less than our target, move the target up, but not before the base
@@ -677,7 +669,7 @@ void device_scheduler::postload()
 		emu_timer &timer = *m_timer_list;
 
 		// temporary timers go away entirely (except our special never-expiring one)
-		if (timer.m_temporary && timer.expire() != attotime::never)
+		if (timer.m_temporary && !timer.expire().is_never())
 			m_timer_allocator.reclaim(timer.release());
 
 		// permanent ones get added to our private list
@@ -689,6 +681,8 @@ void device_scheduler::postload()
 	emu_timer *timer;
 	while ((timer = private_list.detach_head()) != NULL)
 		timer_list_insert(*timer);
+
+	m_suspend_changes_pending = true;
 
 	// report the timer state after a log
 	logerror("After resetting/reordering timers:\n");
@@ -754,19 +748,19 @@ void device_scheduler::rebuild_execute_list()
 		attotime min_quantum = machine().config().m_minimum_quantum;
 
 		// if none specified default to 60Hz
-		if (min_quantum == attotime::zero)
+		if (min_quantum.is_zero())
 			min_quantum = attotime::from_hz(60);
 
 		// if the configuration specifies a device to make perfect, pick that as the minimum
-		if (machine().config().m_perfect_cpu_quantum != NULL)
+		if (machine().config().m_perfect_cpu_quantum)
 		{
 			device_t *device = machine().device(machine().config().m_perfect_cpu_quantum);
 			if (device == NULL)
-				fatalerror("Device '%s' specified for perfect interleave is not present!", machine().config().m_perfect_cpu_quantum);
+				fatalerror("Device '%s' specified for perfect interleave is not present!\n", machine().config().m_perfect_cpu_quantum.cstr());
 
 			device_execute_interface *exec;
 			if (!device->interface(exec))
-				fatalerror("Device '%s' specified for perfect interleave is not an executing device!", machine().config().m_perfect_cpu_quantum);
+				fatalerror("Device '%s' specified for perfect interleave is not an executing device!\n", machine().config().m_perfect_cpu_quantum.cstr());
 
 			min_quantum = min(attotime(0, exec->minimum_quantum()), min_quantum);
 		}
@@ -787,8 +781,8 @@ void device_scheduler::rebuild_execute_list()
 	device_execute_interface **suspend_tailptr = &suspend_list;
 
 	// iterate over all devices
-	device_execute_interface *exec = NULL;
-	for (bool gotone = machine().devicelist().first(exec); gotone; gotone = exec->next(exec))
+	execute_interface_iterator iter(machine().root_device());
+	for (device_execute_interface *exec = iter.first(); exec != NULL; exec = iter.next())
 	{
 		// append to the appropriate list
 		exec->m_nextexec = NULL;
@@ -877,13 +871,13 @@ emu_timer &device_scheduler::timer_list_remove(emu_timer &timer)
 //  scheduling quanta
 //-------------------------------------------------
 
-void device_scheduler::execute_timers()
+inline void device_scheduler::execute_timers()
 {
 	// if the current quantum has expired, find a new one
 	while (m_basetime >= m_quantum_list.first()->m_expire)
 		m_quantum_allocator.reclaim(m_quantum_list.detach_head());
 
-	LOG(("timer_set_global_time: new=%s head->expire=%s\n", m_basetime.as_string(), m_timer_list->m_expire.as_string()));
+	LOG(("execute_timers: new=%s head->expire=%s\n", m_basetime.as_string(), m_timer_list->m_expire.as_string()));
 
 	// now process any timers that are overdue
 	while (m_timer_list->m_expire <= m_basetime)
@@ -891,7 +885,7 @@ void device_scheduler::execute_timers()
 		// if this is a one-shot timer, disable it now
 		emu_timer &timer = *m_timer_list;
 		bool was_enabled = timer.m_enabled;
-		if (timer.m_period == attotime::zero || timer.m_period == attotime::never)
+		if (timer.m_period.is_zero() || timer.m_period.is_never())
 			timer.m_enabled = false;
 
 		// set the global state of which callback we're in
@@ -905,9 +899,15 @@ void device_scheduler::execute_timers()
 			g_profiler.start(PROFILER_TIMER_CALLBACK);
 
 			if (timer.m_device != NULL)
+			{
+				LOG(("execute_timers: timer device %s timer %d\n", timer.m_device->name(), timer.m_id));
 				timer.m_device->timer_expired(timer, timer.m_id, timer.m_param, timer.m_ptr);
+			}
 			else if (!timer.m_callback.isnull())
+			{
+				LOG(("execute_timers: timer callback %s\n", timer.m_callback.name()));
 				timer.m_callback(timer.m_ptr, timer.m_param);
+			}
 
 			g_profiler.stop();
 		}
@@ -986,5 +986,3 @@ void device_scheduler::dump_timers() const
 		timer->dump();
 	logerror("=============================================\n");
 }
-
-

@@ -21,7 +21,6 @@ Note that bit 3 of port 82 is tested at boot. If low, the computer bypasses
 the monitor and goes straight to "Joining HiNet".
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i86/i86.h"
@@ -38,7 +37,7 @@ public:
 	{ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_terminal;
+	required_device<generic_terminal_device> m_terminal;
 	DECLARE_READ16_MEMBER( dms86_82_r );
 	DECLARE_READ16_MEMBER( dms86_84_r );
 	DECLARE_READ16_MEMBER( dms86_86_r );
@@ -46,6 +45,7 @@ public:
 	DECLARE_WRITE8_MEMBER( kbd_put );
 	UINT8 *m_ram;
 	UINT8 m_term_data;
+	virtual void machine_reset();
 };
 
 READ16_MEMBER( dms86_state::dms86_82_r )
@@ -83,10 +83,10 @@ static ADDRESS_MAP_START(dms86_io, AS_IO, 16, dms86_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x82, 0x83) AM_READ(dms86_82_r)
-	AM_RANGE(0x84, 0x85) AM_READ(dms86_84_r) AM_DEVWRITE8_LEGACY(TERMINAL_TAG, terminal_write, 0xff)
+	AM_RANGE(0x84, 0x85) AM_READ(dms86_84_r) AM_DEVWRITE8(TERMINAL_TAG, generic_terminal_device, write, 0xff)
 	AM_RANGE(0x86, 0x87) AM_READ(dms86_86_r)
 	AM_RANGE(0x9A, 0x9B) AM_READ(dms86_9a_r)
-	AM_RANGE(0x9c, 0x9d) AM_DEVWRITE8_LEGACY(TERMINAL_TAG, terminal_write, 0xff)
+	AM_RANGE(0x9c, 0x9d) AM_DEVWRITE8(TERMINAL_TAG, generic_terminal_device, write, 0xff)
 ADDRESS_MAP_END
 
 /* Input ports */
@@ -94,7 +94,7 @@ static INPUT_PORTS_START( dms86 )
 INPUT_PORTS_END
 
 
-static MACHINE_RESET(dms86)
+void dms86_state::machine_reset()
 {
 }
 
@@ -115,9 +115,7 @@ static MACHINE_CONFIG_START( dms86, dms86_state )
 	MCFG_CPU_PROGRAM_MAP(dms86_mem)
 	MCFG_CPU_IO_MAP(dms86_io)
 
-	MCFG_MACHINE_RESET(dms86)
 
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 MACHINE_CONFIG_END
 
@@ -131,5 +129,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT     COMPANY              FULLNAME       FLAGS */
-COMP( 1982, dms86,  0,       0,      dms86,     dms86,    0,   "Digital Microsystems", "DMS-86", GAME_NOT_WORKING | GAME_NO_SOUND)
-
+COMP( 1982, dms86,  0,       0,      dms86,     dms86, driver_device,    0,   "Digital Microsystems", "DMS-86", GAME_NOT_WORKING | GAME_NO_SOUND)

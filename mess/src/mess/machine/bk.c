@@ -13,9 +13,8 @@
 #include "includes/bk.h"
 
 
-static TIMER_CALLBACK(keyboard_callback)
+TIMER_CALLBACK_MEMBER(bk_state::keyboard_callback)
 {
-	bk_state *state = machine.driver_data<bk_state>();
 	UINT8 code, i, j;
 	static const char *const keynames[] = {
 		"LINE1", "LINE2", "LINE3", "LINE4", "LINE5", "LINE6",
@@ -24,91 +23,85 @@ static TIMER_CALLBACK(keyboard_callback)
 
 	for(i = 1; i < 12; i++)
 	{
-		code =	input_port_read(machine, keynames[i-1]);
+		code =  ioport(keynames[i-1])->read();
 		if (code != 0)
 		{
 			for(j = 0; j < 8; j++)
 			{
 				if (code == (1 << j))
 				{
-					state->m_key_code = j + i*8;
+					m_key_code = j + i*8;
 					break;
 				}
 			}
-			if ((input_port_read(machine, "LINE0") & 4) == 4)
+			if ((ioport("LINE0")->read() & 4) == 4)
 			{
 				if (i==6 || i==7)
 				{
-					state->m_key_code -= 16;
+					m_key_code -= 16;
 				}
 
 			}
-			if ((input_port_read(machine, "LINE0") & 4) == 4)
+			if ((ioport("LINE0")->read() & 4) == 4)
 			{
 				if (i>=8 && i<=11)
 				{
-					state->m_key_code += 32;
+					m_key_code += 32;
 				}
 			}
-			state->m_key_pressed = 0x40;
-			if ((input_port_read(machine, "LINE0") & 2) == 0)
+			m_key_pressed = 0x40;
+			if ((ioport("LINE0")->read() & 2) == 0)
 			{
-				state->m_key_irq_vector = 0x30;
+				m_key_irq_vector = 0x30;
 			}
 			else
 			{
-				state->m_key_irq_vector = 0xBC;
+				m_key_irq_vector = 0xBC;
 			}
-			cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
+			m_maincpu->set_input_line(0, ASSERT_LINE);
 			break;
 		}
 	}
 }
 
 
-MACHINE_START(bk0010)
+void bk_state::machine_start()
 {
-	machine.scheduler().timer_pulse(attotime::from_hz(2400), FUNC(keyboard_callback));
+	machine().scheduler().timer_pulse(attotime::from_hz(2400), timer_expired_delegate(FUNC(bk_state::keyboard_callback),this));
 }
 
-static IRQ_CALLBACK(bk0010_irq_callback)
+IRQ_CALLBACK_MEMBER(bk_state::bk0010_irq_callback)
 {
-	bk_state *state = device->machine().driver_data<bk_state>();
-	device_set_input_line(device, 0, CLEAR_LINE);
-	return state->m_key_irq_vector;
+	device.execute().set_input_line(0, CLEAR_LINE);
+	return m_key_irq_vector;
 }
 
-MACHINE_RESET( bk0010 )
+void bk_state::machine_reset()
 {
-	bk_state *state = machine.driver_data<bk_state>();
-	device_set_irq_callback(machine.device("maincpu"), bk0010_irq_callback);
+	m_maincpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(bk_state::bk0010_irq_callback),this));
 
-	state->m_kbd_state = 0;
-	state->m_scrool = 01330;
-}
-
-READ16_HANDLER (bk_key_state_r)
-{
-	bk_state *state = space->machine().driver_data<bk_state>();
-	return state->m_kbd_state;
-}
-READ16_HANDLER (bk_key_code_r)
-{
-	bk_state *state = space->machine().driver_data<bk_state>();
-	state->m_kbd_state &= ~0x80; // mark reading done
-	state->m_key_pressed = 0;
-	return state->m_key_code;
-}
-READ16_HANDLER (bk_vid_scrool_r)
-{
-	bk_state *state = space->machine().driver_data<bk_state>();
-	return state->m_scrool;
+	m_kbd_state = 0;
+	m_scrool = 01330;
 }
 
-READ16_HANDLER (bk_key_press_r)
+READ16_MEMBER(bk_state::bk_key_state_r)
 {
-	bk_state *state = space->machine().driver_data<bk_state>();
-	double level = (space->machine().device<cassette_image_device>(CASSETTE_TAG)->input());
+	return m_kbd_state;
+}
+READ16_MEMBER(bk_state::bk_key_code_r)
+{
+	m_kbd_state &= ~0x80; // mark reading done
+	m_key_pressed = 0;
+	return m_key_code;
+}
+READ16_MEMBER(bk_state::bk_vid_scrool_r)
+{
+	return m_scrool;
+}
+
+READ16_MEMBER(bk_state::bk_key_press_r)
+{
+	double level = m_cassette->input();
 	UINT16 cas;
 	if (level < 0)
 	{
@@ -119,61 +112,57 @@ READ16_HANDLER (bk_key_press_r)
 		cas = 0x20;
 	}
 
-	return 0x8080 | state->m_key_pressed | cas;
+	return 0x8080 | m_key_pressed | cas;
 }
 
-WRITE16_HANDLER(bk_key_state_w)
+WRITE16_MEMBER(bk_state::bk_key_state_w)
 {
-	bk_state *state = space->machine().driver_data<bk_state>();
-	state->m_kbd_state = (state->m_kbd_state & ~0x40) | (data & 0x40);
+	m_kbd_state = (m_kbd_state & ~0x40) | (data & 0x40);
 }
 
-WRITE16_HANDLER(bk_vid_scrool_w)
+WRITE16_MEMBER(bk_state::bk_vid_scrool_w)
 {
-	bk_state *state = space->machine().driver_data<bk_state>();
-	state->m_scrool = data;
+	m_scrool = data;
 }
 
-WRITE16_HANDLER(bk_key_press_w)
+WRITE16_MEMBER(bk_state::bk_key_press_w)
 {
 }
 
-READ16_HANDLER (bk_floppy_cmd_r)
+READ16_MEMBER(bk_state::bk_floppy_cmd_r)
 {
 	return 0;
 }
 
-WRITE16_HANDLER(bk_floppy_cmd_w)
+WRITE16_MEMBER(bk_state::bk_floppy_cmd_w)
 {
-	bk_state *state = space->machine().driver_data<bk_state>();
 	if ((data & 1) == 1)
 	{
-		state->m_drive = 0;
+		m_drive = 0;
 	}
 	if ((data & 2) == 2)
 	{
-		state->m_drive = 1;
+		m_drive = 1;
 	}
 	if ((data & 4) == 4)
 	{
-		state->m_drive = 2;
+		m_drive = 2;
 	}
 	if ((data & 8) == 8)
 	{
-		state->m_drive = 3;
+		m_drive = 3;
 	}
 	if (data == 0)
 	{
-		state->m_drive = -1;
+		m_drive = -1;
 	}
 }
 
-READ16_HANDLER (bk_floppy_data_r)
+READ16_MEMBER(bk_state::bk_floppy_data_r)
 {
 	return 0;
 }
 
-WRITE16_HANDLER(bk_floppy_data_w)
+WRITE16_MEMBER(bk_state::bk_floppy_data_w)
 {
 }
-

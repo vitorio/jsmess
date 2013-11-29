@@ -1,24 +1,23 @@
 /****************************************************************************************
+
 Super Wing - (c) 1985 Wing (UPL?)
 
 driver by Tomasz Slanina
 
-Hardware a bit (interrupts, sound) similar to mouser
+probably a sequel to flipjack
+Hardware a bit (interrupts, sound) similar to mouser as well
 
 TODO:
+- unused rom 6.8s (located on the pcb near the gfx rom 7.8p, but contains
+  data (similar to the one in roms 4.5p and 5.5r).
+  There are two possibilities: its bad dump of gfx rom (two extra bit layers
+  of current gfx) or it's banked at 0x4000 - 0x7fff area.
+- dump color prom
+- some unknown DSW and inputs
+- hopper
+- unknown writes
+- measure clocks
 
- - unused rom 6.8s (located on the pcb near the gfx rom 7.8p, but contains
-   data (similar to the one in roms 4.5p and 5.5r).
-   There are two possibilities: its bad dump of gfx rom (two extra bit layers
-   of current gfx) or it's banked at 0x4000 - 0x7fff area.
-  - missing color prom dump (missing on pcb)
-  - some unknown DSW and inputs
-  - unknown writes
-  - tile and sprite flipping (both h and v controlled by the same bit?)
-  - sprite coords and tile num (is the >>2 correct ?) (name entry, flipped screen)
-  - measure clocks
-
-  To enter initials - use tilt. It's probably separate button (?), not a tilt sensor.
 
 *****************************************************************************************/
 
@@ -32,121 +31,133 @@ class superwng_state : public driver_device
 {
 public:
 	superwng_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this, "maincpu"),
+		m_audiocpu(*this, "audiocpu"),
+		m_videoram_bg(*this, "videorabg"),
+		m_videoram_fg(*this, "videorafg"),
+		m_colorram_bg(*this, "colorrabg"),
+		m_colorram_fg(*this, "colorrafg")
+	{ }
 
-	UINT8 *    m_videoram_bg;
-	UINT8 *    m_colorram_bg;
-	UINT8 *    m_videoram_fg;
-	UINT8 *    m_colorram_fg;
+	required_device<cpu_device> m_maincpu;
+	required_device<cpu_device> m_audiocpu;
+	required_shared_ptr<UINT8> m_videoram_bg;
+	required_shared_ptr<UINT8> m_videoram_fg;
+	required_shared_ptr<UINT8> m_colorram_bg;
+	required_shared_ptr<UINT8> m_colorram_fg;
 
-	int			m_tile_bank;
+	UINT8 m_tile_bank;
+	UINT8 m_sound_byte;
+	UINT8 m_nmi_enable;
 
-	UINT8      m_sound_byte;
-	UINT8      m_nmi_enable;
+	tilemap_t * m_bg_tilemap;
+	tilemap_t * m_fg_tilemap;
 
-	device_t *	m_maincpu;
-	device_t *	m_audiocpu;
-
-	tilemap_t *	m_bg_tilemap;
-	tilemap_t *	m_fg_tilemap;
-
+	DECLARE_WRITE8_MEMBER(superwng_nmi_enable_w);
+	DECLARE_WRITE8_MEMBER(superwng_sound_interrupt_w);
+	DECLARE_WRITE8_MEMBER(superwng_sound_nmi_clear_w);
+	DECLARE_WRITE8_MEMBER(superwng_bg_vram_w);
+	DECLARE_WRITE8_MEMBER(superwng_bg_cram_w);
+	DECLARE_WRITE8_MEMBER(superwng_fg_vram_w);
+	DECLARE_WRITE8_MEMBER(superwng_fg_cram_w);
+	DECLARE_WRITE8_MEMBER(superwng_tilebank_w);
+	DECLARE_WRITE8_MEMBER(superwng_flip_screen_w);
+	DECLARE_WRITE8_MEMBER(superwng_cointcnt1_w);
+	DECLARE_WRITE8_MEMBER(superwng_cointcnt2_w);
+	DECLARE_WRITE8_MEMBER(superwng_hopper_w);
+	DECLARE_READ8_MEMBER(superwng_sound_byte_r);
+	TILE_GET_INFO_MEMBER(get_bg_tile_info);
+	TILE_GET_INFO_MEMBER(get_fg_tile_info);
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void video_start();
+	virtual void palette_init();
+	UINT32 screen_update_superwng(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	INTERRUPT_GEN_MEMBER(superwng_nmi_interrupt);
+	INTERRUPT_GEN_MEMBER(superwng_sound_nmi_assert);
 };
 
-static TILE_GET_INFO( get_bg_tile_info )
+TILE_GET_INFO_MEMBER(superwng_state::get_bg_tile_info)
 {
-	superwng_state *state = machine.driver_data<superwng_state>();
-	int code = state->m_videoram_bg[tile_index];
-	int attr = state->m_colorram_bg[tile_index];
+	int code = m_videoram_bg[tile_index];
+	int attr = m_colorram_bg[tile_index];
 
 	code= (code&0x7f) | ((attr&0x40)<<1) | ((code&0x80)<<1);
-	code|=state->m_tile_bank?0x200:0;
+	code|=m_tile_bank?0x200:0;
 
 	int flipx=(attr&0x80) ? TILE_FLIPX : 0;
 	int flipy=(attr&0x80) ? TILE_FLIPY : 0;
 
-	SET_TILE_INFO(	0, code, attr & 0xf, flipx|flipy);
+	SET_TILE_INFO_MEMBER(0, code, attr & 0xf, flipx|flipy);
 }
 
-static TILE_GET_INFO( get_fg_tile_info )
+TILE_GET_INFO_MEMBER(superwng_state::get_fg_tile_info)
 {
-	superwng_state *state = machine.driver_data<superwng_state>();
-	int code = state->m_videoram_fg[tile_index];
-	int attr = state->m_colorram_fg[tile_index];
+	int code = m_videoram_fg[tile_index];
+	int attr = m_colorram_fg[tile_index];
 
 	code= (code&0x7f) | ((attr&0x40)<<1) | ((code&0x80)<<1);
 
-	code|=state->m_tile_bank?0x200:0;
+	code|=m_tile_bank?0x200:0;
 
 	int flipx=(attr&0x80) ? TILE_FLIPX : 0;
 	int flipy=(attr&0x80) ? TILE_FLIPY : 0;
 
-	SET_TILE_INFO( 0, code, attr & 0xf, flipx|flipy);
+	SET_TILE_INFO_MEMBER(0, code, attr & 0xf, flipx|flipy);
 }
 
-WRITE8_HANDLER( superwng_flip_screen_x_w )
+void superwng_state::video_start()
 {
-	flip_screen_x_set(space->machine(), ~data & 1);
+	m_bg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(superwng_state::get_bg_tile_info),this), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
+	m_fg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(superwng_state::get_fg_tile_info),this), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
+
+	m_bg_tilemap->set_scrollx(0, 64);
 }
 
-WRITE8_HANDLER( superwng_flip_screen_y_w )
+UINT32 superwng_state::screen_update_superwng(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	flip_screen_y_set(space->machine(), ~data & 1);
-}
+	m_bg_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+	rectangle tmp = cliprect;
 
-static VIDEO_START( superwng )
-{
-	superwng_state *state = machine.driver_data<superwng_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-
-	tilemap_set_scrollx(state->m_bg_tilemap, 0, 64);
-}
-
-static SCREEN_UPDATE( superwng )
-{
-	superwng_state *state = screen->machine().driver_data<superwng_state>();
-	int flip=flip_screen_get(screen->machine());
-
-	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
-	rectangle tmp=*cliprect;
-
-	if(flip)
+	if (flip_screen())
 	{
-		tmp.min_x+=32;
-		tilemap_draw(bitmap, &tmp, state->m_fg_tilemap, 0, 0);
+		tmp.min_x += 32;
+		m_fg_tilemap->draw(screen, bitmap, tmp, 0, 0);
 	}
 	else
 	{
-		tmp.max_x-=32;
-		tilemap_draw(bitmap, &tmp, state->m_fg_tilemap, 0, 0);
+		tmp.max_x -= 32;
+		m_fg_tilemap->draw(screen, bitmap, tmp, 0, 0);
 	}
 
+	//sprites
+	for (int i = 0x3e; i >= 0; i -= 2)
 	{
-		//sprites
+		/*      76543210
+		video0: xxxxxx    code
+		              x   /flip
+		               x  enable?
+		video1: xxxxxxxx  x
+		color0: xxxxxxxx  y
+		color1: xxx       unused?
+		           x      ?
+		            xxxx  color
+		*/
+		if (~m_videoram_bg[i] & 1)
+			continue;
 
-		for(int i=0x3e; i>=0; i-=2)
-		{
-			int code=(state->m_videoram_bg[i]>>2)+0x40;
-			int sx=256-state->m_videoram_bg[i+1]-8;
-			int sy = state->m_colorram_bg[i]+8;
-			int attr = state->m_colorram_bg[i+1];
+		int code = (m_videoram_bg[i] >> 2) | 0x40;
+		int flip = ~m_videoram_bg[i] >> 1 & 1;
+		int sx = 240 - m_videoram_bg[i + 1];
+		int sy = m_colorram_bg[i];
+		int color = m_colorram_bg[i + 1] & 0xf;
 
-			if (flip)
-			{
-				sy-=8;
-				sx-=8;
-			}
-
-			if(state->m_videoram_bg[i+1] | state->m_colorram_bg[i])
-			{
-
-				drawgfx_transpen(bitmap, cliprect,screen->machine().gfx[1],
-								code,
-								attr,
-								flip, flip,
-								sx, sy, 0);
-			}
-		}
+		drawgfx_transpen(bitmap, cliprect,machine().gfx[1],
+						code,
+						color,
+						flip, flip,
+						sx, sy, 0);
 	}
 
 	return 0;
@@ -161,12 +172,12 @@ static const UINT8 superwng_colors[]= /* temporary */
 	0x00, 0xc0, 0x07, 0x3f, 0x00, 0x1f, 0x3f, 0xff, 0x00, 0x86, 0x05, 0xff, 0x00, 0xc0, 0xe8, 0xff
 };
 
-PALETTE_INIT( superwng )
+void superwng_state::palette_init()
 {
 	int i;
 	const UINT8 * ptr=superwng_colors;
 
-	for (i = 0; i < machine.total_colors(); i++)
+	for (i = 0; i < machine().total_colors(); i++)
 	{
 		int bit0, bit1, bit2, r, g, b;
 
@@ -184,184 +195,177 @@ PALETTE_INIT( superwng )
 		bit1 = BIT(*ptr, 7);
 		b = 0x4f * bit0 + 0xa8 * bit1;
 
-		palette_set_color(machine,i,MAKE_RGB(r,g,b));
+		palette_set_color(machine(),i,MAKE_RGB(r,g,b));
 		++ptr;
 	}
 }
 
-static WRITE8_HANDLER( superwng_nmi_enable_w )
+WRITE8_MEMBER(superwng_state::superwng_nmi_enable_w)
 {
-	superwng_state *state = space->machine().driver_data<superwng_state>();
-	state->m_nmi_enable = data;
+	m_nmi_enable = data;
 }
 
-static INTERRUPT_GEN( superwng_nmi_interrupt )
+INTERRUPT_GEN_MEMBER(superwng_state::superwng_nmi_interrupt)
 {
-	superwng_state *state = device->machine().driver_data<superwng_state>();
-
-	if (BIT(state->m_nmi_enable, 0))
+	if (BIT(m_nmi_enable, 0))
 		nmi_line_pulse(device);
 }
 
-static WRITE8_HANDLER( superwng_sound_interrupt_w )
+WRITE8_MEMBER(superwng_state::superwng_sound_interrupt_w)
 {
-	superwng_state *state = space->machine().driver_data<superwng_state>();
-	state->m_sound_byte = data;
-	device_set_input_line(state->m_audiocpu, 0, ASSERT_LINE);
+	m_sound_byte = data;
+	m_audiocpu->set_input_line(0, ASSERT_LINE);
 }
 
-static READ8_DEVICE_HANDLER( superwng_sound_byte_r )
+READ8_MEMBER(superwng_state::superwng_sound_byte_r)
 {
-	superwng_state *state = device->machine().driver_data<superwng_state>();
-	device_set_input_line(state->m_audiocpu, 0, CLEAR_LINE);
-	return state->m_sound_byte;
+	m_audiocpu->set_input_line(0, CLEAR_LINE);
+	return m_sound_byte;
 }
 
-static WRITE8_HANDLER( superwng_sound_nmi_clear_w )
+WRITE8_MEMBER(superwng_state::superwng_sound_nmi_clear_w)
 {
-	superwng_state *state = space->machine().driver_data<superwng_state>();
-	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, CLEAR_LINE);
+	m_audiocpu->set_input_line(INPUT_LINE_NMI, CLEAR_LINE);
 }
 
-static INTERRUPT_GEN( superwng_sound_nmi_assert )
+INTERRUPT_GEN_MEMBER(superwng_state::superwng_sound_nmi_assert)
 {
-	superwng_state *state = device->machine().driver_data<superwng_state>();
-	if (BIT(state->m_nmi_enable, 0))
-		device_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE);
+	if (BIT(m_nmi_enable, 0))
+		device.execute().set_input_line(INPUT_LINE_NMI, ASSERT_LINE);
 }
 
-static WRITE8_HANDLER(superwng_bg_vram_w)
+WRITE8_MEMBER(superwng_state::superwng_bg_vram_w)
 {
-	superwng_state *state = space->machine().driver_data<superwng_state>();
-	state->m_videoram_bg[offset] = data;
-	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
+	m_videoram_bg[offset] = data;
+	m_bg_tilemap->mark_tile_dirty(offset);
 }
 
-static WRITE8_HANDLER(superwng_bg_cram_w)
+WRITE8_MEMBER(superwng_state::superwng_bg_cram_w)
 {
-	superwng_state *state = space->machine().driver_data<superwng_state>();
-	state->m_colorram_bg[offset] = data;
-	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
+	m_colorram_bg[offset] = data;
+	m_bg_tilemap->mark_tile_dirty(offset);
 }
 
-static WRITE8_HANDLER(superwng_fg_vram_w)
+WRITE8_MEMBER(superwng_state::superwng_fg_vram_w)
 {
-	superwng_state *state = space->machine().driver_data<superwng_state>();
-	state->m_videoram_fg[offset] = data;
-	tilemap_mark_tile_dirty(state->m_fg_tilemap, offset);
+	m_videoram_fg[offset] = data;
+	m_fg_tilemap->mark_tile_dirty(offset);
 }
 
-static WRITE8_HANDLER(superwng_fg_cram_w)
+WRITE8_MEMBER(superwng_state::superwng_fg_cram_w)
 {
-	superwng_state *state = space->machine().driver_data<superwng_state>();
-	state->m_colorram_fg[offset] = data;
-	tilemap_mark_tile_dirty(state->m_fg_tilemap, offset);
+	m_colorram_fg[offset] = data;
+	m_fg_tilemap->mark_tile_dirty(offset);
 }
 
-static WRITE8_HANDLER(superwng_tilebank_w)
+WRITE8_MEMBER(superwng_state::superwng_tilebank_w)
 {
-	superwng_state *state = space->machine().driver_data<superwng_state>();
-	state->m_tile_bank = data;
-	tilemap_mark_all_tiles_dirty(state->m_bg_tilemap);
-	tilemap_mark_all_tiles_dirty(state->m_fg_tilemap);
+	m_tile_bank = data;
+	m_bg_tilemap->mark_all_dirty();
+	m_fg_tilemap->mark_all_dirty();
 }
 
-static WRITE8_HANDLER( superwng_flip_screen_w )
+WRITE8_MEMBER(superwng_state::superwng_flip_screen_w)
 {
-	superwng_state *state = space->machine().driver_data<superwng_state>();
-	flip_screen_set(space->machine(), ~data & 0x01);
-	tilemap_mark_all_tiles_dirty(state->m_bg_tilemap);
-	tilemap_mark_all_tiles_dirty(state->m_fg_tilemap);
+	flip_screen_set(~data & 0x01);
+	m_bg_tilemap->mark_all_dirty();
+	m_fg_tilemap->mark_all_dirty();
 }
 
-static WRITE8_HANDLER(superwng_cointcnt1_w)
+WRITE8_MEMBER(superwng_state::superwng_cointcnt1_w)
 {
-	coin_counter_w(space->machine(), 0, data);
+	coin_counter_w(machine(), 0, data);
 }
 
-static WRITE8_HANDLER(superwng_cointcnt2_w)
+WRITE8_MEMBER(superwng_state::superwng_cointcnt2_w)
 {
-	coin_counter_w(space->machine(), 1, data);
+	coin_counter_w(machine(), 1, data);
 }
 
-static ADDRESS_MAP_START( superwng_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x6fff) AM_ROM
+WRITE8_MEMBER(superwng_state::superwng_hopper_w)
+{
+}
+
+static ADDRESS_MAP_START( superwng_map, AS_PROGRAM, 8, superwng_state )
+	AM_RANGE(0x0000, 0x6fff) AM_ROM AM_WRITENOP
 	AM_RANGE(0x7000, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(superwng_bg_vram_w) AM_BASE_MEMBER(superwng_state, m_videoram_bg)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(superwng_fg_vram_w) AM_BASE_MEMBER(superwng_state, m_videoram_fg)
-	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(superwng_bg_cram_w) AM_BASE_MEMBER(superwng_state, m_colorram_bg)
-	AM_RANGE(0x8c00, 0x8fff) AM_RAM_WRITE(superwng_fg_cram_w) AM_BASE_MEMBER(superwng_state, m_colorram_fg)
-	AM_RANGE(0x9800, 0x99ff) AM_RAM  //collision map
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(superwng_bg_vram_w) AM_SHARE("videorabg")
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(superwng_fg_vram_w) AM_SHARE("videorafg")
+	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(superwng_bg_cram_w) AM_SHARE("colorrabg")
+	AM_RANGE(0x8c00, 0x8fff) AM_RAM_WRITE(superwng_fg_cram_w) AM_SHARE("colorrafg")
+	AM_RANGE(0x9800, 0x99ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1")
-	AM_RANGE(0xa000, 0xa000) AM_WRITENOP //unknown
+	AM_RANGE(0xa000, 0xa000) AM_WRITE(superwng_hopper_w)
 	AM_RANGE(0xa080, 0xa080) AM_READ_PORT("P2")
 	AM_RANGE(0xa100, 0xa100) AM_READ_PORT("DSW1")
 	AM_RANGE(0xa100, 0xa100) AM_WRITE(superwng_sound_interrupt_w)
 	AM_RANGE(0xa180, 0xa180) AM_READ_PORT("DSW2")
-	AM_RANGE(0xa180, 0xa180) AM_WRITENOP //watchdog ? int ack ?
+	AM_RANGE(0xa180, 0xa180) AM_WRITENOP // watchdog? int ack?
 	AM_RANGE(0xa181, 0xa181) AM_WRITE(superwng_nmi_enable_w)
 	AM_RANGE(0xa182, 0xa182) AM_WRITE(superwng_tilebank_w)
 	AM_RANGE(0xa183, 0xa183) AM_WRITE(superwng_flip_screen_w)
 	AM_RANGE(0xa184, 0xa184) AM_WRITE(superwng_cointcnt1_w)
-	AM_RANGE(0xa185, 0xa185) AM_WRITENOP //unknown , always(?) 0
+	AM_RANGE(0xa185, 0xa185) AM_WRITENOP // unknown, always(?) 0
 	AM_RANGE(0xa186, 0xa186) AM_WRITE(superwng_cointcnt2_w)
-	AM_RANGE(0xa187, 0xa187) AM_WRITENOP //unknown , always(?) 0
+	AM_RANGE(0xa187, 0xa187) AM_WRITENOP // unknown, always(?) 0
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( superwng_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( superwng_sound_map, AS_PROGRAM, 8, superwng_state )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
 	AM_RANGE(0x3000, 0x3000) AM_WRITE(superwng_sound_nmi_clear_w)
-	AM_RANGE(0x4000, 0x4000) AM_DEVREADWRITE("ay1", ay8910_r, ay8910_data_w)
-	AM_RANGE(0x5000, 0x5000) AM_DEVWRITE("ay1", ay8910_address_w)
-	AM_RANGE(0x6000, 0x6000) AM_DEVREADWRITE("ay2", ay8910_r, ay8910_data_w)
-	AM_RANGE(0x7000, 0x7000) AM_DEVWRITE("ay2", ay8910_address_w)
+	AM_RANGE(0x4000, 0x4000) AM_DEVREADWRITE("ay1", ay8910_device, data_r, data_w)
+	AM_RANGE(0x5000, 0x5000) AM_DEVWRITE("ay1", ay8910_device, address_w)
+	AM_RANGE(0x6000, 0x6000) AM_DEVREADWRITE("ay2", ay8910_device, data_r, data_w)
+	AM_RANGE(0x7000, 0x7000) AM_DEVWRITE("ay2", ay8910_device, address_w)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( superwng )
 	PORT_START("P1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME( "Launch Ball" )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME( "Right Flipper" )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME( "Left Flipper" )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("P1 Shoot")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("P1 Right Flipper")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("P1 Left Flipper")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_COCKTAIL PORT_NAME("P2 Tilt")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 )
 
 	PORT_START("P2")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME( "Launch Ball" ) PORT_COCKTAIL
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME( "Right Flipper" ) PORT_COCKTAIL
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME( "Left Flipper" ) PORT_COCKTAIL
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_TILT )
-	PORT_BIT( 0x70, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_COCKTAIL PORT_NAME("P2 Shoot")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_COCKTAIL PORT_NAME("P2 Right Flipper")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL PORT_NAME("P2 Left Flipper")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("P1 Tilt")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
 
 	PORT_START("DSW1")
 	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Unknown ))
-	PORT_DIPSETTING(	0x00,  DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x01,  DEF_STR( On ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
 	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Unknown ))
-	PORT_DIPSETTING(	0x00,  DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x02,  DEF_STR( On ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( On ) )
 	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Unknown ))
-	PORT_DIPSETTING(	0x00,  DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x04,  DEF_STR( On ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( On ) )
 	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Cabinet ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ))
 	PORT_DIPSETTING(    0x08, DEF_STR( Cocktail ))
 	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Unknown ))
-	PORT_DIPSETTING(	0x00,  DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x10,  DEF_STR( On ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
 	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unknown ))
-	PORT_DIPSETTING(	0x00,  DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x20,  DEF_STR( On ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
 	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ))
-	PORT_DIPSETTING(	0x00,  DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x40,  DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Lives ) )
-	PORT_DIPSETTING(	0x00, "3" )
-	PORT_DIPSETTING(	0x80, "5" )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Lives ) )
+	PORT_DIPSETTING(    0x80, "3" )
+	PORT_DIPSETTING(    0x00, "5" )
 
 	PORT_START("DSW2")
 	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_A ) )
@@ -374,17 +378,18 @@ static INPUT_PORTS_START( superwng )
 	PORT_DIPSETTING(    0x08, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 1C_1C ))
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_2C ) )
-	PORT_DIPNAME( 0x30, 0x00,	DEF_STR( Unknown ) ) //causes writes to 0xa000 every frame
-	PORT_DIPSETTING(    0x00, "0" )
-	PORT_DIPSETTING(    0x10, "1" )
-	PORT_DIPSETTING(    0x20, "2" )
-	PORT_DIPSETTING(    0x30, "3" )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ))
-	PORT_DIPSETTING(	0x00,  DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x40,  DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Unknown ))
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unknown )) // hopper related, writes 0 to 0xa000 every frame if it is set
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown )) // hopper related, if 0x20 is set, and this is set, it will lock up with HOPPER EMPTY
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
 	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ))
-	PORT_DIPSETTING(	0x00,  DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x80,  DEF_STR( On ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 INPUT_PORTS_END
 
 static const gfx_layout charlayout =
@@ -419,30 +424,24 @@ static GFXDECODE_START( superwng )
 	GFXDECODE_ENTRY( "gfx1", 0x0000, spritelayout,     0, 16 )
 GFXDECODE_END
 
-static MACHINE_START( superwng )
+void superwng_state::machine_start()
 {
-	superwng_state *state = machine.driver_data<superwng_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-
-	state->save_item(NAME(state->m_sound_byte));
-	state->save_item(NAME(state->m_nmi_enable));
+	save_item(NAME(m_tile_bank));
+	save_item(NAME(m_sound_byte));
+	save_item(NAME(m_nmi_enable));
 }
 
-static MACHINE_RESET( superwng )
+void superwng_state::machine_reset()
 {
-	superwng_state *state = machine.driver_data<superwng_state>();
-
-	state->m_sound_byte = 0;
-	state->m_nmi_enable = 0;
+	m_sound_byte = 0;
+	m_nmi_enable = 0;
 }
 
 static const ay8910_interface ay8910_config_1 =
 {
 	AY8910_LEGACY_OUTPUT,
 	AY8910_DEFAULT_LOADS,
-	DEVCB_HANDLER(superwng_sound_byte_r),
+	DEVCB_DRIVER_MEMBER(superwng_state,superwng_sound_byte_r),
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL
@@ -463,29 +462,24 @@ static MACHINE_CONFIG_START( superwng, superwng_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, MASTER_CLOCK/4)
 	MCFG_CPU_PROGRAM_MAP(superwng_map)
-	MCFG_CPU_VBLANK_INT("screen", superwng_nmi_interrupt)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", superwng_state,  superwng_nmi_interrupt)
 
 	MCFG_CPU_ADD("audiocpu", Z80, MASTER_CLOCK/4)
 	MCFG_CPU_PROGRAM_MAP(superwng_sound_map)
-	MCFG_CPU_PERIODIC_INT(superwng_sound_nmi_assert, 4*60)
+	MCFG_CPU_PERIODIC_INT_DRIVER(superwng_state, superwng_sound_nmi_assert,  4*60)
 
-	MCFG_MACHINE_START(superwng)
-	MCFG_MACHINE_RESET(superwng)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(32*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
 	MCFG_GFXDECODE(superwng)
 
 	MCFG_PALETTE_LENGTH(0x40)
-	MCFG_PALETTE_INIT(superwng)
-	MCFG_VIDEO_START( superwng )
-	MCFG_SCREEN_UPDATE(superwng)
+	MCFG_SCREEN_UPDATE_DRIVER(superwng_state, screen_update_superwng)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
@@ -518,4 +512,4 @@ ROM_START( superwng )
 ROM_END
 
 
-GAME( 1985, superwng,   0,      superwng, superwng, 0, ROT90, "Wing", "Super Wing", GAME_WRONG_COLORS )
+GAME( 1985, superwng,   0,      superwng, superwng, driver_device, 0, ROT90, "Wing", "Super Wing", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )

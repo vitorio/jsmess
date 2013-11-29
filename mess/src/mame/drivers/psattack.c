@@ -83,17 +83,27 @@ class psattack_state : public driver_device
 {
 public:
 	psattack_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this, "maincpu") { }
 
+	DECLARE_READ32_MEMBER(psattack_unk_r);
+	DECLARE_DRIVER_INIT(psattack);
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void video_start();
+	UINT32 screen_update_psattack(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void screen_eof_psattack(screen_device &screen, bool state);
+	INTERRUPT_GEN_MEMBER(psattack_interrupt);
+	required_device<cpu_device> m_maincpu;
 };
 
 
-static READ32_HANDLER( psattack_unk_r )
+READ32_MEMBER(psattack_state::psattack_unk_r)
 {
 	return 0xffffffff;
 }
 
-static ADDRESS_MAP_START( psattack_mem, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( psattack_mem, AS_PROGRAM, 32, psattack_state )
 	AM_RANGE(0x00000000, 0x001fffff) AM_ROM
 	AM_RANGE(0x01402204, 0x01402207) AM_READ(psattack_unk_r)
 	AM_RANGE(0x01402804, 0x01402807) AM_READ(psattack_unk_r)
@@ -103,35 +113,30 @@ static ADDRESS_MAP_START( psattack_mem, AS_PROGRAM, 32 )
 ADDRESS_MAP_END
 
 
-static MACHINE_START(psattack)
+void psattack_state::machine_start()
 {
-
 }
 
-static MACHINE_RESET(psattack)
+void psattack_state::machine_reset()
 {
-
 }
 
-static VIDEO_START(psattack)
+void psattack_state::video_start()
 {
-
 }
 
 
-static SCREEN_UPDATE(psattack)
+UINT32 psattack_state::screen_update_psattack(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	return 0;
 }
 
-static SCREEN_EOF(psattack)
+void psattack_state::screen_eof_psattack(screen_device &screen, bool state)
 {
-
 }
 
-static INTERRUPT_GEN(psattack_interrupt)
+INTERRUPT_GEN_MEMBER(psattack_state::psattack_interrupt)
 {
-
 }
 
 static INPUT_PORTS_START(psattack)
@@ -171,25 +176,21 @@ static const vr0_interface vr0_config =
 static MACHINE_CONFIG_START( psattack, psattack_state )
 	MCFG_CPU_ADD("maincpu", SE3208, 43000000)
 	MCFG_CPU_PROGRAM_MAP(psattack_mem)
-	MCFG_CPU_VBLANK_INT("screen", psattack_interrupt)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", psattack_state,  psattack_interrupt)
 
-	MCFG_MACHINE_START(psattack)
-	MCFG_MACHINE_RESET(psattack)
 
 	//MCFG_NVRAM_ADD_0FILL("nvram")
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320, 240)
 	MCFG_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
-	MCFG_SCREEN_UPDATE(psattack)
-	MCFG_SCREEN_EOF(psattack)
+	MCFG_SCREEN_UPDATE_DRIVER(psattack_state, screen_update_psattack)
+	MCFG_SCREEN_VBLANK_DRIVER(psattack_state, screen_eof_psattack)
 
-	MCFG_VIDEO_START(psattack)
 
-	MCFG_PALETTE_INIT(RRRRR_GGGGGG_BBBBB)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, RRRRR_GGGGGG_BBBBB)
 	MCFG_PALETTE_LENGTH(65536)
 
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -215,10 +216,8 @@ ROM_END
 
 
 
-static DRIVER_INIT(psattack)
+DRIVER_INIT_MEMBER(psattack_state,psattack)
 {
-
 }
 
-GAME( 2004, psattack, 0, psattack, psattack, psattack, ROT0, "Uniana", "P's Attack", GAME_NOT_WORKING )
-
+GAME( 2004, psattack, 0, psattack, psattack, psattack_state, psattack, ROT0, "Uniana", "P's Attack", GAME_IS_SKELETON )

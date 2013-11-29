@@ -18,7 +18,7 @@ struct imddsk_tag
 };
 
 
-static struct imddsk_tag *get_tag(floppy_image *floppy)
+static struct imddsk_tag *get_tag(floppy_image_legacy *floppy)
 {
 	struct imddsk_tag *tag;
 	tag = (imddsk_tag *)floppy_tag(floppy);
@@ -40,22 +40,22 @@ FLOPPY_IDENTIFY( imd_dsk_identify )
 	return FLOPPY_ERROR_SUCCESS;
 }
 
-static int imd_get_heads_per_disk(floppy_image *floppy)
+static int imd_get_heads_per_disk(floppy_image_legacy *floppy)
 {
 	return get_tag(floppy)->heads;
 }
 
-static int imd_get_tracks_per_disk(floppy_image *floppy)
+static int imd_get_tracks_per_disk(floppy_image_legacy *floppy)
 {
 	return get_tag(floppy)->tracks;
 }
 
-static UINT64 imd_get_track_offset(floppy_image *floppy, int head, int track)
+static UINT64 imd_get_track_offset(floppy_image_legacy *floppy, int head, int track)
 {
 	return get_tag(floppy)->track_offsets[(track<<1) + head];
 }
 
-static floperr_t get_offset(floppy_image *floppy, int head, int track, int sector, int sector_is_index, UINT64 *offset)
+static floperr_t get_offset(floppy_image_legacy *floppy, int head, int track, int sector, int sector_is_index, UINT64 *offset)
 {
 	UINT64 offs = 0;
 	UINT8 header[5];
@@ -93,7 +93,7 @@ static floperr_t get_offset(floppy_image *floppy, int head, int track, int secto
 
 
 
-static floperr_t internal_imd_read_sector(floppy_image *floppy, int head, int track, int sector, int sector_is_index, void *buffer, size_t buflen)
+static floperr_t internal_imd_read_sector(floppy_image_legacy *floppy, int head, int track, int sector, int sector_is_index, void *buffer, size_t buflen)
 {
 	UINT64 offset;
 	floperr_t err;
@@ -124,17 +124,17 @@ static floperr_t internal_imd_read_sector(floppy_image *floppy, int head, int tr
 }
 
 
-static floperr_t imd_read_sector(floppy_image *floppy, int head, int track, int sector, void *buffer, size_t buflen)
+static floperr_t imd_read_sector(floppy_image_legacy *floppy, int head, int track, int sector, void *buffer, size_t buflen)
 {
 	return internal_imd_read_sector(floppy, head, track, sector, FALSE, buffer, buflen);
 }
 
-static floperr_t imd_read_indexed_sector(floppy_image *floppy, int head, int track, int sector, void *buffer, size_t buflen)
+static floperr_t imd_read_indexed_sector(floppy_image_legacy *floppy, int head, int track, int sector, void *buffer, size_t buflen)
 {
 	return internal_imd_read_sector(floppy, head, track, sector, TRUE, buffer, buflen);
 }
 
-static floperr_t imd_get_sector_length(floppy_image *floppy, int head, int track, int sector, UINT32 *sector_length)
+static floperr_t imd_get_sector_length(floppy_image_legacy *floppy, int head, int track, int sector, UINT32 *sector_length)
 {
 	floperr_t err;
 	err = get_offset(floppy, head, track, sector, FALSE, NULL);
@@ -147,7 +147,7 @@ static floperr_t imd_get_sector_length(floppy_image *floppy, int head, int track
 	return FLOPPY_ERROR_SUCCESS;
 }
 
-static floperr_t imd_get_indexed_sector_info(floppy_image *floppy, int head, int track, int sector_index, int *cylinder, int *side, int *sector, UINT32 *sector_length, unsigned long *flags)
+static floperr_t imd_get_indexed_sector_info(floppy_image_legacy *floppy, int head, int track, int sector_index, int *cylinder, int *side, int *sector, UINT32 *sector_length, unsigned long *flags)
 {
 	UINT64 offset;
 	UINT8 header[5];
@@ -273,3 +273,154 @@ FLOPPY_CONSTRUCT( imd_dsk_construct )
 	return FLOPPY_ERROR_SUCCESS;
 }
 
+
+// license:BSD-3-Clause
+// copyright-holders:Olivier Galibert
+/*********************************************************************
+
+    formats/imd_dsk.h
+
+    IMD disk images
+
+*********************************************************************/
+
+#include "emu.h"
+#include "imd_dsk.h"
+
+imd_format::imd_format()
+{
+}
+
+const char *imd_format::name() const
+{
+	return "imd";
+}
+
+const char *imd_format::description() const
+{
+	return "IMD disk image";
+}
+
+const char *imd_format::extensions() const
+{
+	return "imd";
+}
+
+void imd_format::fixnum(char *start, char *end) const
+{
+	end--;
+	if(*end != '0')
+		return;
+	while(end > start) {
+		end--;
+		if(*end == ' ')
+			*end = '0';
+		else if(*end != '0')
+			return;
+	};
+}
+
+int imd_format::identify(io_generic *io, UINT32 form_factor)
+{
+	char h[4];
+
+	io_generic_read(io, h, 0, 4);
+	if(!memcmp(h, "IMD ", 4))
+		return 100;
+
+	return 0;
+}
+
+bool imd_format::load(io_generic *io, UINT32 form_factor, floppy_image *image)
+{
+	UINT64 size = io_generic_size(io);
+	UINT8 *img = global_alloc_array(UINT8, size);
+	io_generic_read(io, img, 0, size);
+
+	UINT64 pos;
+	for(pos=0; pos < size && img[pos] != 0x1a; pos++);
+	pos++;
+
+	if(pos >= size)
+		return false;
+
+	while(pos < size) {
+		UINT8 mode = img[pos++];
+		UINT8 track = img[pos++];
+		UINT8 head = img[pos++];
+		UINT8 sector_count = img[pos++];
+		UINT8 ssize = img[pos++];
+
+		if(ssize == 0xff)
+			throw emu_fatalerror("imd_format: Unsupported variable sector size on track %d head %d", track, head);
+
+		UINT32 actual_size = ssize < 7 ? 128 << ssize : 8192;
+
+		static const int rates[3] = { 500000, 300000, 250000 };
+		bool fm = mode < 3;
+		int rate = rates[mode % 3];
+		int rpm = form_factor == floppy_image::FF_8 || (form_factor == floppy_image::FF_525 && rate >= 300000) ? 360 : 300;
+		int cell_count = (fm ? 1 : 2)*rate*60/rpm;
+
+		const UINT8 *snum = img+pos;
+		pos += sector_count;
+		const UINT8 *tnum = head & 0x80 ? img+pos : NULL;
+		if(tnum)
+			pos += sector_count;
+		const UINT8 *hnum = head & 0x40 ? img+pos : NULL;
+		if(hnum)
+			pos += sector_count;
+
+		head &= 0x3f;
+
+		int gap_3 = calc_default_pc_gap3_size(form_factor, actual_size);
+
+		desc_pc_sector sects[256];
+
+		for(int i=0; i<sector_count; i++) {
+			UINT8 stype = img[pos++];
+			sects[i].track       = tnum ? tnum[i] : track;
+			sects[i].head        = hnum ? hnum[i] : head;
+			sects[i].sector      = snum[i];
+			sects[i].size        = ssize;
+			sects[i].actual_size = actual_size;
+
+			if(stype == 0 || stype > 8) {
+				sects[i].data = NULL;
+
+			} else {
+				sects[i].deleted = stype == 3 || stype == 4 || stype == 7 || stype == 8;
+				sects[i].bad_crc = stype == 5 || stype == 6 || stype == 7 || stype == 8;
+
+				if(stype == 2 || stype == 4 || stype == 6 || stype == 8) {
+					sects[i].data = global_alloc_array(UINT8, actual_size);
+					memset(sects[i].data, img[pos++], actual_size);
+
+				} else {
+					sects[i].data = img + pos;
+					pos += actual_size;
+				}
+			}
+		}
+
+		if(fm)
+			build_pc_track_fm(track, head, image, cell_count, sector_count, sects, gap_3);
+		else
+			build_pc_track_mfm(track, head, image, cell_count, sector_count, sects, gap_3);
+
+		for(int i=0; i<sector_count; i++)
+			if(sects[i].data && (sects[i].data < img || sects[i].data >= img+size))
+				global_free(sects[i].data);
+	}
+
+	global_free(img);
+	return true;
+}
+
+
+bool imd_format::supports_save() const
+{
+	return false;
+}
+
+const floppy_format_type FLOPPY_IMD_FORMAT = &floppy_image_format_creator<imd_format>;
