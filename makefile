@@ -56,10 +56,6 @@ EMCC_FLAGS += -s EXPORTED_FUNCTIONS="['_main', '_malloc', \
 # Flags shared between the native tools build and emscripten build of MESS.
 SHARED_MESS_FLAGS := OSD=sdl       # Set the onscreen display to use SDL.
 SHARED_MESS_FLAGS += NOWERROR=1    # Disables -Werror (c|cxx)flag.
-SHARED_MESS_FLAGS += NOASM=1       # No assembly allowed!
-SHARED_MESS_FLAGS += NO_X11=1      # Disable X11 support for the SDL OSD.
-SHARED_MESS_FLAGS += NO_DEBUGGER=1 # Mainly relevant to emscripten. Disables
-                                   # the GTK(?) debugger.
 
 # MESS makefile flags used to build the native tools.
 NATIVE_MESS_FLAGS := PREFIX=native # Prefix prevents us from accidentally
