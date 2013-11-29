@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Sandro Ronco
 /***************************************************************************
 
         Toshiba T6A04 LCD controller
@@ -21,14 +23,14 @@
 
 struct t6a04_interface
 {
-	UINT8 height;			// number of lines
-	UINT8 width;			// pixels for line
+	UINT8 height;           // number of lines
+	UINT8 width;            // pixels for line
 };
 
 // ======================> t6a04_device
 
 class t6a04_device : public device_t,
-					 public t6a04_interface
+						public t6a04_interface
 {
 public:
 	// construction/destruction
@@ -40,18 +42,18 @@ public:
 	DECLARE_WRITE8_MEMBER(data_write);
 	DECLARE_READ8_MEMBER(data_read);
 
-	int video_update(bitmap_t *bitmap, const rectangle *cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 protected:
 	// device-level overrides
 	virtual void device_start();
 	virtual void device_reset();
 	virtual void device_config_complete();
-	virtual bool device_validity_check( const game_driver &driver ) const;
+	virtual void device_validity_check(validity_checker &valid) const;
 
 private:
 	UINT8 m_busy_flag;
-	UINT8 m_lcd_ram[960];	//7680 bit (64*120)
+	UINT8 m_lcd_ram[960];   //7680 bit (64*120)
 	UINT8 m_display_on;
 	UINT8 m_contrast;
 	UINT8 m_xpos;

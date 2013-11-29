@@ -1,8 +1,10 @@
+// license:MAME
+// copyright-holders:Juergen Buchmueller, Krzysztof Strzecha, Robbbert
 /***************************************************************************
     zx.c
 
     Original driver by:
-    Juergen Buchmueller <pullmoll@t-online.de>, Dec 1999
+    Juergen Buchmueller, Dec 1999
 
     Fixes and additions by Krzysztof Strzecha:
     07.06.2004 Tape loading added. Some cleanups of debug code.
@@ -17,13 +19,16 @@
     - Applied NTSC timings to pc8300 only, all others depend on the diode.
     - Many keyboard fixes, and descriptions added to keys.
     - Fixed .O files from causing an access violation.
-    - Enabled cassette saving (wav only).
+    - Enabled cassette saving.
     - Many general fixes to pow3000/lambda.
     - Added sound to pc8300/pow3000/lambda.
 
     24/12/2009 (Robbbert)
     - Added rom mirror, this fixes ringo470
     - Added back the F4 character display
+
+    14/08/2011 (Robbbert)
+    - Modernised.
 
     To do / problems:
     - Some memory areas are not mirrored as they should.
@@ -32,41 +37,33 @@
     - lambda/pow3000 32k memory pack is unemulated, because where is the upper 16k mirror going to be?
     - h4th and tree4th need their address maps worked out (eg, the stack is set to FB80)
     - lambda/pow3000 joystick, connected in parallel with the 4,R,F,7,U keys, but the directions are unknown.
-    - Currently, cassettes will be saved in .wav format, even if you choose something else.
     - Many games don't work.
 
 
 ****************************************************************************/
 
-#include "emu.h"
-#include "cpu/z80/z80.h"
-#include "sound/speaker.h"
-#include "sound/wave.h"
 #include "includes/zx.h"
-#include "imagedev/cassette.h"
-#include "formats/zx81_p.h"
-#include "machine/ram.h"
 
 /* Memory Maps */
 
-static ADDRESS_MAP_START( zx80_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( zx80_map, AS_PROGRAM, 8, zx_state )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM AM_MIRROR(0x2000)
 	AM_RANGE(0xc000, 0xffff) AM_RAM_READ(zx_ram_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( zx80_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( zx80_io_map, AS_IO, 8, zx_state )
 	AM_RANGE(0x0000, 0xffff) AM_READWRITE(zx80_io_r, zx80_io_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( zx81_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( zx81_io_map, AS_IO, 8, zx_state )
 	AM_RANGE(0x0000, 0xffff) AM_READWRITE(zx81_io_r, zx81_io_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pc8300_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( pc8300_io_map, AS_IO, 8, zx_state )
 	AM_RANGE(0x0000, 0xffff) AM_READWRITE(pc8300_io_r, zx81_io_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pow3000_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( pow3000_io_map, AS_IO, 8, zx_state )
 	AM_RANGE(0x0000, 0xffff) AM_READWRITE(pow3000_io_r, zx81_io_w)
 ADDRESS_MAP_END
 
@@ -140,7 +137,7 @@ these functions in Input (This System) menu, hence we live some empty space in t
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("B  OR RET") PORT_CODE(KEYCODE_B) PORT_CHAR('B')
 	PORT_BIT( 0xe0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("CONFIG")	/* config diode on main board */
+	PORT_START("CONFIG")    /* config diode on main board */
 	PORT_CONFNAME( 0x40, 0x40, "TV system")
 	PORT_CONFSETTING(    0x00, "NTSC")
 	PORT_CONFSETTING(    0x40, "PAL")
@@ -216,7 +213,7 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( zx81 )
 	PORT_INCLUDE(pc8300)
 
-	PORT_START("CONFIG")	/* config diode on main board */
+	PORT_START("CONFIG")    /* config diode on main board */
 	PORT_CONFNAME( 0x40, 0x40, "TV system")
 	PORT_CONFSETTING(    0x00, "NTSC")
 	PORT_CONFSETTING(    0x40, "PAL")
@@ -287,7 +284,7 @@ static INPUT_PORTS_START( pow3000 )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("B  Left") PORT_CODE(KEYCODE_B) PORT_CHAR('B') PORT_CHAR(UCHAR_MAMEKEY(LEFT))
 	PORT_BIT( 0xe0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("CONFIG")	/* config diode on main board */
+	PORT_START("CONFIG")    /* config diode on main board */
 	PORT_CONFNAME( 0x01, 0x00, "TV system")
 	PORT_CONFSETTING(    0x00, "NTSC")
 	PORT_CONFSETTING(    0x01, "PAL")
@@ -298,15 +295,15 @@ INPUT_PORTS_END
 
 static const gfx_layout zx_gfx_layout =
 {
-	8, 8,							   /* 8x8 pixels */
-	64,								   /* 64 codes */
-	1,								   /* 1 bit per pixel */
-	{0},							   /* no bitplanes */
+	8, 8,                              /* 8x8 pixels */
+	64,                                /* 64 codes */
+	1,                                 /* 1 bit per pixel */
+	{0},                               /* no bitplanes */
 	/* x offsets */
 	{0, 1, 2, 3, 4, 5, 6, 7},
 	/* y offsets */
 	{0 * 8, 1 * 8, 2 * 8, 3 * 8, 4 * 8, 5 * 8, 6 * 8, 7 * 8},
-	8 * 8							   /* eight bytes per code */
+	8 * 8                              /* eight bytes per code */
 };
 
 
@@ -329,41 +326,41 @@ GFXDECODE_END
 /* Palette Initialization */
 
 
-static PALETTE_INIT( zx80 )
+void zx_state::palette_init()
 {
-	palette_set_color(machine,0,RGB_WHITE); /* white */
-	palette_set_color(machine,1,RGB_BLACK); /* black */
-	palette_set_color(machine,2,RGB_BLACK); /* black */
-	palette_set_color(machine,3,RGB_WHITE); /* white */
+	palette_set_color(machine(),0,RGB_WHITE); /* white */
+	palette_set_color(machine(),1,RGB_BLACK); /* black */
+	palette_set_color(machine(),2,RGB_BLACK); /* black */
+	palette_set_color(machine(),3,RGB_WHITE); /* white */
 }
 
-static PALETTE_INIT( ts1000 )
+PALETTE_INIT_MEMBER(zx_state,ts1000)
 {
-	palette_set_color(machine,0,MAKE_RGB(64, 244, 244)); /* cyan */
-	palette_set_color(machine,1,RGB_BLACK); /* black */
-	palette_set_color(machine,2,RGB_BLACK); /* black */
-	palette_set_color(machine,3,MAKE_RGB(64, 244, 244)); /* cyan */
+	palette_set_color(machine(),0,MAKE_RGB(64, 244, 244)); /* cyan */
+	palette_set_color(machine(),1,RGB_BLACK); /* black */
+	palette_set_color(machine(),2,RGB_BLACK); /* black */
+	palette_set_color(machine(),3,MAKE_RGB(64, 244, 244)); /* cyan */
 }
 
 
-#define ZX81_CPU_CLOCK			3250000
-#define ZX81_CYCLES_PER_SCANLINE	207
-#define ZX81_PIXELS_PER_SCANLINE	256
-#define ZX81_CYCLES_PER_VBLANK		1235
-#define ZX81_VBLANK_DURATION		(1.0*ZX81_CYCLES_PER_VBLANK/ZX81_CPU_CLOCK*1000*1000)
+#define ZX81_CPU_CLOCK          3250000
+#define ZX81_CYCLES_PER_SCANLINE    207
+#define ZX81_PIXELS_PER_SCANLINE    256
+#define ZX81_CYCLES_PER_VBLANK      1235
+#define ZX81_VBLANK_DURATION        (1.0*ZX81_CYCLES_PER_VBLANK/ZX81_CPU_CLOCK*1000*1000)
 
-#define ZX81_PAL_SCANLINES		304
-#define ZX81_PAL_FRAMES_PER_SECOND	(1.0*ZX81_CPU_CLOCK/(ZX81_PAL_SCANLINES*ZX81_CYCLES_PER_SCANLINE+ZX81_CYCLES_PER_VBLANK))
+#define ZX81_PAL_SCANLINES      304
+#define ZX81_PAL_FRAMES_PER_SECOND  (1.0*ZX81_CPU_CLOCK/(ZX81_PAL_SCANLINES*ZX81_CYCLES_PER_SCANLINE+ZX81_CYCLES_PER_VBLANK))
 
-#define ZX81_NTSC_SCANLINES		256
-#define ZX81_NTSC_FRAMES_PER_SECOND	(1.0*ZX81_CPU_CLOCK/(ZX81_NTSC_SCANLINES*ZX81_CYCLES_PER_SCANLINE+ZX81_CYCLES_PER_VBLANK))
+#define ZX81_NTSC_SCANLINES     256
+#define ZX81_NTSC_FRAMES_PER_SECOND (1.0*ZX81_CPU_CLOCK/(ZX81_NTSC_SCANLINES*ZX81_CYCLES_PER_SCANLINE+ZX81_CYCLES_PER_VBLANK))
 
 /* Machine Drivers */
 
 static const struct CassetteOptions zx81_cassette_options = {
-	1,		/* channels */
-	16,		/* bits per sample */
-	44100	/* sample frequency */
+	1,      /* channels */
+	16,     /* bits per sample */
+	44100   /* sample frequency */
 };
 
 static const cassette_interface zx80_cassette_interface =
@@ -393,29 +390,25 @@ static MACHINE_CONFIG_START( zx80, zx_state )
 	MCFG_SCREEN_REFRESH_RATE(ZX81_PAL_FRAMES_PER_SECOND)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(ZX81_VBLANK_DURATION))
 
-	MCFG_MACHINE_RESET(zx80)
 
 	/* video hardware */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(zx_state, screen_update)
 	MCFG_SCREEN_SIZE(ZX81_PIXELS_PER_SCANLINE, ZX81_PAL_SCANLINES)
 	MCFG_SCREEN_VISIBLE_AREA(0, ZX81_PIXELS_PER_SCANLINE-1, 0, ZX81_PAL_SCANLINES-1)
-	MCFG_SCREEN_UPDATE(generic_bitmapped)
-	MCFG_SCREEN_EOF(zx)
+	MCFG_SCREEN_VBLANK_DRIVER(zx_state, screen_eof_zx)
 
 	MCFG_GFXDECODE(zx80)
 	MCFG_PALETTE_LENGTH(4)
-	MCFG_PALETTE_INIT(zx80)
 
-	MCFG_VIDEO_START(zx)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)	/* Used by pc8300/lambda/pow3000 */
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)   /* Used by pc8300/lambda/pow3000 */
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
-	MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, zx80_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", zx80_cassette_interface )
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -430,12 +423,12 @@ static MACHINE_CONFIG_DERIVED( zx81, zx80 )
 
 	MCFG_GFXDECODE(zx81)
 
-	MCFG_CASSETTE_MODIFY( CASSETTE_TAG, zx81_cassette_interface )
+	MCFG_CASSETTE_MODIFY( "cassette", zx81_cassette_interface )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( ts1000, zx81 )
 
-	MCFG_PALETTE_INIT(ts1000)
+	MCFG_PALETTE_INIT_OVERRIDE(zx_state,ts1000)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( ts1500, ts1000 )
@@ -450,7 +443,7 @@ static MACHINE_CONFIG_DERIVED( pc8300, zx81 )
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_IO_MAP(pc8300_io_map)
 
-	MCFG_MACHINE_RESET(pc8300)
+	MCFG_MACHINE_RESET_OVERRIDE(zx_state,pc8300)
 
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_REFRESH_RATE(ZX81_NTSC_FRAMES_PER_SECOND)
@@ -458,7 +451,6 @@ static MACHINE_CONFIG_DERIVED( pc8300, zx81 )
 	MCFG_SCREEN_VISIBLE_AREA(0, ZX81_PIXELS_PER_SCANLINE-1, 0, ZX81_NTSC_SCANLINES-1)
 
 	MCFG_GFXDECODE(pc8300)
-	MCFG_PALETTE_INIT(zx80)
 
 	/* internal ram */
 	MCFG_RAM_MODIFY(RAM_TAG)
@@ -470,10 +462,9 @@ static MACHINE_CONFIG_DERIVED( pow3000, zx81 )
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_IO_MAP(pow3000_io_map)
 
-	MCFG_MACHINE_RESET(pow3000)
+	MCFG_MACHINE_RESET_OVERRIDE(zx_state,pow3000)
 
 	MCFG_GFXDECODE(pc8300)
-	MCFG_PALETTE_INIT(zx80)
 
 	/* internal ram */
 	MCFG_RAM_MODIFY(RAM_TAG)
@@ -513,7 +504,7 @@ ROM_END
 
 ROM_START(ts1500)
 	ROM_REGION( 0x10000, "maincpu",0 )
-	ROM_LOAD( "ts1500.rom", 0x0000, 0x2000, CRC(7dd19c48) SHA1(3eb437359221b4406d236085ec66fa02278e7495) )
+	ROM_LOAD( "d2364c_649.u2", 0x0000, 0x2000, CRC(7dd19c48) SHA1(3eb437359221b4406d236085ec66fa02278e7495) )
 ROM_END
 
 ROM_START(ringo470)
@@ -555,19 +546,19 @@ ROM_END
 ROM_START( zx97 )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "zx97.rom", 0x0000, 0x2000, CRC(5cf49744) SHA1(b2a486efdc7b2bc3dc8e5a441ea5532bfa3207bd) )
-	ROM_IGNORE( 0x6000 )	/* Unemulated bankswitched part */
+	ROM_IGNORE( 0x6000 )    /* Unemulated bankswitched part */
 ROM_END
 
 /* Game Drivers */
 
 /*    YEAR  NAME        PARENT  COMPAT  MACHINE     INPUT       INIT    COMPANY                     FULLNAME                FLAGS */
-COMP( 1980, zx80,       0,      0,      zx80,       zx80,       zx,     "Sinclair Research Ltd",    "ZX-80",               0 )
-COMP( 1981, zx81,       0,      0,      zx81,       zx81,       zx,     "Sinclair Research Ltd",    "ZX-81",               0 )
-COMP( 1982, ts1000,     zx81,   0,      ts1000,     zx81,       zx,     "Timex Sinclair",           "Timex Sinclair 1000", 0 )
-COMP( 1983, ts1500,     zx81,   0,      ts1500,     zx81,       zx,     "Timex Sinclair",           "Timex Sinclair 1500", 0 )
-COMP( 1983, tk85,   	zx81,   0,      ts1000,     zx81,       zx,     "Microdigital",             "TK85",                0 )
-COMP( 1983, ringo470,   zx81,   0,      ts1000,     zx81,       zx,     "Ritas do Brasil Ltda",     "Ringo 470",           0 )
-COMP( 1984, pc8300,     zx81,   0,      pc8300,     pc8300,     zx,     "Your Computer",            "PC8300",              0 )
-COMP( 1983, pow3000,    zx81,   0,      pow3000,    pow3000,    zx,     "Creon Enterprises",        "Power 3000",          0 )
-COMP( 1982, lambda,     zx81,   0,      pow3000,    pow3000,    zx,     "Lambda Electronics Ltd",   "Lambda 8300",         0 )
-COMP( 1997, zx97,       zx81,   0,      zx81,       zx81,   	zx,     "Wilf Rigter",              "ZX97",	  GAME_NOT_WORKING | GAME_UNOFFICIAL )
+COMP( 1980, zx80,       0,      0,      zx80,       zx80, zx_state,       zx,     "Sinclair Research Ltd",    "ZX-80",               0 )
+COMP( 1981, zx81,       0,      0,      zx81,       zx81, zx_state,       zx,     "Sinclair Research Ltd",    "ZX-81",               0 )
+COMP( 1982, ts1000,     zx81,   0,      ts1000,     zx81, zx_state,       zx,     "Timex Sinclair",           "Timex Sinclair 1000", 0 )
+COMP( 1983, ts1500,     zx81,   0,      ts1500,     zx81, zx_state,       zx,     "Timex Sinclair",           "Timex Sinclair 1500", 0 )
+COMP( 1983, tk85,       zx81,   0,      ts1000,     zx81, zx_state,       zx,     "Microdigital",             "TK85",                0 )
+COMP( 1983, ringo470,   zx81,   0,      ts1000,     zx81, zx_state,       zx,     "Ritas do Brasil Ltda",     "Ringo 470",           0 )
+COMP( 1984, pc8300,     zx81,   0,      pc8300,     pc8300, zx_state,     zx,     "Your Computer",            "PC8300",              0 )
+COMP( 1983, pow3000,    zx81,   0,      pow3000,    pow3000, zx_state,    zx,     "Creon Enterprises",        "Power 3000",          0 )
+COMP( 1982, lambda,     zx81,   0,      pow3000,    pow3000, zx_state,    zx,     "Lambda Electronics Ltd",   "Lambda 8300",         0 )
+COMP( 1997, zx97,       zx81,   0,      zx81,       zx81, zx_state,       zx,     "Wilf Rigter",              "ZX97", GAME_NOT_WORKING | GAME_UNOFFICIAL )

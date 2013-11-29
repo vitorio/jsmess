@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Sandro Ronco
 /**********************************************************************
 
     LH5810/LH5811 Input/Output Port Controller
@@ -9,7 +11,6 @@
 **********************************************************************/
 
 #include "emu.h"
-#include "machine/devhelpr.h"
 #include "lh5810.h"
 
 //**************************************************************************
@@ -54,7 +55,7 @@ void lh5810_device::device_config_complete()
 //-------------------------------------------------
 
 lh5810_device::lh5810_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, LH5810, "LH5810", tag, owner, clock)
+	: device_t(mconfig, LH5810, "LH5810", tag, owner, clock, "lh5810", __FILE__)
 {
 }
 
@@ -189,4 +190,3 @@ WRITE8_MEMBER( lh5810_device::data_w )
 			break;
 	}
 }
-

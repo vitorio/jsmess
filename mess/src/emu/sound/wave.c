@@ -16,13 +16,13 @@
 #include "emu.h"
 #include "imagedev/cassette.h"
 #include "wave.h"
+#include "devlegcy.h"
 
-#define ALWAYS_PLAY_SOUND	0
+#define ALWAYS_PLAY_SOUND   0
 
 static STREAM_UPDATE( wave_sound_update )
 {
 	cassette_image_device *cass = (cassette_image_device *)param;
-	int speakers = cass->machine().devicelist().count(SPEAKER);
 	cassette_image *cassette;
 	cassette_state state;
 	double time_index;
@@ -31,6 +31,8 @@ static STREAM_UPDATE( wave_sound_update )
 	stream_sample_t *right_buffer = NULL;
 	int i;
 
+	speaker_device_iterator spkiter(cass->machine().root_device());
+	int speakers = spkiter.count();
 	if (speakers>1)
 		right_buffer = outputs[1];
 
@@ -71,7 +73,8 @@ static DEVICE_START( wave )
 
 	assert( device != NULL );
 	assert( device->static_config() != NULL );
-	int speakers = device->machine().config().devicelist().count(SPEAKER);
+	speaker_device_iterator spkiter(device->machine().root_device());
+	int speakers = spkiter.count();
 	image = dynamic_cast<cassette_image_device *>(device->machine().device( (const char *)device->static_config()));
 	if (speakers > 1)
 		device->machine().sound().stream_alloc(*device, 0, 2, device->machine().sample_rate(), (void *)image, wave_sound_update);
@@ -80,31 +83,39 @@ static DEVICE_START( wave )
 }
 
 
+const device_type WAVE = &device_creator<wave_device>;
 
-/**************************************************************************
- * Generic get_info
- **************************************************************************/
-
-DEVICE_GET_INFO( wave )
+wave_device::wave_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, WAVE, "Wave", tag, owner, clock, "wawe", __FILE__),
+		device_sound_interface(mconfig, *this)
 {
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = 0;								break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME( wave );	break;
-		case DEVINFO_FCT_STOP:							/* nothing */								break;
-		case DEVINFO_FCT_RESET:							/* nothing */								break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "Cassette");				break;
-		case DEVINFO_STR_FAMILY:						strcpy(info->s, "Cassette");				break;
-		case DEVINFO_STR_VERSION:						strcpy(info->s, "1.0");						break;
-		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);					break;
-		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright The MESS Team"); break;
-	}
 }
 
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
 
-DEFINE_LEGACY_SOUND_DEVICE(WAVE, wave);
+void wave_device::device_config_complete()
+{
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void wave_device::device_start()
+{
+	DEVICE_START_NAME( wave )(this);
+}
+
+//-------------------------------------------------
+//  sound_stream_update - handle a stream update
+//-------------------------------------------------
+
+void wave_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
+{
+	// should never get here
+	fatalerror("sound_stream_update called; not applicable to legacy sound devices\n");
+}

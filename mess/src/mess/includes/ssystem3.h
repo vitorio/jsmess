@@ -8,7 +8,7 @@
 #define SSYSTEM3_H_
 
 
-typedef struct
+struct playfield_t
 {
 	int signal;
 	//  int on;
@@ -24,40 +24,45 @@ typedef struct
 		} s;
 		UINT8 data[7+8*8/2+5];
 	} u;
-} playfield_t;
+};
 
-typedef struct
+struct lcd_t
 {
 	UINT8 data[5];
 	int clock;
 	int count;
-} lcd_t;
+};
 
 
 class ssystem3_state : public driver_device
 {
 public:
 	ssystem3_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this, "maincpu") { }
 
 	UINT8 m_porta;
 	UINT8 *m_videoram;
 	playfield_t m_playfield;
 	lcd_t m_lcd;
+	DECLARE_DRIVER_INIT(ssystem3);
+	virtual void video_start();
+	virtual void palette_init();
+	UINT32 screen_update_ssystem3(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	DECLARE_WRITE8_MEMBER(ssystem3_via_write_a);
+	DECLARE_READ8_MEMBER(ssystem3_via_read_a);
+	DECLARE_READ8_MEMBER(ssystem3_via_read_b);
+	DECLARE_WRITE8_MEMBER(ssystem3_via_write_b);
+	required_device<cpu_device> m_maincpu;
+	void ssystem3_lcd_reset();
+	void ssystem3_lcd_write(int clock, int data);
+	void ssystem3_draw_7segment(bitmap_ind16 &bitmap,int value, int x, int y);
+	void ssystem3_draw_led(bitmap_ind16 &bitmap,INT16 color, int x, int y, int ch);
+	void ssystem3_playfield_getfigure(int x, int y, int *figure, int *black);
+	void ssystem3_playfield_reset();
+	void ssystem3_playfield_write(int reset, int signal);
+	void ssystem3_playfield_read(int *on, int *ready);
 };
 
-
-/*----------- defined in drivers/ssystem3.c -----------*/
-
-void ssystem3_playfield_getfigure(running_machine &machine, int x, int y, int *figure, int *black);
-
-/*----------- defined in video/ssystem3.c -----------*/
-
-extern PALETTE_INIT( ssystem3 );
-extern VIDEO_START( ssystem3 );
-extern SCREEN_UPDATE( ssystem3 );
-
-void ssystem3_lcd_reset(running_machine &machine);
-void ssystem3_lcd_write(running_machine &machine, int clock, int data);
 
 #endif /* SSYSTEM3_H_ */

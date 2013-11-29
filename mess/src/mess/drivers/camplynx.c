@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
       Camputers Lynx
@@ -85,108 +87,126 @@ class camplynx_state : public driver_device
 {
 public:
 	camplynx_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+	m_maincpu(*this, "maincpu"),
+	//m_cass(*this, "cassette"),
+	//m_wave(*this, WAVE_TAG),
+	//m_printer(*this, "centronics"),
+	m_crtc(*this, "crtc")
+	//m_fdc(*this, "fdc")
+	{ }
 
-	mc6845_device *m_mc6845;
+	required_device<cpu_device> m_maincpu;
+	//required_device<cassette_image_device> m_cass;
+	//required_device<> m_wave;
+	//required_device<> m_printer;
+	required_device<mc6845_device> m_crtc;
+	//optional_device<> m_fdc;
+	DECLARE_WRITE8_MEMBER(lynx48k_bank_w);
+	DECLARE_WRITE8_MEMBER(lynx128k_bank_w);
+	DECLARE_WRITE8_MEMBER(lynx128k_irq);
+	DECLARE_DRIVER_INIT(lynx48k);
+	virtual void video_start();
+	virtual void palette_init();
+	DECLARE_MACHINE_RESET(lynx128k);
 };
 
 /* These bankswitch handlers are very incomplete, just enough to get the
     computer working. Also, as it happens 6 times for every scanline
     of every character, it causes a huge slowdown. */
 
-static WRITE8_HANDLER( lynx48k_bank_w )
+WRITE8_MEMBER( camplynx_state::lynx48k_bank_w )
 {
 	if (!data)
-		memory_set_bank(space->machine(), "bank1", 0);
+		membank("bank1")->set_entry(0);
 	else
 	if (data & 2)
-		memory_set_bank(space->machine(), "bank1", 1);
+		membank("bank1")->set_entry(1);
 	else
 	if (data & 4)
-		memory_set_bank(space->machine(), "bank1", 2);
+		membank("bank1")->set_entry(2);
 	else
-		logerror("%04X: Cannot understand bankswitch command %X\n",cpu_get_pc(&space->device()), data);
+		logerror("%04X: Cannot understand bankswitch command %X\n",m_maincpu->pc(), data);
 }
 
-static WRITE8_HANDLER( lynx128k_bank_w )
+WRITE8_MEMBER( camplynx_state::lynx128k_bank_w )
 {
 	/* get address space */
-	address_space *mem = space->machine().device("maincpu")->memory().space(AS_PROGRAM);
-	UINT8 *base = mem->machine().region("maincpu")->base();
+	UINT8 *base = memregion("maincpu")->base();
 
 	/* Set read banks */
 	UINT8 bank = data & 0x0f;
 
 	if (!bank)
 	{
-		memory_set_bankptr(mem->machine(), "bank1", base + 0x00000);
-		memory_set_bankptr(mem->machine(), "bank2", base + 0x02000);
-		memory_set_bankptr(mem->machine(), "bank3", base + 0x04000);
-		memory_set_bankptr(mem->machine(), "bank4", base + 0x16000);
-		memory_set_bankptr(mem->machine(), "bank5", base + 0x18000);
-		memory_set_bankptr(mem->machine(), "bank6", base + 0x1a000);
-		memory_set_bankptr(mem->machine(), "bank7", base + 0x0c000);
-		memory_set_bankptr(mem->machine(), "bank8", base + 0x0e000);
+		membank("bank1")->set_base(base + 0x00000);
+		membank("bank2")->set_base(base + 0x02000);
+		membank("bank3")->set_base(base + 0x04000);
+		membank("bank4")->set_base(base + 0x16000);
+		membank("bank5")->set_base(base + 0x18000);
+		membank("bank6")->set_base(base + 0x1a000);
+		membank("bank7")->set_base(base + 0x0c000);
+		membank("bank8")->set_base(base + 0x0e000);
 	}
 	else
 	if (bank == 0x0e)
 	{
-		memory_set_bankptr(mem->machine(), "bank1", base + 0x20000);
-		memory_set_bankptr(mem->machine(), "bank2", base + 0x22000);
-		memory_set_bankptr(mem->machine(), "bank3", base + 0x24000);
-		memory_set_bankptr(mem->machine(), "bank4", base + 0x26000);
-		memory_set_bankptr(mem->machine(), "bank5", base + 0x28000);
-		memory_set_bankptr(mem->machine(), "bank6", base + 0x2a000);
-		memory_set_bankptr(mem->machine(), "bank7", base + 0x2c000);
-		memory_set_bankptr(mem->machine(), "bank8", base + 0x2e000);
+		membank("bank1")->set_base(base + 0x20000);
+		membank("bank2")->set_base(base + 0x22000);
+		membank("bank3")->set_base(base + 0x24000);
+		membank("bank4")->set_base(base + 0x26000);
+		membank("bank5")->set_base(base + 0x28000);
+		membank("bank6")->set_base(base + 0x2a000);
+		membank("bank7")->set_base(base + 0x2c000);
+		membank("bank8")->set_base(base + 0x2e000);
 	}
 	else
-		logerror("%04X: Cannot understand bankswitch command %X\n",cpu_get_pc(&space->device()), data);
+		logerror("%04X: Cannot understand bankswitch command %X\n",m_maincpu->pc(), data);
 
 	/* Set write banks */
 	bank = data & 0xd0;
 
 	if (!bank)
 	{
-		memory_set_bankptr(mem->machine(), "bank11", base + 0x10000);
-		memory_set_bankptr(mem->machine(), "bank12", base + 0x12000);
-		memory_set_bankptr(mem->machine(), "bank13", base + 0x14000);
-		memory_set_bankptr(mem->machine(), "bank14", base + 0x16000);
-		memory_set_bankptr(mem->machine(), "bank15", base + 0x18000);
-		memory_set_bankptr(mem->machine(), "bank16", base + 0x1a000);
-		memory_set_bankptr(mem->machine(), "bank17", base + 0x1c000);
-		memory_set_bankptr(mem->machine(), "bank18", base + 0x1e000);
+		membank("bank11")->set_base(base + 0x10000);
+		membank("bank12")->set_base(base + 0x12000);
+		membank("bank13")->set_base(base + 0x14000);
+		membank("bank14")->set_base(base + 0x16000);
+		membank("bank15")->set_base(base + 0x18000);
+		membank("bank16")->set_base(base + 0x1a000);
+		membank("bank17")->set_base(base + 0x1c000);
+		membank("bank18")->set_base(base + 0x1e000);
 	}
 	else
 	if (bank == 0xc0)
 	{
-		memory_set_bankptr(mem->machine(), "bank11", base + 0x20000);
-		memory_set_bankptr(mem->machine(), "bank12", base + 0x22000);
-		memory_set_bankptr(mem->machine(), "bank13", base + 0x24000);
-		memory_set_bankptr(mem->machine(), "bank14", base + 0x26000);
-		memory_set_bankptr(mem->machine(), "bank15", base + 0x28000);
-		memory_set_bankptr(mem->machine(), "bank16", base + 0x2a000);
-		memory_set_bankptr(mem->machine(), "bank17", base + 0x2c000);
-		memory_set_bankptr(mem->machine(), "bank18", base + 0x2e000);
+		membank("bank11")->set_base(base + 0x20000);
+		membank("bank12")->set_base(base + 0x22000);
+		membank("bank13")->set_base(base + 0x24000);
+		membank("bank14")->set_base(base + 0x26000);
+		membank("bank15")->set_base(base + 0x28000);
+		membank("bank16")->set_base(base + 0x2a000);
+		membank("bank17")->set_base(base + 0x2c000);
+		membank("bank18")->set_base(base + 0x2e000);
 	}
 	else
-		logerror("%04X: Cannot understand bankswitch command %X\n",cpu_get_pc(&space->device()), data);
+		logerror("%04X: Cannot understand bankswitch command %X\n",m_maincpu->pc(), data);
 }
 
-static ADDRESS_MAP_START( lynx48k_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START( lynx48k_mem, AS_PROGRAM, 8, camplynx_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000,0x5fff) AM_ROM
 	AM_RANGE(0x6000,0x7fff) AM_RAM
 	AM_RANGE(0x8000,0xffff) AM_RAMBANK("bank1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lynx128k_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START( lynx128k_mem, AS_PROGRAM, 8, camplynx_state )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lynx48k_io , AS_IO, 8)
+static ADDRESS_MAP_START( lynx48k_io , AS_IO, 8, camplynx_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x007f,0x007f) AM_MIRROR(0xff00) AM_WRITE(lynx48k_bank_w)
-	AM_RANGE(0x0080,0x0080) AM_MIRROR(0xff00) AM_WRITENOP		/* to be emulated */
+	AM_RANGE(0x0080,0x0080) AM_MIRROR(0xff00) AM_WRITENOP       /* to be emulated */
 	AM_RANGE(0x0080,0x0080) AM_READ_PORT("LINE0")
 	AM_RANGE(0x0180,0x0180) AM_READ_PORT("LINE1")
 	AM_RANGE(0x0280,0x0280) AM_READ_PORT("LINE2")
@@ -197,12 +217,12 @@ static ADDRESS_MAP_START( lynx48k_io , AS_IO, 8)
 	AM_RANGE(0x0780,0x0780) AM_READ_PORT("LINE7")
 	AM_RANGE(0x0880,0x0880) AM_READ_PORT("LINE8")
 	AM_RANGE(0x0980,0x0980) AM_READ_PORT("LINE9")
-	AM_RANGE(0x0084,0x0084) AM_MIRROR(0xff00) AM_DEVWRITE("dac", dac_w)	/* 6-bit dac */
-	AM_RANGE(0x0086,0x0086) AM_MIRROR(0xff00) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
-	AM_RANGE(0x0087,0x0087) AM_MIRROR(0xff00) AM_DEVREADWRITE_MODERN("crtc", mc6845_device, register_r, register_w)
+	AM_RANGE(0x0084,0x0084) AM_MIRROR(0xff00) AM_DEVWRITE("dac", dac_device, write_unsigned8)   /* 6-bit dac */
+	AM_RANGE(0x0086,0x0086) AM_MIRROR(0xff00) AM_DEVWRITE("crtc", mc6845_device, address_w)
+	AM_RANGE(0x0087,0x0087) AM_MIRROR(0xff00) AM_DEVREADWRITE("crtc", mc6845_device, register_r, register_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lynx128k_io , AS_IO, 8)
+static ADDRESS_MAP_START( lynx128k_io , AS_IO, 8, camplynx_state )
 	ADDRESS_MAP_UNMAP_HIGH
 //  AM_RANGE(0x0050,0x0053) AM_MIRROR(0xff80) AM_READ(wd179x_r) // uses a 1793
 //  AM_RANGE(0x0054,0x0057) AM_MIRROR(0xff80) AM_WRITE(wd179x_w)
@@ -211,7 +231,7 @@ static ADDRESS_MAP_START( lynx128k_io , AS_IO, 8)
 //  AM_RANGE(0x007c,0x007c) AM_MIRROR(0xff80) AM_READ(lynx128k_printer_r)
 //  AM_RANGE(0x007d,0x007d) AM_MIRROR(0xff80) AM_WRITE(lynx128k_printer_init_w) // this is rw
 //  AM_RANGE(0x007e,0x007e) AM_MIRROR(0xff80) AM_WRITE(lynx128k_printer_w)
-	AM_RANGE(0x0080,0x0080) AM_MIRROR(0xff00) AM_WRITENOP		/* to be emulated */
+	AM_RANGE(0x0080,0x0080) AM_MIRROR(0xff00) AM_WRITENOP       /* to be emulated */
 	AM_RANGE(0x0080,0x0080) AM_READ_PORT("LINE0")
 	AM_RANGE(0x0180,0x0180) AM_READ_PORT("LINE1")
 	AM_RANGE(0x0280,0x0280) AM_READ_PORT("LINE2")
@@ -222,10 +242,10 @@ static ADDRESS_MAP_START( lynx128k_io , AS_IO, 8)
 	AM_RANGE(0x0780,0x0780) AM_READ_PORT("LINE7")
 	AM_RANGE(0x0880,0x0880) AM_READ_PORT("LINE8")
 	AM_RANGE(0x0980,0x0980) AM_READ_PORT("LINE9")
-	AM_RANGE(0x0082,0x0082) AM_MIRROR(0xff00) AM_WRITE(lynx128k_bank_w)	// read=serial buffer
-	AM_RANGE(0x0084,0x0084) AM_MIRROR(0xff00) AM_DEVWRITE("dac", dac_w)	/* 6-bit dac. Read="single-step", causes a NMI */
-	AM_RANGE(0x0086,0x0086) AM_MIRROR(0xff00) AM_DEVREADWRITE_MODERN("crtc", mc6845_device, status_r, address_w)
-	AM_RANGE(0x0087,0x0087) AM_MIRROR(0xff00) AM_DEVREADWRITE_MODERN("crtc", mc6845_device, register_r, register_w)
+	AM_RANGE(0x0082,0x0082) AM_MIRROR(0xff00) AM_WRITE(lynx128k_bank_w) // read=serial buffer
+	AM_RANGE(0x0084,0x0084) AM_MIRROR(0xff00) AM_DEVWRITE("dac", dac_device, write_unsigned8)   /* 6-bit dac. Read="single-step", causes a NMI */
+	AM_RANGE(0x0086,0x0086) AM_MIRROR(0xff00) AM_DEVREADWRITE("crtc", mc6845_device, status_r, address_w)
+	AM_RANGE(0x0087,0x0087) AM_MIRROR(0xff00) AM_DEVREADWRITE("crtc", mc6845_device, register_r, register_w)
 ADDRESS_MAP_END
 
 /* Input ports */
@@ -309,63 +329,64 @@ static INPUT_PORTS_START( lynx48k )
 INPUT_PORTS_END
 
 
-static MACHINE_RESET( lynx128k )
+MACHINE_RESET_MEMBER(camplynx_state,lynx128k)
 {
-	address_space *mem = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	mem->install_read_bank (0x0000, 0x1fff, "bank1");
-	mem->install_read_bank (0x2000, 0x3fff, "bank2");
-	mem->install_read_bank (0x4000, 0x5fff, "bank3");
-	mem->install_read_bank (0x6000, 0x7fff, "bank4");
-	mem->install_read_bank (0x8000, 0x9fff, "bank5");
-	mem->install_read_bank (0xa000, 0xbfff, "bank6");
-	mem->install_read_bank (0xc000, 0xdfff, "bank7");
-	mem->install_read_bank (0xe000, 0xffff, "bank8");
-	mem->install_write_bank (0x0000, 0x1fff, "bank11");
-	mem->install_write_bank (0x2000, 0x3fff, "bank12");
-	mem->install_write_bank (0x4000, 0x5fff, "bank13");
-	mem->install_write_bank (0x6000, 0x7fff, "bank14");
-	mem->install_write_bank (0x8000, 0x9fff, "bank15");
-	mem->install_write_bank (0xa000, 0xbfff, "bank16");
-	mem->install_write_bank (0xc000, 0xdfff, "bank17");
-	mem->install_write_bank (0xe000, 0xffff, "bank18");
+	address_space &mem = m_maincpu->space(AS_PROGRAM);
+	mem.install_read_bank (0x0000, 0x1fff, "bank1");
+	mem.install_read_bank (0x2000, 0x3fff, "bank2");
+	mem.install_read_bank (0x4000, 0x5fff, "bank3");
+	mem.install_read_bank (0x6000, 0x7fff, "bank4");
+	mem.install_read_bank (0x8000, 0x9fff, "bank5");
+	mem.install_read_bank (0xa000, 0xbfff, "bank6");
+	mem.install_read_bank (0xc000, 0xdfff, "bank7");
+	mem.install_read_bank (0xe000, 0xffff, "bank8");
+	mem.install_write_bank (0x0000, 0x1fff, "bank11");
+	mem.install_write_bank (0x2000, 0x3fff, "bank12");
+	mem.install_write_bank (0x4000, 0x5fff, "bank13");
+	mem.install_write_bank (0x6000, 0x7fff, "bank14");
+	mem.install_write_bank (0x8000, 0x9fff, "bank15");
+	mem.install_write_bank (0xa000, 0xbfff, "bank16");
+	mem.install_write_bank (0xc000, 0xdfff, "bank17");
+	mem.install_write_bank (0xe000, 0xffff, "bank18");
 
 	lynx128k_bank_w(mem, 0, 0);
 }
 
-static WRITE8_DEVICE_HANDLER( lynx128k_irq )
+WRITE8_MEMBER( camplynx_state::lynx128k_irq )
 {
-	cputag_set_input_line(device->machine(), "maincpu", 0, data);
+	m_maincpu->set_input_line(0, data);
 }
 
 
 static const UINT8 lynx48k_palette[8*3] =
 {
-	0x00, 0x00, 0x00,	/*  0 Black     */
-	0x00, 0x00, 0xff,	/*  1 Blue      */
-	0xff, 0x00, 0x00,	/*  2 Red       */
-	0xff, 0x00, 0xff,	/*  3 Magenta       */
-	0x00, 0xff, 0x00,	/*  4 Green     */
-	0x00, 0xff, 0xff,	/*  5 Cyan      */
-	0xff, 0xff, 0x00,	/*  6 Yellow        */
-	0xff, 0xff, 0xff,	/*  7 White     */
+	0x00, 0x00, 0x00,   /*  0 Black     */
+	0x00, 0x00, 0xff,   /*  1 Blue      */
+	0xff, 0x00, 0x00,   /*  2 Red       */
+	0xff, 0x00, 0xff,   /*  3 Magenta       */
+	0x00, 0xff, 0x00,   /*  4 Green     */
+	0x00, 0xff, 0xff,   /*  5 Cyan      */
+	0xff, 0xff, 0x00,   /*  6 Yellow        */
+	0xff, 0xff, 0xff,   /*  7 White     */
 };
 
-static PALETTE_INIT( lynx48k )
+void camplynx_state::palette_init()
 {
 	UINT8 r, b, g, i=0, color_count = 8;
 
 	while (color_count--)
 	{
 		r = lynx48k_palette[i++]; g = lynx48k_palette[i++]; b = lynx48k_palette[i++];
-		palette_set_color(machine, 7-color_count, MAKE_RGB(r, g, b));
+		palette_set_color(machine(), 7-color_count, MAKE_RGB(r, g, b));
 	}
 }
 
 static MC6845_UPDATE_ROW( lynx48k_update_row )
 {
-	UINT8 *RAM = device->machine().region("maincpu")->base();
+	UINT8 *RAM = device->machine().root_device().memregion("maincpu")->base();
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
 	UINT8 r,g,b;
-	UINT16 x, *p = BITMAP_ADDR16(bitmap, y, 0);
+	UINT32 x, *p = &bitmap.pix32(y);
 
 	for (x = (y << 5); x < x_count + (y << 5); x++)
 	{
@@ -373,22 +394,23 @@ static MC6845_UPDATE_ROW( lynx48k_update_row )
 		g = RAM[0x1c000+x];
 		b = RAM[0x10000+x];
 
-		*p++ = ((r & 0x80) ? 2 : 0) | ((g & 0x80) ? 4 : 0) | ((b & 0x80) ? 1 : 0);
-		*p++ = ((r & 0x40) ? 2 : 0) | ((g & 0x40) ? 4 : 0) | ((b & 0x40) ? 1 : 0);
-		*p++ = ((r & 0x20) ? 2 : 0) | ((g & 0x20) ? 4 : 0) | ((b & 0x20) ? 1 : 0);
-		*p++ = ((r & 0x10) ? 2 : 0) | ((g & 0x10) ? 4 : 0) | ((b & 0x10) ? 1 : 0);
-		*p++ = ((r & 0x08) ? 2 : 0) | ((g & 0x08) ? 4 : 0) | ((b & 0x08) ? 1 : 0);
-		*p++ = ((r & 0x04) ? 2 : 0) | ((g & 0x04) ? 4 : 0) | ((b & 0x04) ? 1 : 0);
-		*p++ = ((r & 0x02) ? 2 : 0) | ((g & 0x02) ? 4 : 0) | ((b & 0x02) ? 1 : 0);
-		*p++ = ((r & 0x01) ? 2 : 0) | ((g & 0x01) ? 4 : 0) | ((b & 0x01) ? 1 : 0);
+		*p++ = palette[(BIT(r, 7) << 1) | (BIT(g, 7) << 2) | (BIT(b, 7))];
+		*p++ = palette[(BIT(r, 6) << 1) | (BIT(g, 6) << 2) | (BIT(b, 6))];
+		*p++ = palette[(BIT(r, 5) << 1) | (BIT(g, 5) << 2) | (BIT(b, 5))];
+		*p++ = palette[(BIT(r, 4) << 1) | (BIT(g, 4) << 2) | (BIT(b, 4))];
+		*p++ = palette[(BIT(r, 3) << 1) | (BIT(g, 3) << 2) | (BIT(b, 3))];
+		*p++ = palette[(BIT(r, 2) << 1) | (BIT(g, 2) << 2) | (BIT(b, 2))];
+		*p++ = palette[(BIT(r, 1) << 1) | (BIT(g, 1) << 2) | (BIT(b, 1))];
+		*p++ = palette[(BIT(r, 0) << 1) | (BIT(g, 0) << 2) | (BIT(b, 0))];
 	}
 }
 
 static MC6845_UPDATE_ROW( lynx128k_update_row )
 {
-	UINT8 *RAM = device->machine().region("maincpu")->base();
+	UINT8 *RAM = device->machine().root_device().memregion("maincpu")->base();
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
 	UINT8 r,g,b;
-	UINT16 x, *p = BITMAP_ADDR16(bitmap, y, 0);
+	UINT32 x, *p = &bitmap.pix32(y);
 
 	for (x = (y << 6); x < x_count + (y << 6); x++)
 	{
@@ -396,35 +418,24 @@ static MC6845_UPDATE_ROW( lynx128k_update_row )
 		g = RAM[0x28100+x];
 		b = RAM[0x24100+x];
 
-		*p++ = ((r & 0x80) ? 2 : 0) | ((g & 0x80) ? 4 : 0) | ((b & 0x80) ? 1 : 0);
-		*p++ = ((r & 0x40) ? 2 : 0) | ((g & 0x40) ? 4 : 0) | ((b & 0x40) ? 1 : 0);
-		*p++ = ((r & 0x20) ? 2 : 0) | ((g & 0x20) ? 4 : 0) | ((b & 0x20) ? 1 : 0);
-		*p++ = ((r & 0x10) ? 2 : 0) | ((g & 0x10) ? 4 : 0) | ((b & 0x10) ? 1 : 0);
-		*p++ = ((r & 0x08) ? 2 : 0) | ((g & 0x08) ? 4 : 0) | ((b & 0x08) ? 1 : 0);
-		*p++ = ((r & 0x04) ? 2 : 0) | ((g & 0x04) ? 4 : 0) | ((b & 0x04) ? 1 : 0);
-		*p++ = ((r & 0x02) ? 2 : 0) | ((g & 0x02) ? 4 : 0) | ((b & 0x02) ? 1 : 0);
-		*p++ = ((r & 0x01) ? 2 : 0) | ((g & 0x01) ? 4 : 0) | ((b & 0x01) ? 1 : 0);
+		*p++ = palette[(BIT(r, 7) << 1) | (BIT(g, 7) << 2) | (BIT(b, 7))];
+		*p++ = palette[(BIT(r, 6) << 1) | (BIT(g, 6) << 2) | (BIT(b, 6))];
+		*p++ = palette[(BIT(r, 5) << 1) | (BIT(g, 5) << 2) | (BIT(b, 5))];
+		*p++ = palette[(BIT(r, 4) << 1) | (BIT(g, 4) << 2) | (BIT(b, 4))];
+		*p++ = palette[(BIT(r, 3) << 1) | (BIT(g, 3) << 2) | (BIT(b, 3))];
+		*p++ = palette[(BIT(r, 2) << 1) | (BIT(g, 2) << 2) | (BIT(b, 2))];
+		*p++ = palette[(BIT(r, 1) << 1) | (BIT(g, 1) << 2) | (BIT(b, 1))];
+		*p++ = palette[(BIT(r, 0) << 1) | (BIT(g, 0) << 2) | (BIT(b, 0))];
 	}
 }
 
-static VIDEO_START( lynx48k )
+void camplynx_state::video_start()
 {
-	camplynx_state *state = machine.driver_data<camplynx_state>();
-
-	state->m_mc6845 = machine.device<mc6845_device>("crtc");
 }
 
-static SCREEN_UPDATE( lynx48k )
+static MC6845_INTERFACE( lynx48k_crtc6845_interface )
 {
-	camplynx_state *state = screen->machine().driver_data<camplynx_state>();
-
-	state->m_mc6845->update( bitmap, cliprect);
-	return 0;
-}
-
-
-static const mc6845_interface lynx48k_crtc6845_interface = {
-	"screen",
+	false,
 	8,
 	NULL,
 	lynx48k_update_row,
@@ -436,15 +447,17 @@ static const mc6845_interface lynx48k_crtc6845_interface = {
 	NULL
 };
 
-static const mc6845_interface lynx128k_crtc6845_interface = {
-	"screen",			/* screen name */
-	8,				/* dots per character */
+
+static MC6845_INTERFACE( lynx128k_crtc6845_interface )
+{
+	false,
+	8,              /* dots per character */
 	NULL,
-	lynx128k_update_row,		/* callback to display one scanline */
+	lynx128k_update_row,        /* callback to display one scanline */
 	NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_HANDLER(lynx128k_irq),	/* callback when cursor pin changes state */
+	DEVCB_DRIVER_MEMBER(camplynx_state, lynx128k_irq),  /* callback when cursor pin changes state */
 	DEVCB_NULL,
 	NULL
 };
@@ -461,23 +474,18 @@ static MACHINE_CONFIG_START( lynx48k, camplynx_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 511, 0, 479)
-	MCFG_SCREEN_UPDATE(lynx48k)
-
+	MCFG_SCREEN_UPDATE_DEVICE("crtc", mc6845_device, screen_update)
 	MCFG_PALETTE_LENGTH(8)
-	MCFG_PALETTE_INIT(lynx48k)
-
-	MCFG_MC6845_ADD("crtc", MC6845, XTAL_12MHz / 8 /*? dot clock divided by dots per char */, lynx48k_crtc6845_interface)
-
-	MCFG_VIDEO_START(lynx48k)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-
 	MCFG_SOUND_ADD("dac", DAC, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)
+
+	/* Devices */
+	MCFG_MC6845_ADD("crtc", MC6845, "screen", XTAL_12MHz / 8 /*? dot clock divided by dots per char */, lynx48k_crtc6845_interface)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( lynx128k, camplynx_state )
@@ -487,35 +495,30 @@ static MACHINE_CONFIG_START( lynx128k, camplynx_state )
 	MCFG_CPU_PROGRAM_MAP(lynx128k_mem)
 	MCFG_CPU_IO_MAP(lynx128k_io)
 
-	MCFG_MACHINE_RESET(lynx128k)
+	MCFG_MACHINE_RESET_OVERRIDE(camplynx_state,lynx128k)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 511, 0, 479)
-	MCFG_SCREEN_UPDATE(lynx48k)
-
+	MCFG_SCREEN_UPDATE_DEVICE("crtc", mc6845_device, screen_update)
 	MCFG_PALETTE_LENGTH(8)
-	MCFG_PALETTE_INIT(lynx48k)
-
-	MCFG_MC6845_ADD("crtc", MC6845, XTAL_12MHz / 8 /*? dot clock divided by dots per char */, lynx128k_crtc6845_interface)
-
-	MCFG_VIDEO_START(lynx48k)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-
 	MCFG_SOUND_ADD("dac", DAC, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)
+
+	/* Devices */
+	MCFG_MC6845_ADD("crtc", MC6845, "screen", XTAL_12MHz / 8 /*? dot clock divided by dots per char */, lynx128k_crtc6845_interface)
 MACHINE_CONFIG_END
 
-static DRIVER_INIT( lynx48k )
+DRIVER_INIT_MEMBER(camplynx_state,lynx48k)
 {
-	UINT8 *RAM = machine.region("maincpu")->base();
-	memory_configure_bank(machine, "bank1", 0, 3, &RAM[0x8000],  0x8000);
+	UINT8 *RAM = memregion("maincpu")->base();
+	membank("bank1")->configure_entries(0, 3, &RAM[0x8000],  0x8000);
 }
 
 
@@ -548,7 +551,7 @@ ROM_END
 
 
 /* Driver */
-/*    YEAR  NAME       PARENT     COMPAT   MACHINE    INPUT     INIT   COMPANY       FULLNAME     FLAGS */
-COMP( 1983, lynx48k,  0,         0,       lynx48k,  lynx48k, lynx48k,  "Camputers",  "Lynx 48k",   GAME_NOT_WORKING)
-COMP( 1983, lynx96k,  lynx48k,   0,       lynx48k,  lynx48k, lynx48k,  "Camputers",  "Lynx 96k",   GAME_NOT_WORKING)
-COMP( 1983, lynx128k, lynx48k,   0,       lynx128k, lynx48k, 0,        "Camputers",  "Lynx 128k",  GAME_NOT_WORKING)
+/*    YEAR  NAME       PARENT     COMPAT   MACHINE    INPUT     INIT         COMPANY     FULLNAME     FLAGS */
+COMP( 1983, lynx48k,   0,         0,       lynx48k,   lynx48k, camplynx_state,  lynx48k,  "Camputers",  "Lynx 48k",   GAME_NOT_WORKING)
+COMP( 1983, lynx96k,   lynx48k,   0,       lynx48k,   lynx48k, camplynx_state,  lynx48k,  "Camputers",  "Lynx 96k",   GAME_NOT_WORKING)
+COMP( 1983, lynx128k,  lynx48k,   0,       lynx128k,  lynx48k, driver_device,  0,        "Camputers",  "Lynx 128k",  GAME_NOT_WORKING)

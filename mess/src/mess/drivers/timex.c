@@ -103,7 +103,7 @@ xx/xx/2001  KS -    TS-2068 sound fixed.
                 70908 cycles for each frame.
             Remaped some Spectrum+ keys.
                 Presing F3 to reset was seting 0xf7 on keyboard
-                input port. Problem occured for snapshots of
+                input port. Problem occurred for snapshots of
                 some programms where it was readed as pressing
                 key 4 (which is exit in Tapecopy by R. Dannhoefer
                 for example).
@@ -153,10 +153,31 @@ http://www.z88forever.org.uk/zxplus3e/
 #include "sound/speaker.h"
 #include "sound/ay8910.h"
 #include "formats/tzx_cas.h"
-#include "formats/spec_snqk.h"
-#include "formats/timex_dck.h"
+#include "machine/spec_snqk.h"
 #include "machine/beta.h"
 #include "machine/ram.h"
+
+enum
+{
+	TIMEX_CART_NONE,
+	TIMEX_CART_DOCK,
+	TIMEX_CART_EXROM,
+	TIMEX_CART_HOME
+};
+
+struct timex_cart_t
+{
+	int type;
+	UINT8 chunks;
+	UINT8 *data;
+};
+
+static timex_cart_t timex_cart;
+
+const timex_cart_t *timex_cart_data(void)
+{
+	return &timex_cart;
+}
 
 static const ay8910_interface spectrum_ay_interface =
 {
@@ -169,40 +190,32 @@ static const ay8910_interface spectrum_ay_interface =
 /* TS2048 specific functions */
 
 
-static  READ8_HANDLER(ts2068_port_f4_r)
+READ8_MEMBER( spectrum_state::ts2068_port_f4_r )
 {
-	spectrum_state *state = space->machine().driver_data<spectrum_state>();
-
-	return state->m_port_f4_data;
+	return m_port_f4_data;
 }
 
-static WRITE8_HANDLER(ts2068_port_f4_w)
+WRITE8_MEMBER( spectrum_state::ts2068_port_f4_w )
 {
-	spectrum_state *state = space->machine().driver_data<spectrum_state>();
-
-	state->m_port_f4_data = data;
-	ts2068_update_memory(space->machine());
+	m_port_f4_data = data;
+	ts2068_update_memory();
 }
 
-static  READ8_HANDLER(ts2068_port_ff_r)
+READ8_MEMBER( spectrum_state::ts2068_port_ff_r )
 {
-	spectrum_state *state = space->machine().driver_data<spectrum_state>();
-
-	return state->m_port_ff_data;
+	return m_port_ff_data;
 }
 
-static WRITE8_HANDLER(ts2068_port_ff_w)
+WRITE8_MEMBER( spectrum_state::ts2068_port_ff_w )
 {
 		/* Bits 0-2 Video Mode Select
-           Bits 3-5 64 column mode ink/paper selection
-                    (See ts2068_vh_screenrefresh for more info)
-           Bit  6   17ms Interrupt Inhibit
-           Bit  7   Cartridge (0) / EXROM (1) select
-        */
-	spectrum_state *state = space->machine().driver_data<spectrum_state>();
-
-	state->m_port_ff_data = data;
-	ts2068_update_memory(space->machine());
+		   Bits 3-5 64 column mode ink/paper selection
+		            (See ts2068_vh_screenrefresh for more info)
+		   Bit  6   17ms Interrupt Inhibit
+		   Bit  7   Cartridge (0) / EXROM (1) select
+		*/
+	m_port_ff_data = data;
+	ts2068_update_memory();
 	logerror("Port %04x write %02x\n", offset, data);
 }
 
@@ -224,332 +237,331 @@ static WRITE8_HANDLER(ts2068_port_ff_w)
  *      at the same time.
  *
  *******************************************************************/
-void ts2068_update_memory(running_machine &machine)
+void spectrum_state::ts2068_update_memory()
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	UINT8 *messram = ram_get_ptr(machine.device(RAM_TAG));
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	UINT8 *messram = m_ram->pointer();
+	address_space &space = m_maincpu->space(AS_PROGRAM);
 	unsigned char *ChosenROM, *ExROM;
 	const timex_cart_t *timex_cart = timex_cart_data();
 	int timex_cart_type = timex_cart->type;
 	UINT8 timex_cart_chunks = timex_cart->chunks;
 	UINT8 *DOCK = timex_cart->data;
 
-	ExROM = machine.region("maincpu")->base() + 0x014000;
+	ExROM = memregion("maincpu")->base() + 0x014000;
 
-	if (state->m_port_f4_data & 0x01)
+	if (m_port_f4_data & 0x01)
 	{
-		if (state->m_port_ff_data & 0x80)
+		if (m_port_ff_data & 0x80)
 		{
-				space->install_read_bank(0x0000, 0x1fff, "bank1");
-				space->unmap_write(0x0000, 0x1fff);
-				memory_set_bankptr(machine, "bank1", ExROM);
+				space.install_read_bank(0x0000, 0x1fff, "bank1");
+				space.unmap_write(0x0000, 0x1fff);
+				membank("bank1")->set_base(ExROM);
 				logerror("0000-1fff EXROM\n");
 		}
 		else
 		{
 			if (timex_cart_type == TIMEX_CART_DOCK)
 			{
-				memory_set_bankptr(machine, "bank1", DOCK);
-				space->install_read_bank(0x0000, 0x1fff, "bank1");
+				membank("bank1")->set_base(DOCK);
+				space.install_read_bank(0x0000, 0x1fff, "bank1");
 				if (timex_cart_chunks&0x01)
-					space->install_write_bank(0x0000, 0x1fff, "bank9");
+					space.install_write_bank(0x0000, 0x1fff, "bank9");
 				else
-					space->unmap_write(0x0000, 0x1fff);
+					space.unmap_write(0x0000, 0x1fff);
 
 
 			}
 			else
 			{
-				space->nop_read(0x0000, 0x1fff);
-				space->unmap_write(0x0000, 0x1fff);
+				space.nop_read(0x0000, 0x1fff);
+				space.unmap_write(0x0000, 0x1fff);
 			}
 			logerror("0000-1fff Cartridge\n");
 		}
 	}
 	else
 	{
-		ChosenROM = machine.region("maincpu")->base() + 0x010000;
-		memory_set_bankptr(machine, "bank1", ChosenROM);
-		space->install_read_bank(0x0000, 0x1fff, "bank1");
-		space->unmap_write(0x0000, 0x1fff);
+		ChosenROM = memregion("maincpu")->base() + 0x010000;
+		membank("bank1")->set_base(ChosenROM);
+		space.install_read_bank(0x0000, 0x1fff, "bank1");
+		space.unmap_write(0x0000, 0x1fff);
 		logerror("0000-1fff HOME\n");
 	}
 
-	if (state->m_port_f4_data & 0x02)
+	if (m_port_f4_data & 0x02)
 	{
-		if (state->m_port_ff_data & 0x80)
+		if (m_port_ff_data & 0x80)
 		{
-			memory_set_bankptr(machine, "bank2", ExROM);
-			space->install_read_bank(0x2000, 0x3fff, "bank2");
-			space->unmap_write(0x2000, 0x3fff);
+			membank("bank2")->set_base(ExROM);
+			space.install_read_bank(0x2000, 0x3fff, "bank2");
+			space.unmap_write(0x2000, 0x3fff);
 			logerror("2000-3fff EXROM\n");
 		}
 		else
 		{
 			if (timex_cart_type == TIMEX_CART_DOCK)
 			{
-				memory_set_bankptr(machine, "bank2", DOCK+0x2000);
-				space->install_read_bank(0x2000, 0x3fff, "bank2");
+				membank("bank2")->set_base(DOCK+0x2000);
+				space.install_read_bank(0x2000, 0x3fff, "bank2");
 				if (timex_cart_chunks&0x02)
-					space->install_write_bank(0x2000, 0x3fff, "bank10");
+					space.install_write_bank(0x2000, 0x3fff, "bank10");
 				else
-					space->unmap_write(0x2000, 0x3fff);
+					space.unmap_write(0x2000, 0x3fff);
 
 			}
 			else
 			{
-				space->nop_read(0x2000, 0x3fff);
-				space->unmap_write(0x2000, 0x3fff);
+				space.nop_read(0x2000, 0x3fff);
+				space.unmap_write(0x2000, 0x3fff);
 			}
 			logerror("2000-3fff Cartridge\n");
 		}
 	}
 	else
 	{
-		ChosenROM = machine.region("maincpu")->base() + 0x012000;
-		memory_set_bankptr(machine, "bank2", ChosenROM);
-		space->install_read_bank(0x2000, 0x3fff, "bank2");
-		space->unmap_write(0x2000, 0x3fff);
+		ChosenROM = memregion("maincpu")->base() + 0x012000;
+		membank("bank2")->set_base(ChosenROM);
+		space.install_read_bank(0x2000, 0x3fff, "bank2");
+		space.unmap_write(0x2000, 0x3fff);
 		logerror("2000-3fff HOME\n");
 	}
 
-	if (state->m_port_f4_data & 0x04)
+	if (m_port_f4_data & 0x04)
 	{
-		if (state->m_port_ff_data & 0x80)
+		if (m_port_ff_data & 0x80)
 		{
-			memory_set_bankptr(machine, "bank3", ExROM);
-			space->install_read_bank(0x4000, 0x5fff, "bank3");
-			space->unmap_write(0x4000, 0x5fff);
+			membank("bank3")->set_base(ExROM);
+			space.install_read_bank(0x4000, 0x5fff, "bank3");
+			space.unmap_write(0x4000, 0x5fff);
 			logerror("4000-5fff EXROM\n");
 		}
 		else
 		{
 			if (timex_cart_type == TIMEX_CART_DOCK)
 			{
-				memory_set_bankptr(machine, "bank3", DOCK+0x4000);
-				space->install_read_bank(0x4000, 0x5fff, "bank3");
+				membank("bank3")->set_base(DOCK+0x4000);
+				space.install_read_bank(0x4000, 0x5fff, "bank3");
 				if (timex_cart_chunks&0x04)
-					space->install_write_bank(0x4000, 0x5fff, "bank11");
+					space.install_write_bank(0x4000, 0x5fff, "bank11");
 				else
-					space->unmap_write(0x4000, 0x5fff);
+					space.unmap_write(0x4000, 0x5fff);
 			}
 			else
 			{
-				space->nop_read(0x4000, 0x5fff);
-				space->unmap_write(0x4000, 0x5fff);
+				space.nop_read(0x4000, 0x5fff);
+				space.unmap_write(0x4000, 0x5fff);
 			}
 			logerror("4000-5fff Cartridge\n");
 		}
 	}
 	else
 	{
-		memory_set_bankptr(machine, "bank3", messram);
-		memory_set_bankptr(machine, "bank11", messram);
-		space->install_read_bank(0x4000, 0x5fff, "bank3");
-		space->install_write_bank(0x4000, 0x5fff, "bank11");
+		membank("bank3")->set_base(messram);
+		membank("bank11")->set_base(messram);
+		space.install_read_bank(0x4000, 0x5fff, "bank3");
+		space.install_write_bank(0x4000, 0x5fff, "bank11");
 		logerror("4000-5fff RAM\n");
 	}
 
-	if (state->m_port_f4_data & 0x08)
+	if (m_port_f4_data & 0x08)
 	{
-		if (state->m_port_ff_data & 0x80)
+		if (m_port_ff_data & 0x80)
 		{
-			memory_set_bankptr(machine, "bank4", ExROM);
-			space->install_read_bank(0x6000, 0x7fff, "bank4");
-			space->unmap_write(0x6000, 0x7fff);
+			membank("bank4")->set_base(ExROM);
+			space.install_read_bank(0x6000, 0x7fff, "bank4");
+			space.unmap_write(0x6000, 0x7fff);
 			logerror("6000-7fff EXROM\n");
 		}
 		else
 		{
 				if (timex_cart_type == TIMEX_CART_DOCK)
 				{
-					memory_set_bankptr(machine, "bank4", DOCK+0x6000);
-					space->install_read_bank(0x6000, 0x7fff, "bank4");
+					membank("bank4")->set_base(DOCK+0x6000);
+					space.install_read_bank(0x6000, 0x7fff, "bank4");
 					if (timex_cart_chunks&0x08)
-						space->install_write_bank(0x6000, 0x7fff, "bank12");
+						space.install_write_bank(0x6000, 0x7fff, "bank12");
 					else
-						space->unmap_write(0x6000, 0x7fff);
+						space.unmap_write(0x6000, 0x7fff);
 				}
 				else
 				{
-					space->nop_read(0x6000, 0x7fff);
-					space->unmap_write(0x6000, 0x7fff);
+					space.nop_read(0x6000, 0x7fff);
+					space.unmap_write(0x6000, 0x7fff);
 				}
 				logerror("6000-7fff Cartridge\n");
 		}
 	}
 	else
 	{
-		memory_set_bankptr(machine, "bank4", messram + 0x2000);
-		memory_set_bankptr(machine, "bank12", messram + 0x2000);
-		space->install_read_bank(0x6000, 0x7fff, "bank4");
-		space->install_write_bank(0x6000, 0x7fff, "bank12");
+		membank("bank4")->set_base(messram + 0x2000);
+		membank("bank12")->set_base(messram + 0x2000);
+		space.install_read_bank(0x6000, 0x7fff, "bank4");
+		space.install_write_bank(0x6000, 0x7fff, "bank12");
 		logerror("6000-7fff RAM\n");
 	}
 
-	if (state->m_port_f4_data & 0x10)
+	if (m_port_f4_data & 0x10)
 	{
-		if (state->m_port_ff_data & 0x80)
+		if (m_port_ff_data & 0x80)
 		{
-			memory_set_bankptr(machine, "bank5", ExROM);
-			space->install_read_bank(0x8000, 0x9fff, "bank5");
-			space->unmap_write(0x8000, 0x9fff);
+			membank("bank5")->set_base(ExROM);
+			space.install_read_bank(0x8000, 0x9fff, "bank5");
+			space.unmap_write(0x8000, 0x9fff);
 			logerror("8000-9fff EXROM\n");
 		}
 		else
 		{
 			if (timex_cart_type == TIMEX_CART_DOCK)
 			{
-				memory_set_bankptr(machine, "bank5", DOCK+0x8000);
-				space->install_read_bank(0x8000, 0x9fff,"bank5");
+				membank("bank5")->set_base(DOCK+0x8000);
+				space.install_read_bank(0x8000, 0x9fff,"bank5");
 				if (timex_cart_chunks&0x10)
-					space->install_write_bank(0x8000, 0x9fff,"bank13");
+					space.install_write_bank(0x8000, 0x9fff,"bank13");
 				else
-					space->unmap_write(0x8000, 0x9fff);
+					space.unmap_write(0x8000, 0x9fff);
 			}
 			else
 			{
-				space->nop_read(0x8000, 0x9fff);
-				space->unmap_write(0x8000, 0x9fff);
+				space.nop_read(0x8000, 0x9fff);
+				space.unmap_write(0x8000, 0x9fff);
 			}
 			logerror("8000-9fff Cartridge\n");
 		}
 	}
 	else
 	{
-		memory_set_bankptr(machine, "bank5", messram + 0x4000);
-		memory_set_bankptr(machine, "bank13", messram + 0x4000);
-		space->install_read_bank(0x8000, 0x9fff,"bank5");
-		space->install_write_bank(0x8000, 0x9fff,"bank13");
+		membank("bank5")->set_base(messram + 0x4000);
+		membank("bank13")->set_base(messram + 0x4000);
+		space.install_read_bank(0x8000, 0x9fff,"bank5");
+		space.install_write_bank(0x8000, 0x9fff,"bank13");
 		logerror("8000-9fff RAM\n");
 	}
 
-	if (state->m_port_f4_data & 0x20)
+	if (m_port_f4_data & 0x20)
 	{
-		if (state->m_port_ff_data & 0x80)
+		if (m_port_ff_data & 0x80)
 		{
-			memory_set_bankptr(machine, "bank6", ExROM);
-			space->install_read_bank(0xa000, 0xbfff, "bank6");
-			space->unmap_write(0xa000, 0xbfff);
+			membank("bank6")->set_base(ExROM);
+			space.install_read_bank(0xa000, 0xbfff, "bank6");
+			space.unmap_write(0xa000, 0xbfff);
 			logerror("a000-bfff EXROM\n");
 		}
 		else
 		{
 			if (timex_cart_type == TIMEX_CART_DOCK)
 			{
-				memory_set_bankptr(machine, "bank6", DOCK+0xa000);
-				space->install_read_bank(0xa000, 0xbfff, "bank6");
+				membank("bank6")->set_base(DOCK+0xa000);
+				space.install_read_bank(0xa000, 0xbfff, "bank6");
 				if (timex_cart_chunks&0x20)
-					space->install_write_bank(0xa000, 0xbfff, "bank14");
+					space.install_write_bank(0xa000, 0xbfff, "bank14");
 				else
-					space->unmap_write(0xa000, 0xbfff);
+					space.unmap_write(0xa000, 0xbfff);
 
 			}
 			else
 			{
-				space->nop_read(0xa000, 0xbfff);
-				space->unmap_write(0xa000, 0xbfff);
+				space.nop_read(0xa000, 0xbfff);
+				space.unmap_write(0xa000, 0xbfff);
 			}
 			logerror("a000-bfff Cartridge\n");
 		}
 	}
 	else
 	{
-		memory_set_bankptr(machine, "bank6", messram + 0x6000);
-		memory_set_bankptr(machine, "bank14", messram + 0x6000);
-		space->install_read_bank(0xa000, 0xbfff, "bank6");
-		space->install_write_bank(0xa000, 0xbfff, "bank14");
+		membank("bank6")->set_base(messram + 0x6000);
+		membank("bank14")->set_base(messram + 0x6000);
+		space.install_read_bank(0xa000, 0xbfff, "bank6");
+		space.install_write_bank(0xa000, 0xbfff, "bank14");
 		logerror("a000-bfff RAM\n");
 	}
 
-	if (state->m_port_f4_data & 0x40)
+	if (m_port_f4_data & 0x40)
 	{
-		if (state->m_port_ff_data & 0x80)
+		if (m_port_ff_data & 0x80)
 		{
-			memory_set_bankptr(machine, "bank7", ExROM);
-			space->install_read_bank(0xc000, 0xdfff, "bank7");
-			space->unmap_write(0xc000, 0xdfff);
+			membank("bank7")->set_base(ExROM);
+			space.install_read_bank(0xc000, 0xdfff, "bank7");
+			space.unmap_write(0xc000, 0xdfff);
 			logerror("c000-dfff EXROM\n");
 		}
 		else
 		{
 			if (timex_cart_type == TIMEX_CART_DOCK)
 			{
-				memory_set_bankptr(machine, "bank7", DOCK+0xc000);
-				space->install_read_bank(0xc000, 0xdfff, "bank7");
+				membank("bank7")->set_base(DOCK+0xc000);
+				space.install_read_bank(0xc000, 0xdfff, "bank7");
 				if (timex_cart_chunks&0x40)
-					space->install_write_bank(0xc000, 0xdfff, "bank15");
+					space.install_write_bank(0xc000, 0xdfff, "bank15");
 				else
-					space->unmap_write(0xc000, 0xdfff);
+					space.unmap_write(0xc000, 0xdfff);
 			}
 			else
 			{
-				space->nop_read(0xc000, 0xdfff);
-				space->unmap_write(0xc000, 0xdfff);
+				space.nop_read(0xc000, 0xdfff);
+				space.unmap_write(0xc000, 0xdfff);
 			}
 			logerror("c000-dfff Cartridge\n");
 		}
 	}
 	else
 	{
-		memory_set_bankptr(machine, "bank7", messram + 0x8000);
-		memory_set_bankptr(machine, "bank15", messram + 0x8000);
-		space->install_read_bank(0xc000, 0xdfff, "bank7");
-		space->install_write_bank(0xc000, 0xdfff, "bank15");
+		membank("bank7")->set_base(messram + 0x8000);
+		membank("bank15")->set_base(messram + 0x8000);
+		space.install_read_bank(0xc000, 0xdfff, "bank7");
+		space.install_write_bank(0xc000, 0xdfff, "bank15");
 		logerror("c000-dfff RAM\n");
 	}
 
-	if (state->m_port_f4_data & 0x80)
+	if (m_port_f4_data & 0x80)
 	{
-		if (state->m_port_ff_data & 0x80)
+		if (m_port_ff_data & 0x80)
 		{
-			memory_set_bankptr(machine, "bank8", ExROM);
-			space->install_read_bank(0xe000, 0xffff, "bank8");
-			space->unmap_write(0xe000, 0xffff);
+			membank("bank8")->set_base(ExROM);
+			space.install_read_bank(0xe000, 0xffff, "bank8");
+			space.unmap_write(0xe000, 0xffff);
 			logerror("e000-ffff EXROM\n");
 		}
 		else
 		{
 			if (timex_cart_type == TIMEX_CART_DOCK)
 			{
-				memory_set_bankptr(machine, "bank8", DOCK+0xe000);
-				space->install_read_bank(0xe000, 0xffff, "bank8");
+				membank("bank8")->set_base(DOCK+0xe000);
+				space.install_read_bank(0xe000, 0xffff, "bank8");
 				if (timex_cart_chunks&0x80)
-					space->install_write_bank(0xe000, 0xffff, "bank16");
+					space.install_write_bank(0xe000, 0xffff, "bank16");
 				else
-					space->unmap_write(0xe000, 0xffff);
+					space.unmap_write(0xe000, 0xffff);
 			}
 			else
 			{
-				space->nop_read(0xe000, 0xffff);
-				space->unmap_write(0xe000, 0xffff);
+				space.nop_read(0xe000, 0xffff);
+				space.unmap_write(0xe000, 0xffff);
 			}
 			logerror("e000-ffff Cartridge\n");
 		}
 	}
 	else
 	{
-		memory_set_bankptr(machine, "bank8", messram + 0xa000);
-		memory_set_bankptr(machine, "bank16", messram + 0xa000);
-		space->install_read_bank(0xe000, 0xffff, "bank8");
-		space->install_write_bank(0xe000, 0xffff, "bank16");
+		membank("bank8")->set_base(messram + 0xa000);
+		membank("bank16")->set_base(messram + 0xa000);
+		space.install_read_bank(0xe000, 0xffff, "bank8");
+		space.install_write_bank(0xe000, 0xffff, "bank16");
 		logerror("e000-ffff RAM\n");
 	}
 }
 
-static ADDRESS_MAP_START(ts2068_io, AS_IO, 8)
-	AM_RANGE(0x1f, 0x1f) AM_READ( spectrum_port_1f_r ) AM_MIRROR(0xff00)
-	AM_RANGE(0x7f, 0x7f) AM_READ( spectrum_port_7f_r ) AM_MIRROR(0xff00)
-	AM_RANGE(0xdf, 0xdf) AM_READ( spectrum_port_df_r ) AM_MIRROR(0xff00)
-	AM_RANGE(0xf4, 0xf4) AM_READWRITE( ts2068_port_f4_r,ts2068_port_f4_w ) AM_MIRROR(0xff00)
-	AM_RANGE(0xf5, 0xf5) AM_DEVWRITE( "ay8912", ay8910_address_w ) AM_MIRROR(0xff00)
-	AM_RANGE(0xf6, 0xf6) AM_DEVREADWRITE("ay8912", ay8910_r, ay8910_data_w ) AM_MIRROR(0xff00)
-	AM_RANGE(0xfe, 0xfe) AM_READWRITE( spectrum_port_fe_r,spectrum_port_fe_w )  AM_MIRROR(0xff00)  AM_MASK(0xffff)
-	AM_RANGE(0xff, 0xff) AM_READWRITE( ts2068_port_ff_r,ts2068_port_ff_w ) AM_MIRROR(0xff00)
+static ADDRESS_MAP_START(ts2068_io, AS_IO, 8, spectrum_state )
+	AM_RANGE(0x1f, 0x1f) AM_READ(spectrum_port_1f_r ) AM_MIRROR(0xff00)
+	AM_RANGE(0x7f, 0x7f) AM_READ(spectrum_port_7f_r ) AM_MIRROR(0xff00)
+	AM_RANGE(0xdf, 0xdf) AM_READ(spectrum_port_df_r ) AM_MIRROR(0xff00)
+	AM_RANGE(0xf4, 0xf4) AM_READWRITE(ts2068_port_f4_r,ts2068_port_f4_w ) AM_MIRROR(0xff00)
+	AM_RANGE(0xf5, 0xf5) AM_DEVWRITE("ay8912", ay8910_device, address_w ) AM_MIRROR(0xff00)
+	AM_RANGE(0xf6, 0xf6) AM_DEVREADWRITE("ay8912", ay8910_device, data_r, data_w ) AM_MIRROR(0xff00)
+	AM_RANGE(0xfe, 0xfe) AM_READWRITE(spectrum_port_fe_r,spectrum_port_fe_w )  AM_MIRROR(0xff00)  AM_MASK(0xffff)
+	AM_RANGE(0xff, 0xff) AM_READWRITE(ts2068_port_ff_r,ts2068_port_ff_w ) AM_MIRROR(0xff00)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(ts2068_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(ts2068_mem, AS_PROGRAM, 8, spectrum_state )
 	AM_RANGE(0x0000, 0x1fff) AM_READ_BANK("bank1") AM_WRITE_BANK("bank9")
 	AM_RANGE(0x2000, 0x3fff) AM_READ_BANK("bank2") AM_WRITE_BANK("bank10")
 	AM_RANGE(0x4000, 0x5fff) AM_READ_BANK("bank3") AM_WRITE_BANK("bank11")
@@ -561,14 +573,12 @@ static ADDRESS_MAP_START(ts2068_mem, AS_PROGRAM, 8)
 ADDRESS_MAP_END
 
 
-static MACHINE_RESET( ts2068 )
+MACHINE_RESET_MEMBER(spectrum_state,ts2068)
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-
-	state->m_port_ff_data = 0;
-	state->m_port_f4_data = 0;
-	ts2068_update_memory(machine);
-	MACHINE_RESET_CALL(spectrum);
+	m_port_ff_data = 0;
+	m_port_f4_data = 0;
+	ts2068_update_memory();
+	MACHINE_RESET_CALL_MEMBER(spectrum);
 
 }
 
@@ -577,15 +587,13 @@ static MACHINE_RESET( ts2068 )
 /* TC2048 specific functions */
 
 
-static WRITE8_HANDLER( tc2048_port_ff_w )
+WRITE8_MEMBER( spectrum_state::tc2048_port_ff_w )
 {
-	spectrum_state *state = space->machine().driver_data<spectrum_state>();
-
-	state->m_port_ff_data = data;
+	m_port_ff_data = data;
 	logerror("Port %04x write %02x\n", offset, data);
 }
 
-static ADDRESS_MAP_START(tc2048_io, AS_IO, 8)
+static ADDRESS_MAP_START(tc2048_io, AS_IO, 8, spectrum_state )
 	AM_RANGE(0x00, 0x00) AM_READWRITE(spectrum_port_fe_r,spectrum_port_fe_w) AM_MIRROR(0xfffe) AM_MASK(0xffff)
 	AM_RANGE(0x1f, 0x1f) AM_READ(spectrum_port_1f_r) AM_MIRROR(0xff00)
 	AM_RANGE(0x7f, 0x7f) AM_READ(spectrum_port_7f_r) AM_MIRROR(0xff00)
@@ -593,36 +601,128 @@ static ADDRESS_MAP_START(tc2048_io, AS_IO, 8)
 	AM_RANGE(0xff, 0xff) AM_READWRITE(ts2068_port_ff_r,tc2048_port_ff_w)  AM_MIRROR(0xff00)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(tc2048_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(tc2048_mem, AS_PROGRAM, 8, spectrum_state )
 	AM_RANGE( 0x0000, 0x3fff) AM_ROM
 	AM_RANGE( 0x4000, 0xffff) AM_READ_BANK("bank1") AM_WRITE_BANK("bank2")
 ADDRESS_MAP_END
 
-static MACHINE_RESET( tc2048 )
+MACHINE_RESET_MEMBER(spectrum_state,tc2048)
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	UINT8 *messram = ram_get_ptr(machine.device(RAM_TAG));
+	UINT8 *messram = m_ram->pointer();
 
-	memory_set_bankptr(machine, "bank1", messram);
-	memory_set_bankptr(machine, "bank2", messram);
-	state->m_port_ff_data = 0;
-	state->m_port_f4_data = -1;
-	MACHINE_RESET_CALL(spectrum);
+	membank("bank1")->set_base(messram);
+	membank("bank2")->set_base(messram);
+	m_port_ff_data = 0;
+	m_port_f4_data = -1;
+	MACHINE_RESET_CALL_MEMBER(spectrum);
+}
+
+
+DEVICE_IMAGE_LOAD_MEMBER( spectrum_state, timex_cart )
+{
+	int file_size;
+	UINT8 * file_data;
+
+	int chunks_in_file = 0;
+
+	int i;
+
+	logerror ("Trying to load cart\n");
+
+	file_size = image.length();
+
+	if (file_size < 0x09)
+	{
+		logerror ("Bad file size\n");
+		return IMAGE_INIT_FAIL;
+	}
+
+	file_data = (UINT8 *)malloc(file_size);
+	if (file_data == NULL)
+	{
+		logerror ("Memory allocating error\n");
+		return IMAGE_INIT_FAIL;
+	}
+
+	image.fread(file_data, file_size);
+
+	for (i=0; i<8; i++)
+		if(file_data[i+1]&0x02) chunks_in_file++;
+
+	if (chunks_in_file*0x2000+0x09 != file_size)
+	{
+		free (file_data);
+		logerror ("File corrupted\n");
+		return IMAGE_INIT_FAIL;
+	}
+
+	switch (file_data[0x00])
+	{
+		case 0x00:  logerror ("DOCK cart\n");
+				timex_cart.type = TIMEX_CART_DOCK;
+				timex_cart.data = (UINT8*) malloc (0x10000);
+				if (!timex_cart.data)
+				{
+					free (file_data);
+					logerror ("Memory allocate error\n");
+					return IMAGE_INIT_FAIL;
+				}
+				chunks_in_file = 0;
+				for (i=0; i<8; i++)
+				{
+					timex_cart.chunks = timex_cart.chunks | ((file_data[i+1]&0x01)<<i);
+					if (file_data[i+1]&0x02)
+					{
+						memcpy (timex_cart.data+i*0x2000, file_data+0x09+chunks_in_file*0x2000, 0x2000);
+						chunks_in_file++;
+					}
+					else
+					{
+						if (file_data[i+1]&0x01)
+							memset (timex_cart.data+i*0x2000, 0x00, 0x2000);
+						else
+							memset (timex_cart.data+i*0x2000, 0xff, 0x2000);
+					}
+				}
+				free (file_data);
+				break;
+
+		default:    logerror ("Cart type not supported\n");
+				free (file_data);
+				timex_cart.type = TIMEX_CART_NONE;
+				return IMAGE_INIT_FAIL;
+	}
+
+	logerror ("Cart loaded\n");
+	logerror ("Chunks %02x\n", timex_cart.chunks);
+	return IMAGE_INIT_PASS;
+}
+
+
+DEVICE_IMAGE_UNLOAD_MEMBER( spectrum_state, timex_cart )
+{
+	if (timex_cart.data)
+	{
+		free (timex_cart.data);
+		timex_cart.data = NULL;
+	}
+	timex_cart.type = TIMEX_CART_NONE;
+	timex_cart.chunks = 0x00;
 }
 
 
 /* F4 Character Displayer - tc2048 code is inherited from the spectrum */
 static const gfx_layout ts2068_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	96,					/* 96 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	96,                 /* 96 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( ts2068 )
@@ -634,19 +734,18 @@ static MACHINE_CONFIG_DERIVED( ts2068, spectrum_128 )
 	MCFG_CPU_PROGRAM_MAP(ts2068_mem)
 	MCFG_CPU_IO_MAP(ts2068_io)
 
-	MCFG_MACHINE_RESET( ts2068 )
+	MCFG_MACHINE_RESET_OVERRIDE(spectrum_state, ts2068 )
 
 	/* video hardware */
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(TS2068_SCREEN_WIDTH, TS2068_SCREEN_HEIGHT)
 	MCFG_SCREEN_VISIBLE_AREA(0, TS2068_SCREEN_WIDTH-1, 0, TS2068_SCREEN_HEIGHT-1)
-	MCFG_SCREEN_UPDATE( ts2068 )
+	MCFG_SCREEN_UPDATE_DRIVER(spectrum_state, screen_update_ts2068)
 
 	MCFG_GFXDECODE(ts2068)
 
-	MCFG_VIDEO_START( ts2068 )
+	MCFG_VIDEO_START_OVERRIDE(spectrum_state, ts2068 )
 
 	/* sound */
 	MCFG_SOUND_REPLACE("ay8912", AY8912, XTAL_14_112MHz/8)        /* From Schematic; 1.764 MHz */
@@ -657,8 +756,8 @@ static MACHINE_CONFIG_DERIVED( ts2068, spectrum_128 )
 	MCFG_CARTSLOT_MODIFY("cart")
 	MCFG_CARTSLOT_EXTENSION_LIST("dck")
 	MCFG_CARTSLOT_NOT_MANDATORY
-	MCFG_CARTSLOT_LOAD(timex_cart)
-	MCFG_CARTSLOT_UNLOAD(timex_cart)
+	MCFG_CARTSLOT_LOAD(spectrum_state,timex_cart)
+	MCFG_CARTSLOT_UNLOAD(spectrum_state,timex_cart)
 
 	/* internal ram */
 	MCFG_RAM_MODIFY(RAM_TAG)
@@ -677,17 +776,16 @@ static MACHINE_CONFIG_DERIVED( tc2048, spectrum )
 	MCFG_CPU_PROGRAM_MAP(tc2048_mem)
 	MCFG_CPU_IO_MAP(tc2048_io)
 
-	MCFG_MACHINE_RESET( tc2048 )
+	MCFG_MACHINE_RESET_OVERRIDE(spectrum_state, tc2048 )
 
 	/* video hardware */
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_REFRESH_RATE(50)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(TS2068_SCREEN_WIDTH, SPEC_SCREEN_HEIGHT)
 	MCFG_SCREEN_VISIBLE_AREA(0, TS2068_SCREEN_WIDTH-1, 0, SPEC_SCREEN_HEIGHT-1)
-	MCFG_SCREEN_UPDATE( tc2048 )
+	MCFG_SCREEN_UPDATE_DRIVER(spectrum_state, screen_update_tc2048)
 
-	MCFG_VIDEO_START( spectrum_128 )
+	MCFG_VIDEO_START_OVERRIDE(spectrum_state, spectrum_128 )
 
 	/* internal ram */
 	MCFG_RAM_MODIFY(RAM_TAG)
@@ -721,6 +819,6 @@ ROM_START(uk2086)
 ROM_END
 
 /*    YEAR  NAME      PARENT    COMPAT  MACHINE     INPUT       INIT    COMPANY     FULLNAME */
-COMP( 1984, tc2048,   spectrum, 0,		tc2048,		spectrum,	0,		"Timex of Portugal",	"TC-2048" , 0)
-COMP( 1983, ts2068,   spectrum, 0,		ts2068,		spectrum,	0,		"Timex Sinclair",		"TS-2068" , 0)
-COMP( 1986, uk2086,   spectrum, 0,		uk2086,		spectrum,	0,		"Unipolbrit",			"UK-2086 ver. 1.2" , 0)
+COMP( 1984, tc2048,   spectrum, 0,      tc2048,     spectrum, driver_device,    0,      "Timex of Portugal",    "TC-2048" , 0)
+COMP( 1983, ts2068,   spectrum, 0,      ts2068,     spectrum, driver_device,    0,      "Timex Sinclair",       "TS-2068" , 0)
+COMP( 1986, uk2086,   spectrum, 0,      uk2086,     spectrum, driver_device,    0,      "Unipolbrit",           "UK-2086 ver. 1.2" , 0)

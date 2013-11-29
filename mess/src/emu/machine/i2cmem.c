@@ -58,7 +58,7 @@ INLINE void ATTR_PRINTF( 3, 4 ) verboselog( device_t *device, int n_level, const
 // device type definition
 const device_type I2CMEM = &device_creator<i2cmem_device>;
 
-static ADDRESS_MAP_START( i2cmem_map8, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( i2cmem_map8, AS_PROGRAM, 8, i2cmem_device )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 ADDRESS_MAP_END
 
@@ -73,9 +73,9 @@ ADDRESS_MAP_END
 //-------------------------------------------------
 
 i2cmem_device::i2cmem_device( const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock )
-	: device_t(mconfig, I2CMEM, "I2CMEM", tag, owner, clock),
-	  device_memory_interface(mconfig, *this),
-	  device_nvram_interface(mconfig, *this),
+	: device_t(mconfig, I2CMEM, "I2CMEM", tag, owner, clock, "i2cmem", __FILE__),
+		device_memory_interface(mconfig, *this),
+		device_nvram_interface(mconfig, *this),
 	m_scl( 0 ),
 	m_sdaw( 0 ),
 	m_e0( 0 ),
@@ -85,26 +85,6 @@ i2cmem_device::i2cmem_device( const machine_config &mconfig, const char *tag, de
 	m_sdar( 1 ),
 	m_state( STATE_IDLE )
 {
-	m_address_bits = 0;
-
-	int i = m_data_size - 1;
-	while( i > 0 )
-	{
-		m_address_bits++;
-		i >>= 1;
-	}
-}
-
-
-//-------------------------------------------------
-//  static_set_interface - set the device
-//  configuration
-//-------------------------------------------------
-
-void i2cmem_device::static_set_interface(device_t &device, const i2cmem_interface &interface)
-{
-	i2cmem_device &i2cmem = downcast<i2cmem_device &>(device);
-	static_cast<i2cmem_interface &>(i2cmem) = interface;
 }
 
 
@@ -116,19 +96,29 @@ void i2cmem_device::static_set_interface(device_t &device, const i2cmem_interfac
 
 void i2cmem_device::device_config_complete()
 {
+	// inherit a copy of the static data
+	const i2cmem_interface *intf = reinterpret_cast<const i2cmem_interface *>(static_config());
+	if (intf != NULL)
+	{
+		*static_cast<i2cmem_interface *>(this) = *intf;
+	}
+	else
+	{
+		m_slave_address = 0;
+		m_page_size = 0;
+		m_data_size = 0;
+	}
+
+	m_address_bits = 0;
+
+	int i = m_data_size - 1;
+	while( i > 0 )
+	{
+		m_address_bits++;
+		i >>= 1;
+	}
+
 	m_space_config = address_space_config( "i2cmem", ENDIANNESS_BIG, 8,  m_address_bits, 0, *ADDRESS_MAP_NAME( i2cmem_map8 ) );
-}
-
-
-//-------------------------------------------------
-//  device_validity_check - perform validity checks
-//  on this device
-//-------------------------------------------------
-
-bool i2cmem_device::device_validity_check( emu_options &options, const game_driver &driver ) const
-{
-	bool error = false;
-	return error;
 }
 
 
@@ -199,12 +189,12 @@ void i2cmem_device::nvram_default()
 	{
 		if( m_region->bytes() != i2cmem_bytes )
 		{
-			fatalerror( "i2cmem region '%s' wrong size (expected size = 0x%X)", tag(), i2cmem_bytes );
+			fatalerror( "i2cmem region '%s' wrong size (expected size = 0x%X)\n", tag(), i2cmem_bytes );
 		}
 
 		if( m_region->width() != 1 )
 		{
-			fatalerror( "i2cmem region '%s' needs to be an 8-bit region", tag() );
+			fatalerror( "i2cmem region '%s' needs to be an 8-bit region\n", tag() );
 		}
 
 		for( offs_t offs = 0; offs < i2cmem_bytes; offs++ )

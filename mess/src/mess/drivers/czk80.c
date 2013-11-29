@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
         CZK-80
@@ -12,13 +14,11 @@
     27/11/2010 Connected to a terminal
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/terminal.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
 
 class czk80_state : public driver_device
 {
@@ -27,15 +27,16 @@ public:
 		: driver_device(mconfig, type, tag),
 	m_maincpu(*this, "maincpu"),
 	m_terminal(*this, TERMINAL_TAG)
-	{ }
+	,
+		m_p_ram(*this, "p_ram"){ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_terminal;
+	required_device<generic_terminal_device> m_terminal;
 	DECLARE_READ8_MEMBER( czk80_80_r );
 	DECLARE_READ8_MEMBER( czk80_81_r );
 	DECLARE_READ8_MEMBER( czk80_c0_r );
 	DECLARE_WRITE8_MEMBER( kbd_put );
-	UINT8 *m_ram;
+	required_shared_ptr<UINT8> m_p_ram;
 	UINT8 m_term_data;
 	virtual void machine_reset();
 };
@@ -55,17 +56,17 @@ READ8_MEMBER( czk80_state::czk80_c0_r )
 
 READ8_MEMBER( czk80_state::czk80_81_r )
 {
-	return 1 | (m_term_data ? 2 : 0);
+	return (m_term_data) ? 3 : 1;
 }
 
 static ADDRESS_MAP_START(czk80_mem, AS_PROGRAM, 8, czk80_state)
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x0000, 0xffff) AM_RAM AM_BASE(m_ram)
+	AM_RANGE(0x0000, 0xffff) AM_RAM AM_SHARE("p_ram")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START(czk80_io, AS_IO, 8, czk80_state)
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x80, 0x80) AM_READ(czk80_80_r) AM_DEVWRITE_LEGACY(TERMINAL_TAG, terminal_write)
+	AM_RANGE(0x80, 0x80) AM_READ(czk80_80_r) AM_DEVWRITE(TERMINAL_TAG, generic_terminal_device, write)
 	AM_RANGE(0x81, 0x81) AM_READ(czk80_81_r)
 	AM_RANGE(0xc0, 0xc0) AM_READ(czk80_c0_r)
 ADDRESS_MAP_END
@@ -74,11 +75,11 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( czk80 )
 INPUT_PORTS_END
 
-MACHINE_RESET_MEMBER(czk80_state)
+void czk80_state::machine_reset()
 {
-	UINT8* bios = machine().region("maincpu")->base() + 0xe000;
-	memcpy(m_ram, bios, 0x2000);
-	memcpy(m_ram+0xe000, bios, 0x2000);
+	UINT8* bios = memregion("maincpu")->base() + 0xe000;
+	memcpy(m_p_ram, bios, 0x2000);
+	memcpy(m_p_ram+0xe000, bios, 0x2000);
 }
 
 
@@ -98,7 +99,6 @@ static MACHINE_CONFIG_START( czk80, czk80_state )
 	MCFG_CPU_PROGRAM_MAP(czk80_mem)
 	MCFG_CPU_IO_MAP(czk80_io)
 
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 MACHINE_CONFIG_END
 
@@ -111,5 +111,5 @@ ROM_END
 
 /* Driver */
 
-/*   YEAR  NAME    PARENT  COMPAT   MACHINE  INPUT  INIT        COMPANY   FULLNAME       FLAGS */
-COMP( 198?, czk80,  0,       0, 	czk80,	czk80,	 0, 	  "<unknown>",   "CZK-80",		GAME_NOT_WORKING | GAME_NO_SOUND)
+/*   YEAR  NAME    PARENT  COMPAT   MACHINE  INPUT  INIT        COMPANY      FULLNAME       FLAGS */
+COMP( 198?, czk80,  0,       0,     czk80,   czk80, driver_device, 0,        "<unknown>",  "CZK-80", GAME_NOT_WORKING | GAME_NO_SOUND_HW)

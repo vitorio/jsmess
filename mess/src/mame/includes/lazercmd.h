@@ -1,8 +1,10 @@
-#define HORZ_RES		32
-#define VERT_RES		24
+#include "sound/dac.h"
+
+#define HORZ_RES        32
+#define VERT_RES        24
 #define HORZ_CHR        8
-#define VERT_CHR		10
-#define VERT_FNT		8
+#define VERT_CHR        10
+#define VERT_FNT        8
 
 #define HORZ_BAR        0x40
 #define VERT_BAR        0x80
@@ -21,26 +23,43 @@ class lazercmd_state : public driver_device
 {
 public:
 	lazercmd_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	/* memory pointers */
-	UINT8 *  m_videoram;
-	size_t   m_videoram_size;
-
-	/* video-related */
-	int      m_marker_x;
-	int      m_marker_y;
-
-	/* misc */
-	int      m_timer_count;
-	int      m_sense_state;
-	int      m_dac_data;
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this, "maincpu"),
+		m_dac(*this, "dac"),
+		m_videoram(*this, "videoram")
+	{ }
 
 	/* device */
-	device_t *m_dac;
+	required_device<cpu_device> m_maincpu;
+	required_device<dac_device> m_dac;
+	/* memory pointers */
+	required_shared_ptr<UINT8> m_videoram;
+
+	/* video-related */
+	UINT8 m_marker_x;
+	UINT8 m_marker_y;
+
+	/* misc */
+	int m_timer_count;
+	UINT8 m_sense_state;
+	UINT8 m_dac_data;
+	UINT8 m_attract;
+
+	DECLARE_WRITE8_MEMBER(lazercmd_ctrl_port_w);
+	DECLARE_READ8_MEMBER(lazercmd_ctrl_port_r);
+	DECLARE_WRITE8_MEMBER(lazercmd_data_port_w);
+	DECLARE_READ8_MEMBER(lazercmd_data_port_r);
+	DECLARE_WRITE8_MEMBER(lazercmd_hardware_w);
+	DECLARE_WRITE8_MEMBER(medlanes_hardware_w);
+	DECLARE_WRITE8_MEMBER(bbonk_hardware_w);
+	DECLARE_READ8_MEMBER(lazercmd_hardware_r);
+	DECLARE_DRIVER_INIT(lazercmd);
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void palette_init();
+	UINT32 screen_update_lazercmd(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	TIMER_DEVICE_CALLBACK_MEMBER(lazercmd_timer);
+	TIMER_DEVICE_CALLBACK_MEMBER(bbonk_timer);
+	int vert_scale(int data);
+	void plot_pattern( bitmap_ind16 &bitmap, int x, int y );
 };
-
-
-/*----------- defined in video/lazercmd.c -----------*/
-
-SCREEN_UPDATE( lazercmd );

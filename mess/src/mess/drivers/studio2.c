@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /*
 
 RCA Studio II
@@ -76,7 +78,7 @@ Notes: (all chips shown above)
       2111    - NEC D2111AL-4 256 bytes x4 SRAM (DIP18, x6). Total 1.5k
       C       - Composite Video Output to TV from TV Modulator
       TMM331  - Toshiba TMM331AP 2k x8 MASKROM (DIP24)
-                Pinout (preliminary):
+                Pinout:
                            TMM331
                         |----\/----|
                      A7 |1       24| VCC
@@ -88,10 +90,45 @@ Notes: (all chips shown above)
                      A2 |7       18| D5
                      A3 |8       17| D6
                      A4 |9       16| D7
-                     A5 |10      15| CE (LOW)
-                     A6 |11      14| ? (unknown, leave NC?)
-                    GND |12      13| OE (LOW)
+                     A5 |10      15| E0 (measured LOW)
+                     A6 |11      14| E1 (NC?)
+                    GND |12      13| E2 (measured LOW)
                         |----------|
+
+      E0 - E2 are Programmable Chip Select Inputs
+      TMM331 is compatible with AMI S6831A, AMD AM9217,
+      Intel 2316A/8316A, MOSTEK MK31000, GI RO-3-8316,
+      NATIONAL/NEC/SYNERTEK 2316A etc
+
+
+Cartridges
+----------
+
+Inside is a Toshiba TMM331AP ROM, which is pin compatible with the Signetics S6831.
+The cartridge to TMM331 pin connections are as follows, with cartridge pin 1 being the leftmost angled contact:
+
+Pin 1 to ROM pins 12,13 (GND and E2)
+Pin 2 to ROM pins 24,15 (VCC and E0)
+Pin 3 to ROM pin 23 (D0)
+Pin 4 to ROM pin 22 (D1)
+Pin 5 to ROM pin 21 (D2)
+Pin 6 to ROM pin 20 (D3)
+Pin 7 to ROM pin 19 (D4)
+Pin 8 to ROM pin 18 (D5)
+Pin 9 to ROM pin 17 (D6)
+Pin 10 to ROM pin 16 (D7)
+Pin 11 to ROM pin 14 (E1)
+Pin 12 to ROM pin 11 (A6)
+Pin 13 to ROM pin 10 (A5)
+Pin 14 to ROM pin 9 (A4)
+Pin 15 to ROM pin 8 (A3)
+Pin 16 to ROM pin 7 (A2)
+Pin 17 to ROM pin 6 (A1)
+Pin 18 to ROM pin 5 (A0)
+Pin 19 to ROM pin 1 (A7)
+Pin 20 to ROM pin 4 (A10)
+Pin 21 to ROM pin 3 (A9)
+Pin 22 to ROM pin 2 (A8)
 
 */
 
@@ -140,60 +177,89 @@ Notes:
 
 /*
 
-    RCA Studio II games list
-
-    Title                           Series                  Dumped
-    ----------------------------------------------------------------------------
-    Bowling                         built-in                yes
-    Doodles                         built-in                yes
-    Freeway                         built-in                yes
-    Math                            built-in                yes
-    Patterns                        built-in                yes
-    Gunfighter/Moonship Battle      TV Arcade               yes
-    Space War                       TV Arcade I             yes
-    Fun with Numbers                TV Arcade II            no, but Guru has one
-    Tennis/Squash                   TV Arcade III           yes
-    Baseball                        TV Arcade IV            yes
-    Speedway/Tag                    TV Arcade               yes
-    Blackjack                       TV Casino I             yes
-    Bingo                           TV Casino               no
-    Math and Social Studies         TV School House I       no, but Guru has one
-    Math Fun                        TV School House II      yes
-    Biorhythm                       TV Mystic               yes
-
-
-    MPT-02 games list
-
-    ID      Title                   Series                  Dumped
-    ----------------------------------------------------------------------------
-    MG-201  Bingo                                           no
-    MG-202  Concentration Match                             no, but Guru has one
-    MG-203  Star Wars                                       no, but Guru has one
-    MG-204  Math Fun                School House II         no, but Guru has one
-    MG-205  Pinball                                         no, but Guru has one
-    MG-206  Biorythm                                        no
-    MG-207  Tennis/Squash                                   no
-    MG-208  Fun with Numbers                                no
-    MG-209  Computer Quiz           School House I          no
-    MG-210  Baseball                                        no
-    MG-211  Speedway/Tag                                    no
-    MG-212  Spacewar Intercept                              no
-    MG-213  Gun Fight/Moon Ship                             no
-
-*/
-
-/*
-
     TODO:
 
-    - disable ic13/14 when cartridge plugged in
-    - mpt02 clones' colors
-    - visicom colors
     - NE555 discrete sound
 
 */
 
 #include "includes/studio2.h"
+
+/***************************************************************************
+    PARAMETERS
+***************************************************************************/
+
+#define LOG 0
+
+#define ST2_BLOCK_SIZE 256
+
+/***************************************************************************
+    TYPE DEFINITIONS
+***************************************************************************/
+
+struct st2_header
+{
+	UINT8 header[4];            /* "RCA2" in ASCII code */
+	UINT8 blocks;               /* Total number of 256 byte blocks in file (including this one) */
+	UINT8 format;               /* Format Code (this is format number 1) */
+	UINT8 video;                /* If non-zero uses a special video driver, and programs cannot assume that it uses the standard Studio 2 one (top of screen at $0900+RB.0). A value of '1' here indicates the RAM is used normally, but scrolling is not (e.g. the top of the page is always at $900) */
+	UINT8 reserved0;
+	UINT8 author[2];            /* 2 byte ASCII code indicating the identity of the program coder */
+	UINT8 dumper[2];            /* 2 byte ASCII code indicating the identity of the ROM Source */
+	UINT8 reserved1[4];
+	UINT8 catalogue[10];        /* RCA Catalogue Code as ASCIIZ string. If a homebrew ROM, may contain any identifying code you wish */
+	UINT8 reserved2[6];
+	UINT8 title[32];            /* Cartridge Program Title as ASCIIZ string */
+	UINT8 page[64];             /* Contain the page addresses for each 256 byte block. The first byte at 64, contains the target address of the data at offset 256, the second byte contains the target address of the data at offset 512, and so on. Unused block bytes should be filled with $00 (an invalid page address). So, if byte 64 contains $1C, the ROM is paged into memory from $1C00-$1CFF */
+	UINT8 reserved3[128];
+};
+
+/***************************************************************************
+    IMPLEMENTATION
+***************************************************************************/
+
+/*-------------------------------------------------
+    DEVICE_IMAGE_LOAD_MEMBER( studio2_state, st2_cartslot_load )
+-------------------------------------------------*/
+
+DEVICE_IMAGE_LOAD_MEMBER( studio2_state, st2_cartslot_load )
+{
+	st2_header header;
+
+	/* check file size */
+	int filesize = image.length();
+
+	if (filesize <= ST2_BLOCK_SIZE) {
+		logerror("Error loading cartridge: Invalid ROM file: %s.\n", image.filename());
+		return IMAGE_INIT_FAIL;
+	}
+
+	/* read ST2 header */
+	if (image.fread( &header, ST2_BLOCK_SIZE) != ST2_BLOCK_SIZE) {
+		logerror("Error loading cartridge: Unable to read header from file: %s.\n", image.filename());
+		return IMAGE_INIT_FAIL;
+	}
+
+	if (LOG) logerror("ST2 Catalogue: %s\n", header.catalogue);
+	if (LOG) logerror("ST2 Title: %s\n", header.title);
+
+	/* read ST2 cartridge into memory */
+	for (int block = 0; block < (header.blocks - 1); block++)
+	{
+		UINT16 offset = header.page[block] << 8;
+		UINT8 *ptr = ((UINT8 *) memregion(CDP1802_TAG)->base()) + offset;
+
+		if (LOG) logerror("ST2 Reading block %u to %04x\n", block, offset);
+
+		if (image.fread( ptr, ST2_BLOCK_SIZE) != ST2_BLOCK_SIZE) {
+			logerror("Error loading cartridge: Unable to read contents from file: %s.\n", image.filename());
+			return IMAGE_INIT_FAIL;
+		}
+	}
+
+	return IMAGE_INIT_PASS;
+}
+
 
 /* Read/Write Handlers */
 
@@ -231,39 +297,37 @@ static ADDRESS_MAP_START( studio2_io_map, AS_IO, 8, studio2_state )
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( visicom_map, AS_PROGRAM, 8, visicom_state )
-	AM_RANGE(0x0000, 0x07ff) AM_ROM
+	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x1000, 0x10ff) AM_RAM
-	AM_RANGE(0x1100, 0x11ff) AM_RAM AM_BASE(m_color_ram)
-	AM_RANGE(0x1300, 0x13ff) AM_RAM AM_BASE(m_color_ram1)
+	AM_RANGE(0x1100, 0x11ff) AM_RAM AM_SHARE("color0_ram")
+	AM_RANGE(0x1300, 0x13ff) AM_RAM AM_SHARE("color1_ram")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( visicom_io_map, AS_IO, 8, visicom_state )
-	AM_RANGE(0x01, 0x01) AM_WRITE_BASE(studio2_state, dispon_w)
-	AM_RANGE(0x02, 0x02) AM_WRITE_BASE(studio2_state, keylatch_w)
+	AM_RANGE(0x01, 0x01) AM_WRITE(dispon_w)
+	AM_RANGE(0x02, 0x02) AM_WRITE(keylatch_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mpt02_map, AS_PROGRAM, 8, mpt02_state )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
 	AM_RANGE(0x0800, 0x09ff) AM_RAM
-	AM_RANGE(0x0b00, 0x0b3f) AM_RAM AM_BASE(m_color_ram)
+	AM_RANGE(0x0b00, 0x0b3f) AM_RAM AM_SHARE("color_ram")
 	AM_RANGE(0x0c00, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mpt02_io_map, AS_IO, 8, mpt02_state )
 	AM_RANGE(0x01, 0x01) AM_DEVREADWRITE(CDP1864_TAG, cdp1864_device, dispon_r, step_bgcolor_w)
-	AM_RANGE(0x02, 0x02) AM_WRITE_BASE(studio2_state, keylatch_w)
+	AM_RANGE(0x02, 0x02) AM_WRITE(keylatch_w)
 	AM_RANGE(0x04, 0x04) AM_DEVREADWRITE(CDP1864_TAG, cdp1864_device, dispoff_r, tone_latch_w)
 ADDRESS_MAP_END
 
 /* Input Ports */
 
-static INPUT_CHANGED( reset_w )
+INPUT_CHANGED_MEMBER( studio2_state::reset_w )
 {
-	studio2_state *state = field.machine().driver_data<studio2_state>();
-
 	if (oldval && !newval)
 	{
-		state->machine_reset();
+		machine_reset();
 	}
 }
 
@@ -293,33 +357,26 @@ static INPUT_PORTS_START( studio2 )
 	PORT_BIT( 0x200, IP_ACTIVE_HIGH, IPT_KEYPAD ) PORT_NAME("B 9") PORT_CODE(KEYCODE_3_PAD)
 
 	PORT_START("CLEAR")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("Clear") PORT_CODE(KEYCODE_F3) PORT_CHAR(UCHAR_MAMEKEY(F3)) PORT_CHANGED(reset_w, 0)
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYPAD ) PORT_NAME("Clear") PORT_CODE(KEYCODE_F3) PORT_CHAR(UCHAR_MAMEKEY(F3)) PORT_CHANGED_MEMBER(DEVICE_SELF, studio2_state, reset_w, 0)
 INPUT_PORTS_END
 
 /* Video */
 
-static CDP1861_INTERFACE( studio2_cdp1861_intf )
+static const rgb_t VISICOM_PALETTE[] =
 {
-	CDP1802_TAG,
-	SCREEN_TAG,
-	DEVCB_CPU_INPUT_LINE(CDP1802_TAG, COSMAC_INPUT_LINE_INT),
-	DEVCB_CPU_INPUT_LINE(CDP1802_TAG, COSMAC_INPUT_LINE_DMAOUT),
-	DEVCB_CPU_INPUT_LINE(CDP1802_TAG, COSMAC_INPUT_LINE_EF1)
+	MAKE_RGB(0x00, 0x40, 0x00),
+	MAKE_RGB(0xaf, 0xdf, 0xe4),
+	MAKE_RGB(0xb9, 0xc4, 0x2f),
+	MAKE_RGB(0xef, 0x45, 0x4a)
 };
 
-bool studio2_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
+UINT32 visicom_state::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-	m_vdc->update_screen(&bitmap, &cliprect);
+	m_vdc->screen_update(screen, bitmap, cliprect);
+
+	m_vdc->m_bitmap.fill(VISICOM_PALETTE[0], cliprect);
 
 	return 0;
-}
-
-static PALETTE_INIT( visicom )
-{
-    palette_set_color_rgb(machine, 0, 0x00, 0x80, 0x00);
-    palette_set_color_rgb(machine, 1, 0x00, 0x00, 0xff);
-    palette_set_color_rgb(machine, 2, 0x00, 0xff, 0x00);
-    palette_set_color_rgb(machine, 3, 0xff, 0x00, 0x00);
 }
 
 READ_LINE_MEMBER( mpt02_state::rdata_r )
@@ -337,51 +394,26 @@ READ_LINE_MEMBER( mpt02_state::gdata_r )
 	return BIT(m_color, 2);
 }
 
-static CDP1864_INTERFACE( mpt02_cdp1864_intf )
-{
-	CDP1802_TAG,
-	SCREEN_TAG,
-	CDP1864_INTERLACED,
-	DEVCB_DRIVER_LINE_MEMBER(mpt02_state, rdata_r),
-	DEVCB_DRIVER_LINE_MEMBER(mpt02_state, bdata_r),
-	DEVCB_DRIVER_LINE_MEMBER(mpt02_state, gdata_r),
-	DEVCB_CPU_INPUT_LINE(CDP1802_TAG, COSMAC_INPUT_LINE_INT),
-	DEVCB_CPU_INPUT_LINE(CDP1802_TAG, COSMAC_INPUT_LINE_DMAOUT),
-	DEVCB_CPU_INPUT_LINE(CDP1802_TAG, COSMAC_INPUT_LINE_EF1),
-	DEVCB_NULL,
-	RES_K(2.2),	// unverified
-	RES_K(1),	// unverified
-	RES_K(5.1),	// unverified
-	RES_K(4.7)	// unverified
-};
-
-bool mpt02_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
-{
-	m_cti->update_screen(&bitmap, &cliprect);
-
-	return 0;
-}
-
 /* CDP1802 Configuration */
 
 READ_LINE_MEMBER( studio2_state::clear_r )
 {
-	return BIT(input_port_read(machine(), "CLEAR"), 0);
+	return BIT(m_clear->read(), 0);
 }
 
 READ_LINE_MEMBER( studio2_state::ef3_r )
 {
-	return BIT(input_port_read(machine(), "A"), m_keylatch);
+	return BIT(m_a->read(), m_keylatch);
 }
 
 READ_LINE_MEMBER( studio2_state::ef4_r )
 {
-	return BIT(input_port_read(machine(), "B"), m_keylatch);
+	return BIT(m_b->read(), m_keylatch);
 }
 
 WRITE_LINE_MEMBER( studio2_state::q_w )
 {
-	beep_set_state(m_speaker, state);
+	m_beeper->set_state(state);
 }
 
 static COSMAC_INTERFACE( studio2_cosmac_intf )
@@ -395,6 +427,40 @@ static COSMAC_INTERFACE( studio2_cosmac_intf )
 	DEVCB_DRIVER_LINE_MEMBER(studio2_state, q_w),
 	DEVCB_NULL,
 	DEVCB_DEVICE_MEMBER(CDP1861_TAG, cdp1861_device, dma_w),
+	NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
+};
+
+WRITE8_MEMBER( visicom_state::dma_w )
+{
+	int sx = m_screen->hpos() + 4;
+	int y = m_screen->vpos();
+
+	UINT8 addr = offset & 0xff;
+	UINT8 color0 = m_color0_ram[addr];
+	UINT8 color1 = m_color1_ram[addr];
+
+	for (int x = 0; x < 8; x++)
+	{
+		int color = (BIT(color1, 7) << 1) | BIT(color0, 7);
+		m_vdc->m_bitmap.pix32(y, sx + x) = VISICOM_PALETTE[color];
+		color0 <<= 1;
+		color1 <<= 1;
+	}
+}
+
+static COSMAC_INTERFACE( visicom_cosmac_intf )
+{
+	DEVCB_LINE_VCC,
+	DEVCB_DRIVER_LINE_MEMBER(studio2_state, clear_r),
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_DRIVER_LINE_MEMBER(studio2_state, ef3_r),
+	DEVCB_DRIVER_LINE_MEMBER(studio2_state, ef4_r),
+	DEVCB_DRIVER_LINE_MEMBER(studio2_state, q_w),
+	DEVCB_NULL,
+	DEVCB_DRIVER_MEMBER(visicom_state, dma_w),
 	NULL,
 	DEVCB_NULL,
 	DEVCB_NULL
@@ -444,52 +510,83 @@ void mpt02_state::machine_reset()
 	m_cti->reset();
 }
 
-DEVICE_IMAGE_LOAD( studio2_cart_load )
+DEVICE_IMAGE_LOAD_MEMBER( studio2_state, studio2_cart_load )
 {
 	if (image.software_entry() == NULL)
-		return device_load_st2_cartslot_load(image);
+	{
+		if (!strcmp(image.filetype(), "st2"))
+		{
+			return DEVICE_IMAGE_LOAD_MEMBER_NAME(st2_cartslot_load)(image);
+		}
+		else
+		{
+			UINT8 *ptr = memregion(CDP1802_TAG)->base() + 0x400;
+			size_t size = image.length();
+			image.fread(ptr, size);
+		}
+	}
 	else
 	{
-		// WARNING: list code currently assume that cart mapping starts at 0x400.
-		// the five dumps currently available work like this, but the .st2 format
-		// allows for more freedom... how was the content of a real cart mapped?
-		UINT8 *ptr = ((UINT8 *) image.device().machine().region(CDP1802_TAG)->base()) + 0x400;
-		memcpy(ptr, image.get_software_region("rom"), image.get_software_region_length("rom"));
-		return IMAGE_INIT_PASS;
+		UINT8 *ptr = memregion(CDP1802_TAG)->base();
+
+		size_t size = image.get_software_region_length("rom_400");
+		if (size) memcpy(ptr + 0x400, image.get_software_region("rom_400"), size);
+
+		size = image.get_software_region_length("rom_800");
+		if (size) memcpy(ptr + 0x800, image.get_software_region("rom_800"), size);
+
+		size = image.get_software_region_length("rom_c00");
+		if (size) memcpy(ptr + 0xc00, image.get_software_region("rom_c00"), size);
 	}
+
+	return IMAGE_INIT_PASS;
+}
+
+DEVICE_IMAGE_LOAD_MEMBER( visicom_state, visicom_cart_load )
+{
+	UINT8 *ptr = memregion(CDP1802_TAG)->base() + 0x800;
+
+	if (image.software_entry() == NULL)
+	{
+		size_t size = image.length();
+		image.fread(ptr, MAX(size, 0x800));
+	}
+	else
+	{
+		size_t size = image.get_software_region_length("rom");
+		if (size) memcpy(ptr, image.get_software_region("rom"), MAX(size, 0x800));
+	}
+
+	return IMAGE_INIT_PASS;
 }
 
 /* Machine Drivers */
 
 static MACHINE_CONFIG_FRAGMENT( studio2_cartslot )
 	MCFG_CARTSLOT_ADD("cart")
-	MCFG_CARTSLOT_EXTENSION_LIST("st2,bin")
+	MCFG_CARTSLOT_EXTENSION_LIST("st2,bin,rom")
 	MCFG_CARTSLOT_NOT_MANDATORY
-	MCFG_CARTSLOT_LOAD(studio2_cart_load)
+	MCFG_CARTSLOT_LOAD(studio2_state,studio2_cart_load)
 	MCFG_CARTSLOT_INTERFACE("studio2_cart")
 
 	/* software lists */
-	MCFG_SOFTWARE_LIST_ADD("cart_list","studio2")
+	MCFG_SOFTWARE_LIST_ADD("cart_list", "studio2")
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( studio2, studio2_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD(CDP1802_TAG, COSMAC, 1760000) /* the real clock is derived from an oscillator circuit */
+	MCFG_CPU_ADD(CDP1802_TAG, CDP1802, 1760000) /* the real clock is derived from an oscillator circuit */
 	MCFG_CPU_PROGRAM_MAP(studio2_map)
 	MCFG_CPU_IO_MAP(studio2_io_map)
 	MCFG_CPU_CONFIG(studio2_cosmac_intf)
 
-    /* video hardware */
-	MCFG_CDP1861_SCREEN_ADD(SCREEN_TAG, 1760000)
-
-	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
-
-	MCFG_CDP1861_ADD(CDP1861_TAG, 1760000, studio2_cdp1861_intf)
+	/* video hardware */
+	MCFG_CDP1861_SCREEN_ADD(CDP1861_TAG, SCREEN_TAG, 1760000)
+	MCFG_CDP1861_ADD(CDP1861_TAG, SCREEN_TAG, 1760000, INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_INT), INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_DMAOUT), INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_EF1))
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(BEEPER_TAG, BEEP, 0)
+	MCFG_SOUND_ADD("beeper", BEEP, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 
 	MCFG_FRAGMENT_ADD( studio2_cartslot )
@@ -497,45 +594,50 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( visicom, visicom_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD(CDP1802_TAG, COSMAC, XTAL_3_579545MHz/2)
+	MCFG_CPU_ADD(CDP1802_TAG, CDP1802, XTAL_3_579545MHz/2)
 	MCFG_CPU_PROGRAM_MAP(visicom_map)
 	MCFG_CPU_IO_MAP(visicom_io_map)
-	MCFG_CPU_CONFIG(studio2_cosmac_intf)
+	MCFG_CPU_CONFIG(visicom_cosmac_intf)
 
-    /* video hardware */
-	MCFG_CDP1861_SCREEN_ADD(SCREEN_TAG, XTAL_3_579545MHz/2)
-
-	MCFG_PALETTE_LENGTH(4)
-	MCFG_PALETTE_INIT(visicom)
-
-	MCFG_CDP1861_ADD(CDP1861_TAG, XTAL_3_579545MHz/2/8, studio2_cdp1861_intf)
+	/* video hardware */
+	MCFG_CDP1861_SCREEN_ADD(CDP1861_TAG, SCREEN_TAG, XTAL_3_579545MHz/2)
+	MCFG_SCREEN_UPDATE_DRIVER(visicom_state, screen_update)
+	MCFG_CDP1861_ADD(CDP1861_TAG, SCREEN_TAG, XTAL_3_579545MHz/2, INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_INT), INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_DMAOUT), INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_EF1))
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(BEEPER_TAG, BEEP, 0)
+	MCFG_SOUND_ADD("beeper", BEEP, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 
-	MCFG_FRAGMENT_ADD( studio2_cartslot )
+	MCFG_CARTSLOT_ADD("cart")
+	MCFG_CARTSLOT_EXTENSION_LIST("bin,rom")
+	MCFG_CARTSLOT_NOT_MANDATORY
+	MCFG_CARTSLOT_LOAD(visicom_state, visicom_cart_load)
+	MCFG_CARTSLOT_INTERFACE("visicom_cart")
+
+	/* software lists */
+	MCFG_SOFTWARE_LIST_ADD("cart_list", "visicom")
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( mpt02, mpt02_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD(CDP1802_TAG, COSMAC, CDP1864_CLOCK)
+	MCFG_CPU_ADD(CDP1802_TAG, CDP1802, CDP1864_CLOCK)
 	MCFG_CPU_PROGRAM_MAP(mpt02_map)
 	MCFG_CPU_IO_MAP(mpt02_io_map)
 	MCFG_CPU_CONFIG(mpt02_cosmac_intf)
 
-    /* video hardware */
+	/* video hardware */
 	MCFG_CDP1864_SCREEN_ADD(SCREEN_TAG, CDP1864_CLOCK)
-
-	MCFG_PALETTE_LENGTH(8+8)
+	MCFG_SCREEN_UPDATE_DEVICE(CDP1864_TAG, cdp1864_device, screen_update)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(BEEPER_TAG, BEEP, 0)
+	MCFG_SOUND_ADD("beeper", BEEP, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 
-	MCFG_CDP1864_ADD(CDP1864_TAG, CDP1864_CLOCK, mpt02_cdp1864_intf)
+	MCFG_CDP1864_ADD(CDP1864_TAG, SCREEN_TAG, CDP1864_CLOCK, GND, INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_INT), INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_DMAOUT), INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_EF1), NULL, READLINE(mpt02_state, rdata_r), READLINE(mpt02_state, bdata_r), READLINE(mpt02_state, gdata_r))
+	MCFG_CDP1864_CHROMINANCE(RES_K(4.7), RES_K(8.2), RES_K(4.7), RES_K(22))
+
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	MCFG_FRAGMENT_ADD( studio2_cartslot )
@@ -544,26 +646,30 @@ MACHINE_CONFIG_END
 /* ROMs */
 
 ROM_START( studio2 )
-	ROM_REGION( 0x10000, CDP1802_TAG, 0 )
-	ROM_LOAD( "84932.ic11", 0x0000, 0x0200, CRC(283b7e65) SHA1(4b6d21cde59712ecb5941ff63d8eb161420b0aac) )
-	ROM_LOAD( "84933.ic12", 0x0200, 0x0200, CRC(a396b77c) SHA1(023517f67af61790e6916b6c4dbe2d9dc07ae3ff) )
-	ROM_LOAD( "85456.ic13", 0x0400, 0x0200, CRC(d25cf97f) SHA1(d489f41f1125c76cc8ed9defa82a877ae014ef21) )
-	ROM_LOAD( "85457.ic14", 0x0600, 0x0200, CRC(74aa724f) SHA1(085832f29e0d2a387c75463d66c54fb6c1e9e72c) )
+	ROM_REGION( 0x1000, CDP1802_TAG, 0 )
+	ROM_LOAD( "84932.ic11", 0x000, 0x200, CRC(283b7e65) SHA1(4b6d21cde59712ecb5941ff63d8eb161420b0aac) )
+	ROM_LOAD( "84933.ic12", 0x200, 0x200, CRC(a396b77c) SHA1(023517f67af61790e6916b6c4dbe2d9dc07ae3ff) )
+	ROM_LOAD( "85456.ic13", 0x400, 0x200, CRC(d25cf97f) SHA1(d489f41f1125c76cc8ed9defa82a877ae014ef21) )
+	ROM_LOAD( "85457.ic14", 0x600, 0x200, CRC(74aa724f) SHA1(085832f29e0d2a387c75463d66c54fb6c1e9e72c) )
 ROM_END
 
 ROM_START( visicom )
-	ROM_REGION( 0x10000, CDP1802_TAG, 0 )
-	ROM_LOAD( "visicom.q003", 0x0000, 0x0800, CRC(23d22074) SHA1(a0a8be23f70621a2bd8010b1134e8a0019075bf1) )
+	ROM_REGION( 0x1000, CDP1802_TAG, 0 )
+	ROM_LOAD( "visicom.q003", 0x000, 0x800, CRC(23d22074) SHA1(a0a8be23f70621a2bd8010b1134e8a0019075bf1) )
 ROM_END
 
 ROM_START( mpt02 )
-	ROM_REGION( 0x10000, CDP1802_TAG, 0 )
-	ROM_LOAD( "86676.ic13",  0x0000, 0x0400, CRC(a7d0dd3b) SHA1(e1881ab4d67a5d735dd2c8d7e924e41df6f2aeec) )
-	ROM_LOAD( "86677b.ic14", 0x0400, 0x0400, CRC(82a2d29e) SHA1(37e02089d611db10bad070d89c8801de41521189) )
-	ROM_LOAD( "87201.ic12",  0x0c00, 0x0400, CRC(8006a1e3) SHA1(b67612d98231485fce55d604915abd19b6d64eac) )
+	ROM_REGION( 0x1000, CDP1802_TAG, 0 )
+	ROM_LOAD( "86676.ic13",  0x000, 0x400, CRC(a7d0dd3b) SHA1(e1881ab4d67a5d735dd2c8d7e924e41df6f2aeec) )
+	ROM_LOAD( "86677b.ic14", 0x400, 0x400, CRC(82a2d29e) SHA1(37e02089d611db10bad070d89c8801de41521189) )
+	ROM_LOAD( "87201.ic12",  0xc00, 0x400, CRC(8006a1e3) SHA1(b67612d98231485fce55d604915abd19b6d64eac) )
 ROM_END
 
-#define rom_mpt02h rom_mpt02
+ROM_START( mpt02h )
+	ROM_REGION( 0x1000, CDP1802_TAG, 0 )
+	ROM_LOAD( "86676.ic13",  0x000, 0x400, CRC(a7d0dd3b) SHA1(e1881ab4d67a5d735dd2c8d7e924e41df6f2aeec) )
+ROM_END
+
 #define rom_mtc9016 rom_mpt02
 #define rom_shmc1200 rom_mpt02
 #define rom_cm1200 rom_mpt02
@@ -571,26 +677,32 @@ ROM_END
 
 /* Driver Initialization */
 
-static TIMER_CALLBACK( setup_beep )
+void studio2_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	device_t *speaker = machine.device(BEEPER_TAG);
-	beep_set_state(speaker, 0);
-	beep_set_frequency(speaker, 300);
+	switch (id)
+	{
+	case TIMER_SETUP_BEEP:
+		m_beeper->set_state(0);
+		m_beeper->set_frequency(300);
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in studio2_state::device_timer");
+	}
 }
 
-static DRIVER_INIT( studio2 )
+DRIVER_INIT_MEMBER(studio2_state,studio2)
 {
-	machine.scheduler().timer_set(attotime::zero, FUNC(setup_beep));
+	timer_set(attotime::zero, TIMER_SETUP_BEEP);
 }
 
 /* Game Drivers */
 
-/*    YEAR  NAME        PARENT  COMPAT  MACHINE     INPUT       INIT        COMPANY   FULLNAME */
-CONS( 1977,	studio2,	0,		0,		studio2,	studio2,	studio2,	"RCA",		"Studio II", GAME_SUPPORTS_SAVE )
-CONS( 1978, visicom,	studio2,0,		visicom,	studio2,	studio2,	"Toshiba",	"Visicom COM-100 (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
-CONS( 1978,	mpt02,		studio2,0,		mpt02,		studio2,	studio2,	"Soundic",	"Victory MPT-02 Home TV Programmer (Austria)", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
-CONS( 1978,	mpt02h,		studio2,0,		mpt02,		studio2,	studio2,	"Hanimex",	"MPT-02 Jeu TV Programmable (France)", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE)
-CONS( 1978,	mtc9016,	studio2,0,		mpt02,		studio2,	studio2,	"Mustang",	"9016 Telespiel Computer (Germany)", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
-CONS( 1978, shmc1200,	studio2,0,		mpt02,		studio2,	studio2,	"Sheen",	"1200 Micro Computer (Australia)", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
-CONS( 1978, cm1200,		studio2,0,		mpt02,		studio2,	studio2,	"Conic",	"M-1200 (?)", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
-CONS( 1978, apollo80,	studio2,0,		mpt02,		studio2,	studio2,	"Academy",	"Apollo 80 (Germany)", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
+//    YEAR  NAME        PARENT  COMPAT  MACHINE     INPUT    INIT                       COMPANY    FULLNAME                                         FLAGS
+CONS( 1977, studio2,    0,      0,      studio2,    studio2, studio2_state, studio2,    "RCA",      "Studio II",                                    GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+CONS( 1978, visicom,    studio2,0,      visicom,    studio2, studio2_state, studio2,    "Toshiba",  "Visicom COM-100 (Japan)",                      GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+CONS( 1978, mpt02,      studio2,0,      mpt02,      studio2, studio2_state, studio2,    "Soundic",  "Victory MPT-02 Home TV Programmer (Austria)",  GAME_SUPPORTS_SAVE )
+CONS( 1978, mpt02h,     studio2,0,      mpt02,      studio2, studio2_state, studio2,    "Hanimex",  "MPT-02 Jeu TV Programmable (France)",          GAME_SUPPORTS_SAVE )
+CONS( 1978, mtc9016,    studio2,0,      mpt02,      studio2, studio2_state, studio2,    "Mustang",  "9016 Telespiel Computer (Germany)",            GAME_SUPPORTS_SAVE )
+CONS( 1978, shmc1200,   studio2,0,      mpt02,      studio2, studio2_state, studio2,    "Sheen",    "1200 Micro Computer (Australia)",              GAME_SUPPORTS_SAVE )
+CONS( 1978, cm1200,     studio2,0,      mpt02,      studio2, studio2_state, studio2,    "Conic",    "M-1200 (?)",                                   GAME_SUPPORTS_SAVE )
+CONS( 1978, apollo80,   studio2,0,      mpt02,      studio2, studio2_state, studio2,    "Academy",  "Apollo 80 (Germany)",                          GAME_SUPPORTS_SAVE )

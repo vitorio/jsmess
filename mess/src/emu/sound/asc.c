@@ -39,23 +39,15 @@ const device_type ASC = &device_creator<asc_device>;
 //  LIVE DEVICE
 //**************************************************************************
 
-// does nothing, this timer exists only to make MAME sync itself at our audio rate
-static TIMER_CALLBACK( sync_timer_cb )
-{
-	asc_device *pDevice = (asc_device *)ptr;
-
-	pDevice->m_stream->update();
-}
-
 //-------------------------------------------------
 //  asc_device - constructor
 //-------------------------------------------------
 
 asc_device::asc_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, ASC, "ASC", tag, owner, clock),
-	  device_sound_interface(mconfig, *this),
-	  m_chip_type(0),
-	  m_irq_cb(NULL)
+	: device_t(mconfig, ASC, "ASC", tag, owner, clock, "asc", __FILE__),
+		device_sound_interface(mconfig, *this),
+		write_irq(*this),
+		m_chip_type(0)
 {
 }
 
@@ -72,18 +64,6 @@ void asc_device::static_set_type(device_t &device, int type)
 }
 
 //-------------------------------------------------
-//  static_set_type - configuration helper to set
-//  the IRQ callback
-//-------------------------------------------------
-
-
-void asc_device::static_set_irqf(device_t &device, void (*irqf)(device_t *device, int state))
-{
-	asc_device &asc = downcast<asc_device &>(device);
-	asc.m_irq_cb = irqf;
-}
-
-//-------------------------------------------------
 //  device_start - device-specific startup
 //-------------------------------------------------
 
@@ -94,7 +74,7 @@ void asc_device::device_start()
 
 	memset(m_regs, 0, sizeof(m_regs));
 
-	m_sync_timer = this->machine().scheduler().timer_alloc(FUNC(sync_timer_cb), this);
+	m_timer = timer_alloc(0, NULL);
 
 	save_item(NAME(m_fifo_a_rdptr));
 	save_item(NAME(m_fifo_b_rdptr));
@@ -107,6 +87,8 @@ void asc_device::device_start()
 	save_item(NAME(m_regs));
 	save_item(NAME(m_phase));
 	save_item(NAME(m_incr));
+
+	write_irq.resolve_safe();
 }
 
 
@@ -130,6 +112,15 @@ void asc_device::device_reset()
 }
 
 //-------------------------------------------------
+//  device_timer - called when our device timer expires
+//-------------------------------------------------
+
+void asc_device::device_timer(emu_timer &timer, device_timer_id tid, int param, void *ptr)
+{
+	m_stream->update();
+}
+
+//-------------------------------------------------
 //  sound_stream_update - handle update requests for
 //  our sound stream
 //-------------------------------------------------
@@ -145,14 +136,14 @@ void asc_device::sound_stream_update(sound_stream &stream, stream_sample_t **inp
 
 	switch (m_regs[R_MODE-0x800] & 3)
 	{
-		case 0:	// chip off
+		case 0: // chip off
 			for (i = 0; i < samples; i++)
 			{
 				outL[i] = outR[i] = 0;
 			}
 			break;
 
-		case 1:	// FIFO mode
+		case 1: // FIFO mode
 			for (i = 0; i < samples; i++)
 			{
 				INT8 smpll, smplr;
@@ -180,48 +171,33 @@ void asc_device::sound_stream_update(sound_stream &stream, stream_sample_t **inp
 					case ASC_TYPE_SONORA:
 						if (m_fifo_cap_a < 0x200)
 						{
-							m_regs[R_FIFOSTAT-0x800] |= 0x4;	// fifo less than half full
-							m_regs[R_FIFOSTAT-0x800] |= 0x8;	// just pass the damn test
-							if (m_irq_cb)
-							{
-								m_irq_cb(this, 1);
-							}
+							m_regs[R_FIFOSTAT-0x800] |= 0x4;    // fifo less than half full
+							m_regs[R_FIFOSTAT-0x800] |= 0x8;    // just pass the damn test
+							write_irq(ASSERT_LINE);
 						}
 						break;
 
 					default:
 						if (m_fifo_cap_a == 0x1ff)
 						{
-							m_regs[R_FIFOSTAT-0x800] |= 1;	// fifo A half-empty
-							if (m_irq_cb)
-							{
-								m_irq_cb(this, 1);
-							}
+							m_regs[R_FIFOSTAT-0x800] |= 1;  // fifo A half-empty
+							write_irq(ASSERT_LINE);
 						}
-						else if (m_fifo_cap_a == 0x1)	// fifo A fully empty
+						else if (m_fifo_cap_a == 0x1)   // fifo A fully empty
 						{
-							m_regs[R_FIFOSTAT-0x800] |= 2;	// fifo A empty
-							if (m_irq_cb)
-							{
-								m_irq_cb(this, 1);
-							}
+							m_regs[R_FIFOSTAT-0x800] |= 2;  // fifo A empty
+							write_irq(ASSERT_LINE);
 						}
 
 						if (m_fifo_cap_b == 0x1ff)
 						{
-							m_regs[R_FIFOSTAT-0x800] |= 4;	// fifo B half-empty
-							if (m_irq_cb)
-							{
-								m_irq_cb(this, 1);
-							}
+							m_regs[R_FIFOSTAT-0x800] |= 4;  // fifo B half-empty
+							write_irq(ASSERT_LINE);
 						}
-						else if (m_fifo_cap_b == 0x1)	// fifo B fully empty
+						else if (m_fifo_cap_b == 0x1)   // fifo B fully empty
 						{
-							m_regs[R_FIFOSTAT-0x800] |= 8;	// fifo B empty
-							if (m_irq_cb)
-							{
-								m_irq_cb(this, 1);
-							}
+							m_regs[R_FIFOSTAT-0x800] |= 8;  // fifo B empty
+							write_irq(ASSERT_LINE);
 						}
 						break;
 				}
@@ -306,7 +282,7 @@ READ8_MEMBER( asc_device::read )
 					case ASC_TYPE_SONORA:
 						return 0xbc;
 
-					default:	// return the actual register value
+					default:    // return the actual register value
 						break;
 				}
 				break;
@@ -355,13 +331,9 @@ READ8_MEMBER( asc_device::read )
 				m_regs[R_FIFOSTAT-0x800] = 0;
 
 				// reading this clears interrupts
-				if (m_irq_cb)
-				{
-					m_irq_cb(this, 0);
-				}
+				write_irq(CLEAR_LINE);
 
 				return rv;
-				break;
 
 			default:
 				break;
@@ -420,7 +392,7 @@ WRITE8_MEMBER( asc_device::write )
 
 			if (m_fifo_cap_a == 0x3ff)
 			{
-				m_regs[R_FIFOSTAT-0x800] |= 2;	// fifo A full
+				m_regs[R_FIFOSTAT-0x800] |= 2;  // fifo A full
 			}
 
 			m_fifo_a_wrptr &= 0x3ff;
@@ -439,7 +411,7 @@ WRITE8_MEMBER( asc_device::write )
 
 			if (m_fifo_cap_b == 0x3ff)
 			{
-				m_regs[R_FIFOSTAT-0x800] |= 8;	// fifo B full
+				m_regs[R_FIFOSTAT-0x800] |= 8;  // fifo B full
 			}
 
 			m_fifo_b_wrptr &= 0x3ff;
@@ -457,7 +429,7 @@ WRITE8_MEMBER( asc_device::write )
 		switch (offset)
 		{
 			case R_MODE:
-				data &= 3;	// only bits 0 and 1 can be written
+				data &= 3;  // only bits 0 and 1 can be written
 
 				if (data != m_regs[R_MODE-0x800])
 				{
@@ -467,11 +439,11 @@ WRITE8_MEMBER( asc_device::write )
 
 					if (data != 0)
 					{
-						m_sync_timer->adjust(attotime::zero, 0, attotime::from_hz(22257/4));
+						m_timer->adjust(attotime::zero, 0, attotime::from_hz(22257/4));
 					}
 					else
 					{
-						m_sync_timer->adjust(attotime::never);
+						m_timer->adjust(attotime::never);
 					}
 				}
 				break;

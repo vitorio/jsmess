@@ -1,6 +1,41 @@
 /***************************************************************************
 
-        Sun-1
+        Sun-1 Models
+        ------------
+
+    Sun-1
+
+        Processor(s):   68000
+        Notes:          Large black desktop boxes with 17" monitors.
+                        Uses the original Stanford-designed video board
+                        and a parallel microswitch keyboard (type 1) and
+                        parallel mouse (Sun-1).
+
+    100
+        Processor(s):   68000 @ 10MHz
+        Bus:            Multibus, serial
+        Notes:          Uses a design similar to original SUN (Stanford
+                        University Network) CPU. The version 1.5 CPU can
+                        take larger RAMs.
+
+    100U
+        Processor(s):   68010 @ 10MHz
+        CPU:            501-1007
+        Bus:            Multibus, serial
+        Notes:          "Brain transplant" for 100 series. Replaced CPU
+                        and memory boards with first-generation Sun-2
+                        CPU and memory boards so original customers
+                        could run SunOS 1.x. Still has parallel kb/mouse
+                        interface so type 1 keyboards and Sun-1 mice
+                        could be connected.
+
+    170
+        Processor(s):   68010?
+        Bus:            Multibus?
+        Chassis type:   rackmount
+        Notes:          Server. Slightly different chassis design than
+                        2/170's
+
 
         Documentation:
             http://www.bitsavers.org/pdf/sun/sun1/800-0345_Sun-1_System_Ref_Man_Jul82.pdf
@@ -11,14 +46,12 @@
         04/04/2011 Modernised, added terminal keyboard.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
-#include "machine/upd7201.h"
+#include "machine/z80dart.h"
 #include "machine/terminal.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
 
 class sun1_state : public driver_device
 {
@@ -27,15 +60,16 @@ public:
 		: driver_device(mconfig, type, tag),
 	m_maincpu(*this, "maincpu"),
 	m_terminal(*this, TERMINAL_TAG)
-	{ }
+	,
+		m_p_ram(*this, "p_ram"){ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_terminal;
+	required_device<generic_terminal_device> m_terminal;
 	DECLARE_READ16_MEMBER(sun1_upd7201_r);
 	DECLARE_WRITE16_MEMBER(sun1_upd7201_w);
 	DECLARE_WRITE8_MEMBER(kbd_put);
 	virtual void machine_reset();
-	UINT16* m_p_ram;
+	required_shared_ptr<UINT16> m_p_ram;
 	UINT8 m_term_data;
 };
 
@@ -60,12 +94,12 @@ READ16_MEMBER( sun1_state::sun1_upd7201_r )
 WRITE16_MEMBER( sun1_state::sun1_upd7201_w )
 {
 	if (offset == 0)
-		terminal_write(m_terminal, 0, data >> 8);
+		m_terminal->write(space, 0, data >> 8);
 }
 
 static ADDRESS_MAP_START(sun1_mem, AS_PROGRAM, 16, sun1_state)
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE(m_p_ram) // 512 KB RAM / ROM at boot
+	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_SHARE("p_ram") // 512 KB RAM / ROM at boot
 	AM_RANGE(0x00200000, 0x00203fff) AM_ROM AM_REGION("user1",0)
 	AM_RANGE(0x00600000, 0x00600007) AM_READWRITE( sun1_upd7201_r, sun1_upd7201_w )
 ADDRESS_MAP_END
@@ -75,13 +109,13 @@ static INPUT_PORTS_START( sun1 )
 INPUT_PORTS_END
 
 
-MACHINE_RESET_MEMBER(sun1_state)
+void sun1_state::machine_reset()
 {
-	UINT8* user1 = machine().region("user1")->base();
+	UINT8* user1 = memregion("user1")->base();
 
-	memcpy((UINT8*)m_p_ram,user1,0x4000);
+	memcpy((UINT8*)m_p_ram.target(),user1,0x4000);
 
-	machine().device("maincpu")->reset();
+	m_maincpu->reset();
 	m_term_data = 0;
 }
 
@@ -103,7 +137,6 @@ static MACHINE_CONFIG_START( sun1, sun1_state )
 	MCFG_CPU_PROGRAM_MAP(sun1_mem)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 MACHINE_CONFIG_END
 
@@ -135,5 +168,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY         FULLNAME       FLAGS */
-COMP( 1982, sun1,  0,       0,       sun1,      sun1,     0,  "Sun Microsystems", "Sun-1", GAME_NOT_WORKING | GAME_NO_SOUND)
-
+COMP( 1982, sun1,  0,       0,       sun1,      sun1, driver_device,     0,  "Sun Microsystems", "Sun-1", GAME_NOT_WORKING | GAME_NO_SOUND)

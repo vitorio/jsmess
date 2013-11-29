@@ -12,28 +12,28 @@
 #include "sound/discrete.h"
 
 /* Discrete Sound Input Nodes */
-#define QIX_DAC_DATA		NODE_01
-#define QIX_VOL_DATA		NODE_02
-#define QIX_VOL_DATA_L		NODE_03
-#define QIX_VOL_DATA_R		NODE_04
+#define QIX_DAC_DATA        NODE_01
+#define QIX_VOL_DATA        NODE_02
+#define QIX_VOL_DATA_L      NODE_03
+#define QIX_VOL_DATA_R      NODE_04
 
 
-static WRITE_LINE_DEVICE_HANDLER( qix_pia_dint );
-static WRITE_LINE_DEVICE_HANDLER( qix_pia_sint );
+
+
 
 
 /***************************************************************************
 Audio handlers
 ***************************************************************************/
 
-static WRITE8_DEVICE_HANDLER( qix_dac_w )
+WRITE8_MEMBER(qix_state::qix_dac_w)
 {
-	discrete_sound_w(device, QIX_DAC_DATA, data);
+	discrete_sound_w(m_discrete, space, QIX_DAC_DATA, data);
 }
 
-static WRITE8_DEVICE_HANDLER( qix_vol_w )
+WRITE8_MEMBER(qix_state::qix_vol_w)
 {
-	discrete_sound_w(device, QIX_VOL_DATA, data);
+	discrete_sound_w(m_discrete, space, QIX_VOL_DATA, data);
 }
 
 
@@ -61,7 +61,7 @@ static DISCRETE_SOUND_START(qix)
 	DISCRETE_INPUTX_DATA(QIX_DAC_DATA, 128, -128*128, 128)
 	DISCRETE_INPUT_DATA (QIX_VOL_DATA)
 
-	/* Seperate the two 4-bit channels. */
+	/* Separate the two 4-bit channels. */
 	DISCRETE_TRANSFORM3(QIX_VOL_DATA_L, QIX_VOL_DATA, 16, 0x0f, "01/2&")
 	DISCRETE_TRANSFORM2(QIX_VOL_DATA_R, QIX_VOL_DATA, 0x0f, "01&")
 
@@ -93,30 +93,29 @@ DISCRETE_SOUND_END
  *
  *************************************/
 
-static WRITE8_DEVICE_HANDLER( sndpia_2_warning_w )
+WRITE8_MEMBER(qix_state::sndpia_2_warning_w)
 {
 	popmessage("PIA 5 write!!");
 }
 
 
-static TIMER_CALLBACK( deferred_sndpia1_porta_w )
+TIMER_CALLBACK_MEMBER(qix_state::deferred_sndpia1_porta_w)
 {
-	pia6821_device *device = (pia6821_device *)ptr;
-	device->porta_w(param);
+	m_sndpia1->porta_w(param);
 }
 
 
-static WRITE8_DEVICE_HANDLER( sync_sndpia1_porta_w )
+WRITE8_MEMBER(qix_state::sync_sndpia1_porta_w)
 {
 	/* we need to synchronize this so the sound CPU doesn't drop anything important */
-	device->machine().scheduler().synchronize(FUNC(deferred_sndpia1_porta_w), data, (void *)downcast<pia6821_device *>(device));
+	machine().scheduler().synchronize(timer_expired_delegate(FUNC(qix_state::deferred_sndpia1_porta_w), this), data);
 }
 
 
-static WRITE8_DEVICE_HANDLER( slither_coinctl_w )
+WRITE8_MEMBER(qix_state::slither_coinctl_w)
 {
-	coin_lockout_w(device->machine(), 0, (~data >> 6) & 1);
-	coin_counter_w(device->machine(), 0, (data >> 5) & 1);
+	coin_lockout_w(machine(), 0, (~data >> 6) & 1);
+	coin_counter_w(machine(), 0, (data >> 5) & 1);
 }
 
 
@@ -127,23 +126,21 @@ static WRITE8_DEVICE_HANDLER( slither_coinctl_w )
  *
  *************************************/
 
-static WRITE_LINE_DEVICE_HANDLER( qix_pia_dint )
+WRITE_LINE_MEMBER(qix_state::qix_pia_dint)
 {
-	pia6821_device *pia = downcast<pia6821_device *>(device);
-	int combined_state = pia->irq_a_state() | pia->irq_b_state();
+	int combined_state = m_sndpia0->irq_a_state() | m_sndpia0->irq_b_state();
 
 	/* DINT is connected to the data CPU's IRQ line */
-	cputag_set_input_line(device->machine(), "maincpu", M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
+	m_maincpu->set_input_line(M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
-static WRITE_LINE_DEVICE_HANDLER( qix_pia_sint )
+WRITE_LINE_MEMBER(qix_state::qix_pia_sint)
 {
-	pia6821_device *pia = downcast<pia6821_device *>(device);
-	int combined_state = pia->irq_a_state() | pia->irq_b_state();
+	int combined_state = m_sndpia1->irq_a_state() | m_sndpia1->irq_b_state();
 
 	/* SINT is connected to the sound CPU's IRQ line */
-	cputag_set_input_line(device->machine(), "audiocpu", M6800_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
+	m_audiocpu->set_input_line(M6800_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -154,10 +151,10 @@ static WRITE_LINE_DEVICE_HANDLER( qix_pia_sint )
  *
  *************************************/
 
-static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8, driver_device )
 	AM_RANGE(0x0000, 0x007f) AM_RAM
-	AM_RANGE(0x2000, 0x2003) AM_MIRROR(0x5ffc) AM_DEVREADWRITE_MODERN("sndpia2", pia6821_device, read, write)
-	AM_RANGE(0x4000, 0x4003) AM_MIRROR(0x3ffc) AM_DEVREADWRITE_MODERN("sndpia1", pia6821_device, read, write)
+	AM_RANGE(0x2000, 0x2003) AM_MIRROR(0x5ffc) AM_DEVREADWRITE("sndpia2", pia6821_device, read, write)
+	AM_RANGE(0x4000, 0x4003) AM_MIRROR(0x3ffc) AM_DEVREADWRITE("sndpia1", pia6821_device, read, write)
 	AM_RANGE(0xd000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -171,68 +168,77 @@ ADDRESS_MAP_END
 
 static const pia6821_interface qixsnd_pia_0_intf =
 {
-	DEVCB_NULL,		/* port A in */
-	DEVCB_NULL,		/* port B in */
-	DEVCB_NULL,		/* line CA1 in */
-	DEVCB_NULL,		/* line CB1 in */
-	DEVCB_NULL,		/* line CA2 in */
-	DEVCB_NULL,		/* line CB2 in */
-	DEVCB_DEVICE_HANDLER("sndpia1", sync_sndpia1_porta_w),			/* port A out */
-	DEVCB_DEVICE_HANDLER("discrete", qix_vol_w),					/* port B out */
-	DEVCB_DEVICE_LINE_MEMBER("sndpia1", pia6821_device, ca1_w),		/* line CA2 out */
-	DEVCB_HANDLER(qix_flip_screen_w),								/* port CB2 out */
-	DEVCB_LINE(qix_pia_dint),										/* IRQA */
-	DEVCB_LINE(qix_pia_dint)										/* IRQB */
+	DEVCB_NULL,     /* port A in */
+	DEVCB_NULL,     /* port B in */
+	DEVCB_NULL,     /* line CA1 in */
+	DEVCB_NULL,     /* line CB1 in */
+	DEVCB_NULL,     /* line CA2 in */
+	DEVCB_NULL,     /* line CB2 in */
+	DEVCB_DRIVER_MEMBER(qix_state,sync_sndpia1_porta_w),            /* port A out */
+	DEVCB_DRIVER_MEMBER(qix_state,qix_vol_w),                   /* port B out */
+	DEVCB_DEVICE_LINE_MEMBER("sndpia1", pia6821_device, ca1_w),     /* line CA2 out */
+	DEVCB_DRIVER_MEMBER(qix_state,qix_flip_screen_w),                               /* port CB2 out */
+	DEVCB_DRIVER_LINE_MEMBER(qix_state,qix_pia_dint),                                       /* IRQA */
+	DEVCB_DRIVER_LINE_MEMBER(qix_state,qix_pia_dint)                                        /* IRQB */
 };
 
 static const pia6821_interface qixsnd_pia_1_intf =
 {
-	DEVCB_NULL,		/* port A in */
-	DEVCB_NULL,		/* port B in */
-	DEVCB_NULL,		/* line CA1 in */
-	DEVCB_NULL,		/* line CB1 in */
-	DEVCB_NULL,		/* line CA2 in */
-	DEVCB_NULL,		/* line CB2 in */
-	DEVCB_DEVICE_MEMBER("sndpia0", pia6821_device, porta_w),			/* port A out */
-	DEVCB_DEVICE_HANDLER("discrete", qix_dac_w),				/* port B out */
-	DEVCB_DEVICE_LINE_MEMBER("sndpia0", pia6821_device, ca1_w),	/* line CA2 out */
-	DEVCB_NULL,		/* line CB2 out */
-	DEVCB_LINE(qix_pia_sint),								/* IRQA */
-	DEVCB_LINE(qix_pia_sint)								/* IRQB */
+	DEVCB_NULL,     /* port A in */
+	DEVCB_NULL,     /* port B in */
+	DEVCB_NULL,     /* line CA1 in */
+	DEVCB_NULL,     /* line CB1 in */
+	DEVCB_NULL,     /* line CA2 in */
+	DEVCB_NULL,     /* line CB2 in */
+	DEVCB_DEVICE_MEMBER("sndpia0", pia6821_device, porta_w),            /* port A out */
+	DEVCB_DRIVER_MEMBER(qix_state,qix_dac_w),               /* port B out */
+	DEVCB_DEVICE_LINE_MEMBER("sndpia0", pia6821_device, ca1_w), /* line CA2 out */
+	DEVCB_NULL,     /* line CB2 out */
+	DEVCB_DRIVER_LINE_MEMBER(qix_state,qix_pia_sint),                               /* IRQA */
+	DEVCB_DRIVER_LINE_MEMBER(qix_state,qix_pia_sint)                                /* IRQB */
 };
 
 static const pia6821_interface qixsnd_pia_2_intf =
 {
-	DEVCB_NULL,		/* port A in */
-	DEVCB_NULL,		/* port B in */
-	DEVCB_NULL,		/* line CA1 in */
-	DEVCB_NULL,		/* line CB1 in */
-	DEVCB_NULL,		/* line CA2 in */
-	DEVCB_NULL,		/* line CB2 in */
-	DEVCB_HANDLER(sndpia_2_warning_w),	/* port A out */
-	DEVCB_HANDLER(sndpia_2_warning_w),	/* port B out */
-	DEVCB_HANDLER(sndpia_2_warning_w),	/* line CA2 out */
-	DEVCB_HANDLER(sndpia_2_warning_w),	/* line CB2 out */
+	DEVCB_NULL,     /* port A in */
+	DEVCB_NULL,     /* port B in */
+	DEVCB_NULL,     /* line CA1 in */
+	DEVCB_NULL,     /* line CB1 in */
+	DEVCB_NULL,     /* line CA2 in */
+	DEVCB_NULL,     /* line CB2 in */
+	DEVCB_DRIVER_MEMBER(qix_state,sndpia_2_warning_w),  /* port A out */
+	DEVCB_DRIVER_MEMBER(qix_state,sndpia_2_warning_w),  /* port B out */
+	DEVCB_DRIVER_MEMBER(qix_state,sndpia_2_warning_w),  /* line CA2 out */
+	DEVCB_DRIVER_MEMBER(qix_state,sndpia_2_warning_w),  /* line CB2 out */
 	DEVCB_NULL,
 	DEVCB_NULL
 };
 
 static const pia6821_interface slithersnd_pia_0_intf =
 {
-	DEVCB_INPUT_PORT("P2"),		/* port A in */
-	DEVCB_NULL,		/* port B in */
-	DEVCB_NULL,		/* line CA1 in */
-	DEVCB_NULL,		/* line CB1 in */
-	DEVCB_NULL,		/* line CA2 in */
-	DEVCB_NULL,		/* line CB2 in */
-	DEVCB_NULL,		/* port A out */
-	DEVCB_HANDLER(slither_coinctl_w),	/* port B out */
-	DEVCB_NULL,		/* line CA2 out */
-	DEVCB_HANDLER(qix_flip_screen_w),	/* port CB2 out */
-	DEVCB_LINE(qix_pia_dint),			/* IRQA */
-	DEVCB_LINE(qix_pia_dint)			/* IRQB */
+	DEVCB_INPUT_PORT("P2"),     /* port A in */
+	DEVCB_NULL,     /* port B in */
+	DEVCB_NULL,     /* line CA1 in */
+	DEVCB_NULL,     /* line CB1 in */
+	DEVCB_NULL,     /* line CA2 in */
+	DEVCB_NULL,     /* line CB2 in */
+	DEVCB_NULL,     /* port A out */
+	DEVCB_DRIVER_MEMBER(qix_state,slither_coinctl_w),   /* port B out */
+	DEVCB_NULL,     /* line CA2 out */
+	DEVCB_DRIVER_MEMBER(qix_state,qix_flip_screen_w),   /* port CB2 out */
+	DEVCB_DRIVER_LINE_MEMBER(qix_state,qix_pia_dint),           /* IRQA */
+	DEVCB_DRIVER_LINE_MEMBER(qix_state,qix_pia_dint)            /* IRQB */
 };
 
+
+//-------------------------------------------------
+//  sn76496_config psg_intf
+//-------------------------------------------------
+
+static const sn76496_config psg_intf =
+{
+	DEVCB_NULL
+};
 
 
 /*************************************
@@ -242,7 +248,7 @@ static const pia6821_interface slithersnd_pia_0_intf =
  *************************************/
 
 MACHINE_CONFIG_FRAGMENT( qix_audio )
-	MCFG_CPU_ADD("audiocpu", M6802, SOUND_CLOCK_OSC/2)		/* 0.92 MHz */
+	MCFG_CPU_ADD("audiocpu", M6802, SOUND_CLOCK_OSC/2)      /* 0.92 MHz */
 	MCFG_CPU_PROGRAM_MAP(audio_map)
 
 	MCFG_PIA6821_ADD("sndpia0", qixsnd_pia_0_intf)
@@ -265,7 +271,9 @@ MACHINE_CONFIG_FRAGMENT( slither_audio )
 
 	MCFG_SOUND_ADD("sn1", SN76489, SLITHER_CLOCK_OSC/4/4)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_CONFIG(psg_intf)
 
 	MCFG_SOUND_ADD("sn2", SN76489, SLITHER_CLOCK_OSC/4/4)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_CONFIG(psg_intf)
 MACHINE_CONFIG_END

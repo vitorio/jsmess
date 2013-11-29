@@ -5,10 +5,10 @@
   Functions to emulate the video hardware of the TRS80.
 
 ***************************************************************************/
-#include "emu.h"
+
 #include "includes/trs80.h"
 
-/* Bit assignment for "trs80_mode"
+/* Bit assignment for "state->m_mode"
     d7 Page select
     d6 LNW80 switch to graphics ram
     d5 LNW80 colour or monochrome (1=colour)
@@ -19,9 +19,8 @@
     d0 80/64 or 40/32 characters per line (1=32) */
 
 
-WRITE8_HANDLER( trs80m4_88_w )
+WRITE8_MEMBER( trs80_state::trs80m4_88_w )
 {
-	trs80_state *state = space->machine().driver_data<trs80_state>();
 /* This is for the programming of the CRTC registers.
     However this CRTC is mask-programmed, and only the
     start address register can be used. The cursor and
@@ -30,83 +29,90 @@ WRITE8_HANDLER( trs80m4_88_w )
     Therefore it is easier to use normal
     coding rather than the mc6845 device. */
 
-	if (!offset) state->m_crtc_reg = data & 0x1f;
+	if (!offset) m_crtc_reg = data & 0x1f;
 
-	if (offset) switch (state->m_crtc_reg)
+	if (offset) switch (m_crtc_reg)
 	{
 		case 12:
-			state->m_start_address = (state->m_start_address & 0x00ff) | (data << 8);
+			m_start_address = (m_start_address & 0x00ff) | (data << 8);
 			break;
 		case 13:
-			state->m_start_address = (state->m_start_address & 0xff00) | data;
+			m_start_address = (m_start_address & 0xff00) | data;
 	}
 }
 
 
-VIDEO_START( trs80 )
+void trs80_state::video_start()
 {
-	trs80_state *state = machine.driver_data<trs80_state>();
-	state->m_size_store = 0xff;
-	state->m_mode &= 2;
+	m_p_chargen = memregion("chargen")->base();
+	m_size_store = 0xff;
+	m_mode &= 2;
 }
 
 
 /* 7 or 8-bit video, 32/64 characters per line = trs80, trs80l2, sys80 */
-SCREEN_UPDATE( trs80 )
+UINT32 trs80_state::screen_update_trs80(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	trs80_state *state = screen->machine().driver_data<trs80_state>();
-	UINT8 *videoram = state->m_videoram;
 	UINT8 y,ra,chr,gfx,gfxbit;
 	UINT16 sy=0,ma=0,x;
-	UINT8 *FNT = screen->machine().region("gfx1")->base();
-	UINT8 cols = (state->m_mode & 1) ? 32 : 64;
-	UINT8 skip = (state->m_mode & 1) ? 2 : 1;
+	UINT8 cols = BIT(m_mode, 0) ? 32 : 64;
+	UINT8 skip = BIT(m_mode, 0) ? 2 : 1;
 
-	if (state->m_mode != state->m_size_store)
+	if (m_mode != m_size_store)
 	{
-		state->m_size_store = state->m_mode & 1;
-		screen->set_visible_area(0, cols*FW-1, 0, 16*FH-1);
+		m_size_store = m_mode & 1;
+		screen.set_visible_area(0, cols*6-1, 0, 16*12-1);
 	}
 
 	for (y = 0; y < 16; y++)
 	{
-		for (ra = 0; ra < FH; ra++)
+		for (ra = 0; ra < 12; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma + 64; x+=skip)
 			{
-				chr = videoram[x];
+				chr = m_p_videoram[x];
 
 				if (chr & 0x80)
 				{
-					gfxbit = 1<<((ra & 0x0c)>>1);
+					gfxbit = (ra & 0x0c)>>1;
 					/* Display one line of a lores character (6 pixels) */
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					gfxbit <<= 1;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
+					gfxbit++;
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
 				}
 				else
 				{
-					if ((state->m_mode & 2) && (chr < 32)) chr+=64;
+					if (BIT(m_mode, 1) & (chr < 32)) chr+=64;
 
-					/* get pattern of pixels for that character scanline */
-					if (ra < 8)
-						gfx = FNT[(chr<<3) | ra ];
+					// if g,j,p,q,y; lower the descender
+					if ((chr==0x2c)||(chr==0x3b)||(chr==0x67)||(chr==0x6a)||(chr==0x70)||(chr==0x71)||(chr==0x79))
+					{
+						if ((ra < 10) && (ra > 1))
+							gfx = m_p_chargen[(chr<<3) | (ra-2) ];
+						else
+							gfx = 0;
+					}
 					else
-						gfx = 0;
+					{
+						if (ra < 8)
+							gfx = m_p_chargen[(chr<<3) | ra ];
+						else
+							gfx = 0;
+					}
 
 					/* Display a scanline of a character (6 pixels) */
-					*p++ = ( gfx & 0x20 ) ? 1 : 0;
-					*p++ = ( gfx & 0x10 ) ? 1 : 0;
-					*p++ = ( gfx & 0x08 ) ? 1 : 0;
-					*p++ = ( gfx & 0x04 ) ? 1 : 0;
-					*p++ = ( gfx & 0x02 ) ? 1 : 0;
-					*p++ = ( gfx & 0x01 ) ? 1 : 0;
+					*p++ = BIT(gfx, 5);
+					*p++ = BIT(gfx, 4);
+					*p++ = BIT(gfx, 3);
+					*p++ = BIT(gfx, 2);
+					*p++ = BIT(gfx, 1);
+					*p++ = BIT(gfx, 0);
 				}
 			}
 		}
@@ -116,94 +122,91 @@ SCREEN_UPDATE( trs80 )
 }
 
 /* 8-bit video, 32/64/40/80 characters per line = trs80m3, trs80m4. */
-SCREEN_UPDATE( trs80m4 )
+UINT32 trs80_state::screen_update_trs80m4(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	trs80_state *state = screen->machine().driver_data<trs80_state>();
-	UINT8 *videoram = state->m_videoram;
 	UINT8 y,ra,chr,gfx,gfxbit;
 	UINT16 sy=0,ma=0,x;
-	UINT8 *FNT = screen->machine().region("gfx1")->base();
 	UINT8 skip=1;
-	UINT8 cols = (state->m_mode & 4) ? 80 : 64;
-	UINT8 rows = (state->m_mode & 4) ? 24 : 16;
-	UINT8 lines = (state->m_mode & 4) ? 10 : 12;
+	UINT8 cols = BIT(m_mode, 2) ? 80 : 64;
+	UINT8 rows = BIT(m_mode, 2) ? 24 : 16;
+	UINT8 lines = BIT(m_mode, 2) ? 10 : 12;
 	UINT8 s_cols = cols;
-	UINT8 mask = (state->m_mode & 0x20) ? 0xff : 0xbf;	/* Select Japanese or extended chars */
+	UINT8 mask = BIT(m_mode, 5) ? 0xff : 0xbf;  /* Select Japanese or extended chars */
 
-	if (state->m_mode & 1)
+	if (m_mode & 1)
 	{
 		s_cols >>= 1;
 		skip = 2;
 	}
 
-	if ((state->m_mode & 0x7f) != state->m_size_store)
+	if ((m_mode & 0x7f) != m_size_store)
 	{
-		state->m_size_store = state->m_mode & 5;
-		screen->set_visible_area(0, s_cols*8-1, 0, rows*lines-1);
+		m_size_store = m_mode & 5;
+		screen.set_visible_area(0, s_cols*8-1, 0, rows*lines-1);
 	}
 
 	for (y = 0; y < rows; y++)
 	{
 		for (ra = 0; ra < lines; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma + cols; x+=skip)
 			{
-				chr = videoram[x+state->m_start_address];
+				chr = m_p_videoram[x+m_start_address];
 
-				if (((chr & 0xc0) == 0xc0) && (~state->m_mode & 8))
+				if (((chr & 0xc0) == 0xc0) && (~m_mode & 8))
 				{
 					if (ra < 8)
-						gfx = FNT[((chr&mask)<<3) | ra ];
+						gfx = m_p_chargen[((chr&mask)<<3) | ra ];
 					else
 						gfx = 0;
 
-					*p++ = ( gfx & 0x80 ) ? 1 : 0;
-					*p++ = ( gfx & 0x40 ) ? 1 : 0;
-					*p++ = ( gfx & 0x20 ) ? 1 : 0;
-					*p++ = ( gfx & 0x10 ) ? 1 : 0;
-					*p++ = ( gfx & 0x08 ) ? 1 : 0;
-					*p++ = ( gfx & 0x04 ) ? 1 : 0;
-					*p++ = ( gfx & 0x02 ) ? 1 : 0;
-					*p++ = ( gfx & 0x01 ) ? 1 : 0;
+					*p++ = BIT(gfx, 7);
+					*p++ = BIT(gfx, 6);
+					*p++ = BIT(gfx, 5);
+					*p++ = BIT(gfx, 4);
+					*p++ = BIT(gfx, 3);
+					*p++ = BIT(gfx, 2);
+					*p++ = BIT(gfx, 1);
+					*p++ = BIT(gfx, 0);
 				}
 				else
-				if ((chr & 0x80) && (~state->m_mode & 8))
+				if ((chr & 0x80) && (~m_mode & 8))
 				{
-					gfxbit = 1<<((ra & 0x0c)>>1);
+					gfxbit = (ra & 0x0c)>>1;
 					/* Display one line of a lores character */
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					gfxbit <<= 1;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
+					gfxbit++;
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
 				}
 				else
 				{
 					/* get pattern of pixels for that character scanline */
 					if (ra < 8)
-						gfx = FNT[((chr&0x7f)<<3) | ra ];
+						gfx = m_p_chargen[((chr&0x7f)<<3) | ra ];
 					else
 						gfx = 0;
 
 					/* if inverse mode, and bit 7 set, invert gfx */
-					if ((state->m_mode & 8) && (chr & 0x80))
+					if (BIT(m_mode, 3) & BIT(chr, 7))
 						gfx ^= 0xff;
 
 					/* Display a scanline of a character */
-					*p++ = ( gfx & 0x80 ) ? 1 : 0;
-					*p++ = ( gfx & 0x40 ) ? 1 : 0;
-					*p++ = ( gfx & 0x20 ) ? 1 : 0;
-					*p++ = ( gfx & 0x10 ) ? 1 : 0;
-					*p++ = ( gfx & 0x08 ) ? 1 : 0;
-					*p++ = ( gfx & 0x04 ) ? 1 : 0;
-					*p++ = ( gfx & 0x02 ) ? 1 : 0;
-					*p++ = ( gfx & 0x01 ) ? 1 : 0;
+					*p++ = BIT(gfx, 7);
+					*p++ = BIT(gfx, 6);
+					*p++ = BIT(gfx, 5);
+					*p++ = BIT(gfx, 4);
+					*p++ = BIT(gfx, 3);
+					*p++ = BIT(gfx, 2);
+					*p++ = BIT(gfx, 1);
+					*p++ = BIT(gfx, 0);
 				}
 			}
 		}
@@ -213,58 +216,55 @@ SCREEN_UPDATE( trs80m4 )
 }
 
 /* 7 or 8-bit video, 64/32 characters per line = ht1080z, ht1080z2, ht108064 */
-SCREEN_UPDATE( ht1080z )
+UINT32 trs80_state::screen_update_ht1080z(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	trs80_state *state = screen->machine().driver_data<trs80_state>();
-	UINT8 *videoram = state->m_videoram;
 	UINT8 y,ra,chr,gfx,gfxbit;
 	UINT16 sy=0,ma=0,x;
-	UINT8 *FNT = screen->machine().region("gfx1")->base();
-	UINT8 cols = (state->m_mode & 1) ? 32 : 64;
-	UINT8 skip = (state->m_mode & 1) ? 2 : 1;
+	UINT8 cols = BIT(m_mode, 0) ? 32 : 64;
+	UINT8 skip = BIT(m_mode, 0) ? 2 : 1;
 
-	if (state->m_mode != state->m_size_store)
+	if (m_mode != m_size_store)
 	{
-		state->m_size_store = state->m_mode & 1;
-		screen->set_visible_area(0, cols*FW-1, 0, 16*FH-1);
+		m_size_store = m_mode & 1;
+		screen.set_visible_area(0, cols*6-1, 0, 16*12-1);
 	}
 
 	for (y = 0; y < 16; y++)
 	{
-		for (ra = 0; ra < FH; ra++)
+		for (ra = 0; ra < 12; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma + 64; x+=skip)
 			{
-				chr = videoram[x];
+				chr = m_p_videoram[x];
 
 				if (chr & 0x80)
 				{
-					gfxbit = 1<<((ra & 0x0c)>>1);
+					gfxbit = (ra & 0x0c)>>1;
 					/* Display one line of a lores character (6 pixels) */
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					gfxbit <<= 1;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
-					*p++ = ( chr & gfxbit ) ? 1 : 0;
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
+					gfxbit++;
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
+					*p++ = BIT(chr, gfxbit);
 				}
 				else
 				{
-					if ((state->m_mode & 2) && (chr < 32)) chr+=64;
+					if ((m_mode & 2) && (chr < 32)) chr+=64;
 
 					/* get pattern of pixels for that character scanline */
-					gfx = FNT[(chr<<4) | ra ];
+					gfx = m_p_chargen[(chr<<4) | ra ];
 
 					/* Display a scanline of a character (6 pixels) */
-					*p++ = ( gfx & 0x80 ) ? 1 : 0;
-					*p++ = ( gfx & 0x40 ) ? 1 : 0;
-					*p++ = ( gfx & 0x20 ) ? 1 : 0;
-					*p++ = ( gfx & 0x10 ) ? 1 : 0;
-					*p++ = ( gfx & 0x08 ) ? 1 : 0;
-					*p++ = 0;	/* fix for ht108064 */
+					*p++ = BIT(gfx, 7);
+					*p++ = BIT(gfx, 6);
+					*p++ = BIT(gfx, 5);
+					*p++ = BIT(gfx, 4);
+					*p++ = BIT(gfx, 3);
+					*p++ = 0;   /* fix for ht108064 */
 				}
 			}
 		}
@@ -274,69 +274,66 @@ SCREEN_UPDATE( ht1080z )
 }
 
 /* 8-bit video, 64/80 characters per line = lnw80 */
-SCREEN_UPDATE( lnw80 )
+UINT32 trs80_state::screen_update_lnw80(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	trs80_state *state = screen->machine().driver_data<trs80_state>();
-	UINT8 *videoram = state->m_videoram;
 	static const UINT16 rows[] = { 0, 0x200, 0x100, 0x300, 1, 0x201, 0x101, 0x301 };
 	UINT8 chr,gfx,gfxbit,bg=7,fg=0;
 	UINT16 sy=0,ma=0,x,y,ra;
-	UINT8 *FNT = screen->machine().region("gfx1")->base();
-	UINT8 cols = (state->m_mode & 0x10) ? 80 : 64;
+	UINT8 cols = BIT(m_mode, 4) ? 80 : 64;
 
 	/* Although the OS can select 32-character mode, it is not supported by hardware */
-	if (state->m_mode != state->m_size_store)
+	if (m_mode != m_size_store)
 	{
-		state->m_size_store = state->m_mode & 0x10;
-		screen->set_visible_area(0, cols*FW-1, 0, 16*FH-1);
+		m_size_store = m_mode & 0x10;
+		screen.set_visible_area(0, cols*6-1, 0, 16*12-1);
 	}
 
-	if (state->m_mode & 8)
+	if (m_mode & 8)
 	{
 		bg = 0;
 		fg = 7;
 	}
 
-	switch (state->m_mode & 0x30)
+	switch (m_mode & 0x30)
 	{
-		case 0:					// MODE 0
+		case 0:                 // MODE 0
 			for (y = 0; y < 16; y++)
 			{
-				for (ra = 0; ra < FH; ra++)
+				for (ra = 0; ra < 12; ra++)
 				{
-					UINT16 *p = BITMAP_ADDR16(bitmap, sy++, 0);
+					UINT16 *p = &bitmap.pix16(sy++);
 
 					for (x = ma; x < ma + 64; x++)
 					{
-						chr = videoram[x];
+						chr = m_p_videoram[x];
 
 						if (chr & 0x80)
 						{
-							gfxbit = 1<<((ra & 0x0c)>>1);
+							gfxbit = (ra & 0x0c)>>1;
 							/* Display one line of a lores character (6 pixels) */
-							*p++ = ( chr & gfxbit ) ? fg : bg;
-							*p++ = ( chr & gfxbit ) ? fg : bg;
-							*p++ = ( chr & gfxbit ) ? fg : bg;
-							gfxbit <<= 1;
-							*p++ = ( chr & gfxbit ) ? fg : bg;
-							*p++ = ( chr & gfxbit ) ? fg : bg;
-							*p++ = ( chr & gfxbit ) ? fg : bg;
+							*p++ = BIT(chr, gfxbit) ? fg : bg;
+							*p++ = BIT(chr, gfxbit) ? fg : bg;
+							*p++ = BIT(chr, gfxbit) ? fg : bg;
+							gfxbit++;
+							*p++ = BIT(chr, gfxbit) ? fg : bg;
+							*p++ = BIT(chr, gfxbit) ? fg : bg;
+							*p++ = BIT(chr, gfxbit) ? fg : bg;
 						}
 						else
 						{
 							/* get pattern of pixels for that character scanline */
 							if (ra < 8)
-								gfx = FNT[(chr<<1) | rows[ra] ];
+								gfx = m_p_chargen[(chr<<1) | rows[ra] ];
 							else
 								gfx = 0;
 
 							/* Display a scanline of a character (6 pixels) */
-							*p++ = ( gfx & 0x04 ) ? fg : bg;
-							*p++ = ( gfx & 0x02 ) ? fg : bg;
-							*p++ = ( gfx & 0x40 ) ? fg : bg;
-							*p++ = ( gfx & 0x80 ) ? fg : bg;
-							*p++ = ( gfx & 0x20 ) ? fg : bg;
-							*p++ = ( gfx & 0x08 ) ? fg : bg;
+							*p++ = BIT(gfx, 2) ? fg : bg;
+							*p++ = BIT(gfx, 1) ? fg : bg;
+							*p++ = BIT(gfx, 6) ? fg : bg;
+							*p++ = BIT(gfx, 7) ? fg : bg;
+							*p++ = BIT(gfx, 5) ? fg : bg;
+							*p++ = BIT(gfx, 3) ? fg : bg;
 						}
 					}
 				}
@@ -344,52 +341,52 @@ SCREEN_UPDATE( lnw80 )
 			}
 			break;
 
-		case 0x10:					// MODE 1
+		case 0x10:                  // MODE 1
 			for (y = 0; y < 0x400; y+=0x40)
 			{
 				for (ra = 0; ra < 0x3000; ra+=0x400)
 				{
-					UINT16 *p = BITMAP_ADDR16(bitmap, sy++, 0);
+					UINT16 *p = &bitmap.pix16(sy++);
 
 					for (x = 0; x < 0x40; x++)
 					{
-						gfx = state->m_gfxram[ y | x | ra];
+						gfx = m_p_gfxram[ y | x | ra];
 						/* Display 6 pixels in normal region */
-						*p++ = ( gfx & 0x01 ) ? fg : bg;
-						*p++ = ( gfx & 0x02 ) ? fg : bg;
-						*p++ = ( gfx & 0x04 ) ? fg : bg;
-						*p++ = ( gfx & 0x08 ) ? fg : bg;
-						*p++ = ( gfx & 0x10 ) ? fg : bg;
-						*p++ = ( gfx & 0x20 ) ? fg : bg;
+						*p++ = BIT(gfx, 0) ? fg : bg;
+						*p++ = BIT(gfx, 1) ? fg : bg;
+						*p++ = BIT(gfx, 2) ? fg : bg;
+						*p++ = BIT(gfx, 3) ? fg : bg;
+						*p++ = BIT(gfx, 4) ? fg : bg;
+						*p++ = BIT(gfx, 5) ? fg : bg;
 					}
 
 					for (x = 0; x < 0x10; x++)
 					{
-						gfx = state->m_gfxram[ 0x3000 | x | (ra & 0xc00) | ((ra & 0x3000) >> 8)];
+						gfx = m_p_gfxram[ 0x3000 | x | (ra & 0xc00) | ((ra & 0x3000) >> 8)];
 						/* Display 6 pixels in extended region */
-						*p++ = ( gfx & 0x01 ) ? fg : bg;
-						*p++ = ( gfx & 0x02 ) ? fg : bg;
-						*p++ = ( gfx & 0x04 ) ? fg : bg;
-						*p++ = ( gfx & 0x08 ) ? fg : bg;
-						*p++ = ( gfx & 0x10 ) ? fg : bg;
-						*p++ = ( gfx & 0x20 ) ? fg : bg;
+						*p++ = BIT(gfx, 0) ? fg : bg;
+						*p++ = BIT(gfx, 1) ? fg : bg;
+						*p++ = BIT(gfx, 2) ? fg : bg;
+						*p++ = BIT(gfx, 3) ? fg : bg;
+						*p++ = BIT(gfx, 4) ? fg : bg;
+						*p++ = BIT(gfx, 5) ? fg : bg;
 					}
 				}
 			}
 			break;
 
-		case 0x20:					// MODE 2
+		case 0x20:                  // MODE 2
 			/* it seems the text video ram can have an effect in this mode,
-                not explained clearly, so not emulated */
+			    not explained clearly, so not emulated */
 			for (y = 0; y < 0x400; y+=0x40)
 			{
 				for (ra = 0; ra < 0x3000; ra+=0x400)
 				{
-					UINT16 *p = BITMAP_ADDR16(bitmap, sy++, 0);
+					UINT16 *p = &bitmap.pix16(sy++);
 
 					for (x = 0; x < 0x40; x++)
 					{
-						gfx = state->m_gfxram[ y | x | ra];
+						gfx = m_p_gfxram[ y | x | ra];
 						/* Display 6 pixels in normal region */
 						fg = (gfx & 0x38) >> 3;
 						*p++ = fg;
@@ -404,42 +401,42 @@ SCREEN_UPDATE( lnw80 )
 			}
 			break;
 
-		case 0x30:					// MODE 3
+		case 0x30:                  // MODE 3
 			/* the manual does not explain at all how colour is determined
-                for the extended area. Further, the background colour
-                is not mentioned anywhere. Black is assumed. */
+			    for the extended area. Further, the background colour
+			    is not mentioned anywhere. Black is assumed. */
 			for (y = 0; y < 0x400; y+=0x40)
 			{
 				for (ra = 0; ra < 0x3000; ra+=0x400)
 				{
-					UINT16 *p = BITMAP_ADDR16(bitmap, sy++, 0);
+					UINT16 *p = &bitmap.pix16(sy++);
 
 					for (x = 0; x < 0x40; x++)
 					{
-						gfx = state->m_gfxram[ y | x | ra];
-						fg = (videoram[ 0x3c00 | x | y ] & 0x38) >> 3;
+						gfx = m_p_gfxram[ y | x | ra];
+						fg = (m_p_videoram[ 0x3c00 | x | y ] & 0x38) >> 3;
 						/* Display 6 pixels in normal region */
-						*p++ = ( gfx & 0x01 ) ? fg : bg;
-						*p++ = ( gfx & 0x02 ) ? fg : bg;
-						*p++ = ( gfx & 0x04 ) ? fg : bg;
-						fg = videoram[ 0x3c00 | x | y ] & 0x07;
-						*p++ = ( gfx & 0x08 ) ? fg : bg;
-						*p++ = ( gfx & 0x10 ) ? fg : bg;
-						*p++ = ( gfx & 0x20 ) ? fg : bg;
+						*p++ = BIT(gfx, 0) ? fg : bg;
+						*p++ = BIT(gfx, 1) ? fg : bg;
+						*p++ = BIT(gfx, 2) ? fg : bg;
+						fg = m_p_videoram[ 0x3c00 | x | y ] & 0x07;
+						*p++ = BIT(gfx, 3) ? fg : bg;
+						*p++ = BIT(gfx, 4) ? fg : bg;
+						*p++ = BIT(gfx, 5) ? fg : bg;
 					}
 
 					for (x = 0; x < 0x10; x++)
 					{
-						gfx = state->m_gfxram[ 0x3000 | x | (ra & 0xc00) | ((ra & 0x3000) >> 8)];
-						fg = (state->m_gfxram[ 0x3c00 | x | y ] & 0x38) >> 3;
+						gfx = m_p_gfxram[ 0x3000 | x | (ra & 0xc00) | ((ra & 0x3000) >> 8)];
+						fg = (m_p_gfxram[ 0x3c00 | x | y ] & 0x38) >> 3;
 						/* Display 6 pixels in extended region */
-						*p++ = ( gfx & 0x01 ) ? fg : bg;
-						*p++ = ( gfx & 0x02 ) ? fg : bg;
-						*p++ = ( gfx & 0x04 ) ? fg : bg;
-						fg = state->m_gfxram[ 0x3c00 | x | y ] & 0x07;
-						*p++ = ( gfx & 0x08 ) ? fg : bg;
-						*p++ = ( gfx & 0x10 ) ? fg : bg;
-						*p++ = ( gfx & 0x20 ) ? fg : bg;
+						*p++ = BIT(gfx, 0) ? fg : bg;
+						*p++ = BIT(gfx, 1) ? fg : bg;
+						*p++ = BIT(gfx, 2) ? fg : bg;
+						fg = m_p_gfxram[ 0x3c00 | x | y ] & 0x07;
+						*p++ = BIT(gfx, 3) ? fg : bg;
+						*p++ = BIT(gfx, 4) ? fg : bg;
+						*p++ = BIT(gfx, 5) ? fg : bg;
 					}
 				}
 			}
@@ -449,44 +446,82 @@ SCREEN_UPDATE( lnw80 )
 }
 
 /* lores characters are in the character generator. Each character is 8x16. */
-SCREEN_UPDATE( radionic )
+UINT32 trs80_state::screen_update_radionic(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	trs80_state *state = screen->machine().driver_data<trs80_state>();
-	UINT8 *videoram = state->m_videoram;
 	UINT8 y,ra,chr,gfx;
 	UINT16 sy=0,ma=0,x;
-	UINT8 *FNT = screen->machine().region("gfx1")->base();
-	UINT8 cols = (state->m_mode & 1) ? 32 : 64;
-	UINT8 skip = (state->m_mode & 1) ? 2 : 1;
+	UINT8 cols = BIT(m_mode, 0) ? 32 : 64;
+	UINT8 skip = BIT(m_mode, 0) ? 2 : 1;
 
-	if (state->m_mode != state->m_size_store)
+	if (m_mode != m_size_store)
 	{
-		state->m_size_store = state->m_mode & 1;
-		screen->set_visible_area(0, cols*8-1, 0, 16*16-1);
+		m_size_store = m_mode & 1;
+		screen.set_visible_area(0, cols*8-1, 0, 16*16-1);
 	}
 
 	for (y = 0; y < 16; y++)
 	{
 		for (ra = 0; ra < 16; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma + 64; x+=skip)
 			{
-				chr = videoram[x];
+				chr = m_p_videoram[x];
 
 				/* get pattern of pixels for that character scanline */
-				gfx = FNT[(chr<<3) | (ra & 7) | (ra & 8) << 8];
+				gfx = m_p_chargen[(chr<<3) | (ra & 7) | (ra & 8) << 8];
 
 				/* Display a scanline of a character (8 pixels) */
-				*p++ = ( gfx & 0x01 ) ? 1 : 0;
-				*p++ = ( gfx & 0x02 ) ? 1 : 0;
-				*p++ = ( gfx & 0x04 ) ? 1 : 0;
-				*p++ = ( gfx & 0x08 ) ? 1 : 0;
-				*p++ = ( gfx & 0x10 ) ? 1 : 0;
-				*p++ = ( gfx & 0x20 ) ? 1 : 0;
-				*p++ = ( gfx & 0x40 ) ? 1 : 0;
-				*p++ = ( gfx & 0x80 ) ? 1 : 0;
+				*p++ = BIT(gfx, 0);
+				*p++ = BIT(gfx, 1);
+				*p++ = BIT(gfx, 2);
+				*p++ = BIT(gfx, 3);
+				*p++ = BIT(gfx, 4);
+				*p++ = BIT(gfx, 5);
+				*p++ = BIT(gfx, 6);
+				*p++ = BIT(gfx, 7);
+			}
+		}
+		ma+=64;
+	}
+	return 0;
+}
+
+UINT32 trs80_state::screen_update_meritum(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+/* lores characters are in the character generator. Each character is 6x11. */
+{
+	UINT8 y,ra,chr,gfx;
+	UINT16 sy=0,ma=0,x;
+	UINT8 cols = BIT(m_mode, 0) ? 32 : 64;
+	UINT8 skip = BIT(m_mode, 0) ? 2 : 1;
+
+	if (m_mode != m_size_store)
+	{
+		m_size_store = m_mode;
+		screen.set_visible_area(0, cols*6-1, 0, 16*11-1);
+	}
+
+	for (y = 0; y < 16; y++)
+	{
+		for (ra = 0; ra < 11; ra++)
+		{
+			UINT16 *p = &bitmap.pix16(sy++);
+
+			for (x = ma; x < ma + 64; x+=skip)
+			{
+				chr = m_p_videoram[x];
+
+				/* get pattern of pixels for that character scanline */
+				gfx = m_p_chargen[(chr<<4) | ra];
+
+				/* Display a scanline of a character (6 pixels) */
+				*p++ = BIT(gfx, 5);
+				*p++ = BIT(gfx, 4);
+				*p++ = BIT(gfx, 3);
+				*p++ = BIT(gfx, 2);
+				*p++ = BIT(gfx, 1);
+				*p++ = BIT(gfx, 0);
 			}
 		}
 		ma+=64;
@@ -495,24 +530,21 @@ SCREEN_UPDATE( radionic )
 }
 
 
+
 /***************************************************************************
   Write to video ram
 ***************************************************************************/
 
-READ8_HANDLER( trs80_videoram_r )
+READ8_MEMBER( trs80_state::trs80_videoram_r )
 {
-	trs80_state *state = space->machine().driver_data<trs80_state>();
-	UINT8 *videoram = state->m_videoram;
-	if ((state->m_mode & 0x80) && (~state->m_model4 & 1)) offset |= 0x400;
-	return videoram[offset];
+	if ((m_mode & 0x80) && (~m_model4 & 1)) offset |= 0x400;
+	return m_p_videoram[offset];
 }
 
-WRITE8_HANDLER( trs80_videoram_w )
+WRITE8_MEMBER( trs80_state::trs80_videoram_w )
 {
-	trs80_state *state = space->machine().driver_data<trs80_state>();
-	UINT8 *videoram = state->m_videoram;
-	if ((state->m_mode & 0x80) && (~state->m_model4 & 1)) offset |= 0x400;
-	videoram[offset] = data;
+	if ((m_mode & 0x80) && (~m_model4 & 1)) offset |= 0x400;
+	m_p_videoram[offset] = data;
 }
 
 
@@ -520,16 +552,14 @@ WRITE8_HANDLER( trs80_videoram_w )
   Write to graphics ram
 ***************************************************************************/
 
-READ8_HANDLER( trs80_gfxram_r )
+READ8_MEMBER( trs80_state::trs80_gfxram_r )
 {
-	trs80_state *state = space->machine().driver_data<trs80_state>();
-	return state->m_gfxram[offset];
+	return m_p_gfxram[offset];
 }
 
-WRITE8_HANDLER( trs80_gfxram_w )
+WRITE8_MEMBER( trs80_state::trs80_gfxram_w )
 {
-	trs80_state *state = space->machine().driver_data<trs80_state>();
-	state->m_gfxram[offset] = data;
+	m_p_gfxram[offset] = data;
 }
 
 
@@ -550,7 +580,7 @@ static const rgb_t lnw80_palette[] =
 	MAKE_RGB(0, 0, 0), // black
 };
 
-PALETTE_INIT( lnw80 )
+PALETTE_INIT_MEMBER(trs80_state,lnw80)
 {
-	palette_set_colors(machine, 0, lnw80_palette, ARRAY_LENGTH(lnw80_palette));
+	palette_set_colors(machine(), 0, lnw80_palette, ARRAY_LENGTH(lnw80_palette));
 }

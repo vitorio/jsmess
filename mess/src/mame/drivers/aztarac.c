@@ -16,7 +16,6 @@
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "video/vector.h"
 #include "includes/aztarac.h"
 #include "sound/ay8910.h"
 #include "machine/nvram.h"
@@ -29,15 +28,15 @@
  *
  *************************************/
 
-static IRQ_CALLBACK(aztarac_irq_callback)
+IRQ_CALLBACK_MEMBER(aztarac_state::aztarac_irq_callback)
 {
 	return 0xc;
 }
 
 
-static MACHINE_RESET( aztarac )
+void aztarac_state::machine_reset()
 {
-	device_set_irq_callback(machine.device("maincpu"), aztarac_irq_callback);
+	m_maincpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(aztarac_state::aztarac_irq_callback),this));
 }
 
 
@@ -48,10 +47,9 @@ static MACHINE_RESET( aztarac )
  *
  *************************************/
 
-static READ16_HANDLER( nvram_r )
+READ16_MEMBER(aztarac_state::nvram_r)
 {
-	aztarac_state *state = space->machine().driver_data<aztarac_state>();
-	return state->m_nvram[offset] | 0xfff0;
+	return m_nvram[offset] | 0xfff0;
 }
 
 
@@ -62,10 +60,10 @@ static READ16_HANDLER( nvram_r )
  *
  *************************************/
 
-static READ16_HANDLER( joystick_r )
+READ16_MEMBER(aztarac_state::joystick_r)
 {
-    return (((input_port_read(space->machine(), "STICKZ") - 0xf) << 8) |
-            ((input_port_read(space->machine(), "STICKY") - 0xf) & 0xff));
+	return (((ioport("STICKZ")->read() - 0xf) << 8) |
+			((ioport("STICKY")->read() - 0xf) & 0xff));
 }
 
 
@@ -76,7 +74,7 @@ static READ16_HANDLER( joystick_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16, aztarac_state )
 	AM_RANGE(0x000000, 0x00bfff) AM_ROM
 	AM_RANGE(0x022000, 0x0220ff) AM_READ(nvram_r) AM_WRITEONLY AM_SHARE("nvram")
 	AM_RANGE(0x027000, 0x027001) AM_READ(joystick_r)
@@ -84,7 +82,7 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x027008, 0x027009) AM_READWRITE(aztarac_sound_r, aztarac_sound_w)
 	AM_RANGE(0x02700c, 0x02700d) AM_READ_PORT("DIAL")
 	AM_RANGE(0x02700e, 0x02700f) AM_READ(watchdog_reset16_r)
-	AM_RANGE(0xff8000, 0xffafff) AM_RAM AM_BASE_MEMBER(aztarac_state, m_vectorram)
+	AM_RANGE(0xff8000, 0xffafff) AM_RAM AM_SHARE("vectorram")
 	AM_RANGE(0xffb000, 0xffb001) AM_WRITE(aztarac_ubr_w)
 	AM_RANGE(0xffe000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
@@ -97,14 +95,14 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8, aztarac_state )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8800) AM_READ(aztarac_snd_command_r)
-	AM_RANGE(0x8c00, 0x8c01) AM_DEVREADWRITE("ay1", ay8910_r, ay8910_data_address_w)
-	AM_RANGE(0x8c02, 0x8c03) AM_DEVREADWRITE("ay2", ay8910_r, ay8910_data_address_w)
-	AM_RANGE(0x8c04, 0x8c05) AM_DEVREADWRITE("ay3", ay8910_r, ay8910_data_address_w)
-	AM_RANGE(0x8c06, 0x8c07) AM_DEVREADWRITE("ay4", ay8910_r, ay8910_data_address_w)
+	AM_RANGE(0x8c00, 0x8c01) AM_DEVREADWRITE("ay1", ay8910_device, data_r, data_address_w)
+	AM_RANGE(0x8c02, 0x8c03) AM_DEVREADWRITE("ay2", ay8910_device, data_r, data_address_w)
+	AM_RANGE(0x8c04, 0x8c05) AM_DEVREADWRITE("ay3", ay8910_device, data_r, data_address_w)
+	AM_RANGE(0x8c06, 0x8c07) AM_DEVREADWRITE("ay4", ay8910_device, data_r, data_address_w)
 	AM_RANGE(0x9000, 0x9000) AM_READWRITE(aztarac_snd_status_r, aztarac_snd_status_w)
 ADDRESS_MAP_END
 
@@ -150,23 +148,22 @@ static MACHINE_CONFIG_START( aztarac, aztarac_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 8000000)
 	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", aztarac_state,  irq4_line_hold)
 
 	MCFG_CPU_ADD("audiocpu", Z80, 2000000)
 	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_PERIODIC_INT(aztarac_snd_timed_irq, 100)
+	MCFG_CPU_PERIODIC_INT_DRIVER(aztarac_state, aztarac_snd_timed_irq,  100)
 
-	MCFG_MACHINE_RESET(aztarac)
 	MCFG_NVRAM_ADD_1FILL("nvram")
 
 	/* video hardware */
+	MCFG_VECTOR_ADD("vector")
 	MCFG_SCREEN_ADD("screen", VECTOR)
 	MCFG_SCREEN_REFRESH_RATE(40)
 	MCFG_SCREEN_SIZE(400, 300)
 	MCFG_SCREEN_VISIBLE_AREA(0, 1024-1, 0, 768-1)
-	MCFG_SCREEN_UPDATE(vector)
+	MCFG_SCREEN_UPDATE_DEVICE("vector", vector_device, screen_update)
 
-	MCFG_VIDEO_START(aztarac)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -220,4 +217,4 @@ ROM_END
  *
  *************************************/
 
-GAME( 1983, aztarac, 0, aztarac, aztarac, 0, ROT0, "Centuri", "Aztarac", 0 )
+GAME( 1983, aztarac, 0, aztarac, aztarac, driver_device, 0, ROT0, "Centuri", "Aztarac", 0 )

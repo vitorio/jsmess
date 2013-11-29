@@ -4,8 +4,23 @@
 
         17/07/2009 Skeleton driver.
 
+This is heavily based on the KIM-1, the keycodes and operation being
+identical.
+
+Pasting:
+        0-F : as is
+        + (inc) : ^
+        AD : -
+        DA : =
+        GO : X
+
+(note: DA only works when addressing RAM)
+
+Test Paste:
+        =11^22^33^44^55^66^77^88^99^-0000
+        Now press up-arrow to confirm the data has been entered.
+
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/m6502/m6502.h"
@@ -19,9 +34,10 @@ public:
 	junior_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
 	m_riot(*this, "riot")
-	{ }
+	,
+		m_maincpu(*this, "maincpu") { }
 
-	required_device<device_t> m_riot;
+	required_device<riot6532_device> m_riot;
 	DECLARE_READ8_MEMBER(junior_riot_a_r);
 	DECLARE_READ8_MEMBER(junior_riot_b_r);
 	DECLARE_WRITE8_MEMBER(junior_riot_a_w);
@@ -30,6 +46,11 @@ public:
 	UINT8 m_port_a;
 	UINT8 m_port_b;
 	UINT8 m_led_time[6];
+	virtual void machine_start();
+	virtual void machine_reset();
+	DECLARE_INPUT_CHANGED_MEMBER(junior_reset);
+	TIMER_DEVICE_CALLBACK_MEMBER(junior_update_leds);
+	required_device<cpu_device> m_maincpu;
 };
 
 
@@ -40,54 +61,54 @@ static ADDRESS_MAP_START(junior_mem, AS_PROGRAM, 8, junior_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x03ff) AM_RAM // 1K RAM
 	AM_RANGE(0x1a00, 0x1a7f) AM_RAM // 6532 RAM
-	AM_RANGE(0x1a80, 0x1aff) AM_DEVREADWRITE_LEGACY("riot", riot6532_r, riot6532_w)
-	AM_RANGE(0x1c00, 0x1fff) AM_ROM	// Monitor
+	AM_RANGE(0x1a80, 0x1aff) AM_DEVREADWRITE("riot", riot6532_device, read, write)
+	AM_RANGE(0x1c00, 0x1fff) AM_ROM // Monitor
 ADDRESS_MAP_END
 
 
-static INPUT_CHANGED( junior_reset )
+INPUT_CHANGED_MEMBER(junior_state::junior_reset)
 {
 	if (newval == 0)
-		field.machine().firstcpu->reset();
+		machine().firstcpu->reset();
 }
 
 
 /* Input ports */
 static INPUT_PORTS_START( junior )
-PORT_START("LINE0")			/* IN0 keys row 0 */
+PORT_START("LINE0")         /* IN0 keys row 0 */
 	PORT_BIT( 0x80, 0x00, IPT_UNUSED )
-	PORT_BIT( 0x40, 0x40, IPT_KEYBOARD ) PORT_NAME("0.6: 0") PORT_CODE(KEYCODE_0)
-	PORT_BIT( 0x20, 0x20, IPT_KEYBOARD ) PORT_NAME("0.5: 1") PORT_CODE(KEYCODE_1)
-	PORT_BIT( 0x10, 0x10, IPT_KEYBOARD ) PORT_NAME("0.4: 2") PORT_CODE(KEYCODE_2)
-	PORT_BIT( 0x08, 0x08, IPT_KEYBOARD ) PORT_NAME("0.3: 3") PORT_CODE(KEYCODE_3)
-	PORT_BIT( 0x04, 0x04, IPT_KEYBOARD ) PORT_NAME("0.2: 4") PORT_CODE(KEYCODE_4)
-	PORT_BIT( 0x02, 0x02, IPT_KEYBOARD ) PORT_NAME("0.1: 5") PORT_CODE(KEYCODE_5)
-	PORT_BIT( 0x01, 0x01, IPT_KEYBOARD ) PORT_NAME("0.0: 6") PORT_CODE(KEYCODE_6)
+	PORT_BIT( 0x40, 0x40, IPT_KEYBOARD ) PORT_NAME("0") PORT_CODE(KEYCODE_0) PORT_CHAR('0')
+	PORT_BIT( 0x20, 0x20, IPT_KEYBOARD ) PORT_NAME("1") PORT_CODE(KEYCODE_1) PORT_CHAR('1')
+	PORT_BIT( 0x10, 0x10, IPT_KEYBOARD ) PORT_NAME("2") PORT_CODE(KEYCODE_2) PORT_CHAR('2')
+	PORT_BIT( 0x08, 0x08, IPT_KEYBOARD ) PORT_NAME("3") PORT_CODE(KEYCODE_3) PORT_CHAR('3')
+	PORT_BIT( 0x04, 0x04, IPT_KEYBOARD ) PORT_NAME("4") PORT_CODE(KEYCODE_4) PORT_CHAR('4')
+	PORT_BIT( 0x02, 0x02, IPT_KEYBOARD ) PORT_NAME("5") PORT_CODE(KEYCODE_5) PORT_CHAR('5')
+	PORT_BIT( 0x01, 0x01, IPT_KEYBOARD ) PORT_NAME("6") PORT_CODE(KEYCODE_6) PORT_CHAR('6')
 
-	PORT_START("LINE1")			/* IN1 keys row 1 */
+	PORT_START("LINE1")         /* IN1 keys row 1 */
 	PORT_BIT( 0x80, 0x00, IPT_UNUSED )
-	PORT_BIT( 0x40, 0x40, IPT_KEYBOARD ) PORT_NAME("1.6: 7") PORT_CODE(KEYCODE_7)
-	PORT_BIT( 0x20, 0x20, IPT_KEYBOARD ) PORT_NAME("1.5: 8") PORT_CODE(KEYCODE_8)
-	PORT_BIT( 0x10, 0x10, IPT_KEYBOARD ) PORT_NAME("1.4: 9") PORT_CODE(KEYCODE_9)
-	PORT_BIT( 0x08, 0x08, IPT_KEYBOARD ) PORT_NAME("1.3: A") PORT_CODE(KEYCODE_A)
-	PORT_BIT( 0x04, 0x04, IPT_KEYBOARD ) PORT_NAME("1.2: B") PORT_CODE(KEYCODE_B)
-	PORT_BIT( 0x02, 0x02, IPT_KEYBOARD ) PORT_NAME("1.1: C") PORT_CODE(KEYCODE_C)
-	PORT_BIT( 0x01, 0x01, IPT_KEYBOARD ) PORT_NAME("1.0: D") PORT_CODE(KEYCODE_D)
+	PORT_BIT( 0x40, 0x40, IPT_KEYBOARD ) PORT_NAME("7") PORT_CODE(KEYCODE_7) PORT_CHAR('7')
+	PORT_BIT( 0x20, 0x20, IPT_KEYBOARD ) PORT_NAME("8") PORT_CODE(KEYCODE_8) PORT_CHAR('8')
+	PORT_BIT( 0x10, 0x10, IPT_KEYBOARD ) PORT_NAME("9") PORT_CODE(KEYCODE_9) PORT_CHAR('9')
+	PORT_BIT( 0x08, 0x08, IPT_KEYBOARD ) PORT_NAME("A") PORT_CODE(KEYCODE_A) PORT_CHAR('A')
+	PORT_BIT( 0x04, 0x04, IPT_KEYBOARD ) PORT_NAME("B") PORT_CODE(KEYCODE_B) PORT_CHAR('B')
+	PORT_BIT( 0x02, 0x02, IPT_KEYBOARD ) PORT_NAME("C") PORT_CODE(KEYCODE_C) PORT_CHAR('C')
+	PORT_BIT( 0x01, 0x01, IPT_KEYBOARD ) PORT_NAME("D") PORT_CODE(KEYCODE_D) PORT_CHAR('D')
 
-	PORT_START("LINE2")			/* IN2 keys row 2 */
+	PORT_START("LINE2")         /* IN2 keys row 2 */
 	PORT_BIT( 0x80, 0x00, IPT_UNUSED )
-	PORT_BIT( 0x40, 0x40, IPT_KEYBOARD ) PORT_NAME("2.6: E") PORT_CODE(KEYCODE_E)
-	PORT_BIT( 0x20, 0x20, IPT_KEYBOARD ) PORT_NAME("2.5: F") PORT_CODE(KEYCODE_F)
-	PORT_BIT( 0x10, 0x10, IPT_KEYBOARD ) PORT_NAME("2.4: AD (F1)") PORT_CODE(KEYCODE_F1)
-	PORT_BIT( 0x08, 0x08, IPT_KEYBOARD ) PORT_NAME("2.3: DA (F2)") PORT_CODE(KEYCODE_F2)
-	PORT_BIT( 0x04, 0x04, IPT_KEYBOARD ) PORT_NAME("2.2: +  (CR)") PORT_CODE(KEYCODE_ENTER)
-	PORT_BIT( 0x02, 0x02, IPT_KEYBOARD ) PORT_NAME("2.1: GO (F5)") PORT_CODE(KEYCODE_F5)
-	PORT_BIT( 0x01, 0x01, IPT_KEYBOARD ) PORT_NAME("2.0: PC (F6)") PORT_CODE(KEYCODE_F6)
+	PORT_BIT( 0x40, 0x40, IPT_KEYBOARD ) PORT_NAME("E") PORT_CODE(KEYCODE_E) PORT_CHAR('E')
+	PORT_BIT( 0x20, 0x20, IPT_KEYBOARD ) PORT_NAME("F") PORT_CODE(KEYCODE_F) PORT_CHAR('F')
+	PORT_BIT( 0x10, 0x10, IPT_KEYBOARD ) PORT_NAME("AD") PORT_CODE(KEYCODE_MINUS) PORT_CHAR('-')
+	PORT_BIT( 0x08, 0x08, IPT_KEYBOARD ) PORT_NAME("DA") PORT_CODE(KEYCODE_EQUALS) PORT_CHAR('=')
+	PORT_BIT( 0x04, 0x04, IPT_KEYBOARD ) PORT_NAME("+") PORT_CODE(KEYCODE_UP) PORT_CHAR('^')
+	PORT_BIT( 0x02, 0x02, IPT_KEYBOARD ) PORT_NAME("GO") PORT_CODE(KEYCODE_X) PORT_CHAR('X')
+	PORT_BIT( 0x01, 0x01, IPT_KEYBOARD ) PORT_NAME("PC") PORT_CODE(KEYCODE_F6)
 
-	PORT_START("LINE3")			/* IN3 STEP and RESET keys, MODE switch */
+	PORT_START("LINE3")         /* IN3 STEP and RESET keys, MODE switch */
 	PORT_BIT( 0x80, 0x00, IPT_UNUSED )
-	PORT_BIT( 0x40, 0x40, IPT_KEYBOARD ) PORT_NAME("sw1: ST (F7)") PORT_CODE(KEYCODE_F7)
-	PORT_BIT( 0x20, 0x20, IPT_KEYBOARD ) PORT_NAME("sw2: RST (F3)") PORT_CODE(KEYCODE_F3) PORT_CHANGED(junior_reset, NULL)
+	PORT_BIT( 0x40, 0x40, IPT_KEYBOARD ) PORT_NAME("sw1: ST") PORT_CODE(KEYCODE_F7)
+	PORT_BIT( 0x20, 0x20, IPT_KEYBOARD ) PORT_NAME("sw2: RST") PORT_CODE(KEYCODE_F3) PORT_CHANGED_MEMBER(DEVICE_SELF, junior_state, junior_reset, NULL)
 	PORT_DIPNAME(0x10, 0x10, "sw3: SS (NumLock)") PORT_CODE(KEYCODE_NUMLOCK) PORT_TOGGLE
 	PORT_DIPSETTING( 0x00, "single step")
 	PORT_DIPSETTING( 0x10, "run")
@@ -106,13 +127,13 @@ READ8_MEMBER( junior_state::junior_riot_a_r )
 	switch( ( m_port_b >> 1 ) & 0x0f )
 	{
 	case 0:
-		data = input_port_read(machine(), "LINE0");
+		data = ioport("LINE0")->read();
 		break;
 	case 1:
-		data = input_port_read(machine(), "LINE1");
+		data = ioport("LINE1")->read();
 		break;
 	case 2:
-		data = input_port_read(machine(), "LINE2");
+		data = ioport("LINE2")->read();
 		break;
 	}
 	return data;
@@ -122,7 +143,7 @@ READ8_MEMBER( junior_state::junior_riot_a_r )
 
 READ8_MEMBER( junior_state::junior_riot_b_r )
 {
-	if ( riot6532_portb_out_get(m_riot) & 0x20 )
+	if ( m_riot->portb_out_get() & 0x20 )
 		return 0xFF;
 
 	return 0x7F;
@@ -160,7 +181,7 @@ WRITE8_MEMBER( junior_state::junior_riot_b_w )
 
 WRITE_LINE_MEMBER( junior_state::junior_riot_irq )
 {
-	cputag_set_input_line(machine(), "maincpu", M6502_IRQ_LINE, state ? HOLD_LINE : CLEAR_LINE);
+	m_maincpu->set_input_line(M6502_IRQ_LINE, state ? HOLD_LINE : CLEAR_LINE);
 }
 
 
@@ -174,38 +195,33 @@ static const riot6532_interface junior_riot_interface =
 };
 
 
-static TIMER_DEVICE_CALLBACK( junior_update_leds )
+TIMER_DEVICE_CALLBACK_MEMBER(junior_state::junior_update_leds)
 {
-	junior_state *state = timer.machine().driver_data<junior_state>();
 	int i;
 
 	for ( i = 0; i < 6; i++ )
 	{
-		if ( state->m_led_time[i] )
-			state->m_led_time[i]--;
+		if ( m_led_time[i] )
+			m_led_time[i]--;
 		else
 			output_set_digit_value( i, 0 );
 	}
 }
 
 
-static MACHINE_START( junior )
+void junior_state::machine_start()
 {
-	junior_state *state = machine.driver_data<junior_state>();
-	state_save_register_item(machine, "junior", NULL, 0, state->m_port_a );
-	state_save_register_item(machine, "junior", NULL, 0, state->m_port_b );
+	save_item(NAME(m_port_a));
+	save_item(NAME(m_port_b));
 }
 
 
-static MACHINE_RESET(junior)
+void junior_state::machine_reset()
 {
-	junior_state *state = machine.driver_data<junior_state>();
 	int i;
 
 	for ( i = 0; i < 6; i++ )
-	{
-		state->m_led_time[i] = 0;
-	}
+		m_led_time[i] = 0;
 }
 
 
@@ -215,15 +231,13 @@ static MACHINE_CONFIG_START( junior, junior_state )
 	MCFG_CPU_PROGRAM_MAP(junior_mem)
 	MCFG_QUANTUM_TIME(attotime::from_hz(50))
 
-	MCFG_MACHINE_START( junior )
-	MCFG_MACHINE_RESET(junior)
 
 	/* video hardware */
 	MCFG_DEFAULT_LAYOUT( layout_junior )
 
+	/* Devices */
 	MCFG_RIOT6532_ADD("riot", XTAL_1MHz, junior_riot_interface)
-
-	MCFG_TIMER_ADD_PERIODIC("led_timer", junior_update_leds, attotime::from_hz(50))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("led_timer", junior_state, junior_update_leds, attotime::from_hz(50))
 MACHINE_CONFIG_END
 
 
@@ -244,5 +258,5 @@ ROM_END
 
 /* Driver */
 
-/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT     COMPANY   FULLNAME       FLAGS */
-COMP( 1980, junior,  0,       0,     junior,    junior,   0,     "Elektor Electronics", "Junior Computer", GAME_SUPPORTS_SAVE | GAME_NO_SOUND)
+/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT     COMPANY                     FULLNAME       FLAGS */
+COMP( 1980, junior, 0,      0,       junior,    junior, driver_device,   0,     "Elektor Electronics", "Junior Computer", GAME_SUPPORTS_SAVE | GAME_NO_SOUND_HW)

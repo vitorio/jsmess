@@ -15,139 +15,137 @@ Memo:
 #include "includes/nb1413m3.h"
 
 
-#define NB1413M3_DEBUG	0
-#define NB1413M3_CHEAT	0
-
-
-int nb1413m3_type;
-//int nb1413m3_sndromregion;
-const char * nb1413m3_sndromrgntag;
-int nb1413m3_sndrombank1;
-int nb1413m3_sndrombank2;
-int nb1413m3_busyctr;
-int nb1413m3_busyflag;
-int nb1413m3_inputport;
-
-static int nb1413m3_74ls193_counter;
-static int nb1413m3_nmi_count;			// for debug
-static int nb1413m3_nmi_clock;
-static int nb1413m3_nmi_enable;
-static int nb1413m3_counter;
-static int nb1413m3_gfxradr_l;
-static int nb1413m3_gfxradr_h;
-static int nb1413m3_gfxrombank;
-static int nb1413m3_outcoin_enable;
-static int nb1413m3_outcoin_flag;
-
+#define NB1413M3_DEBUG  0
 
 #define NB1413M3_TIMER_BASE 20000000
-static TIMER_CALLBACK( nb1413m3_timer_callback )
+
+const device_type NB1413M3 = &device_creator<nb1413m3_device>;
+
+nb1413m3_device::nb1413m3_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, NB1413M3, "Nichibutsu NB1413M3", tag, owner, clock, "nb1413m3", __FILE__),
+	m_sndromrgntag("voice"),
+	m_sndrombank1(0),
+	m_sndrombank2(0),
+	m_busyctr(0),
+	m_busyflag(1),
+	m_outcoin_flag(1),
+	m_inputport(0xff),
+	m_74ls193_counter(0),
+	m_nmi_count(0),
+	m_nmi_clock(0),
+	m_nmi_enable(0),
+	m_counter(0),
+	m_gfxradr_l(0),
+	m_gfxradr_h(0),
+	m_gfxrombank(0),
+	m_outcoin_enable(0)
 {
-	machine.scheduler().timer_set(attotime::from_hz(NB1413M3_TIMER_BASE) * 256, FUNC(nb1413m3_timer_callback));
+}
 
-	nb1413m3_74ls193_counter++;
-	nb1413m3_74ls193_counter &= 0x0f;
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
 
-	if (nb1413m3_74ls193_counter == 0x0f)
+void nb1413m3_device::device_config_complete()
+{
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void nb1413m3_device::device_start()
+{
+	machine().scheduler().synchronize(timer_expired_delegate(FUNC(nb1413m3_device::timer_callback), this));
+
+	save_item(NAME(m_nb1413m3_type));
+	save_item(NAME(m_sndrombank1));
+	save_item(NAME(m_sndrombank2));
+	save_item(NAME(m_busyctr));
+	save_item(NAME(m_busyflag));
+	save_item(NAME(m_inputport));
+	save_item(NAME(m_74ls193_counter));
+	save_item(NAME(m_nmi_count));
+	save_item(NAME(m_nmi_clock));
+	save_item(NAME(m_nmi_enable));
+	save_item(NAME(m_counter));
+	save_item(NAME(m_gfxradr_l));
+	save_item(NAME(m_gfxradr_h));
+	save_item(NAME(m_gfxrombank));
+	save_item(NAME(m_outcoin_enable));
+	save_item(NAME(m_outcoin_flag));
+}
+
+//-------------------------------------------------
+//  device_reset - device-specific startup
+//-------------------------------------------------
+
+void nb1413m3_device::device_reset()
+{
+	m_nmi_clock = 0;
+	m_nmi_enable = 0;
+	m_nmi_count = 0;
+	m_74ls193_counter = 0;
+	m_counter = 0;
+	m_sndromrgntag = "voice";
+	m_sndrombank1 = 0;
+	m_sndrombank2 = 0;
+	m_busyctr = 0;
+	m_busyflag = 1;
+	m_gfxradr_l = 0;
+	m_gfxradr_h = 0;
+	m_gfxrombank = 0;
+	m_inputport = 0xff;
+	m_outcoin_flag = 1;
+}
+
+/*****************************************************************************
+    DEVICE HANDLERS
+*****************************************************************************/
+
+/* TODO: is all of this actually programmable? */
+TIMER_CALLBACK_MEMBER( nb1413m3_device::timer_callback )
+{
+	machine().scheduler().timer_set(attotime::from_hz(NB1413M3_TIMER_BASE) * 256, timer_expired_delegate(FUNC(nb1413m3_device::timer_callback), this));
+
+	m_74ls193_counter++;
+	m_74ls193_counter &= 0x0f;
+
+	if (m_74ls193_counter == 0x0f)
 	{
-
-		if (nb1413m3_nmi_enable)
+		if (m_nmi_enable)
 		{
-			cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
-			nb1413m3_nmi_count++;
+			machine().device("maincpu")->execute().set_input_line(INPUT_LINE_NMI, PULSE_LINE);
+			m_nmi_count++;
 		}
 
-#if 1
-		switch (nb1413m3_type)
+		switch (m_nb1413m3_type)
 		{
 			case NB1413M3_TAIWANMB:
-				nb1413m3_74ls193_counter = 0x05;	// 130 ???
+				m_74ls193_counter = 0x05;
 				break;
 			case NB1413M3_OMOTESND:
-				nb1413m3_74ls193_counter = 0x05;	// 130 ???
+				m_74ls193_counter = 0x05;
 				break;
 			case NB1413M3_PASTELG:
-				nb1413m3_74ls193_counter = 0x02;	// 96 ???
+				m_74ls193_counter = 0x02;
 				break;
 			case NB1413M3_HYHOO:
 			case NB1413M3_HYHOO2:
-				nb1413m3_74ls193_counter = 0x05;	// 128 ???
+				m_74ls193_counter = 0x05;
 				break;
 		}
-#endif
 	}
-
-#if 0
-	// nbmj1413m3_nmi_clock_w ?w??
-	// ----------------------------------------------------------------------------------------------------------------
-	//                      nbmj8688    Z80:5.00MHz (20000000/4)
-	// 7    144-145         mjsikaku, mjsikakb, otonano, mjcamera
-
-	// ----------------------------------------------------------------------------------------------------------------
-	//                      nbmj8891    Z80:5.00MHz (20000000/4)
-	// 7    144-145         msjiken, telmahjn, mjcamerb, mmcamera
-
-	// ----------------------------------------------------------------------------------------------------------------
-	//                      nbmj8688    Z80:5.00MHz (20000000/4)
-	// 6    130-131         kaguya, kaguya2, idhimitu
-
-	// ----------------------------------------------------------------------------------------------------------------
-	//                      nbmj8891    Z80:5.00MHz (20000000/4)
-	// 6    130-131         hanamomo, gionbana, mgion, abunai, mjfocus, mjfocusm, peepshow, scandal, scandalm, mgmen89,
-	//                      mjnanpas, mjnanpaa, mjnanpau, bananadr, mladyhtr, chinmoku, club90s, club90sa, lovehous,
-	//                      maiko, mmaiko, hanaoji, pairsten
-
-	// ----------------------------------------------------------------------------------------------------------------
-	//                      nbmj8991    Z80:5MHz (25000000/5)
-	// 6    130-131         galkoku, hyouban, galkaika, tokyogal, tokimbsj, mcontest, uchuuai
-
-	// ----------------------------------------------------------------------------------------------------------------
-	//                      nbmj8688    Z80:5.00MHz (20000000/4)
-	// 6     81- 82         crystalg(DAC?????x??),  crystal2(DAC?????x??)
-	// 6    130-131         bijokkoy(?A?j????), bijokkog(?A?j????)
-
-	// ----------------------------------------------------------------------------------------------------------------
-	//                      nbmj8688    Z80:5.00MHz (20000000/4)
-	// 4    108-109         bijokkoy(?A?j????), bijokkog(?A?j????)
-
-	// ----------------------------------------------------------------------------------------------------------------
-
-	// nbmj1413m3_nmi_clock_w ???w??
-	//*5    130-131?        hyhoo, hyhoo2   5.00MHz (????????DAC???????x???????????c)
-	//*5    130-131?        taiwanmb        5.00MHz (???@??????????DAC???????x?s??)
-	//*5    128-129?        omotesnd        5.00MHz
-	//*2    100-101?        pastelg         2.496MHz (19968000/8) ???
-#endif
 }
 
-MACHINE_RESET( nb1413m3 )
+
+WRITE8_MEMBER( nb1413m3_device::nmi_clock_w )
 {
-	nb1413m3_nmi_clock = 0;
-	nb1413m3_nmi_enable = 0;
-	nb1413m3_nmi_count = 0;
-	nb1413m3_74ls193_counter = 0;
-	nb1413m3_counter = 0;
-	nb1413m3_sndromrgntag = "voice";
-	nb1413m3_sndrombank1 = 0;
-	nb1413m3_sndrombank2 = 0;
-	nb1413m3_busyctr = 0;
-	nb1413m3_busyflag = 1;
-	nb1413m3_gfxradr_l = 0;
-	nb1413m3_gfxradr_h = 0;
-	nb1413m3_gfxrombank = 0;
-	nb1413m3_inputport = 0xff;
-	nb1413m3_outcoin_flag = 1;
+	m_nmi_clock = data;
 
-	nb1413m3_74ls193_counter = 0;
-
-	machine.scheduler().synchronize(FUNC(nb1413m3_timer_callback));
-}
-
-WRITE8_HANDLER( nb1413m3_nmi_clock_w )
-{
-	nb1413m3_nmi_clock = data;
-
-	switch (nb1413m3_type)
+	switch (m_nb1413m3_type)
 	{
 		case NB1413M3_APPAREL:
 		case NB1413M3_CITYLOVE:
@@ -173,64 +171,31 @@ WRITE8_HANDLER( nb1413m3_nmi_clock_w )
 		case NB1413M3_MMSIKAKU:
 		case NB1413M3_KANATUEN:
 		case NB1413M3_KYUHITO:
-			nb1413m3_nmi_clock -= 1;
+			m_nmi_clock -= 1;
 			break;
 #if 1
 		case NB1413M3_NIGHTLOV:
-			nb1413m3_nmi_enable = ((data & 0x08) >> 3);
-			nb1413m3_nmi_enable |= ((data & 0x01) ^ 0x01);
-			nb1413m3_nmi_clock -= 1;
+			m_nmi_enable = ((data & 0x08) >> 3);
+			m_nmi_enable |= ((data & 0x01) ^ 0x01);
+			m_nmi_clock -= 1;
 
-			nb1413m3_sndrombank1 = 1;
+			m_sndrombank1 = 1;
 			break;
 #endif
 	}
 
-	nb1413m3_74ls193_counter = ((nb1413m3_nmi_clock & 0xf0) >> 4);
+	m_74ls193_counter = ((m_nmi_clock & 0xf0) >> 4);
 
 }
 
-INTERRUPT_GEN( nb1413m3_interrupt )
-{
-#if 0
-	if (!cpu_getiloops(device))
-	{
-//      nb1413m3_busyflag = 1;
-//      nb1413m3_busyctr = 0;
-		device_set_input_line(device, 0, HOLD_LINE);
-	}
-	if (nb1413m3_nmi_enable)
-	{
-		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
-	}
-
-	#if NB1413M3_CHEAT
-	#include "nbmjchet.inc"
-	#endif
-#else
-//  nb1413m3_busyflag = 1;
-//  nb1413m3_busyctr = 0;
-	device_set_input_line(device, 0, HOLD_LINE);
-
-#if NB1413M3_DEBUG
-	popmessage("NMI SW:%01X CLOCK:%02X COUNT:%02X", nb1413m3_nmi_enable, nb1413m3_nmi_clock, nb1413m3_nmi_count);
-	nb1413m3_nmi_count = 0;
-#endif
-
-	#if NB1413M3_CHEAT
-	#include "nbmjchet.inc"
-	#endif
-#endif
-}
-
-READ8_HANDLER( nb1413m3_sndrom_r )
+READ8_MEMBER( nb1413m3_device::sndrom_r )
 {
 	int rombank;
 
 	/* get top 8 bits of the I/O port address */
-	offset = (offset << 8) | (cpu_get_reg(&space->device(), Z80_BC) >> 8);
+	offset = (offset << 8) | (space.device().state().state_int(Z80_BC) >> 8);
 
-	switch (nb1413m3_type)
+	switch (m_nb1413m3_type)
 	{
 		case NB1413M3_IEMOTO:
 		case NB1413M3_IEMOTOM:
@@ -243,30 +208,32 @@ READ8_HANDLER( nb1413m3_sndrom_r )
 		case NB1413M3_MMSIKAKU:
 		case NB1413M3_KORINAI:
 		case NB1413M3_KORINAIM:
-			rombank = (nb1413m3_sndrombank2 << 1) + (nb1413m3_sndrombank1 & 0x01);
+			rombank = (m_sndrombank2 << 1) + (m_sndrombank1 & 0x01);
 			break;
 		case NB1413M3_HYHOO:
 		case NB1413M3_HYHOO2:
-			rombank = (nb1413m3_sndrombank1 & 0x01);
+			rombank = (m_sndrombank1 & 0x01);
 			break;
-		case NB1413M3_APPAREL:		// no samples
-		case NB1413M3_NIGHTLOV:		// 0-1
-		case NB1413M3_SECOLOVE:		// 0-1
-		case NB1413M3_CITYLOVE:		// 0-1
-		case NB1413M3_MCITYLOV:		// 0-1
-		case NB1413M3_HOUSEMNQ:		// 0-1
-		case NB1413M3_HOUSEMN2:		// 0-1
-		case NB1413M3_LIVEGAL:		// 0-1
-		case NB1413M3_ORANGEC:		// 0-1
-		case NB1413M3_KAGUYA:		// 0-3
-		case NB1413M3_KAGUYA2:		// 0-3 + 4-5 for protection
-		case NB1413M3_BIJOKKOY:		// 0-7
-		case NB1413M3_BIJOKKOG:		// 0-7
-		case NB1413M3_OTONANO:		// 0-7
-		case NB1413M3_MJCAMERA:		// 0 + 4-5 for protection
-		case NB1413M3_IDHIMITU:		// 0 + 4-5 for protection
-		case NB1413M3_KANATUEN:		// 0 + 6 for protection
-			rombank = nb1413m3_sndrombank1;
+		case NB1413M3_APPAREL:      // no samples
+		case NB1413M3_NIGHTLOV:     // 0-1
+		case NB1413M3_SECOLOVE:     // 0-1
+		case NB1413M3_CITYLOVE:     // 0-1
+		case NB1413M3_MCITYLOV:     // 0-1
+		case NB1413M3_HOUSEMNQ:     // 0-1
+		case NB1413M3_HOUSEMN2:     // 0-1
+		case NB1413M3_LIVEGAL:      // 0-1
+		case NB1413M3_ORANGEC:      // 0-1
+		case NB1413M3_ORANGECI:     // 0-1
+		case NB1413M3_VIPCLUB:      // 0-1
+		case NB1413M3_KAGUYA:       // 0-3
+		case NB1413M3_KAGUYA2:      // 0-3 + 4-5 for protection
+		case NB1413M3_BIJOKKOY:     // 0-7
+		case NB1413M3_BIJOKKOG:     // 0-7
+		case NB1413M3_OTONANO:      // 0-7
+		case NB1413M3_MJCAMERA:     // 0 + 4-5 for protection
+		case NB1413M3_IDHIMITU:     // 0 + 4-5 for protection
+		case NB1413M3_KANATUEN:     // 0 + 6 for protection
+			rombank = m_sndrombank1;
 			break;
 		case NB1413M3_TAIWANMB:
 		case NB1413M3_OMOTESND:
@@ -275,7 +242,7 @@ READ8_HANDLER( nb1413m3_sndrom_r )
 		case NB1413M3_MJFOCUSM:
 		case NB1413M3_BANANADR:
 			offset = (((offset & 0x7f00) >> 8) | ((offset & 0x0080) >> 0) | ((offset & 0x007f) << 8));
-			rombank = (nb1413m3_sndrombank1 >> 1);
+			rombank = (m_sndrombank1 >> 1);
 			break;
 		case NB1413M3_MMCAMERA:
 		case NB1413M3_MSJIKEN:
@@ -305,18 +272,18 @@ READ8_HANDLER( nb1413m3_sndrom_r )
 		case NB1413M3_PAIRSNB:
 		case NB1413M3_PAIRSTEN:
 		default:
-			rombank = (nb1413m3_sndrombank1 >> 1);
+			rombank = (m_sndrombank1 >> 1);
 			break;
 	}
 
 	offset += 0x08000 * rombank;
 
 #if NB1413M3_DEBUG
-	popmessage("Sound ROM %02X:%05X [B1:%02X B2:%02X]", rombank, offset, nb1413m3_sndrombank1, nb1413m3_sndrombank2);
+	popmessage("Sound ROM %02X:%05X [B1:%02X B2:%02X]", rombank, offset, m_sndrombank1, m_sndrombank2);
 #endif
 
-	if (offset < space->machine().region(nb1413m3_sndromrgntag)->bytes())
-		return space->machine().region(nb1413m3_sndromrgntag)->base()[offset];
+	if (offset < space.machine().root_device().memregion(m_sndromrgntag)->bytes())
+		return space.machine().root_device().memregion(m_sndromrgntag)->base()[offset];
 	else
 	{
 		popmessage("read past sound ROM length (%05x[%02X])",offset, rombank);
@@ -324,172 +291,158 @@ READ8_HANDLER( nb1413m3_sndrom_r )
 	}
 }
 
-WRITE8_HANDLER( nb1413m3_sndrombank1_w )
+WRITE8_MEMBER( nb1413m3_device::sndrombank1_w )
 {
 	// if (data & 0x02) coin counter ?
-	nb1413m3_outcoin_w(space, 0, data);				// (data & 0x04) >> 2;
-	nb1413m3_nmi_enable = ((data & 0x20) >> 5);
-	nb1413m3_sndrombank1 = (((data & 0xc0) >> 5) | ((data & 0x10) >> 4));
+	outcoin_w(space, 0, data);             // (data & 0x04) >> 2;
+	m_nmi_enable = ((data & 0x20) >> 5);
+	m_sndrombank1 = (((data & 0xc0) >> 5) | ((data & 0x10) >> 4));
 }
 
-WRITE8_HANDLER( nb1413m3_sndrombank2_w )
+WRITE8_MEMBER( nb1413m3_device::sndrombank2_w )
 {
-	nb1413m3_sndrombank2 = (data & 0x03);
+	m_sndrombank2 = (data & 0x03);
 }
 
-READ8_HANDLER( nb1413m3_gfxrom_r )
+READ8_MEMBER( nb1413m3_device::gfxrom_r )
 {
-	UINT8 *GFXROM = space->machine().region("gfx1")->base();
+	UINT8 *GFXROM = space.machine().root_device().memregion("gfx1")->base();
 
-	return GFXROM[(0x20000 * (nb1413m3_gfxrombank | ((nb1413m3_sndrombank1 & 0x02) << 3))) + ((0x0200 * nb1413m3_gfxradr_h) + (0x0002 * nb1413m3_gfxradr_l)) + (offset & 0x01)];
+	return GFXROM[(0x20000 * (m_gfxrombank | ((m_sndrombank1 & 0x02) << 3))) + ((0x0200 * m_gfxradr_h) + (0x0002 * m_gfxradr_l)) + (offset & 0x01)];
 }
 
-WRITE8_HANDLER( nb1413m3_gfxrombank_w )
+WRITE8_MEMBER( nb1413m3_device::gfxrombank_w )
 {
-	nb1413m3_gfxrombank = (((data & 0xc0) >> 4) + (data & 0x03));
+	m_gfxrombank = (((data & 0xc0) >> 4) + (data & 0x03));
 }
 
-WRITE8_HANDLER( nb1413m3_gfxradr_l_w )
+WRITE8_MEMBER( nb1413m3_device::gfxradr_l_w )
 {
-	nb1413m3_gfxradr_l = data;
+	m_gfxradr_l = data;
 }
 
-WRITE8_HANDLER( nb1413m3_gfxradr_h_w )
+WRITE8_MEMBER( nb1413m3_device::gfxradr_h_w )
 {
-	nb1413m3_gfxradr_h = data;
+	m_gfxradr_h = data;
 }
 
-WRITE8_HANDLER( nb1413m3_inputportsel_w )
+WRITE8_MEMBER( nb1413m3_device::inputportsel_w )
 {
-	nb1413m3_inputport = data;
+	m_inputport = data;
 }
 
-CUSTOM_INPUT( nb1413m3_busyflag_r )
+READ8_MEMBER( nb1413m3_device::inputport0_r )
 {
-	return nb1413m3_busyflag & 0x01;
+	return ((space.machine().root_device().ioport("SYSTEM")->read() & 0xfd) | ((m_outcoin_flag & 0x01) << 1));
 }
 
-
-/* 2008-08 FP:
- * In ALL games (but pastelg, hyhoo & hyhoo2) nb1413m3_outcoin_flag is read at inputport0.
- * However, a few games (lovehous, maiko, mmaiko, hanaoji and the ones using inputport3_r below)
- * read nb1413m3_outcoin_flag also at inputport3! Is this the correct behaviour for these games
- * or should they only check the flag at inputport3? */
-CUSTOM_INPUT( nb1413m3_outcoin_flag_r )
+READ8_MEMBER( nb1413m3_device::inputport1_r )
 {
-	return nb1413m3_outcoin_flag & 0x01;
-}
-
-READ8_HANDLER( nb1413m3_inputport0_r )
-{
-	return ((input_port_read(space->machine(), "SYSTEM") & 0xfd) | ((nb1413m3_outcoin_flag & 0x01) << 1));
-}
-
-READ8_HANDLER( nb1413m3_inputport1_r )
-{
-	switch (nb1413m3_type)
+	device_t &root = space.machine().root_device();
+	switch (m_nb1413m3_type)
 	{
 		case NB1413M3_HYHOO:
 		case NB1413M3_HYHOO2:
-			switch ((nb1413m3_inputport ^ 0xff) & 0x07)
+			switch ((m_inputport ^ 0xff) & 0x07)
 			{
-				case 0x01:	return input_port_read(space->machine(), "IN0");
-				case 0x02:	return input_port_read(space->machine(), "IN1");
-				case 0x04:	return 0xff;
-				default:	return 0xff;
+				case 0x01:  return root.ioport("IN0")->read();
+				case 0x02:  return root.ioport("IN1")->read();
+				case 0x04:  return 0xff;
+				default:    return 0xff;
 			}
 			break;
 		case NB1413M3_MSJIKEN:
 		case NB1413M3_TELMAHJN:
-			if (input_port_read(space->machine(), "DSWA") & 0x80)
+			if (root.ioport("DSWA")->read() & 0x80)
 			{
-				switch ((nb1413m3_inputport ^ 0xff) & 0x1f)
+				switch ((m_inputport ^ 0xff) & 0x1f)
 				{
-					case 0x01:	return input_port_read(space->machine(), "KEY0");
-					case 0x02:	return input_port_read(space->machine(), "KEY1");
-					case 0x04:	return input_port_read(space->machine(), "KEY2");
-					case 0x08:	return input_port_read(space->machine(), "KEY3");
-					case 0x10:	return input_port_read(space->machine(), "KEY4");
-					default:	return (input_port_read(space->machine(), "KEY0") & input_port_read(space->machine(), "KEY1") & input_port_read(space->machine(), "KEY2")
-										& input_port_read(space->machine(), "KEY3") & input_port_read(space->machine(), "KEY4"));
+					case 0x01:  return root.ioport("KEY0")->read();
+					case 0x02:  return root.ioport("KEY1")->read();
+					case 0x04:  return root.ioport("KEY2")->read();
+					case 0x08:  return root.ioport("KEY3")->read();
+					case 0x10:  return root.ioport("KEY4")->read();
+					default:    return (root.ioport("KEY0")->read() & root.ioport("KEY1")->read() & root.ioport("KEY2")->read()
+										& root.ioport("KEY3")->read() & root.ioport("KEY4")->read());
 				}
 			}
-			else return input_port_read(space->machine(), "JAMMA2");
+			else return root.ioport("JAMMA2")->read();
 			break;
 		case NB1413M3_PAIRSNB:
 		case NB1413M3_PAIRSTEN:
 		case NB1413M3_OHPAIPEE:
 		case NB1413M3_TOGENKYO:
-			return input_port_read(space->machine(), "P1");
+			return root.ioport("P1")->read();
 		default:
-			switch ((nb1413m3_inputport ^ 0xff) & 0x1f)
+			switch ((m_inputport ^ 0xff) & 0x1f)
 			{
-				case 0x01:	return input_port_read(space->machine(), "KEY0");
-				case 0x02:	return input_port_read(space->machine(), "KEY1");
-				case 0x04:	return input_port_read(space->machine(), "KEY2");
-				case 0x08:	return input_port_read(space->machine(), "KEY3");
-				case 0x10:	return input_port_read(space->machine(), "KEY4");
-				default:	return (input_port_read(space->machine(), "KEY0") & input_port_read(space->machine(), "KEY1") & input_port_read(space->machine(), "KEY2")
-									& input_port_read(space->machine(), "KEY3") & input_port_read(space->machine(), "KEY4"));
+				case 0x01:  return root.ioport("KEY0")->read();
+				case 0x02:  return root.ioport("KEY1")->read();
+				case 0x04:  return root.ioport("KEY2")->read();
+				case 0x08:  return root.ioport("KEY3")->read();
+				case 0x10:  return root.ioport("KEY4")->read();
+				default:    return (root.ioport("KEY0")->read() & root.ioport("KEY1")->read() & root.ioport("KEY2")->read()
+									& root.ioport("KEY3")->read() & root.ioport("KEY4")->read());
 			}
 			break;
 	}
 }
 
-READ8_HANDLER( nb1413m3_inputport2_r )
+READ8_MEMBER( nb1413m3_device::inputport2_r )
 {
-	switch (nb1413m3_type)
+	device_t &root = space.machine().root_device();
+	switch (m_nb1413m3_type)
 	{
 		case NB1413M3_HYHOO:
 		case NB1413M3_HYHOO2:
-			switch ((nb1413m3_inputport ^ 0xff) & 0x07)
+			switch ((m_inputport ^ 0xff) & 0x07)
 			{
-				case 0x01:	return 0xff;
-				case 0x02:	return 0xff;
-				case 0x04:	return input_port_read(space->machine(), "IN2");
-				default:	return 0xff;
+				case 0x01:  return 0xff;
+				case 0x02:  return 0xff;
+				case 0x04:  return root.ioport("IN2")->read();
+				default:    return 0xff;
 			}
 			break;
 		case NB1413M3_MSJIKEN:
 		case NB1413M3_TELMAHJN:
-			if (input_port_read(space->machine(), "DSWA") & 0x80)
+			if (root.ioport("DSWA")->read() & 0x80)
 			{
-				switch ((nb1413m3_inputport ^ 0xff) & 0x1f)
+				switch ((m_inputport ^ 0xff) & 0x1f)
 				{
-					case 0x01:	return input_port_read(space->machine(), "KEY5");
-					case 0x02:	return input_port_read(space->machine(), "KEY6");
-					case 0x04:	return input_port_read(space->machine(), "KEY7");
-					case 0x08:	return input_port_read(space->machine(), "KEY8");
-					case 0x10:	return input_port_read(space->machine(), "KEY9");
-					default:	return (input_port_read(space->machine(), "KEY5") & input_port_read(space->machine(), "KEY6") & input_port_read(space->machine(), "KEY7")
-										& input_port_read(space->machine(), "KEY8") & input_port_read(space->machine(), "KEY9"));
+					case 0x01:  return root.ioport("KEY5")->read();
+					case 0x02:  return root.ioport("KEY6")->read();
+					case 0x04:  return root.ioport("KEY7")->read();
+					case 0x08:  return root.ioport("KEY8")->read();
+					case 0x10:  return root.ioport("KEY9")->read();
+					default:    return (root.ioport("KEY5")->read() & root.ioport("KEY6")->read() & root.ioport("KEY7")->read()
+										& root.ioport("KEY8")->read() & root.ioport("KEY9")->read());
 				}
 			}
-			else return input_port_read(space->machine(), "JAMMA1");
+			else return root.ioport("JAMMA1")->read();
 			break;
 		case NB1413M3_PAIRSNB:
 		case NB1413M3_PAIRSTEN:
 		case NB1413M3_OHPAIPEE:
 		case NB1413M3_TOGENKYO:
-			return input_port_read(space->machine(), "P2");
+			return root.ioport("P2")->read();
 		default:
-			switch ((nb1413m3_inputport ^ 0xff) & 0x1f)
+			switch ((m_inputport ^ 0xff) & 0x1f)
 			{
-				case 0x01:	return input_port_read(space->machine(), "KEY5");
-				case 0x02:	return input_port_read(space->machine(), "KEY6");
-				case 0x04:	return input_port_read(space->machine(), "KEY7");
-				case 0x08:	return input_port_read(space->machine(), "KEY8");
-				case 0x10:	return input_port_read(space->machine(), "KEY9");
-				default:	return (input_port_read(space->machine(), "KEY5") & input_port_read(space->machine(), "KEY6") & input_port_read(space->machine(), "KEY7")
-									& input_port_read(space->machine(), "KEY8") & input_port_read(space->machine(), "KEY9"));
+				case 0x01:  return root.ioport("KEY5")->read();
+				case 0x02:  return root.ioport("KEY6")->read();
+				case 0x04:  return root.ioport("KEY7")->read();
+				case 0x08:  return root.ioport("KEY8")->read();
+				case 0x10:  return root.ioport("KEY9")->read();
+				default:    return (root.ioport("KEY5")->read() & root.ioport("KEY6")->read() & root.ioport("KEY7")->read()
+									& root.ioport("KEY8")->read() & root.ioport("KEY9")->read());
 			}
 			break;
 	}
 }
 
-READ8_HANDLER( nb1413m3_inputport3_r )
+READ8_MEMBER( nb1413m3_device::inputport3_r )
 {
-	switch (nb1413m3_type)
+	switch (m_nb1413m3_type)
 	{
 		case NB1413M3_TAIWANMB:
 		case NB1413M3_IEMOTOM:
@@ -504,26 +457,27 @@ READ8_HANDLER( nb1413m3_inputport3_r )
 		case NB1413M3_BANANADR:
 		case NB1413M3_FINALBNY:
 		case NB1413M3_MMSIKAKU:
-			return ((nb1413m3_outcoin_flag & 0x01) << 1);
+			return ((m_outcoin_flag & 0x01) << 1);
 		default:
 			return 0xff;
 	}
 }
 
-READ8_HANDLER( nb1413m3_dipsw1_r )
+READ8_MEMBER( nb1413m3_device::dipsw1_r )
 {
-	switch (nb1413m3_type)
+	device_t &root = space.machine().root_device();
+	switch (m_nb1413m3_type)
 	{
 		case NB1413M3_KANATUEN:
 		case NB1413M3_KYUHITO:
-			return input_port_read(space->machine(), "DSWB");
+			return root.ioport("DSWB")->read();
 		case NB1413M3_TAIWANMB:
-			return ((input_port_read(space->machine(), "DSWA") & 0xf0) | ((input_port_read(space->machine(), "DSWB") & 0xf0) >> 4));
+			return ((root.ioport("DSWA")->read() & 0xf0) | ((root.ioport("DSWB")->read() & 0xf0) >> 4));
 		case NB1413M3_OTONANO:
 		case NB1413M3_MJCAMERA:
 		case NB1413M3_IDHIMITU:
 		case NB1413M3_KAGUYA2:
-			return (((input_port_read(space->machine(), "DSWA") & 0x0f) << 4) | (input_port_read(space->machine(), "DSWB") & 0x0f));
+			return (((root.ioport("DSWA")->read() & 0x0f) << 4) | (root.ioport("DSWB")->read() & 0x0f));
 		case NB1413M3_SCANDAL:
 		case NB1413M3_SCANDALM:
 		case NB1413M3_MJFOCUSM:
@@ -534,7 +488,7 @@ READ8_HANDLER( nb1413m3_dipsw1_r )
 		case NB1413M3_UCHUUAI:
 		case NB1413M3_TOKIMBSJ:
 		case NB1413M3_TOKYOGAL:
-			return ((input_port_read(space->machine(), "DSWA") & 0x0f) | ((input_port_read(space->machine(), "DSWB") & 0x0f) << 4));
+			return ((root.ioport("DSWA")->read() & 0x0f) | ((root.ioport("DSWB")->read() & 0x0f) << 4));
 		case NB1413M3_TRIPLEW1:
 		case NB1413M3_NTOPSTAR:
 		case NB1413M3_PSTADIUM:
@@ -544,29 +498,30 @@ READ8_HANDLER( nb1413m3_dipsw1_r )
 		case NB1413M3_MJLSTORY:
 		case NB1413M3_QMHAYAKU:
 		case NB1413M3_MJGOTTUB:
-			return (((input_port_read(space->machine(), "DSWB") & 0x01) >> 0) | ((input_port_read(space->machine(), "DSWB") & 0x04) >> 1) |
-			        ((input_port_read(space->machine(), "DSWB") & 0x10) >> 2) | ((input_port_read(space->machine(), "DSWB") & 0x40) >> 3) |
-			        ((input_port_read(space->machine(), "DSWA") & 0x01) << 4) | ((input_port_read(space->machine(), "DSWA") & 0x04) << 3) |
-			        ((input_port_read(space->machine(), "DSWA") & 0x10) << 2) | ((input_port_read(space->machine(), "DSWA") & 0x40) << 1));
+			return (((root.ioport("DSWB")->read() & 0x01) >> 0) | ((root.ioport("DSWB")->read() & 0x04) >> 1) |
+					((root.ioport("DSWB")->read() & 0x10) >> 2) | ((root.ioport("DSWB")->read() & 0x40) >> 3) |
+					((root.ioport("DSWA")->read() & 0x01) << 4) | ((root.ioport("DSWA")->read() & 0x04) << 3) |
+					((root.ioport("DSWA")->read() & 0x10) << 2) | ((root.ioport("DSWA")->read() & 0x40) << 1));
 		default:
-			return input_port_read(space->machine(), "DSWA");
+			return space.machine().root_device().ioport("DSWA")->read();
 	}
 }
 
-READ8_HANDLER( nb1413m3_dipsw2_r )
+READ8_MEMBER( nb1413m3_device::dipsw2_r )
 {
-	switch (nb1413m3_type)
+	device_t &root = space.machine().root_device();
+	switch (m_nb1413m3_type)
 	{
 		case NB1413M3_KANATUEN:
 		case NB1413M3_KYUHITO:
-			return input_port_read(space->machine(), "DSWA");
+			return root.ioport("DSWA")->read();
 		case NB1413M3_TAIWANMB:
-			return (((input_port_read(space->machine(), "DSWA") & 0x0f) << 4) | (input_port_read(space->machine(), "DSWB") & 0x0f));
+			return (((root.ioport("DSWA")->read() & 0x0f) << 4) | (root.ioport("DSWB")->read() & 0x0f));
 		case NB1413M3_OTONANO:
 		case NB1413M3_MJCAMERA:
 		case NB1413M3_IDHIMITU:
 		case NB1413M3_KAGUYA2:
-			return ((input_port_read(space->machine(), "DSWA") & 0xf0) | ((input_port_read(space->machine(), "DSWB") & 0xf0) >> 4));
+			return ((root.ioport("DSWA")->read() & 0xf0) | ((root.ioport("DSWB")->read() & 0xf0) >> 4));
 		case NB1413M3_SCANDAL:
 		case NB1413M3_SCANDALM:
 		case NB1413M3_MJFOCUSM:
@@ -577,7 +532,7 @@ READ8_HANDLER( nb1413m3_dipsw2_r )
 		case NB1413M3_UCHUUAI:
 		case NB1413M3_TOKIMBSJ:
 		case NB1413M3_TOKYOGAL:
-			return (((input_port_read(space->machine(), "DSWA") & 0xf0) >> 4) | (input_port_read(space->machine(), "DSWB") & 0xf0));
+			return (((root.ioport("DSWA")->read() & 0xf0) >> 4) | (root.ioport("DSWB")->read() & 0xf0));
 		case NB1413M3_TRIPLEW1:
 		case NB1413M3_NTOPSTAR:
 		case NB1413M3_PSTADIUM:
@@ -587,32 +542,32 @@ READ8_HANDLER( nb1413m3_dipsw2_r )
 		case NB1413M3_MJLSTORY:
 		case NB1413M3_QMHAYAKU:
 		case NB1413M3_MJGOTTUB:
-			return (((input_port_read(space->machine(), "DSWB") & 0x02) >> 1) | ((input_port_read(space->machine(), "DSWB") & 0x08) >> 2) |
-			        ((input_port_read(space->machine(), "DSWB") & 0x20) >> 3) | ((input_port_read(space->machine(), "DSWB") & 0x80) >> 4) |
-			        ((input_port_read(space->machine(), "DSWA") & 0x02) << 3) | ((input_port_read(space->machine(), "DSWA") & 0x08) << 2) |
-			        ((input_port_read(space->machine(), "DSWA") & 0x20) << 1) | ((input_port_read(space->machine(), "DSWA") & 0x80) << 0));
+			return (((root.ioport("DSWB")->read() & 0x02) >> 1) | ((root.ioport("DSWB")->read() & 0x08) >> 2) |
+					((root.ioport("DSWB")->read() & 0x20) >> 3) | ((root.ioport("DSWB")->read() & 0x80) >> 4) |
+					((root.ioport("DSWA")->read() & 0x02) << 3) | ((root.ioport("DSWA")->read() & 0x08) << 2) |
+					((root.ioport("DSWA")->read() & 0x20) << 1) | ((root.ioport("DSWA")->read() & 0x80) << 0));
 		default:
-			return input_port_read(space->machine(), "DSWB");
+			return space.machine().root_device().ioport("DSWB")->read();
 	}
 }
 
-READ8_HANDLER( nb1413m3_dipsw3_l_r )
+READ8_MEMBER( nb1413m3_device::dipsw3_l_r )
 {
-	return ((input_port_read(space->machine(), "DSWC") & 0xf0) >> 4);
+	return ((space.machine().root_device().ioport("DSWC")->read() & 0xf0) >> 4);
 }
 
-READ8_HANDLER( nb1413m3_dipsw3_h_r )
+READ8_MEMBER( nb1413m3_device::dipsw3_h_r )
 {
-	return ((input_port_read(space->machine(), "DSWC") & 0x0f) >> 0);
+	return ((space.machine().root_device().ioport("DSWC")->read() & 0x0f) >> 0);
 }
 
-WRITE8_HANDLER( nb1413m3_outcoin_w )
+WRITE8_MEMBER( nb1413m3_device::outcoin_w )
 {
 	static int counter = 0;
 
-	nb1413m3_outcoin_enable = (data & 0x04) >> 2;
+	m_outcoin_enable = (data & 0x04) >> 2;
 
-	switch (nb1413m3_type)
+	switch (m_nb1413m3_type)
 	{
 		case NB1413M3_TAIWANMB:
 		case NB1413M3_IEMOTOM:
@@ -631,11 +586,11 @@ WRITE8_HANDLER( nb1413m3_outcoin_w )
 		case NB1413M3_FINALBNY:
 		case NB1413M3_LOVEHOUS:
 		case NB1413M3_MMAIKO:
-			if (nb1413m3_outcoin_enable)
+			if (m_outcoin_enable)
 			{
 				if (counter++ == 2)
 				{
-					nb1413m3_outcoin_flag ^= 1;
+					m_outcoin_flag ^= 1;
 					counter = 0;
 				}
 			}
@@ -644,19 +599,19 @@ WRITE8_HANDLER( nb1413m3_outcoin_w )
 			break;
 	}
 
-	set_led_status(space->machine(), 2, nb1413m3_outcoin_flag);		// out coin
+	set_led_status(space.machine(), 2, m_outcoin_flag);      // out coin
 }
 
-WRITE8_HANDLER( nb1413m3_vcrctrl_w )
+WRITE8_MEMBER( nb1413m3_device::vcrctrl_w )
 {
 	if (data & 0x08)
 	{
 		popmessage(" ** VCR CONTROL ** ");
-		set_led_status(space->machine(), 2, 1);
+		set_led_status(space.machine(), 2, 1);
 	}
 	else
 	{
-		set_led_status(space->machine(), 2, 0);
+		set_led_status(space.machine(), 2, 0);
 	}
 }
 
@@ -766,7 +721,7 @@ INPUT_PORTS_END
 /* Hanafuda controls share part of the mahjong panel. Notice that some of the remaining
 inputs are detected in Service Mode, even if we label them as IPT_UNKNOWN because they
 do not correspond to actual inputs */
-INPUT_PORTS_START( nbhf1_ctrl )	// used by gionbana, mgion, abunai
+INPUT_PORTS_START( nbhf1_ctrl ) // used by gionbana, mgion, abunai
 	PORT_START("KEY0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -868,7 +823,7 @@ INPUT_PORTS_START( nbhf1_ctrl )	// used by gionbana, mgion, abunai
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 INPUT_PORTS_END
 
-INPUT_PORTS_START( nbhf2_ctrl )	// used by maiko, hanaoji, hnxmasev and hnageman
+INPUT_PORTS_START( nbhf2_ctrl ) // used by maiko, hanaoji, hnxmasev and hnageman
 	PORT_INCLUDE( nbhf1_ctrl )
 
 	PORT_MODIFY("KEY0")

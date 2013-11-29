@@ -1,11 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 #include "includes/newbrain.h"
 #include "newbrain.lh"
 
 void newbrain_state::video_start()
 {
-	/* find memory regions */
-	m_char_rom = machine().region("chargen")->base();
-
 	/* register for state saving */
 	save_item(NAME(m_tvcnsl));
 	save_item(NAME(m_tvctl));
@@ -13,9 +12,9 @@ void newbrain_state::video_start()
 	save_item(NAME(m_segment_data));
 }
 
-void newbrain_state::screen_update(bitmap_t *bitmap, const rectangle *cliprect)
+void newbrain_state::screen_update(bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
+	address_space &program = m_maincpu->space(AS_PROGRAM);
 
 	int y, sx;
 	int columns = (m_tvctl & NEWBRAIN_VIDEO_80L) ? 80 : 40;
@@ -36,7 +35,7 @@ void newbrain_state::screen_update(bitmap_t *bitmap, const rectangle *cliprect)
 		{
 			int bit;
 
-			UINT8 videoram_data = program->read_byte(videoram_addr + sx);
+			UINT8 videoram_data = program.read_byte(videoram_addr + sx);
 			UINT8 charrom_data;
 
 			if (gr)
@@ -48,7 +47,7 @@ void newbrain_state::screen_update(bitmap_t *bitmap, const rectangle *cliprect)
 			{
 				/* render character rom data */
 				UINT16 charrom_addr = (rc << 8) | ((BIT(videoram_data, 7) & fs) << 7) | (videoram_data & 0x7f);
-				charrom_data = m_char_rom[charrom_addr & 0xfff];
+				charrom_data = m_char_rom->base()[charrom_addr & 0xfff];
 
 				if ((videoram_data & 0x80) && !fs)
 				{
@@ -67,11 +66,11 @@ void newbrain_state::screen_update(bitmap_t *bitmap, const rectangle *cliprect)
 			{
 				int color = BIT(charrom_data, 7) ^ rv;
 
-				*BITMAP_ADDR16(bitmap, y, x++) = color;
+				bitmap.pix32(y, x++) = RGB_MONOCHROME_WHITE[color];
 
 				if (columns == 40)
 				{
-					*BITMAP_ADDR16(bitmap, y, x++) = color;
+					bitmap.pix32(y, x++) = RGB_MONOCHROME_WHITE[color];
 				}
 
 				charrom_data <<= 1;
@@ -101,15 +100,15 @@ void newbrain_state::screen_update(bitmap_t *bitmap, const rectangle *cliprect)
 	}
 }
 
-bool newbrain_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
+UINT32 newbrain_state::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
 	if (m_enrg1 & NEWBRAIN_ENRG1_TVP)
 	{
-		screen_update(&bitmap, &cliprect);
+		screen_update(bitmap, cliprect);
 	}
 	else
 	{
-		bitmap_fill(&bitmap, &cliprect, get_black_pen(machine()));
+		bitmap.fill(RGB_BLACK, cliprect);
 	}
 
 	return 0;
@@ -121,12 +120,9 @@ MACHINE_CONFIG_FRAGMENT( newbrain_video )
 	MCFG_DEFAULT_LAYOUT(layout_newbrain)
 
 	MCFG_SCREEN_ADD(SCREEN_TAG, RASTER)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(newbrain_state, screen_update)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
 	MCFG_SCREEN_SIZE(640, 250)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 249)
-
-	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
 MACHINE_CONFIG_END

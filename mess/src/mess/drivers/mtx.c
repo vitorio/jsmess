@@ -1,8 +1,9 @@
 /*************************************************************************
 
-    driver/mtx.c
-
     Memotech MTX 500, MTX 512 and RS 128
+
+    license: MAME
+    copyright-holders: (Original Author?), Dirk Best, Curt Coder
 
 **************************************************************************/
 
@@ -28,7 +29,7 @@
 #include "imagedev/cassette.h"
 #include "machine/ram.h"
 #include "imagedev/snapquik.h"
-#include "machine/ctronics.h"
+#include "bus/centronics/ctronics.h"
 #include "machine/z80ctc.h"
 #include "machine/z80dart.h"
 #include "video/tms9928a.h"
@@ -42,7 +43,7 @@
     ADDRESS_MAP( mtx_mem )
 -------------------------------------------------*/
 
-static ADDRESS_MAP_START( mtx_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mtx_mem, AS_PROGRAM, 8, mtx_state )
 	AM_RANGE(0x0000, 0x1fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK("bank2")
 	AM_RANGE(0x4000, 0x7fff) AM_RAMBANK("bank3")
@@ -54,23 +55,24 @@ ADDRESS_MAP_END
     ADDRESS_MAP( mtx_io )
 -------------------------------------------------*/
 
-static ADDRESS_MAP_START( mtx_io, AS_IO, 8 )
+static ADDRESS_MAP_START( mtx_io, AS_IO, 8, mtx_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVREAD(CENTRONICS_TAG, mtx_strobe_r) AM_WRITE(mtx_bankswitch_w)
-	AM_RANGE(0x01, 0x01) AM_READWRITE(TMS9928A_vram_r, TMS9928A_vram_w)
-	AM_RANGE(0x02, 0x02) AM_READWRITE(TMS9928A_register_r, TMS9928A_register_w)
-	AM_RANGE(0x03, 0x03) AM_DEVREAD(SN76489A_TAG, mtx_sound_strobe_r) AM_DEVWRITE(CASSETTE_TAG, mtx_cst_w)
-	AM_RANGE(0x04, 0x04) AM_DEVREADWRITE(CENTRONICS_TAG, mtx_prt_r, centronics_data_w)
+	AM_RANGE(0x00, 0x00) AM_READWRITE(mtx_strobe_r, mtx_bankswitch_w)
+	AM_RANGE(0x01, 0x01) AM_DEVREADWRITE("tms9929a", tms9929a_device, vram_read, vram_write)
+	AM_RANGE(0x02, 0x02) AM_DEVREADWRITE("tms9929a", tms9929a_device, register_read, register_write)
+	AM_RANGE(0x03, 0x03) AM_READWRITE(mtx_sound_strobe_r, mtx_cst_w)
+	AM_RANGE(0x04, 0x04) AM_READ(mtx_prt_r)
+	AM_RANGE(0x04, 0x04) AM_DEVWRITE(CENTRONICS_TAG, centronics_device, write)
 	AM_RANGE(0x05, 0x05) AM_READWRITE(mtx_key_lo_r, mtx_sense_w)
 	AM_RANGE(0x06, 0x06) AM_READWRITE(mtx_key_hi_r, mtx_sound_latch_w)
 //  AM_RANGE(0x07, 0x07) PIO
-	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE(Z80CTC_TAG, z80ctc_r, z80ctc_w)
+	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE(Z80CTC_TAG, z80ctc_device, read, write)
 	AM_RANGE(0x30, 0x31) AM_WRITE(hrx_address_w)
 	AM_RANGE(0x32, 0x32) AM_READWRITE(hrx_data_r, hrx_data_w)
 	AM_RANGE(0x33, 0x33) AM_READWRITE(hrx_attr_r, hrx_attr_w)
-//  AM_RANGE(0x38, 0x38) AM_DEVWRITE(MC6845_TAG, mc6845_address_w)
-//  AM_RANGE(0x39, 0x39) AM_DEVWRITE(MC6845_TAG, mc6845_register_r, mc6845_register_w)
-/*  AM_RANGE(0x40, 0x43) AM_DEVREADWRITE(FD1791_TAG, wd17xx_r, wd17xx_w)
+//  AM_RANGE(0x38, 0x38) AM_DEVWRITE(MC6845_TAG, mc6845_device, address_w)
+//  AM_RANGE(0x39, 0x39) AM_DEVWRITE(MC6845_TAG, mc6845_device, register_r, register_w)
+/*  AM_RANGE(0x40, 0x43) AM_DEVREADWRITE_LEGACY(FD1791_TAG, wd17xx_r, wd17xx_w)
     AM_RANGE(0x44, 0x44) AM_READWRITE(fdx_status_r, fdx_control_w)
     AM_RANGE(0x45, 0x45) AM_WRITE(fdx_drv_sel_w)
     AM_RANGE(0x46, 0x46) AM_WRITE(fdx_dma_lo_w)
@@ -81,9 +83,9 @@ ADDRESS_MAP_END
     ADDRESS_MAP( rs128_io )
 -------------------------------------------------*/
 
-static ADDRESS_MAP_START( rs128_io, AS_IO, 8 )
+static ADDRESS_MAP_START( rs128_io, AS_IO, 8, mtx_state )
 	AM_IMPORT_FROM(mtx_io)
-	AM_RANGE(0x0c, 0x0f) AM_DEVREADWRITE(Z80DART_TAG, z80dart_cd_ba_r, z80dart_cd_ba_w)
+	AM_RANGE(0x0c, 0x0f) AM_DEVREADWRITE(Z80DART_TAG, z80dart_device, cd_ba_r, cd_ba_w)
 ADDRESS_MAP_END
 
 /***************************************************************************
@@ -209,44 +211,37 @@ INPUT_PORTS_END
     Z80CTC_INTERFACE( ctc_intf )
 -------------------------------------------------*/
 
-static TIMER_DEVICE_CALLBACK( ctc_tick )
+TIMER_DEVICE_CALLBACK_MEMBER(mtx_state::ctc_tick)
 {
-	mtx_state *state = timer.machine().driver_data<mtx_state>();
-
-	z80ctc_trg1_w(state->m_z80ctc, 1);
-	z80ctc_trg1_w(state->m_z80ctc, 0 );
-	z80ctc_trg2_w(state->m_z80ctc, 1);
-	z80ctc_trg2_w(state->m_z80ctc, 0 );
+	m_z80ctc->trg1(1);
+	m_z80ctc->trg1(0);
+	m_z80ctc->trg2(1);
+	m_z80ctc->trg2(0);
 }
 
-static WRITE_LINE_DEVICE_HANDLER( ctc_trg1_w )
+WRITE_LINE_MEMBER(mtx_state::ctc_trg1_w)
 {
-	mtx_state *driver_state = device->machine().driver_data<mtx_state>();
-
-	if (driver_state->m_z80dart != NULL)
+	if (m_z80dart)
 	{
-		z80dart_rxca_w(driver_state->m_z80dart, state);
-		z80dart_txca_w(driver_state->m_z80dart, state);
+		m_z80dart->rxca_w(state);
+		m_z80dart->txca_w(state);
 	}
 }
 
-static WRITE_LINE_DEVICE_HANDLER( ctc_trg2_w )
+WRITE_LINE_MEMBER(mtx_state::ctc_trg2_w)
 {
-	mtx_state *driver_state = device->machine().driver_data<mtx_state>();
-
-	if (driver_state->m_z80dart != NULL)
+	if (m_z80dart)
 	{
-		z80dart_rxtxcb_w(driver_state->m_z80dart, state);
+		m_z80dart->rxtxcb_w(state);
 	}
 }
 
 static Z80CTC_INTERFACE( ctc_intf )
 {
-	0,
 	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0),
 	DEVCB_NULL,
-	DEVCB_LINE(ctc_trg1_w),
-	DEVCB_LINE(ctc_trg2_w)
+	DEVCB_DRIVER_LINE_MEMBER(mtx_state,ctc_trg1_w),
+	DEVCB_DRIVER_LINE_MEMBER(mtx_state,ctc_trg2_w)
 };
 
 /*-------------------------------------------------
@@ -302,12 +297,11 @@ static const z80_daisy_config rs128_daisy_chain[] =
     cassette_interface mtx_cassette_interface
 -------------------------------------------------*/
 
-static TIMER_DEVICE_CALLBACK( cassette_tick )
+TIMER_DEVICE_CALLBACK_MEMBER(mtx_state::cassette_tick)
 {
-	mtx_state *state = timer.machine().driver_data<mtx_state>();
-	int data = ((state->m_cassette)->input() > +0.0) ? 0 : 1;
+	int data = ((m_cassette)->input() > +0.0) ? 0 : 1;
 
-	z80ctc_trg3_w(state->m_z80ctc, data);
+	m_z80ctc->trg3(data);
 }
 
 static const cassette_interface mtx_cassette_interface =
@@ -318,6 +312,31 @@ static const cassette_interface mtx_cassette_interface =
 	NULL,
 	NULL
 };
+
+/*-------------------------------------------------
+    mtx_tms9928a_interface
+-------------------------------------------------*/
+
+WRITE_LINE_MEMBER(mtx_state::mtx_tms9929a_interrupt)
+{
+	m_z80ctc->trg0(state ? 0 : 1);
+}
+
+static TMS9928A_INTERFACE(mtx_tms9928a_interface)
+{
+	0x4000,
+	DEVCB_DRIVER_LINE_MEMBER(mtx_state,mtx_tms9929a_interrupt)
+};
+
+/*-------------------------------------------------
+    sn76496_config psg_intf
+-------------------------------------------------*/
+
+static const sn76496_config psg_intf =
+{
+	DEVCB_NULL
+};
+
 
 /***************************************************************************
     MACHINE DRIVERS
@@ -333,30 +352,29 @@ static MACHINE_CONFIG_START( mtx512, mtx_state )
 	MCFG_CPU_ADD(Z80_TAG, Z80, XTAL_4MHz)
 	MCFG_CPU_PROGRAM_MAP(mtx_mem)
 	MCFG_CPU_IO_MAP(mtx_io)
-	MCFG_CPU_VBLANK_INT(SCREEN_TAG, mtx_interrupt)
 	MCFG_CPU_CONFIG(mtx_daisy_chain)
 
-	MCFG_MACHINE_START(mtx512)
-	MCFG_MACHINE_RESET(mtx512)
+	MCFG_MACHINE_START_OVERRIDE(mtx_state,mtx512)
+	MCFG_MACHINE_RESET_OVERRIDE(mtx_state,mtx512)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD(tms9928a)
-	MCFG_SCREEN_MODIFY(SCREEN_TAG)
-	MCFG_SCREEN_REFRESH_RATE(50)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
+	MCFG_TMS9928A_ADD( "tms9929a", TMS9929A, mtx_tms9928a_interface )
+	MCFG_TMS9928A_SCREEN_ADD_PAL( "screen" )
+	MCFG_SCREEN_UPDATE_DEVICE( "tms9929a", tms9929a_device, screen_update )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 	MCFG_SOUND_ADD(SN76489A_TAG, SN76489A, XTAL_4MHz)
+	MCFG_SOUND_CONFIG(psg_intf)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 
 	/* devices */
 	MCFG_Z80CTC_ADD(Z80CTC_TAG, XTAL_4MHz, ctc_intf )
-	MCFG_TIMER_ADD_PERIODIC("z80ctc_timer", ctc_tick, attotime::from_hz(XTAL_4MHz/13))
-	MCFG_CENTRONICS_ADD(CENTRONICS_TAG, standard_centronics)
-	MCFG_SNAPSHOT_ADD("snapshot", mtx, "mtb", 0.5)
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, mtx_cassette_interface)
-	MCFG_TIMER_ADD_PERIODIC("cassette_timer", cassette_tick, attotime::from_hz(44100))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("z80ctc_timer", mtx_state, ctc_tick, attotime::from_hz(XTAL_4MHz/13))
+	MCFG_CENTRONICS_PRINTER_ADD(CENTRONICS_TAG, standard_centronics)
+	MCFG_SNAPSHOT_ADD("snapshot", mtx_state, mtx, "mtx", 1)
+	MCFG_CASSETTE_ADD("cassette", mtx_cassette_interface)
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("cassette_timer", mtx_state, cassette_tick, attotime::from_hz(44100))
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -430,6 +448,40 @@ ROM_END
 ***************************************************************************/
 
 /*    YEAR  NAME      PARENT    COMPAT  MACHINE   INPUT     INIT    COMPANY          FULLNAME   FLAGS */
-COMP( 1983, mtx512,   0,		0,      mtx512,   mtx512,   0,		"Memotech Ltd", "MTX 512", 0 )
-COMP( 1983, mtx500,   mtx512,   0,      mtx500,   mtx512,   0,		"Memotech Ltd", "MTX 500", 0 )
-COMP( 1984, rs128,    mtx512,   0,      rs128,    mtx512,   0,		"Memotech Ltd", "RS 128",  0 )
+COMP( 1983, mtx512,   0,        0,      mtx512,   mtx512, driver_device,   0,       "Memotech Ltd", "MTX 512", 0 )
+COMP( 1983, mtx500,   mtx512,   0,      mtx500,   mtx512, driver_device,   0,       "Memotech Ltd", "MTX 500", 0 )
+COMP( 1984, rs128,    mtx512,   0,      rs128,    mtx512, driver_device,   0,       "Memotech Ltd", "RS 128",  0 )
+
+
+/*
+The following roms are available should they be considered useful:
+
+ROM_START( mtx_roms )
+    ROM_LOAD( "assem.rom",    CRC(599d5b6b) SHA1(3ec1f7f476a21ca3206012ded22198c020b47f7d) )
+    ROM_LOAD( "basic.rom",    CRC(d1e9ff36) SHA1(e89ae3a627716e6cee7e35054be8a2472bdd49d4) )
+    ROM_LOAD( "boot.rom",     CRC(ed98d6dd) SHA1(4671ee49bb96262b0468f7122a49bf2588170903) )
+    ROM_LOAD( "mtx3-an.rom",  CRC(54c9eca2) SHA1(3e628beaa360e635264c8c2c3a5b8312951a220b) )
+    ROM_LOAD( "nboot.rom",    CRC(9caea81c) SHA1(93fca6e7ffbc7ae3283b8bda9f01c36b2bed1c54) )
+ROM_END
+
+BASIC.ROM   this contains the monitor ROM plus the BASIC ROM.
+        It's good to view them as one, because the monitor
+        ROM contains a good deal of BASIC code and the machine
+        code just runs from the monitor ROM into the BASIC ROM.
+        It's also handy if you want to disassemble it (which
+        you don't need because it's already done).
+
+MTX3-AN.ROM the monitor ROM, but slightly modified
+        While detecting memory size, the startup code destroys
+        RAM content. When you have a lot of RAM it is convenient
+        to have a ramdisk for CP/M, but it is a nuisance if the
+        ramdisk is trashed at each reset. The modification simply
+        prevents RAM trashing.
+
+ASSEM.ROM   assembler ROM
+
+BOOT.ROM    FDX floppy boot ROM
+
+NBOOT.ROM   replacement FDX boot ROM written by M. Kessler (supports
+        booting from different disk formats and different drives)
+*/

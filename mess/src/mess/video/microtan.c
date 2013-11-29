@@ -18,42 +18,38 @@
 
 
 
-WRITE8_HANDLER( microtan_videoram_w )
+WRITE8_MEMBER(microtan_state::microtan_videoram_w)
 {
-	microtan_state *state = space->machine().driver_data<microtan_state>();
-	UINT8 *videoram = state->m_videoram;
-	if ((videoram[offset] != data) || (state->m_chunky_buffer[offset] != state->m_chunky_graphics))
+	UINT8 *videoram = m_videoram;
+	if ((videoram[offset] != data) || (m_chunky_buffer[offset] != m_chunky_graphics))
 	{
 		videoram[offset] = data;
-		tilemap_mark_tile_dirty(state->m_bg_tilemap, offset);
-		state->m_chunky_buffer[offset] = state->m_chunky_graphics;
+		m_bg_tilemap->mark_tile_dirty(offset);
+		m_chunky_buffer[offset] = m_chunky_graphics;
 	}
 }
 
-static TILE_GET_INFO(get_bg_tile_info)
+TILE_GET_INFO_MEMBER(microtan_state::get_bg_tile_info)
 {
-	microtan_state *state = machine.driver_data<microtan_state>();
-	UINT8 *videoram = state->m_videoram;
-	int gfxn = state->m_chunky_buffer[tile_index];
+	UINT8 *videoram = m_videoram;
+	int gfxn = m_chunky_buffer[tile_index];
 	int code = videoram[tile_index];
 
-	SET_TILE_INFO(gfxn, code, 0, 0);
+	SET_TILE_INFO_MEMBER(gfxn, code, 0, 0);
 }
 
-VIDEO_START( microtan )
+void microtan_state::video_start()
 {
-	microtan_state *state = machine.driver_data<microtan_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
+	m_bg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(microtan_state::get_bg_tile_info),this), TILEMAP_SCAN_ROWS,
 		8, 16, 32, 16);
 
-	state->m_chunky_buffer = auto_alloc_array(machine, UINT8, 0x200);
-	memset(state->m_chunky_buffer, 0, 0x200);
-	state->m_chunky_graphics = 0;
+	m_chunky_buffer = auto_alloc_array(machine(), UINT8, 0x200);
+	memset(m_chunky_buffer, 0, 0x200);
+	m_chunky_graphics = 0;
 }
 
-SCREEN_UPDATE( microtan )
+UINT32 microtan_state::screen_update_microtan(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	microtan_state *state = screen->machine().driver_data<microtan_state>();
-	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
+	m_bg_tilemap->draw(screen, bitmap, cliprect, 0, 0);
 	return 0;
 }

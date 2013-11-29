@@ -29,8 +29,8 @@ enum
 	TIMER_FINISHING
 };
 
-#define TIMER_FLAG		0x80
-#define PA7_FLAG		0x40
+#define TIMER_FLAG      0x80
+#define PA7_FLAG        0x40
 
 
 
@@ -46,15 +46,12 @@ enum
 
 void riot6532_device::update_irqstate()
 {
-	int state = (m_irqstate & m_irqenable);
+	int irq = (m_irqstate & m_irqenable) ? ASSERT_LINE : CLEAR_LINE;
 
-	if (!m_irq_func.isnull())
+	if (m_irq != irq)
 	{
-		m_irq_func((state != 0) ? ASSERT_LINE : CLEAR_LINE);
-	}
-	else
-	{
-		logerror("%s:6532RIOT chip #%d: no irq callback function\n", machine().describe_context(), m_index);
+		m_irq_func(irq);
+		m_irq = irq;
 	}
 }
 
@@ -159,10 +156,9 @@ void riot6532_device::timer_end()
     riot6532_w - master I/O write access
 -------------------------------------------------*/
 
-WRITE8_DEVICE_HANDLER( riot6532_w )
+WRITE8_MEMBER( riot6532_device::write )
 {
-	riot6532_device *via = downcast<riot6532_device *>(device);
-	via->reg_w(offset, data);
+	reg_w(offset, data);
 }
 
 void riot6532_device::reg_w(UINT8 offset, UINT8 data)
@@ -229,14 +225,7 @@ void riot6532_device::reg_w(UINT8 offset, UINT8 data)
 		else
 		{
 			port->m_out = data;
-			if (!port->m_out_func.isnull())
-			{
-				port->m_out_func(0, data);
-			}
-			else
-			{
-				logerror("%s:6532RIOT chip %s: Port %c is being written to but has no handler. %02X\n", machine().describe_context(), tag(), 'A' + (offset & 1), data);
-			}
+			port->m_out_func(0, data);
 		}
 
 		/* writes to port A need to update the PA7 state */
@@ -252,13 +241,12 @@ void riot6532_device::reg_w(UINT8 offset, UINT8 data)
     riot6532_r - master I/O read access
 -------------------------------------------------*/
 
-READ8_DEVICE_HANDLER( riot6532_r )
+READ8_MEMBER( riot6532_device::read )
 {
-	riot6532_device *via = downcast<riot6532_device *>(device);
-	return via->reg_r(offset);
+	return reg_r(offset, space.debugger_access());
 }
 
-UINT8 riot6532_device::reg_r(UINT8 offset)
+UINT8 riot6532_device::reg_r(UINT8 offset, bool debugger_access)
 {
 	UINT8 val = 0;
 
@@ -267,9 +255,12 @@ UINT8 riot6532_device::reg_r(UINT8 offset)
 	{
 		val = m_irqstate;
 
-		/* implicitly clears the PA7 flag */
-		m_irqstate &= ~PA7_FLAG;
-		update_irqstate();
+		if ( ! debugger_access )
+		{
+			/* implicitly clears the PA7 flag */
+			m_irqstate &= ~PA7_FLAG;
+			update_irqstate();
+		}
 	}
 
 	/* if A2 == 1 and A0 == 0, we are reading the timer */
@@ -277,22 +268,25 @@ UINT8 riot6532_device::reg_r(UINT8 offset)
 	{
 		val = get_timer();
 
-		/* A3 contains the timer IRQ enable */
-		if (offset & 8)
+		if ( ! debugger_access )
 		{
-			m_irqenable |= TIMER_FLAG;
-		}
-		else
-		{
-			m_irqenable &= ~TIMER_FLAG;
-		}
+			/* A3 contains the timer IRQ enable */
+			if (offset & 8)
+			{
+				m_irqenable |= TIMER_FLAG;
+			}
+			else
+			{
+				m_irqenable &= ~TIMER_FLAG;
+			}
 
-		/* implicitly clears the timer flag */
-		if (m_timerstate != TIMER_FINISHING || val != 0xff)
-		{
-			m_irqstate &= ~TIMER_FLAG;
+			/* implicitly clears the timer flag */
+			if (m_timerstate != TIMER_FINISHING || val != 0xff)
+			{
+				m_irqstate &= ~TIMER_FLAG;
+			}
+			update_irqstate();
 		}
-		update_irqstate();
 	}
 
 	/* if A2 == 0 and A0 == anything, we are reading from ports */
@@ -318,12 +312,11 @@ UINT8 riot6532_device::reg_r(UINT8 offset)
 				/* changes to port A need to update the PA7 state */
 				if (port == &m_port[0])
 				{
-					update_pa7_state();
+					if ( ! debugger_access )
+					{
+						update_pa7_state();
+					}
 				}
-			}
-			else
-			{
-				logerror("%s:6532RIOT chip %s: Port %c is being read but has no handler\n", machine().describe_context(), tag(), 'A' + (offset & 1));
 			}
 
 			/* apply the DDR to the result */
@@ -338,12 +331,6 @@ UINT8 riot6532_device::reg_r(UINT8 offset)
     porta_in_set - set port A input value
 -------------------------------------------------*/
 
-void riot6532_porta_in_set(device_t *device, UINT8 data, UINT8 mask)
-{
-	riot6532_device *via = downcast<riot6532_device *>(device);
-	via->porta_in_set(data, mask);
-}
-
 void riot6532_device::porta_in_set(UINT8 data, UINT8 mask)
 {
 	m_port[0].m_in = (m_port[0].m_in & ~mask) | (data & mask);
@@ -355,12 +342,6 @@ void riot6532_device::porta_in_set(UINT8 data, UINT8 mask)
     portb_in_set - set port B input value
 -------------------------------------------------*/
 
-void riot6532_portb_in_set(device_t *device, UINT8 data, UINT8 mask)
-{
-	riot6532_device *via = downcast<riot6532_device *>(device);
-	via->portb_in_set(data, mask);
-}
-
 void riot6532_device::portb_in_set(UINT8 data, UINT8 mask)
 {
 	m_port[1].m_in = (m_port[1].m_in & ~mask) | (data & mask);
@@ -370,12 +351,6 @@ void riot6532_device::portb_in_set(UINT8 data, UINT8 mask)
 /*-------------------------------------------------
     porta_in_get - return port A input value
 -------------------------------------------------*/
-
-UINT8 riot6532_porta_in_get(device_t *device)
-{
-	riot6532_device *via = downcast<riot6532_device *>(device);
-	return via->porta_in_get();
-}
 
 UINT8 riot6532_device::porta_in_get()
 {
@@ -387,12 +362,6 @@ UINT8 riot6532_device::porta_in_get()
     portb_in_get - return port B input value
 -------------------------------------------------*/
 
-UINT8 riot6532_portb_in_get(device_t *device)
-{
-	riot6532_device *via = downcast<riot6532_device *>(device);
-	return via->portb_in_get();
-}
-
 UINT8 riot6532_device::portb_in_get()
 {
 	return m_port[1].m_in;
@@ -403,12 +372,6 @@ UINT8 riot6532_device::portb_in_get()
     porta_in_get - return port A output value
 -------------------------------------------------*/
 
-UINT8 riot6532_porta_out_get(device_t *device)
-{
-	riot6532_device *via = downcast<riot6532_device *>(device);
-	return via->porta_out_get();
-}
-
 UINT8 riot6532_device::porta_out_get()
 {
 	return m_port[0].m_out;
@@ -418,12 +381,6 @@ UINT8 riot6532_device::porta_out_get()
 /*-------------------------------------------------
     portb_in_get - return port B output value
 -------------------------------------------------*/
-
-UINT8 riot6532_portb_out_get(device_t *device)
-{
-	riot6532_device *via = downcast<riot6532_device *>(device);
-	return via->portb_out_get();
-}
 
 UINT8 riot6532_device::portb_out_get()
 {
@@ -440,7 +397,8 @@ UINT8 riot6532_device::portb_out_get()
 //-------------------------------------------------
 
 riot6532_device::riot6532_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, RIOT6532, "6532 (RIOT)", tag, owner, clock)
+	: device_t(mconfig, RIOT6532, "6532 (RIOT)", tag, owner, clock, "riot6532", __FILE__),
+		m_irq(CLEAR_LINE)
 {
 }
 
@@ -478,12 +436,6 @@ void riot6532_device::device_config_complete()
 
 void riot6532_device::device_start()
 {
-	/* validate arguments */
-	assert(this != NULL);
-
-	/* set static values */
-	m_index = machine().devicelist().indexof(RIOT6532, tag());
-
 	/* configure the ports */
 	m_port[0].m_in_func.resolve(m_in_a_cb, *this);
 	m_port[0].m_out_func.resolve(m_out_a_cb, *this);
@@ -506,6 +458,7 @@ void riot6532_device::device_start()
 
 	save_item(NAME(m_irqstate));
 	save_item(NAME(m_irqenable));
+	save_item(NAME(m_irq));
 
 	save_item(NAME(m_pa7dir));
 	save_item(NAME(m_pa7prev));
@@ -523,8 +476,10 @@ void riot6532_device::device_start()
 void riot6532_device::device_reset()
 {
 	/* reset I/O states */
+	m_port[0].m_in = 0;
 	m_port[0].m_out = 0;
 	m_port[0].m_ddr = 0;
+	m_port[1].m_in = 0;
 	m_port[1].m_out = 0;
 	m_port[1].m_ddr = 0;
 
@@ -538,7 +493,7 @@ void riot6532_device::device_reset()
 	m_pa7prev = 0;
 
 	/* reset timer states */
-	m_timershift = 0;
-	m_timerstate = TIMER_IDLE;
-	m_timer->adjust(attotime::never);
+	m_timershift = 10;
+	m_timerstate = TIMER_COUNTING;
+	m_timer->adjust(attotime::from_ticks(256 << m_timershift, clock()));
 }

@@ -1,6 +1,6 @@
-#include "emu.h"
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 #include "includes/v1050.h"
-#include "video/mc6845.h"
 
 /*
 
@@ -10,13 +10,13 @@
 
 */
 
-#define V1050_ATTR_BRIGHT	0x01
-#define V1050_ATTR_BLINKING	0x02
-#define V1050_ATTR_ATTEN	0x04
-#define V1050_ATTR_REVERSE	0x10
-#define V1050_ATTR_BLANK	0x20
-#define V1050_ATTR_BOLD		0x40
-#define V1050_ATTR_BLINK	0x80
+#define V1050_ATTR_BRIGHT   0x01
+#define V1050_ATTR_BLINKING 0x02
+#define V1050_ATTR_ATTEN    0x04
+#define V1050_ATTR_REVERSE  0x10
+#define V1050_ATTR_BLANK    0x20
+#define V1050_ATTR_BOLD     0x40
+#define V1050_ATTR_BLINK    0x80
 
 /* Video RAM Access */
 
@@ -81,7 +81,7 @@ static MC6845_UPDATE_ROW( v1050_update_row )
 			/* display blank */
 			if (attr & V1050_ATTR_BLANK) color = 0;
 
-			*BITMAP_ADDR16(bitmap, y, x) = color;
+			bitmap.pix32(y, x) = RGB_MONOCHROME_GREEN_HIGHLIGHT[color];
 
 			data <<= 1;
 		}
@@ -90,14 +90,14 @@ static MC6845_UPDATE_ROW( v1050_update_row )
 
 WRITE_LINE_MEMBER( v1050_state::crtc_vs_w )
 {
-	device_set_input_line(m_subcpu, INPUT_LINE_IRQ0, state ? ASSERT_LINE : CLEAR_LINE);
+	m_subcpu->set_input_line(INPUT_LINE_IRQ0, state ? ASSERT_LINE : CLEAR_LINE);
 
 	set_interrupt(INT_VSYNC, state);
 }
 
-static const mc6845_interface crtc_intf =
+static MC6845_INTERFACE( crtc_intf )
 {
-	SCREEN_TAG,
+	false,
 	8,
 	NULL,
 	v1050_update_row,
@@ -109,49 +109,27 @@ static const mc6845_interface crtc_intf =
 	NULL
 };
 
-/* Palette */
-
-static PALETTE_INIT( v1050 )
-{
-	palette_set_color(machine, 0, RGB_BLACK); /* black */
-	palette_set_color_rgb(machine, 1, 0x00, 0xc0, 0x00); /* green */
-	palette_set_color_rgb(machine, 2, 0x00, 0xff, 0x00); /* bright green */
-}
-
 /* Video Start */
 
 void v1050_state::video_start()
 {
 	/* allocate memory */
-	m_attr_ram = auto_alloc_array(machine(), UINT8, V1050_VIDEORAM_SIZE);
+	m_attr_ram.allocate(V1050_VIDEORAM_SIZE);
 
 	/* register for state saving */
-	state_save_register_global(machine(), m_attr);
-	state_save_register_global_pointer(machine(), m_attr_ram, V1050_VIDEORAM_SIZE);
-}
-
-/* Video Update */
-
-bool v1050_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
-{
-	m_crtc->update(&bitmap, &cliprect);
-
-	return 0;
+	save_item(NAME(m_attr));
 }
 
 /* Machine Drivers */
 
 MACHINE_CONFIG_FRAGMENT( v1050_video )
-	MCFG_MC6845_ADD(H46505_TAG, H46505, XTAL_15_36MHz/8, crtc_intf)
+	MCFG_MC6845_ADD(H46505_TAG, H46505, SCREEN_TAG, XTAL_15_36MHz/8, crtc_intf)
 
 	MCFG_SCREEN_ADD(SCREEN_TAG, RASTER)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DEVICE(H46505_TAG, h46505_device, screen_update)
 
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
 	MCFG_SCREEN_SIZE(640, 400)
 	MCFG_SCREEN_VISIBLE_AREA(0,640-1, 0, 400-1)
-
-	MCFG_PALETTE_LENGTH(3)
-    MCFG_PALETTE_INIT(v1050)
 MACHINE_CONFIG_END

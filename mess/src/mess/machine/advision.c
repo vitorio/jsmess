@@ -28,10 +28,10 @@
 void advision_state::machine_start()
 {
 	/* configure EA banking */
-	memory_configure_bank(machine(), "bank1", 0, 1, machine().region("bios")->base(), 0);
-	memory_configure_bank(machine(), "bank1", 1, 1, machine().region(I8048_TAG)->base(), 0);
-	m_maincpu->memory().space(AS_PROGRAM)->install_readwrite_bank(0x0000, 0x03ff, "bank1");
-	memory_set_bank(machine(), "bank1", 0);
+	membank("bank1")->configure_entry(0, memregion("bios")->base());
+	membank("bank1")->configure_entry(1, memregion(I8048_TAG)->base());
+	m_maincpu->space(AS_PROGRAM).install_readwrite_bank(0x0000, 0x03ff, "bank1");
+	membank("bank1")->set_entry(0);
 
 	/* allocate external RAM */
 	m_ext_ram = auto_alloc_array(machine(), UINT8, 0x400);
@@ -40,11 +40,11 @@ void advision_state::machine_start()
 void advision_state::machine_reset()
 {
 	/* enable internal ROM */
-	device_set_input_line(m_maincpu, MCS48_INPUT_EA, CLEAR_LINE);
-	memory_set_bank(machine(), "bank1", 0);
+	m_maincpu->set_input_line(MCS48_INPUT_EA, CLEAR_LINE);
+	membank("bank1")->set_entry(0);
 
 	/* reset sound CPU */
-	device_set_input_line(m_soundcpu, INPUT_LINE_RESET, ASSERT_LINE);
+	m_soundcpu->set_input_line(INPUT_LINE_RESET, ASSERT_LINE);
 
 	m_rambank = 0x300;
 	m_frame_start = 0;
@@ -58,9 +58,9 @@ WRITE8_MEMBER( advision_state::bankswitch_w )
 {
 	int ea = BIT(data, 2);
 
-	device_set_input_line(m_maincpu, MCS48_INPUT_EA, ea ? ASSERT_LINE : CLEAR_LINE);
+	m_maincpu->set_input_line(MCS48_INPUT_EA, ea ? ASSERT_LINE : CLEAR_LINE);
 
-	memory_set_bank(machine(), "bank1", ea);
+	membank("bank1")->set_entry(ea);
 
 	m_rambank = (data & 0x03) << 8;
 }
@@ -79,7 +79,7 @@ READ8_MEMBER( advision_state::ext_ram_r )
 
 	if (m_video_bank == 0x06)
 	{
-		device_set_input_line(m_soundcpu, INPUT_LINE_RESET, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
+		m_soundcpu->set_input_line(INPUT_LINE_RESET, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
 	}
 
 	return data;
@@ -100,11 +100,11 @@ READ8_MEMBER( advision_state::sound_cmd_r )
 void advision_state::update_dac()
 {
 	if (m_sound_g == 0 && m_sound_d == 0)
-		dac_data_w(m_dac, 0xff);
+		m_dac->write_unsigned8(0xff);
 	else if (m_sound_g == 1 && m_sound_d == 1)
-		dac_data_w(m_dac, 0x80);
+		m_dac->write_unsigned8(0x80);
 	else
-		dac_data_w(m_dac, 0x00);
+		m_dac->write_unsigned8(0x00);
 }
 
 WRITE8_MEMBER( advision_state::sound_g_w )
@@ -163,7 +163,7 @@ READ8_MEMBER( advision_state::vsync_r )
 READ8_MEMBER( advision_state::controller_r )
 {
 	// Get joystick switches
-	UINT8 in = input_port_read(machine(), "joystick");
+	UINT8 in = ioport("joystick")->read();
 	UINT8 data = in | 0x0f;
 
 	// Get buttons

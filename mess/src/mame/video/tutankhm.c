@@ -10,7 +10,7 @@
 #include "includes/tutankhm.h"
 
 
-#define NUM_PENS	(0x10)
+#define NUM_PENS    (0x10)
 
 
 /*************************************
@@ -19,17 +19,15 @@
  *
  *************************************/
 
-WRITE8_HANDLER( tutankhm_flip_screen_x_w )
+WRITE8_MEMBER(tutankhm_state::tutankhm_flip_screen_x_w)
 {
-	tutankhm_state *state = space->machine().driver_data<tutankhm_state>();
-	state->m_flip_x = data & 0x01;
+	m_flip_x = data & 0x01;
 }
 
 
-WRITE8_HANDLER( tutankhm_flip_screen_y_w )
+WRITE8_MEMBER(tutankhm_state::tutankhm_flip_screen_y_w)
 {
-	tutankhm_state *state = space->machine().driver_data<tutankhm_state>();
-	state->m_flip_y = data & 0x01;
+	m_flip_y = data & 0x01;
 }
 
 
@@ -39,14 +37,13 @@ WRITE8_HANDLER( tutankhm_flip_screen_y_w )
  *
  *************************************/
 
-static void get_pens( running_machine &machine, pen_t *pens )
+void tutankhm_state::get_pens( pen_t *pens )
 {
-	tutankhm_state *state = machine.driver_data<tutankhm_state>();
 	offs_t i;
 
 	for (i = 0; i < NUM_PENS; i++)
 	{
-		UINT8 data = state->m_paletteram[i];
+		UINT8 data = m_paletteram[i];
 
 		pens[i] = MAKE_RGB(pal3bit(data >> 0), pal3bit(data >> 3), pal2bit(data >> 6));
 	}
@@ -59,26 +56,25 @@ static void get_pens( running_machine &machine, pen_t *pens )
  *
  *************************************/
 
-SCREEN_UPDATE( tutankhm )
+UINT32 tutankhm_state::screen_update_tutankhm(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-	tutankhm_state *state = screen->machine().driver_data<tutankhm_state>();
-	int xorx = state->m_flip_x ? 255 : 0;
-	int xory = state->m_flip_y ? 255 : 0;
+	int xorx = m_flip_x ? 255 : 0;
+	int xory = m_flip_y ? 255 : 0;
 	pen_t pens[NUM_PENS];
 	int x, y;
 
-	get_pens(screen->machine(), pens);
+	get_pens( pens);
 
-	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
+	for (y = cliprect.min_y; y <= cliprect.max_y; y++)
 	{
-		UINT32 *dst = BITMAP_ADDR32(bitmap, y, 0);
+		UINT32 *dst = &bitmap.pix32(y);
 
-		for (x = cliprect->min_x; x <= cliprect->max_x; x++)
+		for (x = cliprect.min_x; x <= cliprect.max_x; x++)
 		{
 			UINT8 effx = x ^ xorx;
-			UINT8 yscroll = (effx < 192) ? *state->m_scroll : 0;
+			UINT8 yscroll = (effx < 192) ? *m_scroll : 0;
 			UINT8 effy = (y ^ xory) + yscroll;
-			UINT8 vrambyte = state->m_videoram[effy * 128 + effx / 2];
+			UINT8 vrambyte = m_videoram[effy * 128 + effx / 2];
 			UINT8 shifted = vrambyte >> (4 * (effx % 2));
 			dst[x] = pens[shifted & 0x0f];
 		}
@@ -86,6 +82,3 @@ SCREEN_UPDATE( tutankhm )
 
 	return 0;
 }
-
-
-

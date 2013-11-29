@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     video.c
 
     Core MAME video routines.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -45,6 +16,8 @@
 #include "ui.h"
 #include "aviio.h"
 #include "crsshair.h"
+#include "rendersw.c"
+#include "output.h"
 
 #include "snap.lh"
 
@@ -54,7 +27,7 @@
 //  DEBUGGING
 //**************************************************************************
 
-#define LOG_THROTTLE				(0)
+#define LOG_THROTTLE                (0)
 
 
 
@@ -82,17 +55,16 @@ const UINT8 video_manager::s_skiptable[FRAMESKIP_LEVELS][FRAMESKIP_LEVELS] =
 
 
 //**************************************************************************
-//  FUNCTION PROTOTYPES
-//**************************************************************************
-
-// software rendering
-static void rgb888_draw_primitives(const render_primitive_list &primlist, void *dstdata, UINT32 width, UINT32 height, UINT32 pitch);
-
-
-
-//**************************************************************************
 //  VIDEO MANAGER
 //**************************************************************************
+
+static void video_notifier_callback(const char *outname, INT32 value, void *param)
+{
+	video_manager *vm = (video_manager *)param;
+
+	vm->set_output_changed();
+}
+
 
 //-------------------------------------------------
 //  video_manager - constructor
@@ -100,39 +72,39 @@ static void rgb888_draw_primitives(const render_primitive_list &primlist, void *
 
 video_manager::video_manager(running_machine &machine)
 	: m_machine(machine),
-	  m_screenless_frame_timer(NULL),
-	  m_throttle_last_ticks(0),
-	  m_throttle_realtime(attotime::zero),
-	  m_throttle_emutime(attotime::zero),
-	  m_throttle_history(0),
-	  m_speed_last_realtime(0),
-	  m_speed_last_emutime(attotime::zero),
-	  m_speed_percent(1.0),
-	  m_overall_real_seconds(0),
-	  m_overall_real_ticks(0),
-	  m_overall_emutime(attotime::zero),
-	  m_overall_valid_counter(0),
-	  m_throttle(machine.options().throttle()),
-	  m_fastforward(false),
-	  m_seconds_to_run(machine.options().seconds_to_run()),
-	  m_auto_frameskip(machine.options().auto_frameskip()),
-	  m_speed(original_speed_setting()),
-	  m_empty_skip_count(0),
-	  m_frameskip_level(machine.options().frameskip()),
-	  m_frameskip_counter(0),
-	  m_frameskip_adjust(0),
-	  m_skipping_this_frame(false),
-	  m_average_oversleep(0),
-	  m_snap_target(NULL),
-	  m_snap_bitmap(NULL),
-	  m_snap_native(true),
-	  m_snap_width(0),
-	  m_snap_height(0),
-	  m_mngfile(NULL),
-	  m_avifile(NULL),
-	  m_movie_frame_period(attotime::zero),
-	  m_movie_next_frame_time(attotime::zero),
-	  m_movie_frame(0)
+		m_screenless_frame_timer(NULL),
+		m_output_changed(false),
+		m_throttle_last_ticks(0),
+		m_throttle_realtime(attotime::zero),
+		m_throttle_emutime(attotime::zero),
+		m_throttle_history(0),
+		m_speed_last_realtime(0),
+		m_speed_last_emutime(attotime::zero),
+		m_speed_percent(1.0),
+		m_overall_real_seconds(0),
+		m_overall_real_ticks(0),
+		m_overall_emutime(attotime::zero),
+		m_overall_valid_counter(0),
+		m_throttle(machine.options().throttle()),
+		m_fastforward(false),
+		m_seconds_to_run(machine.options().seconds_to_run()),
+		m_auto_frameskip(machine.options().auto_frameskip()),
+		m_speed(original_speed_setting()),
+		m_empty_skip_count(0),
+		m_frameskip_level(machine.options().frameskip()),
+		m_frameskip_counter(0),
+		m_frameskip_adjust(0),
+		m_skipping_this_frame(false),
+		m_average_oversleep(0),
+		m_snap_target(NULL),
+		m_snap_native(true),
+		m_snap_width(0),
+		m_snap_height(0),
+		m_mngfile(NULL),
+		m_avifile(NULL),
+		m_movie_frame_period(attotime::zero),
+		m_movie_next_frame_time(attotime::zero),
+		m_movie_frame(0)
 {
 	// request a callback upon exiting
 	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(video_manager::exit), this));
@@ -184,6 +156,7 @@ video_manager::video_manager(running_machine &machine)
 	{
 		m_screenless_frame_timer = machine.scheduler().timer_alloc(timer_expired_delegate(FUNC(video_manager::screenless_update_callback), this));
 		m_screenless_frame_timer->adjust(screen_device::DEFAULT_FRAME_PERIOD, 0, screen_device::DEFAULT_FRAME_PERIOD);
+		output_set_notifier(NULL, video_notifier_callback, this);
 	}
 }
 
@@ -227,8 +200,8 @@ void video_manager::frame_update(bool debug)
 		bool anything_changed = finish_screen_updates();
 
 		// if none of the screens changed and we haven't skipped too many frames in a row,
-        // mark this frame as skipped to prevent throttling; this helps for games that
-        // don't update their screen at the monitor refresh rate
+		// mark this frame as skipped to prevent throttling; this helps for games that
+		// don't update their screen at the monitor refresh rate
 		if (!anything_changed && !m_auto_frameskip && m_frameskip_level == 0 && m_empty_skip_count++ < 3)
 			skipped_it = true;
 		else
@@ -260,7 +233,7 @@ void video_manager::frame_update(bool debug)
 		update_frameskip();
 
 	// update speed computations
-	if (!debug && !skipped_it)
+	if (!debug)
 		recompute_speed(current_time);
 
 	// call the end-of-frame callback
@@ -268,16 +241,7 @@ void video_manager::frame_update(bool debug)
 	{
 		// reset partial updates if we're paused or if the debugger is active
 		if (machine().primary_screen != NULL && (machine().paused() || debug || debugger_within_instruction_hook(machine())))
-			machine().primary_screen->scanline0_callback();
-
-		// otherwise, call the video EOF callback
-		else
-		{
-			g_profiler.start(PROFILER_VIDEO);
-			for (screen_device *screen = machine().first_screen(); screen != NULL; screen = screen->next_screen())
-				screen->screen_eof();
-			g_profiler.stop();
-		}
+			machine().primary_screen->reset_partial_updates();
 	}
 }
 
@@ -314,7 +278,8 @@ astring &video_manager::speed_text(astring &string)
 
 	// display the number of partial updates as well
 	int partials = 0;
-	for (screen_device *screen = machine().first_screen(); screen != NULL; screen = screen->next_screen())
+	screen_device_iterator iter(machine().root_device());
+	for (screen_device *screen = iter.first(); screen != NULL; screen = iter.next())
 		partials += screen->partial_updates();
 	if (partials > 1)
 		string.catprintf("\n%d partial updates", partials);
@@ -337,7 +302,7 @@ void video_manager::save_snapshot(screen_device *screen, emu_file &file)
 	create_snapshot_bitmap(screen);
 
 	// add two text entries describing the image
-	astring text1(APPNAME, " ", build_version);
+	astring text1(emulator_info::get_appname(), " ", build_version);
 	astring text2(machine().system().manufacturer, " ", machine().system().description);
 	png_info pnginfo = { 0 };
 	png_add_text(&pnginfo, "Software", text1);
@@ -365,7 +330,8 @@ void video_manager::save_active_screen_snapshots()
 	if (m_snap_native)
 	{
 		// write one snapshot per visible screen
-		for (screen_device *screen = machine().first_screen(); screen != NULL; screen = screen->next_screen())
+		screen_device_iterator iter(machine().root_device());
+		for (screen_device *screen = iter.first(); screen != NULL; screen = iter.next())
 			if (machine().render().is_live(*screen))
 			{
 				emu_file file(machine().options().snapshot_directory(), OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS);
@@ -411,8 +377,8 @@ void video_manager::begin_recording(const char *name, movie_format format)
 		info.video_timescale = 1000 * ((machine().primary_screen != NULL) ? ATTOSECONDS_TO_HZ(machine().primary_screen->frame_period().attoseconds) : screen_device::DEFAULT_FRAME_RATE);
 		info.video_sampletime = 1000;
 		info.video_numsamples = 0;
-		info.video_width = m_snap_bitmap->width;
-		info.video_height = m_snap_bitmap->height;
+		info.video_width = m_snap_bitmap.width();
+		info.video_height = m_snap_bitmap.height();
 		info.video_depth = 24;
 
 		info.audio_format = 0;
@@ -544,15 +510,14 @@ void video_manager::exit()
 
 	// free all the graphics elements
 	for (int i = 0; i < MAX_GFX_ELEMENTS; i++)
-		gfx_element_free(machine().gfx[i]);
+		auto_free(machine(), machine().gfx[i]);
 
 	// free the snapshot target
 	machine().render().target_free(m_snap_target);
-	if (m_snap_bitmap != NULL)
-		global_free(m_snap_bitmap);
+	m_snap_bitmap.reset();
 
-	// print a final result if we have at least 5 seconds' worth of data
-	if (m_overall_emutime.seconds >= 5)
+	// print a final result if we have at least 2 seconds' worth of data
+	if (m_overall_emutime.seconds >= 1)
 	{
 		osd_ticks_t tps = osd_ticks_per_second();
 		double final_real_time = (double)m_overall_real_seconds + (double)m_overall_real_ticks / (double)tps;
@@ -647,7 +612,7 @@ inline bool video_manager::effective_throttle() const
 
 inline int video_manager::original_speed_setting() const
 {
-	return machine().options().speed() * 100.0 + 0.5;
+	return machine().options().speed() * 1000.0 + 0.5;
 }
 
 
@@ -659,12 +624,14 @@ inline int video_manager::original_speed_setting() const
 bool video_manager::finish_screen_updates()
 {
 	// finish updating the screens
-	for (screen_device *screen = machine().first_screen(); screen != NULL; screen = screen->next_screen())
+	screen_device_iterator iter(machine().root_device());
+	for (screen_device *screen = iter.first(); screen != NULL; screen = iter.next())
 		screen->update_partial(screen->visible_area().max_y);
 
 	// now add the quads for all the screens
-	bool anything_changed = false;
-	for (screen_device *screen = machine().first_screen(); screen != NULL; screen = screen->next_screen())
+	bool anything_changed = m_output_changed;
+	m_output_changed = false;
+	for (screen_device *screen = iter.first(); screen != NULL; screen = iter.next())
 		if (screen->update_quads())
 			anything_changed = true;
 
@@ -674,12 +641,12 @@ bool video_manager::finish_screen_updates()
 		record_frame();
 
 		// iterate over screens and update the burnin for the ones that care
-		for (screen_device *screen = machine().first_screen(); screen != NULL; screen = screen->next_screen())
+		for (screen_device *screen = iter.first(); screen != NULL; screen = iter.next())
 			screen->update_burnin();
 	}
 
 	// draw any crosshairs
-	for (screen_device *screen = machine().first_screen(); screen != NULL; screen = screen->next_screen())
+	for (screen_device *screen = iter.first(); screen != NULL; screen = iter.next())
 		crosshair_render(*screen);
 
 	return anything_changed;
@@ -743,10 +710,10 @@ void video_manager::update_throttle(attotime emutime)
 	while (1)
 	{
 		// apply speed factor to emu time
-		if (m_speed != 0 && m_speed != 100)
+		if (m_speed != 0 && m_speed != 1000)
 		{
-			// multiply emutime by 100, then divide by the global speed factor
-			emutime = (emutime * 100) / m_speed;
+			// multiply emutime by 1000, then divide by the global speed factor
+			emutime = (emutime * 1000) / m_speed;
 		}
 
 		// compute conversion factors up front
@@ -754,10 +721,10 @@ void video_manager::update_throttle(attotime emutime)
 		attoseconds_t attoseconds_per_tick = ATTOSECONDS_PER_SECOND / ticks_per_second;
 
 		// if we're paused, emutime will not advance; instead, we subtract a fixed
-	    // amount of time (1/60th of a second) from the emulated time that was passed in,
-	    // and explicitly reset our tracked real and emulated timers to that value ...
-	    // this means we pretend that the last update was exactly 1/60th of a second
-	    // ago, and was in sync in both real and emulated time
+		// amount of time (1/60th of a second) from the emulated time that was passed in,
+		// and explicitly reset our tracked real and emulated timers to that value ...
+		// this means we pretend that the last update was exactly 1/60th of a second
+		// ago, and was in sync in both real and emulated time
 		if (machine().paused())
 		{
 			m_throttle_emutime = emutime - attotime(0, ATTOSECONDS_PER_SECOND / PAUSED_REFRESH_RATE);
@@ -765,9 +732,9 @@ void video_manager::update_throttle(attotime emutime)
 		}
 
 		// attempt to detect anomalies in the emulated time by subtracting the previously
-	    // reported value from our current value; this should be a small value somewhere
-	    // between 0 and 1/10th of a second ... anything outside of this range is obviously
-	    // wrong and requires a resync
+		// reported value from our current value; this should be a small value somewhere
+		// between 0 and 1/10th of a second ... anything outside of this range is obviously
+		// wrong and requires a resync
 		attoseconds_t emu_delta_attoseconds = (emutime - m_throttle_emutime).as_attoseconds();
 		if (emu_delta_attoseconds < 0 || emu_delta_attoseconds > ATTOSECONDS_PER_SECOND / 10)
 		{
@@ -777,13 +744,13 @@ void video_manager::update_throttle(attotime emutime)
 		}
 
 		// now determine the current real time in OSD-specified ticks; we have to be careful
-	    // here because counters can wrap, so we only use the difference between the last
-	    // read value and the current value in our computations
+		// here because counters can wrap, so we only use the difference between the last
+		// read value and the current value in our computations
 		osd_ticks_t diff_ticks = osd_ticks() - m_throttle_last_ticks;
 		m_throttle_last_ticks += diff_ticks;
 
 		// if it has been more than a full second of real time since the last call to this
-	    // function, we just need to resynchronize
+		// function, we just need to resynchronize
 		if (diff_ticks >= ticks_per_second)
 		{
 			if (LOG_THROTTLE)
@@ -799,16 +766,16 @@ void video_manager::update_throttle(attotime emutime)
 		m_throttle_realtime += attotime(0, real_delta_attoseconds);
 
 		// keep a history of whether or not emulated time beat real time over the last few
-	    // updates; this can be used for future heuristics
+		// updates; this can be used for future heuristics
 		m_throttle_history = (m_throttle_history << 1) | (emu_delta_attoseconds > real_delta_attoseconds);
 
 		// determine how far ahead real time is versus emulated time; note that we use the
-	    // accumulated times for this instead of the deltas for the current update because
-	    // we want to track time over a longer duration than a single update
+		// accumulated times for this instead of the deltas for the current update because
+		// we want to track time over a longer duration than a single update
 		attoseconds_t real_is_ahead_attoseconds = (m_throttle_emutime - m_throttle_realtime).as_attoseconds();
 
 		// if we're more than 1/10th of a second out, or if we are behind at all and emulation
-	    // is taking longer than the real frame, we just need to resync
+		// is taking longer than the real frame, we just need to resync
 		if (real_is_ahead_attoseconds < -ATTOSECONDS_PER_SECOND / 10 ||
 			(real_is_ahead_attoseconds < 0 && popcount[m_throttle_history & 0xff] < 6))
 		{
@@ -845,12 +812,12 @@ void video_manager::update_throttle(attotime emutime)
 osd_ticks_t video_manager::throttle_until_ticks(osd_ticks_t target_ticks)
 {
 	// we're allowed to sleep via the OSD code only if we're configured to do so
-    // and we're not frameskipping due to autoframeskip, or if we're paused
+	// and we're not frameskipping due to autoframeskip, or if we're paused
 	bool allowed_to_sleep = false;
-    if (machine().options().sleep() && (!effective_autoframeskip() || effective_frameskip() == 0))
-    	allowed_to_sleep = true;
-    if (machine().paused())
-    	allowed_to_sleep = true;
+	if (machine().options().sleep() && (!effective_autoframeskip() || effective_frameskip() == 0))
+		allowed_to_sleep = true;
+	if (machine().paused())
+		allowed_to_sleep = true;
 
 	// loop until we reach our target
 	g_profiler.start(PROFILER_IDLE);
@@ -906,7 +873,7 @@ void video_manager::update_frameskip()
 	if (effective_throttle() && effective_autoframeskip() && m_frameskip_counter == 0)
 	{
 		// if we're too fast, attempt to increase the frameskip
-		double speed = m_speed * 0.01;
+		double speed = m_speed * 0.001;
 		if (m_speed_percent >= 0.995 * speed)
 		{
 			// but only after 3 consecutive frames where we are too fast
@@ -961,7 +928,8 @@ void video_manager::update_refresh_speed()
 			// find the screen with the shortest frame period (max refresh rate)
 			// note that we first check the token since this can get called before all screens are created
 			attoseconds_t min_frame_period = ATTOSECONDS_PER_SECOND;
-			for (screen_device *screen = machine().first_screen(); screen != NULL; screen = screen->next_screen())
+			screen_device_iterator iter(machine().root_device());
+			for (screen_device *screen = iter.first(); screen != NULL; screen = iter.next())
 			{
 				attoseconds_t period = screen->frame_period().attoseconds;
 				if (period != 0)
@@ -970,15 +938,15 @@ void video_manager::update_refresh_speed()
 
 			// compute a target speed as an integral percentage
 			// note that we lop 0.25Hz off of the minrefresh when doing the computation to allow for
-            // the fact that most refresh rates are not accurate to 10 digits...
-			UINT32 target_speed = floor((minrefresh - 0.25f) * 100.0 / ATTOSECONDS_TO_HZ(min_frame_period));
+			// the fact that most refresh rates are not accurate to 10 digits...
+			UINT32 target_speed = floor((minrefresh - 0.25f) * 1000.0 / ATTOSECONDS_TO_HZ(min_frame_period));
 			UINT32 original_speed = original_speed_setting();
 			target_speed = MIN(target_speed, original_speed);
 
 			// if we changed, log that verbosely
 			if (target_speed != m_speed)
 			{
-				mame_printf_verbose("Adjusting target speed to %d%% (hw=%.2fHz, game=%.2fHz, adjusted=%.2fHz)\n", target_speed, minrefresh, ATTOSECONDS_TO_HZ(min_frame_period), ATTOSECONDS_TO_HZ(min_frame_period * 100 / target_speed));
+				mame_printf_verbose("Adjusting target speed to %.1f%% (hw=%.2fHz, game=%.2fHz, adjusted=%.2fHz)\n", target_speed / 10.0, minrefresh, ATTOSECONDS_TO_HZ(min_frame_period), ATTOSECONDS_TO_HZ(min_frame_period * 1000.0 / target_speed));
 				m_speed = target_speed;
 			}
 		}
@@ -1058,12 +1026,13 @@ void video_manager::recompute_speed(attotime emutime)
 //  given screen
 //-------------------------------------------------
 
-void video_manager::create_snapshot_bitmap(device_t *screen)
+void video_manager::create_snapshot_bitmap(screen_device *screen)
 {
 	// select the appropriate view in our dummy target
 	if (m_snap_native && screen != NULL)
 	{
-		int view_index = machine().devicelist().indexof(SCREEN, screen->tag());
+		screen_device_iterator iter(machine().root_device());
+		int view_index = iter.indexof(*screen);
 		assert(view_index != -1);
 		m_snap_target->set_view(view_index);
 	}
@@ -1076,17 +1045,13 @@ void video_manager::create_snapshot_bitmap(device_t *screen)
 	m_snap_target->set_bounds(width, height);
 
 	// if we don't have a bitmap, or if it's not the right size, allocate a new one
-	if (m_snap_bitmap == NULL || width != m_snap_bitmap->width || height != m_snap_bitmap->height)
-	{
-		if (m_snap_bitmap != NULL)
-			auto_free(machine(), m_snap_bitmap);
-		m_snap_bitmap = auto_alloc(machine(), bitmap_t(width, height, BITMAP_FORMAT_RGB32));
-	}
+	if (!m_snap_bitmap.valid() || width != m_snap_bitmap.width() || height != m_snap_bitmap.height())
+		m_snap_bitmap.allocate(width, height);
 
 	// render the screen there
 	render_primitive_list &primlist = m_snap_target->get_primitives();
 	primlist.acquire_lock();
-	rgb888_draw_primitives(primlist, m_snap_bitmap->base, width, height, m_snap_bitmap->rowpixels);
+	software_renderer<UINT32, 0,0,0, 16,8,0, false, true>::draw_primitives(primlist, &m_snap_bitmap.pix32(0), width, height, m_snap_bitmap.rowpixels());
 	primlist.release_lock();
 }
 
@@ -1142,7 +1107,7 @@ file_error video_manager::open_next(emu_file &file, const char *extension)
 				end = snapstr.len();
 
 			if (end - pos < 3)
-				fatalerror("Something very wrong is going on!!!");
+				fatalerror("Something very wrong is going on!!!\n");
 
 			// copy the device name to an astring
 			astring snapdevname;
@@ -1150,8 +1115,8 @@ file_error video_manager::open_next(emu_file &file, const char *extension)
 			//printf("check template: %s\n", snapdevname.cstr());
 
 			// verify that there is such a device for this system
-			device_image_interface *image = NULL;
-			for (bool gotone = machine().devicelist().first(image); gotone; gotone = image->next(image))
+			image_interface_iterator iter(machine().root_device());
+			for (device_image_interface *image = iter.first(); image != NULL; image = iter.next())
 			{
 				// get the device name
 				astring tempdevname(image->brief_instance_name());
@@ -1215,7 +1180,7 @@ file_error video_manager::open_next(emu_file &file, const char *extension)
 
 	// create the final file
 	file.set_openflags(origflags);
-    return file.open(fname);
+	return file.open(fname);
 }
 
 
@@ -1244,7 +1209,7 @@ void video_manager::record_frame()
 		if (m_avifile != NULL)
 		{
 			// write the next frame
-			avi_error avierr = avi_append_video_frame_rgb32(m_avifile, m_snap_bitmap);
+			avi_error avierr = avi_append_video_frame(m_avifile, m_snap_bitmap);
 			if (avierr != AVIERR_NONE)
 			{
 				g_profiler.stop();
@@ -1259,7 +1224,7 @@ void video_manager::record_frame()
 			png_info pnginfo = { 0 };
 			if (m_movie_frame == 0)
 			{
-				astring text1(APPNAME, " ", build_version);
+				astring text1(emulator_info::get_appname(), " ", build_version);
 				astring text2(machine().system().manufacturer, " ", machine().system().description);
 				png_add_text(&pnginfo, "Software", text1);
 				png_add_text(&pnginfo, "System", text2);
@@ -1291,40 +1256,21 @@ void video_manager::record_frame()
     invalid palette index
 -------------------------------------------------*/
 
-void video_assert_out_of_range_pixels(running_machine &machine, bitmap_t *bitmap)
+bool video_assert_out_of_range_pixels(running_machine &machine, bitmap_ind16 &bitmap)
 {
 #ifdef MAME_DEBUG
-	int maxindex = palette_get_max_index(machine.palette);
-	int x, y;
-
-	// this only applies to indexed16 bitmaps
-	if (bitmap->format != BITMAP_FORMAT_INDEXED16)
-		return;
-
 	// iterate over rows
-	for (y = 0; y < bitmap->height; y++)
+	int maxindex = palette_get_max_index(machine.palette);
+	for (int y = 0; y < bitmap.height(); y++)
 	{
-		UINT16 *rowbase = BITMAP_ADDR16(bitmap, y, 0);
-		for (x = 0; x < bitmap->width; x++)
-			assert(rowbase[x] < maxindex);
+		UINT16 *rowbase = &bitmap.pix16(y);
+		for (int x = 0; x < bitmap.width(); x++)
+			if (rowbase[x] > maxindex)
+			{
+				osd_break_into_debugger("Out of range pixel");
+				return true;
+			}
 	}
 #endif
+	return false;
 }
-
-
-
-//**************************************************************************
-//  SOFTWARE RENDERING
-//**************************************************************************
-
-#define FUNC_PREFIX(x)		rgb888_##x
-#define PIXEL_TYPE			UINT32
-#define SRCSHIFT_R			0
-#define SRCSHIFT_G			0
-#define SRCSHIFT_B			0
-#define DSTSHIFT_R			16
-#define DSTSHIFT_G			8
-#define DSTSHIFT_B			0
-#define BILINEAR_FILTER		1
-
-#include "rendersw.c"

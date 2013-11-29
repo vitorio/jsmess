@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     tms32031.h
 
     TMS32031/2 emulator
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -47,7 +18,7 @@
 //  DEBUGGING
 //**************************************************************************
 
-#define TMS_3203X_LOG_OPCODE_USAGE	(0)
+#define TMS_3203X_LOG_OPCODE_USAGE  (0)
 
 
 
@@ -56,19 +27,20 @@
 //**************************************************************************
 
 // interrupts
-const int TMS3203X_IRQ0		= 0;		// IRQ0
-const int TMS3203X_IRQ1		= 1;		// IRQ1
-const int TMS3203X_IRQ2		= 2;		// IRQ2
-const int TMS3203X_IRQ3		= 3;		// IRQ3
-const int TMS3203X_XINT0	= 4;		// serial 0 transmit interrupt
-const int TMS3203X_RINT0	= 5;		// serial 0 receive interrupt
-const int TMS3203X_XINT1	= 6;		// serial 1 transmit interrupt
-const int TMS3203X_RINT1	= 7;		// serial 1 receive interrupt
-const int TMS3203X_TINT0	= 8;		// timer 0 interrupt
-const int TMS3203X_TINT1	= 9;		// timer 1 interrupt
-const int TMS3203X_DINT		= 10;		// DMA interrupt
-const int TMS3203X_DINT0	= 10;		// DMA 0 interrupt (32032 only)
-const int TMS3203X_DINT1	= 11;		// DMA 1 interrupt (32032 only)
+const int TMS3203X_IRQ0     = 0;        // IRQ0
+const int TMS3203X_IRQ1     = 1;        // IRQ1
+const int TMS3203X_IRQ2     = 2;        // IRQ2
+const int TMS3203X_IRQ3     = 3;        // IRQ3
+const int TMS3203X_XINT0    = 4;        // serial 0 transmit interrupt
+const int TMS3203X_RINT0    = 5;        // serial 0 receive interrupt
+const int TMS3203X_XINT1    = 6;        // serial 1 transmit interrupt
+const int TMS3203X_RINT1    = 7;        // serial 1 receive interrupt
+const int TMS3203X_TINT0    = 8;        // timer 0 interrupt
+const int TMS3203X_TINT1    = 9;        // timer 1 interrupt
+const int TMS3203X_DINT     = 10;       // DMA interrupt
+const int TMS3203X_DINT0    = 10;       // DMA 0 interrupt (32032 only)
+const int TMS3203X_DINT1    = 11;       // DMA 1 interrupt (32032 only)
+const int TMS3203X_MCBL     = 12;       // Microcomputer/boot loader mode
 
 // register enumeration
 enum
@@ -119,8 +91,7 @@ enum
 //**************************************************************************
 
 #define MCFG_TMS3203X_CONFIG(_config) \
-	tms3203x_device::static_set_config(*device, _config); \
-
+	tms3203x_device::static_set_config(*device, _config);
 
 
 //**************************************************************************
@@ -138,10 +109,10 @@ typedef void (*tms3203x_iack_func)(tms3203x_device &device, UINT8 val, offs_t ad
 
 struct tms3203x_config
 {
-	UINT32				m_bootoffset;
-	tms3203x_xf_func	m_xf0_w;
-	tms3203x_xf_func	m_xf1_w;
-	tms3203x_iack_func	m_iack_w;
+	bool                m_mcbl_mode;
+	tms3203x_xf_func    m_xf0_w;
+	tms3203x_xf_func    m_xf1_w;
+	tms3203x_iack_func  m_iack_w;
 };
 
 
@@ -172,7 +143,7 @@ class tms3203x_device : public cpu_device,
 		// importers
 		void from_double(double);
 
-		UINT32		i32[2];
+		UINT32      i32[2];
 	};
 
 protected:
@@ -183,7 +154,7 @@ protected:
 	};
 
 	// construction/destruction
-	tms3203x_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, UINT32 chiptype, address_map_constructor internal_map);
+	tms3203x_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, UINT32 chiptype, address_map_constructor internal_map, const char *shortname, const char *source);
 	virtual ~tms3203x_device();
 
 public:
@@ -200,6 +171,8 @@ protected:
 	// device-level overrides
 	virtual void device_start();
 	virtual void device_reset();
+
+	virtual const rom_entry *device_rom_region() const;
 
 	// device_execute_interface overrides
 	virtual UINT32 execute_min_cycles() const;
@@ -222,13 +195,13 @@ protected:
 	virtual offs_t disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options);
 
 	// memory helpers
+	DECLARE_DIRECT_UPDATE_MEMBER(direct_handler);
 	UINT32 ROPCODE(offs_t pc);
 	UINT32 RMEM(offs_t addr);
 	void WMEM(offs_t addr, UINT32 data);
 
 	// misc helpers
 	void check_irqs();
-	UINT32 boot_loader(UINT32 boot_rom_addr);
 	void execute_one();
 	void update_special(int dreg);
 	bool condition(int which);
@@ -779,8 +752,8 @@ protected:
 	void xor3sti(UINT32 op);
 
 	// configuration
-	const address_space_config		m_program_config;
-	UINT32							m_chip_type;
+	const address_space_config      m_program_config;
+	UINT32                          m_chip_type;
 
 	union int_double
 	{
@@ -790,22 +763,21 @@ protected:
 	};
 
 	// core registers
-	UINT32				m_pc;
-	tmsreg				m_r[36];
-	UINT32				m_bkmask;
+	UINT32              m_pc;
+	tmsreg              m_r[36];
+	UINT32              m_bkmask;
 
 	// internal stuff
-	UINT16				m_irq_state;
-	bool				m_delayed;
-	bool				m_irq_pending;
-	bool				m_mcu_mode;
-	bool				m_is_idling;
-	int					m_icount;
+	UINT16              m_irq_state;
+	bool                m_delayed;
+	bool                m_irq_pending;
+	bool                m_is_idling;
+	int                 m_icount;
 
-	UINT32				m_iotemp;
-	device_irq_callback	m_irq_callback;
-	address_space *		m_program;
-	direct_read_data *	m_direct;
+	UINT32              m_iotemp;
+	address_space *     m_program;
+	direct_read_data *  m_direct;
+	UINT32 *            m_bootrom;
 
 	// tables
 	static void (tms3203x_device::*const s_tms32031ops[])(UINT32 op);
@@ -814,7 +786,7 @@ protected:
 	static UINT32 (tms3203x_device::*const s_indirect_1_def[0x20])(UINT32, UINT8, UINT32 *&);
 
 #if (TMS_3203X_LOG_OPCODE_USAGE)
-	UINT32				m_hits[0x200*4];
+	UINT32              m_hits[0x200*4];
 #endif
 };
 

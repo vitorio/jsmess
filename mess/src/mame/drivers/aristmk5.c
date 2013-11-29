@@ -11,7 +11,7 @@
     TODO (MK-5 specific):
     - Fix remaining errors
     - If all tests passes, this msg is printed on the keyboard serial port:
-    "System Startup Code Entered \n Gos_create could not allocate stack for the new process \n Unrecoverable error occured. System will now restart"
+    "System Startup Code Entered \n Gos_create could not allocate stack for the new process \n Unrecoverable error occurred. System will now restart"
     Apparently it looks like some sort of protection device ...
 
     code DASMing of POST (adonis):
@@ -64,40 +64,132 @@
 //#include "machine/i2cmem.h"
 
 
-class aristmk5_state : public driver_device
+class aristmk5_state : public archimedes_state
 {
 public:
 	aristmk5_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: archimedes_state(mconfig, type, tag) { }
 
 	emu_timer *m_mk5_2KHz_timer;
+	emu_timer *m_mk5_VSYNC_timer;
 	UINT8 m_ext_latch;
 	UINT8 m_flyback;
+	DECLARE_WRITE32_MEMBER(Ns5w48);
+	DECLARE_READ32_MEMBER(Ns5x58);
+	DECLARE_READ32_MEMBER(mk5_ioc_r);
+	DECLARE_WRITE32_MEMBER(mk5_ioc_w);
+	DECLARE_READ32_MEMBER(Ns5r50);
+	DECLARE_WRITE32_MEMBER(sram_banksel_w);
+	DECLARE_DRIVER_INIT(aristmk5);
+	virtual void machine_start();
+	virtual void machine_reset();
+	TIMER_CALLBACK_MEMBER(mk5_VSYNC_callback);
+	TIMER_CALLBACK_MEMBER(mk5_2KHz_callback);
 };
 
 
-
-static WRITE32_HANDLER( mk5_ext_latch_w )
+TIMER_CALLBACK_MEMBER(aristmk5_state::mk5_VSYNC_callback)
 {
-	aristmk5_state *state = space->machine().driver_data<aristmk5_state>();
-	/* this banks "something" */
-	state->m_ext_latch = data & 1;
+	m_ioc_regs[IRQ_STATUS_A] |= 0x08; //turn vsync bit on
+	m_mk5_VSYNC_timer->adjust(attotime::never);
 }
 
-static READ32_HANDLER( ext_timer_latch_r )
+WRITE32_MEMBER(aristmk5_state::Ns5w48)
 {
-	aristmk5_state *state = space->machine().driver_data<aristmk5_state>();
-	/* reset 2KHz timer */
-	ioc_regs[IRQ_STATUS_A] &= 0xfe;
-	state->m_mk5_2KHz_timer->adjust(attotime::from_hz(1953.125)); // 8MHz / 4096
+	/*
+	There is one writeable register which is written with the Ns5w48 strobe. It contains four bits which are
+	taken from bits 16 to 19 of the word being written. The register is cleared whenever the chip is reset. The
+	register controls part of the video system. Bit 3(from data bus bit 19) controls the eorv output. If the bit is
+	one, eorv outputs the NV/CSYNC signal from VIDC. If the bit is zero, eorv outputs inverted NV/CSYNC. Bit 2 of
+	the register controls the eorh output. If the bit is zero, eorh is the NHSYNC output of VIDC. If the bit is one,
+	eorh is inverted NHSYNC. Bits 1 and 0 control what is fed to the vidclk output as follows:
 
-	return 0xffffffff; //value doesn't matter apparently
+	     Bit1     Bit0     vidclk
+	     0        0        24 Mhz clock
+	     0        1        25 Mhz clock ;// external video crystal
+	     1        0        36 Mhz clock
+	     1        1        24 Mhz clock
+
+
+	*/
+
+	/*
+	Golden Pyramids disassembly
+
+	MOV     R0, #0x3200000
+	ROM:03400948                 MOV     R1, #8
+	ROM:0340094C                 STRB    R1, [R0,#0x14]  ; clear vsync
+	ROM:03400950                 LDR     R2, =0xC350     ; 50000
+	ROM:03400954
+	ROM:03400954 loc_3400954                             ; CODE XREF: sub_3400944+18?j
+	ROM:03400954                 NOP
+	ROM:03400958                 SUBS    R2, R2, #1
+	ROM:0340095C                 BNE     loc_3400954     ; does this 50000 times, presumably to wait for vsync
+	ROM:03400960                 MOV     R0, #0x3200000
+	ROM:03400964                 LDRB    R1, [R0,#0x10]  ; reads the irq status a
+	ROM:03400968                 TST     R1, #8          ; test vsync
+	*/
+
+
+	m_ioc_regs[IRQ_STATUS_A] &= ~0x08;
+
+	/*          bit 1              bit 0 */
+	if((data &~(0x02)) && (data & (0x01))) // external video crystal is enabled. 25 mhz
+	{
+			m_mk5_VSYNC_timer->adjust(attotime::from_hz(50000)); // not sure but see above
+	}
+	if((data &~(0x02)) && (data &~(0x01))) // video clock is enabled. 24 mhz
+	{
+			m_mk5_VSYNC_timer->adjust(attotime::from_hz(50000)); // not sure
+	}
+	if((data & (0x02)) && (data &~(0x01))) // video clock is enabled. 36 mhz
+	{
+			m_mk5_VSYNC_timer->adjust(attotime::from_hz(50000)); // not sure
+	}
+	if((data &(0x02)) && (data &(0x01))) // video clock is enabled. 24 mhz
+	{
+			m_mk5_VSYNC_timer->adjust(attotime::from_hz(50000)); // not sure
+	}
+}
+
+TIMER_CALLBACK_MEMBER(aristmk5_state::mk5_2KHz_callback)
+{
+	m_ioc_regs[IRQ_STATUS_A] |= 0x01;
+	m_mk5_2KHz_timer->adjust(attotime::never);
+
+}
+
+READ32_MEMBER(aristmk5_state::Ns5x58)
+{
+	/*
+	    1953.125 Hz for the operating system timer interrupt
+
+	The pintr pin ( printer interrupt ) is connected to an interrupt latch in IOEB.
+	A rising edge on pintr causes an interrupt to be latched in IOEB. The latch output
+	is connected to the NIL[6] interrupt input on IOC and goes low when the rising edge is detected.
+	The interrupt is cleared (NIL[6] is set high) by resetting the chip or by the NS5x58
+	strobe.
+
+	NIL[6] IOEB/1pintr - Interrupt Input ( OS Tick Interrput )
+
+	Rising edge signal
+	010101010101  .-------.   logic 0      .-------------.
+	------------->|pint   |---1pintr------>|NIL[6]       |
+	              | IOEB  |                |     IOC     |
+	              `-------'                `-------------'
+	*/
+
+
+	// reset 2KHz timer
+	m_mk5_2KHz_timer->adjust(attotime::from_hz(1953.125));
+	m_ioc_regs[IRQ_STATUS_A] &= ~0x01;
+	m_maincpu->set_input_line(ARM_IRQ_LINE, CLEAR_LINE);
+	return 0xffffffff;
 }
 
 /* same as plain AA but with the I2C unconnected */
-static READ32_HANDLER( mk5_ioc_r )
+READ32_MEMBER(aristmk5_state::mk5_ioc_r)
 {
-	aristmk5_state *state = space->machine().driver_data<aristmk5_state>();
 	UINT32 ioc_addr;
 
 	ioc_addr = offset*4;
@@ -108,31 +200,30 @@ static READ32_HANDLER( mk5_ioc_r )
 	{
 		int vert_pos;
 
-		vert_pos = space->machine().primary_screen->vpos();
-		state->m_flyback = (vert_pos <= vidc_regs[VIDC_VDSR] || vert_pos >= vidc_regs[VIDC_VDER]) ? 0x80 : 0x00;
+		vert_pos = m_screen->vpos();
+		m_flyback = (vert_pos <= m_vidc_regs[VIDC_VDSR] || vert_pos >= m_vidc_regs[VIDC_VDER]) ? 0x80 : 0x00;
 
-		//i2c_data = (i2cmem_sda_read(space->machine().device("i2cmem")) & 1);
+		//i2c_data = (i2cmem_sda_read(machine().device("i2cmem")) & 1);
 
-		return (state->m_flyback) | (ioc_regs[CONTROL] & 0x7c) | (1<<1) | 1;
+		return (m_flyback) | (m_ioc_regs[CONTROL] & 0x7c) | (1<<1) | 1;
 	}
 
 	return archimedes_ioc_r(space,offset,mem_mask);
 }
 
-static WRITE32_HANDLER( mk5_ioc_w )
+WRITE32_MEMBER(aristmk5_state::mk5_ioc_w)
 {
-	aristmk5_state *state = space->machine().driver_data<aristmk5_state>();
 	UINT32 ioc_addr;
 
 	ioc_addr = offset*4;
 	ioc_addr >>= 16;
 	ioc_addr &= 0x37;
 
-	if(!state->m_ext_latch)
+	if(!m_ext_latch)
 	{
 		if(((ioc_addr == 0x20) || (ioc_addr == 0x30)) && (offset & 0x1f) == 0)
 		{
-			ioc_regs[CONTROL] = data & 0x7c;
+			m_ioc_regs[CONTROL] = data & 0x7c;
 			return;
 		}
 		else
@@ -140,74 +231,118 @@ static WRITE32_HANDLER( mk5_ioc_w )
 	}
 }
 
-static READ32_HANDLER( mk5_unk_r )
+READ32_MEMBER(aristmk5_state::Ns5r50)
 {
 	return 0xf5; // checked inside the CPU check, unknown meaning
 }
 
-static WRITE32_HANDLER( sram_banksel_w )
+WRITE32_MEMBER(aristmk5_state::sram_banksel_w)
 {
-    /*
+	/*
 
-    The Main Board provides 32 kbytes of Static Random Access Memory (SRAM) with
-    battery back-up for the electronic meters.
-    The SRAM contains machine metering information, recording money in/out and
-    game history etc. It is critical that this data is preserved reliably, and various
-    jurisdictions require multiple backups of the data.
-    Three standard low power SRAMs are fitted to the board. The data is usually
-    replicated three times, so that each chip contains identical data. Each memory is
-    checked against the other to verify that the stored data is correct.
-    Each chip is mapped to the same address, and the chip selected depends on the bank
-    select register. Access is mutually exclusive, increasing security with only one chip
-    visible in the CPU address space at a time. If the CPU crashes and overwrites
-    memory only one of the three devices can be corrupted. On reset the bank select
-    register selects bank 0, which does not exist. The SRAMs are at banks 1,2,3.
-    Each of the SRAM chips may be powered from a separate battery, further reducing
-    the possibility of losing data. For the US Gaming Machine, a single battery provides
-    power for all three SRAMs. This battery also powers the Real Time Clock
+	The Main Board provides 32 kbytes of Static Random Access Memory (SRAM) with
+	battery back-up for the electronic meters.
+	The SRAM contains machine metering information, recording money in/out and
+	game history etc. It is critical that this data is preserved reliably, and various
+	jurisdictions require multiple backups of the data.
+	Three standard low power SRAMs are fitted to the board. The data is usually
+	replicated three times, so that each chip contains identical data. Each memory is
+	checked against the other to verify that the stored data is correct.
+	Each chip is mapped to the same address, and the chip selected depends on the bank
+	select register. Access is mutually exclusive, increasing security with only one chip
+	visible in the CPU address space at a time. If the CPU crashes and overwrites
+	memory only one of the three devices can be corrupted. On reset the bank select
+	register selects bank 0, which does not exist. The SRAMs are at banks 1,2,3.
+	Each of the SRAM chips may be powered from a separate battery, further reducing
+	the possibility of losing data. For the US Gaming Machine, a single battery provides
+	power for all three SRAMs. This battery also powers the Real Time Clock
 
 
-    CHIP SELECT & SRAM BANKING
+	CHIP SELECT & SRAM BANKING
 
-    write: 03010420 40  select bank 1
-    write: 3220000 01   store 0x01 @ 3220000
-    write: 03010420 80  select bank 2
-    write: 3220000 02   store 0x02 @ 3220000
-    write: 03010420 C0  ...
-    write: 3220000 03   ...
-    write: 03010420 00  ...
-    write: 3220000 00   ...
-    write: 03010420 40  select the first SRAM chip
-    read:  3220000 01   read the value 0x1 back hopefully
-    write: 03010420 80  ...
-    read:  3220000 02   ...
-    write: 03010420 C0  ...
-    read:  3220000 03   ...
-    write: 03010420 00  select bank 0
-    */
+	write: 03010420 40  select bank 1
+	write: 3220000 01   store 0x01 @ 3220000
+	write: 03010420 80  select bank 2
+	write: 3220000 02   store 0x02 @ 3220000
+	write: 03010420 C0  ...
+	write: 3220000 03   ...
+	write: 03010420 00  ...
+	write: 3220000 00   ...
+	write: 03010420 40  select the first SRAM chip
+	read:  3220000 01   read the value 0x1 back hopefully
+	write: 03010420 80  ...
+	read:  3220000 02   ...
+	write: 03010420 C0  ...
+	read:  3220000 03   ...
+	write: 03010420 00  select bank 0
 
-    memory_set_bank(space->machine(),"sram_bank", (data & 0xc0) >> 6);
+
+	     Bit 0 - Page 1
+	     Bit 1 - Page 2
+	     Bit 2 - Page 3
+	     NC
+	     NC
+	     NC
+	     Bit 6 - SRAM 1
+	     Bit 7 - SRAM 2
+
+	     Bit 1 and 2 on select Page 4.
+	     Bit 6 and 7 on select SRAM 3.
+
+	     4 pages of 32k for each sram chip.
+	*/
+	membank("sram_bank")->set_entry((data & 0xc0) >> 6);
+	membank("sram_bank_nz")->set_entry((data & 0xc0) >> 6);
 }
 
-static ADDRESS_MAP_START( aristmk5_map, AS_PROGRAM, 32 )
+/* U.S games have no dram emulator enabled */
+static ADDRESS_MAP_START( aristmk5_map, AS_PROGRAM, 32, aristmk5_state )
 	AM_RANGE(0x00000000, 0x01ffffff) AM_READWRITE(archimedes_memc_logical_r, archimedes_memc_logical_w)
-	AM_RANGE(0x02000000, 0x02ffffff) AM_RAM AM_BASE(&archimedes_memc_physmem) /* physical RAM - 16 MB for now, should be 512k for the A310 */
+	AM_RANGE(0x02000000, 0x02ffffff) AM_RAM AM_SHARE("physicalram") /* physical RAM - 16 MB for now, should be 512k for the A310 */
 
 	/* MK-5 overrides */
 	AM_RANGE(0x03010420, 0x03010423) AM_WRITE(sram_banksel_w) // SRAM bank select write
 
-//  AM_RANGE(0x0301049c, 0x0301051f) AM_DEVREADWRITE("eeprom", eeprom_r, eeprom_w) // eeprom ???
+//  AM_RANGE(0x0301049c, 0x0301051f) AM_DEVREADWRITE_LEGACY("eeprom", eeprom_r, eeprom_w) // eeprom ???
 
-	AM_RANGE(0x03010810, 0x03010813) AM_READNOP //MK-5 specific, watchdog
+	AM_RANGE(0x03010810, 0x03010813) AM_READWRITE(watchdog_reset32_r,watchdog_reset32_w) //MK-5 specific, watchdog
 //  System Startup Code Enabled protection appears to be located at 0x3010400 - 0x30104ff
-	AM_RANGE(0x03220000, 0x03227fff) AM_RAMBANK("sram_bank") //AM_BASE_SIZE_GENERIC(nvram) // nvram 32kbytes x 3
+	AM_RANGE(0x03220000, 0x0323ffff) AM_RAMBANK("sram_bank") //AM_BASE_SIZE_GENERIC(nvram) // nvram 32kbytes x 3
 
-	AM_RANGE(0x03250048, 0x0325004b) AM_WRITE(mk5_ext_latch_w)
-	AM_RANGE(0x03250050, 0x03250053) AM_READ(mk5_unk_r)
-	AM_RANGE(0x03250058, 0x0325005b) AM_READ(ext_timer_latch_r)
+	// bank5 slow
+	AM_RANGE(0x03250048, 0x0325004b) AM_WRITE(Ns5w48) //IOEB control register
+	AM_RANGE(0x03250050, 0x03250053) AM_READ(Ns5r50)  //IOEB ID register
+	AM_RANGE(0x03250058, 0x0325005b) AM_READ(Ns5x58)  //IOEB interrupt Latch
 
 	AM_RANGE(0x03000000, 0x0331ffff) AM_READWRITE(mk5_ioc_r, mk5_ioc_w)
-	AM_RANGE(0x03320000, 0x03327fff) AM_RAMBANK("sram_bank") // AM_BASE_SIZE_GENERIC(nvram) // nvram 32kbytes x 3 NZ
+	AM_RANGE(0x03320000, 0x0333ffff) AM_RAMBANK("sram_bank_nz") // AM_BASE_SIZE_GENERIC(nvram) // nvram 32kbytes x 3 NZ
+	AM_RANGE(0x03400000, 0x035fffff) AM_ROM AM_REGION("maincpu", 0) AM_WRITE(archimedes_vidc_w)
+	AM_RANGE(0x03600000, 0x037fffff) AM_READWRITE(archimedes_memc_r, archimedes_memc_w)
+	AM_RANGE(0x03800000, 0x039fffff) AM_WRITE(archimedes_memc_page_w)
+ADDRESS_MAP_END
+
+/* with dram emulator enabled */
+static ADDRESS_MAP_START( aristmk5_drame_map, AS_PROGRAM, 32, aristmk5_state )
+	AM_RANGE(0x00000000, 0x01ffffff) AM_READWRITE(aristmk5_drame_memc_logical_r, archimedes_memc_logical_w)
+	AM_RANGE(0x02000000, 0x02ffffff) AM_RAM AM_SHARE("physicalram") /* physical RAM - 16 MB for now, should be 512k for the A310 */
+
+	/* MK-5 overrides */
+	AM_RANGE(0x03010420, 0x03010423) AM_WRITE(sram_banksel_w) // SRAM bank select write
+
+//  AM_RANGE(0x0301049c, 0x0301051f) AM_DEVREADWRITE_LEGACY("eeprom", eeprom_r, eeprom_w) // eeprom ???
+
+	AM_RANGE(0x03010810, 0x03010813) AM_READWRITE(watchdog_reset32_r,watchdog_reset32_w) //MK-5 specific, watchdog
+//  System Startup Code Enabled protection appears to be located at 0x3010400 - 0x30104ff
+	AM_RANGE(0x03220000, 0x0323ffff) AM_RAMBANK("sram_bank") //AM_BASE_SIZE_GENERIC(nvram) // nvram 32kbytes x 3
+
+	// bank5 slow
+	AM_RANGE(0x03250048, 0x0325004b) AM_WRITE(Ns5w48) //IOEB control register
+	AM_RANGE(0x03250050, 0x03250053) AM_READ(Ns5r50)  //IOEB ID register
+	AM_RANGE(0x03250058, 0x0325005b) AM_READ(Ns5x58)  //IOEB interrupt Latch
+
+
+	AM_RANGE(0x03000000, 0x0331ffff) AM_READWRITE(mk5_ioc_r, mk5_ioc_w)
+	AM_RANGE(0x03320000, 0x0333ffff) AM_RAMBANK("sram_bank_nz") // AM_BASE_SIZE_GENERIC(nvram) // nvram 32kbytes x 3 NZ
 	AM_RANGE(0x03400000, 0x035fffff) AM_ROM AM_REGION("maincpu", 0) AM_WRITE(archimedes_vidc_w)
 	AM_RANGE(0x03600000, 0x037fffff) AM_READWRITE(archimedes_memc_r, archimedes_memc_w)
 	AM_RANGE(0x03800000, 0x039fffff) AM_WRITE(archimedes_memc_page_w)
@@ -217,59 +352,55 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( aristmk5 )
 	/* This simulates the ROM swap */
 	PORT_START("ROM_LOAD")
-	PORT_CONFNAME( 0x03, 0x00, "System Mode" )
+	PORT_CONFNAME( 0x03, 0x03, "System Mode" )
 	PORT_CONFSETTING(    0x00, "Set Chip v4.04 Mode" )
 	PORT_CONFSETTING(    0x01, "Set Chip v4.4 Mode" )
 	PORT_CONFSETTING(    0x02, "Clear Chip Mode" )
 	PORT_CONFSETTING(    0x03, "Game Mode" )
 INPUT_PORTS_END
 
-static DRIVER_INIT( aristmk5 )
+DRIVER_INIT_MEMBER(aristmk5_state,aristmk5)
 {
-	UINT8 *SRAM = machine.region("sram")->base();
-	archimedes_driver_init(machine);
+	UINT8 *SRAM    = memregion("sram")->base();
+	UINT8 *SRAM_NZ = memregion("sram")->base();
 
-	memory_configure_bank(machine, "sram_bank", 0, 4, &SRAM[0], 0x8000);
+	archimedes_driver_init();
+
+	membank("sram_bank")->configure_entries(0, 4,    &SRAM[0],    0x20000);
+	membank("sram_bank_nz")->configure_entries(0, 4, &SRAM_NZ[0], 0x20000);
 }
 
-static TIMER_CALLBACK( mk5_2KHz_callback )
-{
-	aristmk5_state *state = machine.driver_data<aristmk5_state>();
-	ioc_regs[IRQ_STATUS_A] |= 1;
 
-	state->m_mk5_2KHz_timer->adjust(attotime::never);
-}
-
-static MACHINE_START( aristmk5 )
+void aristmk5_state::machine_start()
 {
-	aristmk5_state *state = machine.driver_data<aristmk5_state>();
-	archimedes_init(machine);
+	archimedes_init();
 
 	// reset the DAC to centerline
-	//dac_signed_data_w(machine.device("dac"), 0x80);
+	//m_dac->write_signed8(0x80);
 
-	state->m_mk5_2KHz_timer = machine.scheduler().timer_alloc(FUNC(mk5_2KHz_callback));
+	m_mk5_2KHz_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(aristmk5_state::mk5_2KHz_callback),this));
+	m_mk5_VSYNC_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(aristmk5_state::mk5_VSYNC_callback),this));
 }
 
-static MACHINE_RESET( aristmk5 )
+void aristmk5_state::machine_reset()
 {
-	aristmk5_state *state = machine.driver_data<aristmk5_state>();
-	archimedes_reset(machine);
-	state->m_mk5_2KHz_timer->adjust(attotime::from_hz(1953.125)); // 8MHz / 4096
+	archimedes_reset();
+	m_mk5_2KHz_timer->adjust(attotime::from_hz(1953.125)); // 8MHz / 4096
+	m_mk5_VSYNC_timer->adjust(attotime::from_hz(50000)); // default bit 1 & bit 2 == 0
 
-	ioc_regs[IRQ_STATUS_B] |= 0x40; //hack, set keyboard irq empty to be ON
+	m_ioc_regs[IRQ_STATUS_B] |= 0x40; //hack, set keyboard irq empty to be ON
 
 	/* load the roms according to what the operator wants */
 	{
-		UINT8 *ROM = machine.region("maincpu")->base();
-		UINT8 *PRG;// = machine.region("prg_code")->base();
+		UINT8 *ROM = memregion("maincpu")->base();
+		UINT8 *PRG;// = memregion("prg_code")->base();
 		int i;
 		UINT8 op_mode;
 		static const char *const rom_region[] = { "set_chip_4.04", "set_chip_4.4", "clear_chip", "game_prg" };
 
-		op_mode = input_port_read(machine, "ROM_LOAD");
+		op_mode = ioport("ROM_LOAD")->read();
 
-		PRG = machine.region(rom_region[op_mode & 3])->base();
+		PRG = memregion(rom_region[op_mode & 3])->base();
 
 		if(PRG!=NULL)
 
@@ -279,8 +410,8 @@ static MACHINE_RESET( aristmk5 )
 }
 
 #if 0
-#define	NVRAM_SIZE 256
-#define	NVRAM_PAGE_SIZE	0	/* max size of one write request */
+#define NVRAM_SIZE 256
+#define NVRAM_PAGE_SIZE 0   /* max size of one write request */
 
 static const i2cmem_interface i2cmem_interface =
 {
@@ -288,50 +419,98 @@ static const i2cmem_interface i2cmem_interface =
 };
 #endif
 
+/* TODO: this isn't supposed to access a keyboard ... */
+static AAKART_INTERFACE( kart_interface )
+{
+	DEVCB_NULL,
+	DEVCB_NULL
+};
+
 static MACHINE_CONFIG_START( aristmk5, aristmk5_state )
 	MCFG_CPU_ADD("maincpu", ARM, 12000000)
-	MCFG_CPU_PROGRAM_MAP(aristmk5_map)
-
-	MCFG_MACHINE_START( aristmk5 )
-	MCFG_MACHINE_RESET( aristmk5 )
+	MCFG_CPU_PROGRAM_MAP(aristmk5_drame_map)
+	MCFG_WATCHDOG_TIME_INIT(attotime::from_seconds(2))  /* 1.6 - 2 seconds */
 
 //  MCFG_I2CMEM_ADD("i2cmem",i2cmem_interface)
+	MCFG_AAKART_ADD("kart", 12000000/128, kart_interface) // TODO: frequency
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(640, 400)
 	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 400-1)
 
 	MCFG_PALETTE_LENGTH(0x200)
 
-	MCFG_VIDEO_START(archimds_vidc)
-	MCFG_SCREEN_UPDATE(archimds_vidc)
+	MCFG_SCREEN_UPDATE_DRIVER(archimedes_state, screen_update)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("dac0", DAC, 0)
+	MCFG_DAC_ADD("dac0")
 	MCFG_SOUND_ROUTE(0, "mono", 0.10)
 
-	MCFG_SOUND_ADD("dac1", DAC, 0)
+	MCFG_DAC_ADD("dac1")
 	MCFG_SOUND_ROUTE(0, "mono", 0.10)
 
-	MCFG_SOUND_ADD("dac2", DAC, 0)
+	MCFG_DAC_ADD("dac2")
 	MCFG_SOUND_ROUTE(0, "mono", 0.10)
 
-	MCFG_SOUND_ADD("dac3", DAC, 0)
+	MCFG_DAC_ADD("dac3")
 	MCFG_SOUND_ROUTE(0, "mono", 0.10)
 
-	MCFG_SOUND_ADD("dac4", DAC, 0)
+	MCFG_DAC_ADD("dac4")
 	MCFG_SOUND_ROUTE(0, "mono", 0.10)
 
-	MCFG_SOUND_ADD("dac5", DAC, 0)
+	MCFG_DAC_ADD("dac5")
 	MCFG_SOUND_ROUTE(0, "mono", 0.10)
 
-	MCFG_SOUND_ADD("dac6", DAC, 0)
+	MCFG_DAC_ADD("dac6")
 	MCFG_SOUND_ROUTE(0, "mono", 0.10)
 
-	MCFG_SOUND_ADD("dac7", DAC, 0)
+	MCFG_DAC_ADD("dac7")
+	MCFG_SOUND_ROUTE(0, "mono", 0.10)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_START( aristmk5_usa, aristmk5_state )
+	MCFG_CPU_ADD("maincpu", ARM, 12000000)
+	MCFG_CPU_PROGRAM_MAP(aristmk5_map)
+	MCFG_WATCHDOG_TIME_INIT(attotime::from_seconds(2))  /* 1.6 - 2 seconds */
+
+//  MCFG_I2CMEM_ADD("i2cmem",i2cmem_interface)
+	MCFG_AAKART_ADD("kart", 12000000/128, kart_interface) // TODO: frequency
+
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(640, 400)
+	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 400-1)
+
+	MCFG_PALETTE_LENGTH(0x200)
+
+	MCFG_SCREEN_UPDATE_DRIVER(archimedes_state, screen_update)
+
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_DAC_ADD("dac0")
+	MCFG_SOUND_ROUTE(0, "mono", 0.10)
+
+	MCFG_DAC_ADD("dac1")
+	MCFG_SOUND_ROUTE(0, "mono", 0.10)
+
+	MCFG_DAC_ADD("dac2")
+	MCFG_SOUND_ROUTE(0, "mono", 0.10)
+
+	MCFG_DAC_ADD("dac3")
+	MCFG_SOUND_ROUTE(0, "mono", 0.10)
+
+	MCFG_DAC_ADD("dac4")
+	MCFG_SOUND_ROUTE(0, "mono", 0.10)
+
+	MCFG_DAC_ADD("dac5")
+	MCFG_SOUND_ROUTE(0, "mono", 0.10)
+
+	MCFG_DAC_ADD("dac6")
+	MCFG_SOUND_ROUTE(0, "mono", 0.10)
+
+	MCFG_DAC_ADD("dac7")
 	MCFG_SOUND_ROUTE(0, "mono", 0.10)
 MACHINE_CONFIG_END
 
@@ -348,6 +527,11 @@ MACHINE_CONFIG_END
 	/* clear chip */ \
 	ROM_LOAD32_WORD( "clear.u7",  0x000000, 0x80000, CRC(5a254b22) SHA1(8444f237b392df2a3cb42ea349e7af32f47dd544) ) \
 	ROM_LOAD32_WORD( "clear.u11", 0x000002, 0x80000, CRC(def36617) SHA1(c7ba5b08e884a8fb36c9fb51c08e243e32c81f89) ) \
+	/* GALs */ \
+	ROM_REGION( 0x600, "gals", 0 ) \
+	ROM_LOAD( "a562837.u36",  0x000000, 0x000157, CRC(1f269234) SHA1(29940dd50fb55c632935f62ff44ca724379c7a43) ) \
+	ROM_LOAD( "a562838.u65",  0x000200, 0x000157, CRC(f2f3c40a) SHA1(b795dfa5cc4e8127c3f3a0906664910d1325ec92) ) \
+	ROM_LOAD( "a562840.u22",  0x000400, 0x000157, CRC(941d4cdb) SHA1(1ca091fba69e92f262dbb3d40f515703c8981793) )
 
 ROM_START( aristmk5 )
 	ARISTOCRAT_MK5_BIOS
@@ -358,7 +542,7 @@ ROM_START( aristmk5 )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 ROM_START( reelrock )
@@ -372,7 +556,7 @@ ROM_START( reelrock )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 ROM_START( indiandr )
@@ -386,7 +570,7 @@ ROM_START( indiandr )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 ROM_START( dolphntr )
@@ -398,7 +582,7 @@ ROM_START( dolphntr )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 ROM_START( dolphtra )
@@ -412,7 +596,7 @@ ROM_START( dolphtra )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 ROM_START( qotn )
@@ -426,7 +610,7 @@ ROM_START( qotn )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 ROM_START( swthrt2v )
@@ -438,7 +622,7 @@ ROM_START( swthrt2v )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 ROM_START( enchfrst )
@@ -450,7 +634,7 @@ ROM_START( enchfrst )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 ROM_START( margmgc )
@@ -466,7 +650,7 @@ ROM_START( margmgc )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 ROM_START( adonis )
@@ -480,7 +664,7 @@ ROM_START( adonis )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 ROM_START( wtiger )
@@ -492,7 +676,7 @@ ROM_START( wtiger )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 /****************** Touchscreen games and New Zealand games ******************/
@@ -508,7 +692,7 @@ ROM_START( dmdtouch )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASEFF )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASEFF )
 ROM_END
 
 ROM_START( geishanz )
@@ -524,7 +708,7 @@ ROM_START( geishanz )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 /*********************** US games (requires set chips) ***********************/
@@ -541,7 +725,7 @@ ROM_START( goldprmd )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
 ROM_START( magicmsk )
@@ -556,23 +740,23 @@ ROM_START( magicmsk )
 
 	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
 
-	ROM_REGION( 0x8000*4, "sram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x20000*4, "sram", ROMREGION_ERASE00 )
 ROM_END
 
-GAME( 1995, aristmk5, 0,        aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "MKV Set/Clear Chips (USA)", GAME_NOT_WORKING|GAME_IS_BIOS_ROOT )
+GAME( 1995, aristmk5, 0,        aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "MKV Set/Clear Chips (USA)", GAME_NOT_WORKING|GAME_IS_BIOS_ROOT )
 
 // Dates listed below are for the combination (reel layout), not release dates
-GAME( 1995, enchfrst, 0,        aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Enchanted Forest (0400122V, Local)",                   GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// 570/3,  E - 23/06/95
-GAME( 1995, swthrt2v, 0,        aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Sweet Hearts II (01J01986, Venezuela)",                GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// 577/1,  C - 07/09/95
-GAME( 1996, dolphntr, 0,        aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Dolphin Treasure (0200424V, NSW/ACT)",                 GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// 602/1,  B - 06/12/96
-GAME( 1996, dolphtra, dolphntr, aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Dolphin Treasure (0100424V, NSW/ACT)",                 GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// 602/1,  B - 06/12/96
-GAME( 1997, goldprmd, aristmk5, aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Golden Pyramids (MV4091, USA)",                        GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// MV4091, B - 13/05/97
-GAME( 1997, qotn,     0,        aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Queen of the Nile (0200439V, NSW/ACT)",                GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// 602/4,  B - 13/05/97
-GAME( 1997, dmdtouch, 0,        aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Diamond Touch (0400433V, Local)",                      GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// 604,    E - 30/06/97
-GAME( 1998, adonis,   0,        aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Adonis (0200751V, NSW/ACT)",                           GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// 602/9,  A - 25/05/98
-GAME( 1998, reelrock, 0,        aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Reelin-n-Rockin (0100779V, Local)",                    GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// 628,    A - 13/07/98
-GAME( 1998, indiandr, 0,        aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Indian Dreaming (0100845V, Local)",                    GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// 628/1,  B - 15/12/98
-GAME( 1999, wtiger,   0,        aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "White Tiger Classic (0200954V, NSW/ACT)",              GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// 638/1,  B - 08/07/99
-GAME( 2000, magicmsk, aristmk5, aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Magic Mask (MV4115, Export)",                          GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// MV4115, A - 09/05/2000
-GAME( 2000, margmgc,  0,        aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Margarita Magic (01J00101, NSW/ACT)",                  GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// JB005,  A - 07/07/2000
-GAME( 2001, geishanz, 0,        aristmk5, aristmk5, aristmk5, ROT0,  "Aristocrat", "Geisha (0101408V, New Zealand)",                       GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )	// MV4127, A - 05/03/01
+GAME( 1995, enchfrst, 0,        aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Enchanted Forest (0400122V, Local)",                   GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // 570/3,  E - 23/06/95
+GAME( 1995, swthrt2v, 0,        aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Sweet Hearts II (01J01986, Venezuela)",                GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // 577/1,  C - 07/09/95
+GAME( 1996, dolphntr, 0,        aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Dolphin Treasure (0200424V, NSW/ACT)",                 GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // 602/1,  B - 06/12/96
+GAME( 1996, dolphtra, dolphntr, aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Dolphin Treasure (0100424V, NSW/ACT)",                 GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // 602/1,  B - 06/12/96
+GAME( 1997, goldprmd, aristmk5, aristmk5_usa, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Golden Pyramids (MV4091, USA)",                        GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // MV4091, B - 13/05/97
+GAME( 1997, qotn,     0,        aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Queen of the Nile (0200439V, NSW/ACT)",                GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // 602/4,  B - 13/05/97
+GAME( 1997, dmdtouch, 0,        aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Diamond Touch (0400433V, Local)",                      GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // 604,    E - 30/06/97
+GAME( 1998, adonis,   0,        aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Adonis (0200751V, NSW/ACT)",                           GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // 602/9,  A - 25/05/98
+GAME( 1998, reelrock, 0,        aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Reelin-n-Rockin (0100779V, Local)",                    GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // 628,    A - 13/07/98
+GAME( 1998, indiandr, 0,        aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Indian Dreaming (0100845V, Local)",                    GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // 628/1,  B - 15/12/98
+GAME( 1999, wtiger,   0,        aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "White Tiger Classic (0200954V, NSW/ACT)",              GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // 638/1,  B - 08/07/99
+GAME( 2000, magicmsk, aristmk5, aristmk5_usa, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Magic Mask (MV4115, Export)",                          GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // MV4115, A - 09/05/2000
+GAME( 2000, margmgc,  0,        aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Margarita Magic (01J00101, NSW/ACT)",                  GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // JB005,  A - 07/07/2000
+GAME( 2001, geishanz, 0,        aristmk5, aristmk5, aristmk5_state, aristmk5, ROT0,  "Aristocrat", "Geisha (0101408V, New Zealand)",                       GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )  // MV4127, A - 05/03/01

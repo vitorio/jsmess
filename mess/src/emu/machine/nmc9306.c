@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     National Semiconductor NMC9306 256-Bit Serial EEPROM emulation
@@ -9,7 +11,6 @@
 
 #include "emu.h"
 #include "nmc9306.h"
-#include "machine/devhelpr.h"
 
 
 
@@ -26,18 +27,18 @@
 enum
 {
 	OTHER = 0,
-	WRITE,			// write register A3A2A1A0
-	READ,			// read register  A3A2A1A0
-	ERASE			// erase register A3A2A1A0
+	WRITE,          // write register A3A2A1A0
+	READ,           // read register  A3A2A1A0
+	ERASE           // erase register A3A2A1A0
 };
 
 // other instructions
 enum
 {
-	EWDS = 0,		// erase/write disable
-	WRAL,			// write all registers
-	ERAL,			// erase all registers
-	EWEN,			// erase/write enable
+	EWDS = 0,       // erase/write disable
+	WRAL,           // write all registers
+	ERAL,           // erase all registers
+	EWEN,           // erase/write enable
 };
 
 // states
@@ -106,10 +107,10 @@ inline void nmc9306_device::erase(offs_t offset)
 //-------------------------------------------------
 
 nmc9306_device::nmc9306_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, NMC9306, "NMC9306", tag, owner, clock),
-	  device_nvram_interface(mconfig, *this),
-	  m_state(STATE_IDLE),
-	  m_ewen(false)
+	: device_t(mconfig, NMC9306, "NMC9306", tag, owner, clock, "nmc9306", __FILE__),
+		device_nvram_interface(mconfig, *this),
+		m_state(STATE_IDLE),
+		m_ewen(false)
 {
 }
 
@@ -120,6 +121,8 @@ nmc9306_device::nmc9306_device(const machine_config &mconfig, const char *tag, d
 
 void nmc9306_device::device_start()
 {
+	memset(m_register, 0, sizeof(m_register));
+
 	// state saving
 	save_item(NAME(m_bits));
 	save_item(NAME(m_state));

@@ -14,40 +14,53 @@ class multi16_state : public driver_device
 {
 public:
 	multi16_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+	m_maincpu(*this, "maincpu"),
+	m_pic(*this, "pic8259"),
+	m_crtc(*this, "crtc")
+	,
+		m_p_vram(*this, "p_vram"){ }
 
-	UINT16 *m_vram;
+	required_device<cpu_device> m_maincpu;
+	required_device<pic8259_device> m_pic;
+	required_device<mc6845_device> m_crtc;
+	DECLARE_WRITE8_MEMBER(multi16_6845_address_w);
+	DECLARE_WRITE8_MEMBER(multi16_6845_data_w);
+	DECLARE_WRITE_LINE_MEMBER(multi16_set_int_line);
+	required_shared_ptr<UINT16> m_p_vram;
 	UINT8 m_crtc_vreg[0x100],m_crtc_index;
-
-	mc6845_device *m_mc6845;
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void video_start();
+	UINT32 screen_update_multi16(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	IRQ_CALLBACK_MEMBER(multi16_irq_callback);
 };
 
 
-static VIDEO_START( multi16 )
+void multi16_state::video_start()
 {
 }
 
-#define mc6845_h_char_total 	(state->m_crtc_vreg[0])
-#define mc6845_h_display		(state->m_crtc_vreg[1])
-#define mc6845_h_sync_pos		(state->m_crtc_vreg[2])
-#define mc6845_sync_width		(state->m_crtc_vreg[3])
-#define mc6845_v_char_total		(state->m_crtc_vreg[4])
-#define mc6845_v_total_adj		(state->m_crtc_vreg[5])
-#define mc6845_v_display		(state->m_crtc_vreg[6])
-#define mc6845_v_sync_pos		(state->m_crtc_vreg[7])
-#define mc6845_mode_ctrl		(state->m_crtc_vreg[8])
-#define mc6845_tile_height		(state->m_crtc_vreg[9]+1)
-#define mc6845_cursor_y_start	(state->m_crtc_vreg[0x0a])
-#define mc6845_cursor_y_end 	(state->m_crtc_vreg[0x0b])
-#define mc6845_start_addr		(((state->m_crtc_vreg[0x0c]<<8) & 0x3f00) | (state->m_crtc_vreg[0x0d] & 0xff))
-#define mc6845_cursor_addr  	(((state->m_crtc_vreg[0x0e]<<8) & 0x3f00) | (state->m_crtc_vreg[0x0f] & 0xff))
-#define mc6845_light_pen_addr	(((state->m_crtc_vreg[0x10]<<8) & 0x3f00) | (state->m_crtc_vreg[0x11] & 0xff))
-#define mc6845_update_addr  	(((state->m_crtc_vreg[0x12]<<8) & 0x3f00) | (state->m_crtc_vreg[0x13] & 0xff))
+#define mc6845_h_char_total     (m_crtc_vreg[0])
+#define mc6845_h_display        (m_crtc_vreg[1])
+#define mc6845_h_sync_pos       (m_crtc_vreg[2])
+#define mc6845_sync_width       (m_crtc_vreg[3])
+#define mc6845_v_char_total     (m_crtc_vreg[4])
+#define mc6845_v_total_adj      (m_crtc_vreg[5])
+#define mc6845_v_display        (m_crtc_vreg[6])
+#define mc6845_v_sync_pos       (m_crtc_vreg[7])
+#define mc6845_mode_ctrl        (m_crtc_vreg[8])
+#define mc6845_tile_height      (m_crtc_vreg[9]+1)
+#define mc6845_cursor_y_start   (m_crtc_vreg[0x0a])
+#define mc6845_cursor_y_end     (m_crtc_vreg[0x0b])
+#define mc6845_start_addr       (((m_crtc_vreg[0x0c]<<8) & 0x3f00) | (m_crtc_vreg[0x0d] & 0xff))
+#define mc6845_cursor_addr      (((m_crtc_vreg[0x0e]<<8) & 0x3f00) | (m_crtc_vreg[0x0f] & 0xff))
+#define mc6845_light_pen_addr   (((m_crtc_vreg[0x10]<<8) & 0x3f00) | (m_crtc_vreg[0x11] & 0xff))
+#define mc6845_update_addr      (((m_crtc_vreg[0x12]<<8) & 0x3f00) | (m_crtc_vreg[0x13] & 0xff))
 
 
-static SCREEN_UPDATE( multi16 )
+UINT32 multi16_state::screen_update_multi16(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	multi16_state *state = screen->machine().driver_data<multi16_state>();
 	int x,y;
 	int count;
 	int xi;
@@ -60,10 +73,10 @@ static SCREEN_UPDATE( multi16 )
 		{
 			for(xi=0;xi<16;xi++)
 			{
-				int dot = (BITSWAP16(state->m_vram[count],7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8) >> (15-xi)) & 0x1;
+				int dot = (BITSWAP16(m_p_vram[count],7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8) >> (15-xi)) & 0x1;
 
-				if(y < screen->machine().primary_screen->visible_area().max_y && x*16+xi < screen->machine().primary_screen->visible_area().max_x) /* TODO: safety check */
-					*BITMAP_ADDR16(bitmap, y, x*16+xi) = screen->machine().pens[dot];
+				if(screen.visible_area().contains(x*16+xi, y))
+					bitmap.pix16(y, x*16+xi) = machine().pens[dot];
 			}
 
 			count++;
@@ -73,85 +86,71 @@ static SCREEN_UPDATE( multi16 )
 	return 0;
 }
 
-static ADDRESS_MAP_START(multi16_map, AS_PROGRAM, 16)
+static ADDRESS_MAP_START(multi16_map, AS_PROGRAM, 16, multi16_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x00000,0x7ffff) AM_RAM
-	AM_RANGE(0xd8000,0xdffff) AM_RAM AM_BASE_MEMBER(multi16_state,m_vram)
+	AM_RANGE(0xd8000,0xdffff) AM_RAM AM_SHARE("p_vram")
 	AM_RANGE(0xe0000,0xeffff) AM_RAM
 	AM_RANGE(0xf0000,0xf3fff) AM_MIRROR(0xc000) AM_ROM AM_REGION("ipl", 0)
 ADDRESS_MAP_END
 
-static WRITE8_HANDLER( multi16_6845_address_w )
+WRITE8_MEMBER( multi16_state::multi16_6845_address_w )
 {
-	multi16_state *state = space->machine().driver_data<multi16_state>();
-
-	state->m_crtc_index = data;
-	state->m_mc6845->address_w(*space, offset, data);
+	m_crtc_index = data;
+	m_crtc->address_w(space, offset, data);
 }
 
-static WRITE8_HANDLER( multi16_6845_data_w )
+WRITE8_MEMBER( multi16_state::multi16_6845_data_w )
 {
-	multi16_state *state = space->machine().driver_data<multi16_state>();
-
-	state->m_crtc_vreg[state->m_crtc_index] = data;
-	state->m_mc6845->register_w(*space, offset, data);
+	m_crtc_vreg[m_crtc_index] = data;
+	m_crtc->register_w(space, offset, data);
 }
 
-static ADDRESS_MAP_START(multi16_io, AS_IO, 16)
+static ADDRESS_MAP_START(multi16_io, AS_IO, 16, multi16_state)
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE8("pic8259", pic8259_r, pic8259_w, 0xffff) // i8259
-	AM_RANGE(0x40, 0x41) AM_WRITE8(multi16_6845_address_w,0x00ff)
-	AM_RANGE(0x40, 0x41) AM_WRITE8(multi16_6845_data_w,0xff00)
+	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE8("pic8259", pic8259_device, read, write, 0xffff) // i8259
+	AM_RANGE(0x40, 0x41) AM_WRITE8(multi16_6845_address_w, 0x00ff)
+	AM_RANGE(0x40, 0x41) AM_WRITE8(multi16_6845_data_w, 0xff00)
 ADDRESS_MAP_END
 
 /* Input ports */
 static INPUT_PORTS_START( multi16 )
 INPUT_PORTS_END
 
-static IRQ_CALLBACK(multi16_irq_callback)
+IRQ_CALLBACK_MEMBER(multi16_state::multi16_irq_callback)
 {
-	return pic8259_acknowledge( device->machine().device( "pic8259" ) );
+	return machine().device<pic8259_device>("pic8259")->acknowledge();
 }
 
-static WRITE_LINE_DEVICE_HANDLER( multi16_set_int_line )
+WRITE_LINE_MEMBER( multi16_state::multi16_set_int_line )
 {
 	//printf("%02x\n",interrupt);
-	cputag_set_input_line(device->machine(), "maincpu", 0, state ? HOLD_LINE : CLEAR_LINE);
+	m_maincpu->set_input_line(0, state ? HOLD_LINE : CLEAR_LINE);
 }
 
-static const struct pic8259_interface multi16_pic8259_config =
+void multi16_state::machine_start()
 {
-	DEVCB_LINE(multi16_set_int_line),
-	DEVCB_LINE_GND,
-	DEVCB_NULL
-};
-
-static MACHINE_START(multi16)
-{
-	multi16_state *state = machine.driver_data<multi16_state>();
-
-	state->m_mc6845 = machine.device<mc6845_device>("crtc");
-
-	device_set_irq_callback(machine.device("maincpu"), multi16_irq_callback);
+	m_maincpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(multi16_state::multi16_irq_callback),this));
 }
 
 
-static MACHINE_RESET(multi16)
+void multi16_state::machine_reset()
 {
 }
 
-static const mc6845_interface mc6845_intf =
+
+static MC6845_INTERFACE( mc6845_intf )
 {
-	"screen",	/* screen we are acting on */
-	8,			/* number of pixels per video memory address */
-	NULL,		/* before pixel update callback */
-	NULL,		/* row update callback */
-	NULL,		/* after pixel update callback */
-	DEVCB_NULL,	/* callback for display state changes */
-	DEVCB_NULL,	/* callback for cursor state changes */
-	DEVCB_NULL,	/* HSYNC callback */
-	DEVCB_NULL,	/* VSYNC callback */
-	NULL		/* update address callback */
+	false,      /* show border area */
+	8,          /* number of pixels per video memory address */
+	NULL,       /* before pixel update callback */
+	NULL,       /* row update callback */
+	NULL,       /* after pixel update callback */
+	DEVCB_NULL, /* callback for display state changes */
+	DEVCB_NULL, /* callback for cursor state changes */
+	DEVCB_NULL, /* HSYNC callback */
+	DEVCB_NULL, /* VSYNC callback */
+	NULL        /* update address callback */
 };
 
 static MACHINE_CONFIG_START( multi16, multi16_state )
@@ -160,26 +159,19 @@ static MACHINE_CONFIG_START( multi16, multi16_state )
 	MCFG_CPU_PROGRAM_MAP(multi16_map)
 	MCFG_CPU_IO_MAP(multi16_io)
 
-	MCFG_MACHINE_START(multi16)
-	MCFG_MACHINE_RESET(multi16)
-
-	MCFG_PIC8259_ADD( "pic8259", multi16_pic8259_config )
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(640, 200)
 	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 200-1)
-	MCFG_SCREEN_UPDATE(multi16)
-
-	MCFG_MC6845_ADD("crtc", H46505, 16000000/5, mc6845_intf)	/* unknown clock, hand tuned to get ~60 fps */
-
+	MCFG_SCREEN_UPDATE_DRIVER(multi16_state, screen_update_multi16)
 	MCFG_PALETTE_LENGTH(8)
-//  MCFG_PALETTE_INIT(black_and_white)
 
-	MCFG_VIDEO_START(multi16)
+	/* Devices */
+	MCFG_MC6845_ADD("crtc", H46505, "screen", 16000000/5, mc6845_intf)    /* unknown clock, hand tuned to get ~60 fps */
+	MCFG_PIC8259_ADD( "pic8259", WRITELINE(multi16_state, multi16_set_int_line), GND, NULL )
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -190,5 +182,5 @@ ROM_END
 
 /* Driver */
 
-/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY           FULLNAME       FLAGS */
-COMP( 1986, multi16,  0,      0,       multi16,     multi16,    0,     "Mitsubishi",   "Multi 16", GAME_NOT_WORKING | GAME_NO_SOUND)
+/*    YEAR  NAME     PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY     FULLNAME       FLAGS */
+COMP( 1986, multi16, 0,      0,       multi16,   multi16, driver_device, 0,   "Mitsubishi", "Multi 16", GAME_NOT_WORKING | GAME_NO_SOUND)

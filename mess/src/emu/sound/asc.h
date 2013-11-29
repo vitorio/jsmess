@@ -22,14 +22,14 @@
 // chip behavior types
 enum
 {
-	ASC_TYPE_ASC = 0,	// original discrete Apple Sound Chip
-	ASC_TYPE_EASC = 1,	// discrete Enhanced Apple Sound Chip
-	ASC_TYPE_V8 = 2,	// Subset of ASC included in the V8 ASIC (LC/LCII)
-	ASC_TYPE_EAGLE = 3,	// Subset of ASC included in the Eagle ASIC (Classic II)
-	ASC_TYPE_SPICE = 4,	// Subset of ASC included in the Spice ASIC (Color Classic)
-	ASC_TYPE_SONORA = 5,	// Subset of ASC included in the Sonora ASIC (LCIII)
-	ASC_TYPE_VASP = 6,	// Subset of ASC included in the VASP ASIC  (IIvx/IIvi)
-	ASC_TYPE_ARDBEG = 7	// Subset of ASC included in the Ardbeg ASIC (LC520)
+	ASC_TYPE_ASC = 0,   // original discrete Apple Sound Chip
+	ASC_TYPE_EASC = 1,  // discrete Enhanced Apple Sound Chip
+	ASC_TYPE_V8 = 2,    // Subset of ASC included in the V8 ASIC (LC/LCII)
+	ASC_TYPE_EAGLE = 3, // Subset of ASC included in the Eagle ASIC (Classic II)
+	ASC_TYPE_SPICE = 4, // Subset of ASC included in the Spice ASIC (Color Classic)
+	ASC_TYPE_SONORA = 5,    // Subset of ASC included in the Sonora ASIC (LCIII)
+	ASC_TYPE_VASP = 6,  // Subset of ASC included in the VASP ASIC  (IIvx/IIvi)
+	ASC_TYPE_ARDBEG = 7 // Subset of ASC included in the Ardbeg ASIC (LC520)
 };
 
 
@@ -49,11 +49,9 @@ enum
 	MCFG_IRQ_FUNC(_irqf)
 
 #define MCFG_ASC_TYPE(_type) \
-	asc_device::static_set_type(*device, _type); \
-
+	asc_device::static_set_type(*device, _type);
 #define MCFG_IRQ_FUNC(_irqf) \
-	asc_device::static_set_irqf(*device, _irqf); \
-
+	downcast<asc_device *>(device)->set_irqf(DEVCB2_##_irqf);
 
 //**************************************************************************
 //  TYPE DEFINITIONS
@@ -69,7 +67,14 @@ public:
 
 	// inline configuration helpers
 	static void static_set_type(device_t &device, int type);
-	static void static_set_irqf(device_t &device, void (*irqf)(device_t *device, int state));
+
+
+	template<class _write> void set_irqf(_write wr)
+	{
+		write_irq.set_callback(wr);
+	}
+
+	devcb2_write_line write_irq;
 
 	DECLARE_READ8_MEMBER(read);
 	DECLARE_WRITE8_MEMBER(write);
@@ -100,25 +105,25 @@ protected:
 	// device-level overrides
 	virtual void device_start();
 	virtual void device_reset();
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 
 	virtual void sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples);
 
 	// inline data
-	UINT8	m_chip_type;
-	void (*m_irq_cb)(device_t *device, int state);
+	UINT8   m_chip_type;
 
-	UINT8	m_fifo_a[0x400];
-	UINT8	m_fifo_b[0x400];
+	UINT8   m_fifo_a[0x400];
+	UINT8   m_fifo_b[0x400];
 
-	UINT8	m_regs[0x800];
+	UINT8   m_regs[0x800];
 
-	UINT32	m_phase[4], m_incr[4];
+	UINT32  m_phase[4], m_incr[4];
 
-	int	m_fifo_a_rdptr, m_fifo_b_rdptr;
-	int	m_fifo_a_wrptr, m_fifo_b_wrptr;
-	int 	m_fifo_cap_a, m_fifo_cap_b;
+	int m_fifo_a_rdptr, m_fifo_b_rdptr;
+	int m_fifo_a_wrptr, m_fifo_b_wrptr;
+	int     m_fifo_cap_a, m_fifo_cap_b;
 
-	emu_timer *m_sync_timer;
+	emu_timer *m_timer;
 };
 
 
@@ -127,4 +132,3 @@ extern const device_type ASC;
 
 
 #endif /* __ASC_H__ */
-

@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /*****************************************************************************
  *
  * video/abc80.c
@@ -30,52 +32,16 @@ static const gfx_layout charlayout =
 //-------------------------------------------------
 
 static GFXDECODE_START( abc80 )
-	GFXDECODE_ENTRY( "chargen", 0,	   charlayout, 0, 2 ) // normal characters
+	GFXDECODE_ENTRY( "chargen", 0,     charlayout, 0, 2 ) // normal characters
 	GFXDECODE_ENTRY( "chargen", 0x500, charlayout, 0, 2 ) // graphics characters
 GFXDECODE_END
-
-
-//-------------------------------------------------
-//  TIMER_DEVICE_CALLBACK( blink_tick )
-//-------------------------------------------------
-
-static TIMER_DEVICE_CALLBACK( blink_tick )
-{
-	abc80_state *state = timer.machine().driver_data<abc80_state>();
-
-	state->m_blink = !state->m_blink;
-}
-
-
-//-------------------------------------------------
-//  TIMER_DEVICE_CALLBACK( vsync_on_tick )
-//-------------------------------------------------
-
-static TIMER_DEVICE_CALLBACK( vsync_on_tick )
-{
-	abc80_state *state = timer.machine().driver_data<abc80_state>();
-
-	device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, ASSERT_LINE);
-}
-
-
-//-------------------------------------------------
-//  TIMER_DEVICE_CALLBACK( vsync_off_tick )
-//-------------------------------------------------
-
-static TIMER_DEVICE_CALLBACK( vsync_off_tick )
-{
-	abc80_state *state = timer.machine().driver_data<abc80_state>();
-
-	device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, CLEAR_LINE);
-}
 
 
 //-------------------------------------------------
 //  update_screen -
 //-------------------------------------------------
 
-void abc80_state::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
+void abc80_state::update_screen(bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
 	int c = 0;
 	int r = 0;
@@ -83,8 +49,8 @@ void abc80_state::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 
 	for (int y = 0; y < 312; y++)
 	{
-		UINT8 vsync_data = m_vsync_prom[y];
-		UINT8 l = m_line_prom[y];
+		UINT8 vsync_data = m_vsync_prom->base()[y];
+		UINT8 l = m_line_prom->base()[y];
 		int dv = (vsync_data & ABC80_K2_DV) ? 1 : 0;
 
 		if (!(vsync_data & ABC80_K2_FRAME_RESET))
@@ -95,7 +61,7 @@ void abc80_state::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 
 		for (int sx = 0; sx < 64; sx++)
 		{
-			UINT8 hsync_data = m_hsync_prom[sx];
+			UINT8 hsync_data = m_hsync_prom->base()[sx];
 			int dh = (hsync_data & ABC80_K5_DH) ? 1 : 0;
 			UINT8 data = 0;
 
@@ -110,14 +76,14 @@ void abc80_state::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 
 			/*
 
-                Video RAM Addressing Scheme
+			    Video RAM Addressing Scheme
 
-                A9 A8 A7 A6 A5 A4 A3 A2 A1 A0
-                R2 R1 R0 xx xx xx xx C2 C1 C0
+			    A9 A8 A7 A6 A5 A4 A3 A2 A1 A0
+			    R2 R1 R0 xx xx xx xx C2 C1 C0
 
-                A6 A5 A4 A3 = 00 C5 C4 C3 + R4 R3 R4 R3
+			    A6 A5 A4 A3 = 00 C5 C4 C3 + R4 R3 R4 R3
 
-            */
+			*/
 
 			int a = (c >> 3) & 0x07;
 			int b = ((r >> 1) & 0x0c) | ((r >> 3) & 0x03);
@@ -125,7 +91,7 @@ void abc80_state::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 			UINT16 videoram_addr = ((r & 0x07) << 7) | (s << 3) | (c & 0x07);
 			UINT8 videoram_data = m_latch;
 			UINT8 attr_addr = ((dh & dv) << 7) | (videoram_data & 0x7f);
-			UINT8 attr_data = m_attr_prom[attr_addr];
+			UINT8 attr_data = m_attr_prom->base()[attr_addr];
 
 			int blank = (attr_data & ABC80_J3_BLANK) ? 1 : 0;
 			int j = (attr_data & ABC80_J3_TEXT) ? 1 : 0;
@@ -159,7 +125,7 @@ void abc80_state::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 				// text mode
 				UINT16 chargen_addr = ((videoram_data & 0x7f) * 10) + l;
 
-				data = m_char_rom[chargen_addr];
+				data = m_char_rom->base()[chargen_addr];
 			}
 
 			// shift out pixels
@@ -171,7 +137,7 @@ void abc80_state::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 				color ^= (cursor & m_blink);
 				color &= blank;
 
-				*BITMAP_ADDR16(bitmap, y, x) = color;
+				bitmap.pix32(y, x) = RGB_MONOCHROME_WHITE[color];
 
 				data <<= 1;
 			}
@@ -194,32 +160,35 @@ void abc80_state::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 }
 
 
-//-------------------------------------------------
-//  VIDEO_START( abc80 )
-//-------------------------------------------------
-
 void abc80_state::video_start()
 {
-	// find memory regions
-	m_char_rom = machine().region("chargen")->base();
-	m_hsync_prom = machine().region("hsync")->base();
-	m_vsync_prom = machine().region("vsync")->base();
-	m_line_prom = machine().region("line")->base();
-	m_attr_prom = machine().region("attr")->base();
+	screen_device *screen = machine().device<screen_device>(SCREEN_TAG);
+
+	// start timers
+	m_pio_timer = timer_alloc(TIMER_ID_PIO);
+	m_pio_timer->adjust(screen->time_until_pos(0, 0), 0, screen->scan_period());
+
+	m_blink_timer = timer_alloc(TIMER_ID_BLINK);
+	m_blink_timer->adjust(attotime::from_hz(XTAL_11_9808MHz/2/6/64/312/16), 0, attotime::from_hz(XTAL_11_9808MHz/2/6/64/312/16));
+
+	m_vsync_on_timer = timer_alloc(TIMER_ID_VSYNC_ON);
+	m_vsync_on_timer->adjust(screen->time_until_pos(0, 0), 0, screen->frame_period());
+
+	m_vsync_off_timer = timer_alloc(TIMER_ID_VSYNC_OFF);
+	m_vsync_on_timer->adjust(screen->time_until_pos(16, 0), 0, screen->frame_period());
+
+	// allocate memory
+	m_video_ram.allocate(0x400);
 
 	// register for state saving
-	state_save_register_global(machine(), m_blink);
-	state_save_register_global(machine(), m_latch);
+	save_item(NAME(m_blink));
+	save_item(NAME(m_latch));
 }
 
 
-//-------------------------------------------------
-//  SCREEN_UPDATE( abc80 )
-//-------------------------------------------------
-
-bool abc80_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
+UINT32 abc80_state::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-	update_screen(&bitmap, &cliprect);
+	update_screen(bitmap, cliprect);
 
 	return 0;
 }
@@ -230,17 +199,10 @@ bool abc80_state::screen_update(screen_device &screen, bitmap_t &bitmap, const r
 //-------------------------------------------------
 
 MACHINE_CONFIG_FRAGMENT( abc80_video )
-	MCFG_TIMER_ADD_PERIODIC("blink", blink_tick, attotime::from_hz(ABC80_XTAL/2/6/64/312/16))
-	MCFG_TIMER_ADD_SCANLINE("vsync_on", vsync_on_tick, SCREEN_TAG, 0, ABC80_VTOTAL)
-	MCFG_TIMER_ADD_SCANLINE("vsync_off", vsync_off_tick, SCREEN_TAG, 16, ABC80_VTOTAL)
-
 	MCFG_SCREEN_ADD(SCREEN_TAG, RASTER)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(abc80_state, screen_update)
 
 	MCFG_GFXDECODE(abc80)
 
-	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
-
-	MCFG_SCREEN_RAW_PARAMS(ABC80_XTAL/2, ABC80_HTOTAL, ABC80_HBEND, ABC80_HBSTART, ABC80_VTOTAL, ABC80_VBEND, ABC80_VBSTART)
+	MCFG_SCREEN_RAW_PARAMS(XTAL_11_9808MHz/2, ABC80_HTOTAL, ABC80_HBEND, ABC80_HBSTART, ABC80_VTOTAL, ABC80_VBEND, ABC80_VBSTART)
 MACHINE_CONFIG_END

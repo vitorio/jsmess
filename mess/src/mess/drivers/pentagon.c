@@ -9,154 +9,183 @@
 #include "machine/beta.h"
 #include "machine/ram.h"
 
-DIRECT_UPDATE_HANDLER( pentagon_direct )
+class pentagon_state : public spectrum_state
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	device_t *beta = machine.device(BETA_DISK_TAG);
-	UINT16 pc = cpu_get_reg(machine.device("maincpu"), STATE_GENPCBASE);
+public:
+	pentagon_state(const machine_config &mconfig, device_type type, const char *tag)
+		: spectrum_state(mconfig, type, tag)
+		, m_bank1(*this, "bank1")
+		, m_bank2(*this, "bank2")
+		, m_bank3(*this, "bank3")
+		, m_bank4(*this, "bank4")
+		, m_beta(*this, BETA_DISK_TAG)
+	{ }
 
-	if (beta->started() && betadisk_is_active(beta))
-	{
-		if (pc >= 0x4000)
-		{
-			state->m_ROMSelection = ((state->m_port_7ffd_data>>4) & 0x01) ? 1 : 0;
-			betadisk_disable(beta);
-			memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base() + 0x010000 + (state->m_ROMSelection<<14));
-		}
-	} else if (((pc & 0xff00) == 0x3d00) && (state->m_ROMSelection==1))
-	{
-		state->m_ROMSelection = 3;
-		if (beta->started())
-			betadisk_enable(beta);
+	DECLARE_DIRECT_UPDATE_MEMBER(pentagon_direct);
+	DECLARE_WRITE8_MEMBER(pentagon_port_7ffd_w);
+	DECLARE_MACHINE_RESET(pentagon);
 
+protected:
+	required_memory_bank m_bank1;
+	required_memory_bank m_bank2;
+	required_memory_bank m_bank3;
+	required_memory_bank m_bank4;
+	required_device<device_t> m_beta;
+private:
+	UINT8 *m_p_ram;
+	void pentagon_update_memory();
+};
+
+DIRECT_UPDATE_MEMBER(pentagon_state::pentagon_direct)
+{
+	UINT16 pc = m_maincpu->pcbase();
+
+	if (m_beta->started() && betadisk_is_active(m_beta) && (pc >= 0x4000))
+	{
+		m_ROMSelection = BIT(m_port_7ffd_data, 4);
+		betadisk_disable(m_beta);
+		m_bank1->set_base(&m_p_ram[0x10000 + (m_ROMSelection<<14)]);
 	}
-	if((address>=0x0000) && (address<=0x3fff))
+	else
+	if (((pc & 0xff00) == 0x3d00) && (m_ROMSelection==1))
 	{
-		if (state->m_ROMSelection == 3) {
-			if (beta->started()) {
-				direct.explicit_configure(0x0000, 0x3fff, 0x3fff, machine.region("beta:beta")->base());
-				memory_set_bankptr(machine, "bank1", machine.region("beta:beta")->base());
+		m_ROMSelection = 3;
+		if (m_beta->started())
+			betadisk_enable(m_beta);
+	}
+
+	if (address<=0x3fff)
+	{
+		if (m_ROMSelection == 3)
+		{
+			if (m_beta->started())
+			{
+				direct.explicit_configure(0x0000, 0x3fff, 0x3fff, memregion("beta:beta")->base());
+				m_bank1->set_base(memregion("beta:beta")->base());
 			}
-		} else {
-			direct.explicit_configure(0x0000, 0x3fff, 0x3fff, machine.region("maincpu")->base() + 0x010000 + (state->m_ROMSelection<<14));
-			memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base() + 0x010000 + (state->m_ROMSelection<<14));
+		}
+		else
+		{
+			direct.explicit_configure(0x0000, 0x3fff, 0x3fff, &m_p_ram[0x10000 + (m_ROMSelection<<14)]);
+			m_bank1->set_base(&m_p_ram[0x10000 + (m_ROMSelection<<14)]);
 		}
 		return ~0;
 	}
+
 	return address;
 }
 
-static void pentagon_update_memory(running_machine &machine)
+void pentagon_state::pentagon_update_memory()
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	device_t *beta = machine.device(BETA_DISK_TAG);
-	UINT8 *messram = ram_get_ptr(machine.device(RAM_TAG));
-	state->m_screen_location = messram + ((state->m_port_7ffd_data & 8) ? (7<<14) : (5<<14));
+	UINT8 *messram = m_ram->pointer();
 
-	memory_set_bankptr(machine, "bank4", messram + ((state->m_port_7ffd_data & 0x07) * 0x4000));
+	m_screen_location = messram + ((m_port_7ffd_data & 8) ? (7<<14) : (5<<14));
 
-	if (beta->started() && betadisk_is_active(beta) && !( state->m_port_7ffd_data & 0x10 ) )
+	m_bank4->set_base(messram + ((m_port_7ffd_data & 0x07) * 0x4000));
+
+	if (m_beta->started() && betadisk_is_active(m_beta) && !( m_port_7ffd_data & 0x10 ) )
 	{
 		/* GLUK */
-		if (strcmp(machine.system().name, "pent1024")==0) {
-			state->m_ROMSelection = 2;
-		} else {
-			state->m_ROMSelection = ((state->m_port_7ffd_data>>4) & 0x01) ;
-		}
+		if (strcmp(machine().system().name, "pent1024")==0)
+			m_ROMSelection = 2;
+		else
+			m_ROMSelection = BIT(m_port_7ffd_data, 4);
 	}
-	else {
+	else
 		/* ROM switching */
-		state->m_ROMSelection = ((state->m_port_7ffd_data>>4) & 0x01) ;
-	}
+		m_ROMSelection = BIT(m_port_7ffd_data, 4);
+
 	/* rom 0 is 128K rom, rom 1 is 48 BASIC */
-	memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base() + 0x010000 + (state->m_ROMSelection<<14));
+	m_bank1->set_base(&m_p_ram[0x10000 + (m_ROMSelection<<14)]);
 }
 
-static WRITE8_HANDLER(pentagon_port_7ffd_w)
+WRITE8_MEMBER(pentagon_state::pentagon_port_7ffd_w)
 {
-	spectrum_state *state = space->machine().driver_data<spectrum_state>();
-
 	/* disable paging */
-	if (state->m_port_7ffd_data & 0x20)
+	if (m_port_7ffd_data & 0x20)
 		return;
 
 	/* store new state */
-	state->m_port_7ffd_data = data;
+	m_port_7ffd_data = data;
 
 	/* update memory */
-	pentagon_update_memory(space->machine());
+	pentagon_update_memory();
 }
 
-static ADDRESS_MAP_START (pentagon_io, AS_IO, 8)
+static ADDRESS_MAP_START (pentagon_io, AS_IO, 8, pentagon_state )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x001f, 0x001f) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_status_r,betadisk_command_w) AM_MIRROR(0xff00)
-	AM_RANGE(0x003f, 0x003f) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_track_r,betadisk_track_w) AM_MIRROR(0xff00)
-	AM_RANGE(0x005f, 0x005f) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_sector_r,betadisk_sector_w) AM_MIRROR(0xff00)
-	AM_RANGE(0x007f, 0x007f) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_data_r,betadisk_data_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x001f, 0x001f) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_status_r,betadisk_command_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x003f, 0x003f) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_track_r,betadisk_track_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x005f, 0x005f) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_sector_r,betadisk_sector_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x007f, 0x007f) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_data_r,betadisk_data_w) AM_MIRROR(0xff00)
 	AM_RANGE(0x00fe, 0x00fe) AM_READWRITE(spectrum_port_fe_r,spectrum_port_fe_w) AM_MIRROR(0xff00) AM_MASK(0xffff)
-	AM_RANGE(0x00ff, 0x00ff) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_state_r, betadisk_param_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x00ff, 0x00ff) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_state_r, betadisk_param_w) AM_MIRROR(0xff00)
 	AM_RANGE(0x4000, 0x4000) AM_WRITE(pentagon_port_7ffd_w)  AM_MIRROR(0x3ffd)
-	AM_RANGE(0x8000, 0x8000) AM_DEVWRITE("ay8912", ay8910_data_w) AM_MIRROR(0x3ffd)
-	AM_RANGE(0xc000, 0xc000) AM_DEVREADWRITE("ay8912", ay8910_r, ay8910_address_w) AM_MIRROR(0x3ffd)
+	AM_RANGE(0x8000, 0x8000) AM_DEVWRITE("ay8912", ay8910_device, data_w) AM_MIRROR(0x3ffd)
+	AM_RANGE(0xc000, 0xc000) AM_DEVREADWRITE("ay8912", ay8910_device, data_r, address_w) AM_MIRROR(0x3ffd)
 ADDRESS_MAP_END
 
-static MACHINE_RESET( pentagon )
+MACHINE_RESET_MEMBER(pentagon_state,pentagon)
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	UINT8 *messram = ram_get_ptr(machine.device(RAM_TAG));
-	device_t *beta = machine.device(BETA_DISK_TAG);
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	UINT8 *messram = m_ram->pointer();
+	address_space &space = m_maincpu->space(AS_PROGRAM);
+	m_p_ram = memregion("maincpu")->base();
 
-	space->install_read_bank(0x0000, 0x3fff, "bank1");
-	space->unmap_write(0x0000, 0x3fff);
+	space.install_read_bank(0x0000, 0x3fff, "bank1");
+	space.unmap_write(0x0000, 0x3fff);
 
-	if (beta->started())  {
-		betadisk_enable(beta);
-		betadisk_clear_status(beta);
+	if (m_beta->started())
+	{
+		betadisk_enable(m_beta);
+		betadisk_clear_status(m_beta);
 	}
-	space->set_direct_update_handler(direct_update_delegate(FUNC(pentagon_direct), &machine));
+	space.set_direct_update_handler(direct_update_delegate(FUNC(pentagon_state::pentagon_direct), this));
 
 	memset(messram,0,128*1024);
 
 	/* Bank 5 is always in 0x4000 - 0x7fff */
-	memory_set_bankptr(machine, "bank2", messram + (5<<14));
+	m_bank2->set_base(messram + (5<<14));
 
 	/* Bank 2 is always in 0x8000 - 0xbfff */
-	memory_set_bankptr(machine, "bank3", messram + (2<<14));
+	m_bank3->set_base(messram + (2<<14));
 
-	state->m_port_7ffd_data = 0;
-	state->m_port_1ffd_data = -1;
-	pentagon_update_memory(machine);
+	m_port_7ffd_data = 0;
+	m_port_1ffd_data = -1;
+	pentagon_update_memory();
 }
 
 /* F4 Character Displayer */
 static const gfx_layout spectrum_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	96,					/* 96 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	96,                 /* 96 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( pentagon )
 	GFXDECODE_ENTRY( "maincpu", 0x17d00, spectrum_charlayout, 0, 8 )
 GFXDECODE_END
 
-static MACHINE_CONFIG_DERIVED( pentagon, spectrum_128 )
+
+
+static MACHINE_CONFIG_DERIVED_CLASS( pentagon, spectrum_128, pentagon_state )
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_IO_MAP(pentagon_io)
-	MCFG_MACHINE_RESET( pentagon )
+	MCFG_MACHINE_RESET_OVERRIDE(pentagon_state, pentagon )
 
 	MCFG_BETA_DISK_ADD(BETA_DISK_TAG)
 	MCFG_GFXDECODE(pentagon)
+
+	MCFG_SOFTWARE_LIST_ADD("cass_list_pen","pentagon_cass")
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_DERIVED( pent1024, pentagon )
+static MACHINE_CONFIG_DERIVED( pent1024, pentagon)
 	/* internal ram */
 	MCFG_RAM_MODIFY(RAM_TAG)
 	MCFG_RAM_DEFAULT_SIZE("1024K")
@@ -193,8 +222,8 @@ ROM_START(pentagon)
 	ROMX_LOAD("128p-0.rom", 0x010000, 0x4000, CRC(124ad9e0) SHA1(d07fcdeca892ee80494d286ea9ea5bf3928a1aca), ROM_BIOS(8))
 	ROMX_LOAD( "m48a.rom",  0x014000, 0x4000, CRC(a3b4def6) SHA1(7ad59ca373876d452b0cf0ed5edb0e93c3176f1a), ROM_BIOS(8))
 	ROM_SYSTEM_BIOS(8, "v9", "ZXVGS v0.22 by Yarek")
-    ROMX_LOAD( "zxvgs-22-0.rom", 0x010000, 0x4000, CRC(63041c61) SHA1(f6718097d939afa8881b4436741a5a23d7e93d78), ROM_BIOS(9))
-    ROMX_LOAD( "zxvgs-22-1.rom", 0x014000, 0x4000, CRC(f3736047) SHA1(f3739bf460a57e3f10e8dfb1e7120842938d27ea), ROM_BIOS(9))
+	ROMX_LOAD( "zxvgs-22-0.rom", 0x010000, 0x4000, CRC(63041c61) SHA1(f6718097d939afa8881b4436741a5a23d7e93d78), ROM_BIOS(9))
+	ROMX_LOAD( "zxvgs-22-1.rom", 0x014000, 0x4000, CRC(f3736047) SHA1(f3739bf460a57e3f10e8dfb1e7120842938d27ea), ROM_BIOS(9))
 	ROM_SYSTEM_BIOS(9, "v10", "ZXVGS v0.29 by Yarek")
 	ROMX_LOAD( "zxvg-29-0.rom", 0x010000, 0x4000, CRC(3b66f433) SHA1(d21df9e7f1ee99d8b38c2e6a32727aac0f1d5dc6), ROM_BIOS(10))
 	ROMX_LOAD( "zxvg-1.rom", 0x014000, 0x4000, CRC(a8baca3e) SHA1(f2f131eaa4de832eda76290e48f86e465d28ded7), ROM_BIOS(10))
@@ -239,5 +268,5 @@ ROM_START(pent1024)
 ROM_END
 
 /*    YEAR  NAME      PARENT    COMPAT  MACHINE     INPUT       INIT    COMPANY     FULLNAME */
-COMP( 1989, pentagon, spec128,	0,		pentagon,	spec_plus,	0,		"<unknown>",		"Pentagon", GAME_NOT_WORKING)
-COMP( 19??, pent1024, spec128,	0,		pent1024,	spec_plus,	0,		"<unknown>",		"Pentagon 1024", GAME_NOT_WORKING)
+COMP( 1989, pentagon, spec128,  0,      pentagon,   spec_plus, driver_device,   0,      "<unknown>",        "Pentagon", GAME_NOT_WORKING)
+COMP( 19??, pent1024, spec128,  0,      pent1024,   spec_plus, driver_device,   0,      "<unknown>",        "Pentagon 1024", GAME_NOT_WORKING)

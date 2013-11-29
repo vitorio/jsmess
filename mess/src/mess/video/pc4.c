@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Sandro Ronco
 /***************************************************************************
 
         VTech Laser PC4 LCD controller emulation
@@ -13,9 +15,9 @@ void pc4_state::set_busy_flag(UINT16 usec)
 	m_busy_timer->adjust( attotime::from_usec( usec ) );
 }
 
-bool pc4_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
+UINT32 pc4_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	bitmap_fill(&bitmap, &cliprect, 0);
+	bitmap.fill(0, cliprect);
 
 	if (m_display_on)
 		for (int l=0; l<4; l++)
@@ -28,12 +30,12 @@ bool pc4_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rec
 						if (m_ddram[char_pos] <= 0x10)
 						{
 							//draw CGRAM characters
-							*BITMAP_ADDR16(&bitmap, l*9 + y, i*6 + x) = BIT(m_cgram[(m_ddram[char_pos]&0x07)*8+y], 4-x);
+							bitmap.pix16(l*9 + y, i*6 + x) = BIT(m_cgram[(m_ddram[char_pos]&0x07)*8+y], 4-x);
 						}
 						else
 						{
 							//draw CGROM characters
-							*BITMAP_ADDR16(&bitmap, l*9 + y, i*6 + x) = BIT(machine().region("charset")->base()[m_ddram[char_pos]*8+y], 4-x);
+							bitmap.pix16(l*9 + y, i*6 + x) = BIT(m_region_charset->base()[m_ddram[char_pos]*8+y], 4-x);
 
 						}
 
@@ -43,12 +45,12 @@ bool pc4_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rec
 					//draw the cursor
 					if (m_cursor_on)
 						for (int x=0; x<5; x++)
-							*BITMAP_ADDR16(&bitmap, l*9 + 7, i * 6 + x) = 1;
+							bitmap.pix16(l*9 + 7, i * 6 + x) = 1;
 
 					if (!m_blink && m_blink_on)
 						for (int y=0; y<7; y++)
 							for (int x=0; x<5; x++)
-								*BITMAP_ADDR16(&bitmap, l*9 + y, i * 6 + x) = 1;
+								bitmap.pix16(l*9 + y, i * 6 + x) = 1;
 				}
 			}
 
@@ -154,7 +156,7 @@ void pc4_state::update_ac(void)
 	{
 		m_cursor_pos = m_ac;
 		// display is shifted only after a write
-		if (m_shift_on && m_data_bus_flag == 1)	m_disp_shift += m_direction;
+		if (m_shift_on && m_data_bus_flag == 1) m_disp_shift += m_direction;
 	}
 
 	m_data_bus_flag = 0;

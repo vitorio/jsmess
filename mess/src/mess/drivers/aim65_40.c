@@ -45,23 +45,52 @@ The source code there implies that *maybe* ff7e and ff7f are also open bus.
 */
 
 #include "emu.h"
-#include "includes/aim65_40.h"
 #include "cpu/m6502/m6502.h"
 #include "machine/6522via.h"
-#include "machine/6551.h"
+#include "machine/mos6551.h"
 #include "aim65_40.lh"
+
+
+//**************************************************************************
+//  MACROS/CONSTANTS
+//**************************************************************************
+
+#define M6502_TAG       "m6502"
+#define M6522_0_TAG     "m6522_0"
+#define M6522_1_TAG     "m6522_1"
+#define M6522_2_TAG     "m6522_2"
+#define M6551_TAG       "m6551"
+
+
+//**************************************************************************
+//  TYPE DEFINITIONS
+//**************************************************************************
+
+class aim65_40_state : public driver_device
+{
+public:
+	aim65_40_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	// devices
+	device_t *m_via0;
+	device_t *m_via1;
+	device_t *m_via2;
+	device_t *m_speaker;
+};
+
 
 /***************************************************************************
     ADDRESS MAPS
 ***************************************************************************/
 
-static ADDRESS_MAP_START( aim65_40_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( aim65_40_mem, AS_PROGRAM, 8, aim65_40_state )
 	AM_RANGE(0x0000, 0x3fff) AM_RAM
 	AM_RANGE(0xa000, 0xff7f) AM_ROM
-	AM_RANGE(0xffa0, 0xffaf) AM_DEVREADWRITE_MODERN(M6522_0_TAG, via6522_device, read, write)
-	AM_RANGE(0xffb0, 0xffbf) AM_DEVREADWRITE_MODERN(M6522_1_TAG, via6522_device, read, write)
-	AM_RANGE(0xffc0, 0xffcf) AM_DEVREADWRITE_MODERN(M6522_2_TAG, via6522_device, read, write)
-	AM_RANGE(0xffd0, 0xffd3) AM_DEVREADWRITE(M6551_TAG, acia_6551_r, acia_6551_w)
+	AM_RANGE(0xffa0, 0xffaf) AM_DEVREADWRITE(M6522_0_TAG, via6522_device, read, write)
+	AM_RANGE(0xffb0, 0xffbf) AM_DEVREADWRITE(M6522_1_TAG, via6522_device, read, write)
+	AM_RANGE(0xffc0, 0xffcf) AM_DEVREADWRITE(M6522_2_TAG, via6522_device, read, write)
+	AM_RANGE(0xffd0, 0xffd3) AM_DEVREADWRITE(M6551_TAG, mos6551_device, read, write)
 	AM_RANGE(0xffe0, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -145,7 +174,7 @@ static MACHINE_CONFIG_START( aim65_40, aim65_40_state )
 	MCFG_VIA6522_ADD(M6522_0_TAG, 0, user_via_intf)
 	MCFG_VIA6522_ADD(M6522_1_TAG, 0, system_via_intf)
 	MCFG_VIA6522_ADD(M6522_2_TAG, 0, kb_via_intf)
-	MCFG_ACIA6551_ADD(M6551_TAG)
+	MCFG_MOS6551_ADD(M6551_TAG, XTAL_1_8432MHz, NULL)
 MACHINE_CONFIG_END
 
 /***************************************************************************
@@ -165,4 +194,4 @@ ROM_END
 ***************************************************************************/
 
 /*    YEAR  NAME      PARENT  COMPAT  MACHINE   INPUT     INIT  COMPANY     FULLNAME     FLAGS */
-COMP( 1981, aim65_40, 0,      0,      aim65_40, aim65_40, 0,    "Rockwell", "AIM-65/40", GAME_NOT_WORKING | GAME_NO_SOUND )
+COMP( 1981, aim65_40, 0,      0,      aim65_40, aim65_40, driver_device, 0,    "Rockwell", "AIM-65/40", GAME_NOT_WORKING | GAME_NO_SOUND )

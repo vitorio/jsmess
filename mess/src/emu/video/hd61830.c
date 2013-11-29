@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     HD61830 LCD Timing Controller emulation
@@ -40,12 +42,12 @@ static const int CYCLES[] =
 	4, 4, 4, 4, 4, -1, -1, -1, 4, 4, 4, 4, 6, 6, 36, 36
 };
 
-const int MODE_EXTERNAL_CG		= 0x01;
-const int MODE_GRAPHIC			= 0x02;
-const int MODE_CURSOR			= 0x04;
-const int MODE_BLINK			= 0x08;
-const int MODE_MASTER			= 0x10;
-const int MODE_DISPLAY_ON		= 0x20;
+const int MODE_EXTERNAL_CG      = 0x01;
+const int MODE_GRAPHIC          = 0x02;
+const int MODE_CURSOR           = 0x04;
+const int MODE_BLINK            = 0x08;
+const int MODE_MASTER           = 0x10;
+const int MODE_DISPLAY_ON       = 0x20;
 
 
 
@@ -58,14 +60,14 @@ const device_type HD61830 = &device_creator<hd61830_device>;
 
 
 // default address map
-static ADDRESS_MAP_START( hd61830, AS_0, 8 )
+static ADDRESS_MAP_START( hd61830, AS_0, 8, hd61830_device )
 	AM_RANGE(0x0000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 
 // internal character generator ROM
 ROM_START( hd61830 )
-	ROM_REGION( 0x5c0, "hd61830", ROMREGION_LOADBYNAME ) // internal 7360-bit chargen ROM
+	ROM_REGION( 0x5c0, "hd61830", 0 ) // internal 7360-bit chargen ROM
 	ROM_LOAD( "hd61830.bin", 0x000, 0x5c0, BAD_DUMP CRC(06a934da) SHA1(bf3f074db5dc92e6f530cb18d6c013563099a87d) ) // typed in from manual
 ROM_END
 
@@ -82,7 +84,7 @@ ROM_END
 
 inline UINT8 hd61830_device::readbyte(offs_t address)
 {
-	return space()->read_byte(address);
+	return space().read_byte(address);
 }
 
 
@@ -92,7 +94,7 @@ inline UINT8 hd61830_device::readbyte(offs_t address)
 
 inline void hd61830_device::writebyte(offs_t address, UINT8 data)
 {
-	space()->write_byte(address, data);
+	space().write_byte(address, data);
 }
 
 
@@ -106,13 +108,16 @@ inline void hd61830_device::writebyte(offs_t address, UINT8 data)
 //-------------------------------------------------
 
 hd61830_device::hd61830_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, HD61830, "Hitachi HD61830", tag, owner, clock),
-	  device_memory_interface(mconfig, *this),
-	  m_bf(false),
-	  m_blink(0),
-	  m_space_config("videoram", ENDIANNESS_LITTLE, 8, 16, 0, NULL, *ADDRESS_MAP_NAME(hd61830))
+	: device_t(mconfig, HD61830, "Hitachi HD61830", tag, owner, clock, "hd61830", __FILE__),
+		device_memory_interface(mconfig, *this),
+		device_video_interface(mconfig, *this),
+		m_bf(false),
+		m_cac(0),
+		m_blink(0),
+		m_cursor(0),
+		m_space_config("videoram", ENDIANNESS_LITTLE, 8, 16, 0, NULL, *ADDRESS_MAP_NAME(hd61830)),
+		m_region_hd61830(*this, "hd61830")
 {
-	m_shortname = "hd61830";
 }
 
 
@@ -157,9 +162,7 @@ void hd61830_device::device_start()
 	m_busy_timer = timer_alloc();
 
 	// resolve callbacks
-    m_in_rd_func.resolve(m_in_rd_cb, *this);
-
-	m_screen = machine().device<screen_device>(screen_tag);
+	m_in_rd_func.resolve(m_in_rd_cb, *this);
 
 	// register for state saving
 	save_item(NAME(m_bf));
@@ -406,7 +409,7 @@ WRITE8_MEMBER( hd61830_device::data_w )
 //  draw_scanline - draw one graphics scanline
 //-------------------------------------------------
 
-void hd61830_device::draw_scanline(bitmap_t *bitmap, const rectangle *cliprect, int y, UINT16 ra)
+void hd61830_device::draw_scanline(bitmap_ind16 &bitmap, const rectangle &cliprect, int y, UINT16 ra)
 {
 	for (int sx = 0; sx < m_hn; sx++)
 	{
@@ -414,7 +417,7 @@ void hd61830_device::draw_scanline(bitmap_t *bitmap, const rectangle *cliprect, 
 
 		for (int x = 0; x < m_hp; x++)
 		{
-			*BITMAP_ADDR16(bitmap, y, (sx * m_hp) + x) = BIT(data, x);
+			bitmap.pix16(y, (sx * m_hp) + x) = BIT(data, x);
 		}
 	}
 }
@@ -424,7 +427,7 @@ void hd61830_device::draw_scanline(bitmap_t *bitmap, const rectangle *cliprect, 
 //  update_graphics - draw graphics mode screen
 //-------------------------------------------------
 
-void hd61830_device::update_graphics(bitmap_t *bitmap, const rectangle *cliprect)
+void hd61830_device::update_graphics(bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	for (int y = 0; y < m_nx; y++)
 	{
@@ -444,7 +447,7 @@ void hd61830_device::update_graphics(bitmap_t *bitmap, const rectangle *cliprect
 //  draw_char - draw a char
 //-------------------------------------------------
 
-void hd61830_device::draw_char(bitmap_t *bitmap, const rectangle *cliprect, UINT16 ma, int x, int y, UINT8 md)
+void hd61830_device::draw_char(bitmap_ind16 &bitmap, const rectangle &cliprect, UINT16 ma, int x, int y, UINT8 md)
 {
 	for (int cl = 0; cl < m_vp; cl++)
 	{
@@ -478,7 +481,7 @@ void hd61830_device::draw_char(bitmap_t *bitmap, const rectangle *cliprect, UINT
 					addr = 160*7 + (md - 0xe0) * 11 + cl;
 				}
 
-				data = subregion("hd61830")->u8(addr);
+				data = m_region_hd61830->u8(addr);
 			}
 
 			int cursor = m_mcr & MODE_CURSOR;
@@ -505,7 +508,7 @@ void hd61830_device::draw_char(bitmap_t *bitmap, const rectangle *cliprect, UINT
 			}
 
 			if (sy < m_screen->height() && sx < m_screen->width())
-				*BITMAP_ADDR16(bitmap, sy, sx) = pixel;
+				bitmap.pix16(sy, sx) = pixel;
 		}
 	}
 }
@@ -515,7 +518,7 @@ void hd61830_device::draw_char(bitmap_t *bitmap, const rectangle *cliprect, UINT
 //  update_text - draw text mode screen
 //-------------------------------------------------
 
-void hd61830_device::update_text(bitmap_t *bitmap, const rectangle *cliprect)
+void hd61830_device::update_text(bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	for (int y = 0; y < (m_nx / m_vp); y++)
 	{
@@ -534,7 +537,7 @@ void hd61830_device::update_text(bitmap_t *bitmap, const rectangle *cliprect)
 //  update_screen - update screen
 //-------------------------------------------------
 
-void hd61830_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
+UINT32 hd61830_device::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	if (m_mcr & MODE_DISPLAY_ON)
 	{
@@ -549,7 +552,7 @@ void hd61830_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 	}
 	else
 	{
-		bitmap_fill(bitmap, cliprect, 0);
+		bitmap.fill(0, cliprect);
 	}
 
 	m_blink++;
@@ -559,4 +562,5 @@ void hd61830_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 		m_blink = 0;
 		m_cursor = !m_cursor;
 	}
+	return 0;
 }

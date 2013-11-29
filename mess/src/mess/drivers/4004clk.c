@@ -5,7 +5,6 @@
         03/08/2009 Initial driver
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i4004/i4004.h"
@@ -21,22 +20,27 @@ public:
 		m_dac(*this, "dac")
 		{ }
 
-	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_dac;
+	required_device<i4004_cpu_device> m_maincpu;
+	required_device<dac_device> m_dac;
 	DECLARE_READ8_MEMBER( data_r );
 	DECLARE_WRITE8_MEMBER( nixie_w );
 	DECLARE_WRITE8_MEMBER( neon_w );
 	DECLARE_WRITE8_MEMBER( relays_w );
 	UINT16 m_nixie[16];
 	UINT8 m_timer;
+	virtual void machine_start();
+	TIMER_DEVICE_CALLBACK_MEMBER(timer_callback);
+	UINT8 nixie_to_num(UINT16 val);
+	inline void output_set_nixie_value(int index, int value);
+	inline void output_set_neon_value(int index, int value);
 };
 
 READ8_MEMBER(nixieclock_state::data_r)
 {
-	return input_port_read(machine(), "INPUT") & 0x0f;
+	return ioport("INPUT")->read() & 0x0f;
 }
 
-static UINT8 nixie_to_num(UINT16 val)
+UINT8 nixieclock_state::nixie_to_num(UINT16 val)
 {
 	if (BIT(val,0)) return 0;
 	if (BIT(val,1)) return 1;
@@ -51,12 +55,12 @@ static UINT8 nixie_to_num(UINT16 val)
 	return 10;
 }
 
-INLINE void output_set_nixie_value(int index, int value)
+inline void nixieclock_state::output_set_nixie_value(int index, int value)
 {
 	output_set_indexed_value("nixie", index, value);
 }
 
-INLINE void output_set_neon_value(int index, int value)
+inline void nixieclock_state::output_set_neon_value(int index, int value)
 {
 	output_set_indexed_value("neon", index, value);
 }
@@ -82,7 +86,7 @@ WRITE8_MEMBER(nixieclock_state::neon_w)
 
 WRITE8_MEMBER(nixieclock_state::relays_w)
 {
-	dac_data_w(m_dac, (data & 1) ? 0x80 : 0x40); //tick - tock
+	m_dac->write_unsigned8((data & 1) ? 0x80 : 0x40); //tick - tock
 }
 
 static ADDRESS_MAP_START(4004clk_rom, AS_PROGRAM, 8, nixieclock_state)
@@ -124,21 +128,19 @@ INPUT_PORTS_END
 
 */
 
-static TIMER_DEVICE_CALLBACK(timer_callback)
+TIMER_DEVICE_CALLBACK_MEMBER(nixieclock_state::timer_callback)
 {
-	nixieclock_state *state = timer.machine().driver_data<nixieclock_state>();
-	i4004_set_test(timer.machine().device("maincpu"),state->m_timer);
-	state->m_timer^=1;
+	m_maincpu->set_test(m_timer);
+	m_timer^=1;
 }
 
-static MACHINE_START(4004clk)
+void nixieclock_state::machine_start()
 {
-	nixieclock_state *state = machine.driver_data<nixieclock_state>();
-	state->m_timer = 0;
+	m_timer = 0;
 
 	/* register for state saving */
-	state->save_item(NAME(state->m_timer));
-	state->save_pointer(NAME(state->m_nixie), 6);
+	save_item(NAME(m_timer));
+	save_pointer(NAME(m_nixie), 6);
 }
 
 static MACHINE_CONFIG_START( 4004clk, nixieclock_state )
@@ -149,17 +151,16 @@ static MACHINE_CONFIG_START( 4004clk, nixieclock_state )
 	MCFG_CPU_DATA_MAP(4004clk_mem)
 	MCFG_CPU_IO_MAP(4004clk_io)
 
-	MCFG_MACHINE_START(4004clk)
 
 	/* video hardware */
-	//MCFG_DEFAULT_LAYOUT(layoutnixieclock)
+	MCFG_DEFAULT_LAYOUT(layout_4004clk)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 	MCFG_SOUND_ADD("dac", DAC, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_TIMER_ADD_PERIODIC("4004clk_timer", timer_callback, attotime::from_hz(120))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("4004clk_timer", nixieclock_state, timer_callback, attotime::from_hz(120))
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -186,5 +187,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME      PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY               FULLNAME            FLAGS */
-SYST( 2008, 4004clk,  0,      0,       4004clk,   4004clk, 0,      "John L. Weinrich",   "4004 Nixie Clock", GAME_SUPPORTS_SAVE)
-
+SYST( 2008, 4004clk,  0,      0,       4004clk,   4004clk, driver_device, 0,      "John L. Weinrich",   "4004 Nixie Clock", GAME_SUPPORTS_SAVE)

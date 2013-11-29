@@ -8,7 +8,6 @@
 
 #include "emu.h"
 #include "includes/tnzs.h"
-#include "video/seta001.h"
 
 /***************************************************************************
 
@@ -30,30 +29,33 @@
 
 ***************************************************************************/
 
-PALETTE_INIT( arknoid2 )
+PALETTE_INIT_MEMBER(tnzs_state,arknoid2)
 {
+	const UINT8 *color_prom = memregion("proms")->base();
 	int i, col;
 
-	for (i = 0; i < machine.total_colors(); i++)
+	for (i = 0; i < machine().total_colors(); i++)
 	{
 		col = (color_prom[i] << 8) + color_prom[i + 512];
-		palette_set_color_rgb(machine, i, pal5bit(col >> 10), pal5bit(col >> 5), pal5bit(col >> 0));
+		palette_set_color_rgb(machine(), i, pal5bit(col >> 10), pal5bit(col >> 5), pal5bit(col >> 0));
 	}
 }
 
 
-SCREEN_UPDATE( tnzs )
+UINT32 tnzs_state::screen_update_tnzs(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	bitmap_fill(bitmap, cliprect, 0x1f0);
+	bitmap.fill(0x1f0, cliprect);
 
-	screen->machine().device<seta001_device>("spritegen")->set_fg_yoffsets( -0x12, 0x0e );
-	screen->machine().device<seta001_device>("spritegen")->set_bg_yoffsets( 0x1, -0x1 );
+	m_seta001->set_fg_yoffsets( -0x12, 0x0e );
+	m_seta001->set_bg_yoffsets( 0x1, -0x1 );
 
-	screen->machine().device<seta001_device>("spritegen")->seta001_draw_sprites(screen->machine(), bitmap, cliprect, 0x800, 0 );
+	m_seta001->draw_sprites(screen, bitmap, cliprect, 0x800, 0 );
 	return 0;
 }
 
-SCREEN_EOF( tnzs )
+void tnzs_state::screen_eof_tnzs(screen_device &screen, bool state)
 {
-	machine.device<seta001_device>("spritegen")->tnzs_eof();
+	// rising edge
+	if (state)
+		m_seta001->tnzs_eof();
 }

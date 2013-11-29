@@ -14,11 +14,11 @@
 //  GLOBAL VARIABLES
 //**************************************************************************
 
-static ADDRESS_MAP_START( x2212_sram_map, AS_0, 8 )
+static ADDRESS_MAP_START( x2212_sram_map, AS_0, 8, x2212_device )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( x2212_e2prom_map, AS_1, 8 )
+static ADDRESS_MAP_START( x2212_e2prom_map, AS_1, 8, x2212_device )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM
 ADDRESS_MAP_END
 
@@ -36,14 +36,14 @@ const device_type X2212 = &device_creator<x2212_device>;
 //-------------------------------------------------
 
 x2212_device::x2212_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, X2212, "X2212", tag, owner, clock),
-	  device_memory_interface(mconfig, *this),
-	  device_nvram_interface(mconfig, *this),
-	  m_auto_save(false),
-	  m_sram_space_config("SRAM", ENDIANNESS_BIG, 8, 8, 0, *ADDRESS_MAP_NAME(x2212_sram_map)),
-	  m_e2prom_space_config("E2PROM", ENDIANNESS_BIG, 8, 8, 0, *ADDRESS_MAP_NAME(x2212_e2prom_map)),
-	  m_store(false),
-	  m_array_recall(false)
+	: device_t(mconfig, X2212, "X2212", tag, owner, clock, "x2212", __FILE__),
+		device_memory_interface(mconfig, *this),
+		device_nvram_interface(mconfig, *this),
+		m_auto_save(false),
+		m_sram_space_config("SRAM", ENDIANNESS_BIG, 8, 8, 0, *ADDRESS_MAP_NAME(x2212_sram_map)),
+		m_e2prom_space_config("E2PROM", ENDIANNESS_BIG, 8, 8, 0, *ADDRESS_MAP_NAME(x2212_e2prom_map)),
+		m_store(false),
+		m_array_recall(false)
 {
 }
 
@@ -102,9 +102,9 @@ void x2212_device::nvram_default()
 	if (m_region != NULL)
 	{
 		if (m_region->bytes() != SIZE_DATA)
-			fatalerror("x2212 region '%s' wrong size (expected size = 0x100)", tag());
+			fatalerror("x2212 region '%s' wrong size (expected size = 0x100)\n", tag());
 		if (m_region->width() != 1)
-			fatalerror("x2212 region '%s' needs to be an 8-bit region", tag());
+			fatalerror("x2212 region '%s' needs to be an 8-bit region\n", tag());
 
 		for (int byte = 0; byte < SIZE_DATA; byte++)
 			m_e2prom->write_byte(byte, m_region->u8(byte));

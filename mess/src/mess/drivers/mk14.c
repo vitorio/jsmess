@@ -5,7 +5,6 @@
         20/11/2009 Skeleton driver.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/scmp/scmp.h"
@@ -17,10 +16,13 @@ class mk14_state : public driver_device
 {
 public:
 	mk14_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu") { }
 
 	DECLARE_READ8_MEMBER(keyboard_r);
 	DECLARE_WRITE8_MEMBER(display_w);
+	virtual void machine_reset();
+	required_device<cpu_device> m_maincpu;
 };
 
 /*
@@ -47,7 +49,7 @@ READ8_MEMBER( mk14_state::keyboard_r )
 	{
 		char kbdrow[6];
 		sprintf(kbdrow,"X%X",offset);
-		return input_port_read(machine(), kbdrow);
+		return ioport(kbdrow)->read();
 	}
 	else
 		return 0xff;
@@ -68,7 +70,7 @@ static ADDRESS_MAP_START(mk14_mem, AS_PROGRAM, 8, mk14_state)
 	ADDRESS_MAP_GLOBAL_MASK(0x0fff)
 	AM_RANGE(0x000, 0x1ff) AM_ROM AM_MIRROR(0x600) // ROM
 	AM_RANGE(0x800, 0x87f) AM_RAM AM_MIRROR(0x600) // 128 I/O chip RAM
-	AM_RANGE(0x880, 0x8ff) AM_DEVREADWRITE_LEGACY("ic8", ins8154_r, ins8154_w) AM_MIRROR(0x600) // I/O
+	AM_RANGE(0x880, 0x8ff) AM_DEVREADWRITE("ic8", ins8154_device, ins8154_r, ins8154_w) AM_MIRROR(0x600) // I/O
 	AM_RANGE(0x900, 0x9ff) AM_READWRITE(keyboard_r, display_w) AM_MIRROR(0x400)
 	AM_RANGE(0xb00, 0xbff) AM_RAM // VDU RAM
 	AM_RANGE(0xf00, 0xfff) AM_RAM // Standard RAM
@@ -128,7 +130,7 @@ static INPUT_PORTS_START( mk14 )
 INPUT_PORTS_END
 
 
-static MACHINE_RESET(mk14)
+void mk14_state::machine_reset()
 {
 }
 
@@ -147,7 +149,6 @@ static MACHINE_CONFIG_START( mk14, mk14_state )
 	MCFG_CPU_ADD("maincpu", INS8060, XTAL_4_433619MHz)
 	MCFG_CPU_PROGRAM_MAP(mk14_mem)
 
-	MCFG_MACHINE_RESET(mk14)
 
 	/* video hardware */
 	MCFG_DEFAULT_LAYOUT(layout_mk14)
@@ -166,4 +167,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME   PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY              FULLNAME     FLAGS */
-COMP( 1977, mk14,  0,       0,      mk14,      mk14,      0, "Science of Cambridge", "MK-14", GAME_NO_SOUND)
+COMP( 1977, mk14,  0,       0,      mk14,      mk14, driver_device,      0, "Science of Cambridge", "MK-14", GAME_NO_SOUND)

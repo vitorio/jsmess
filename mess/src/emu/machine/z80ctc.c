@@ -20,7 +20,7 @@
 //  DEBUGGING
 //**************************************************************************
 
-#define VERBOSE		0
+#define VERBOSE     0
 
 #define VPRINTF(x) do { if (VERBOSE) logerror x; } while (0)
 
@@ -31,40 +31,40 @@
 //**************************************************************************
 
 // these are the bits of the incoming commands to the CTC
-const int INTERRUPT			= 0x80;
-const int INTERRUPT_ON		= 0x80;
-const int INTERRUPT_OFF		= 0x00;
+const int INTERRUPT         = 0x80;
+const int INTERRUPT_ON      = 0x80;
+const int INTERRUPT_OFF     = 0x00;
 
-const int MODE				= 0x40;
-const int MODE_TIMER		= 0x00;
-const int MODE_COUNTER		= 0x40;
+const int MODE              = 0x40;
+const int MODE_TIMER        = 0x00;
+const int MODE_COUNTER      = 0x40;
 
-const int PRESCALER			= 0x20;
-const int PRESCALER_256		= 0x20;
-const int PRESCALER_16		= 0x00;
+const int PRESCALER         = 0x20;
+const int PRESCALER_256     = 0x20;
+const int PRESCALER_16      = 0x00;
 
-const int EDGE				= 0x10;
-const int EDGE_FALLING		= 0x00;
-const int EDGE_RISING		= 0x10;
+const int EDGE              = 0x10;
+const int EDGE_FALLING      = 0x00;
+const int EDGE_RISING       = 0x10;
 
-const int TRIGGER			= 0x08;
-const int TRIGGER_AUTO		= 0x00;
-const int TRIGGER_CLOCK		= 0x08;
+const int TRIGGER           = 0x08;
+const int TRIGGER_AUTO      = 0x00;
+const int TRIGGER_CLOCK     = 0x08;
 
-const int CONSTANT			= 0x04;
-const int CONSTANT_LOAD		= 0x04;
-const int CONSTANT_NONE		= 0x00;
+const int CONSTANT          = 0x04;
+const int CONSTANT_LOAD     = 0x04;
+const int CONSTANT_NONE     = 0x00;
 
-const int RESET				= 0x02;
-const int RESET_CONTINUE	= 0x00;
-const int RESET_ACTIVE		= 0x02;
+const int RESET             = 0x02;
+const int RESET_CONTINUE    = 0x00;
+const int RESET_ACTIVE      = 0x02;
 
-const int CONTROL			= 0x01;
-const int CONTROL_VECTOR	= 0x00;
-const int CONTROL_WORD		= 0x01;
+const int CONTROL           = 0x01;
+const int CONTROL_VECTOR    = 0x00;
+const int CONTROL_WORD      = 0x01;
 
 // these extra bits help us keep things accurate
-const int WAITING_FOR_TRIG	= 0x100;
+const int WAITING_FOR_TRIG  = 0x100;
 
 
 
@@ -80,10 +80,41 @@ const device_type Z80CTC = &device_creator<z80ctc_device>;
 //-------------------------------------------------
 
 z80ctc_device::z80ctc_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, Z80CTC, "Zilog Z80 CTC", tag, owner, clock),
-	  device_z80daisy_interface(mconfig, *this)
+	: device_t(mconfig, Z80CTC, "Zilog Z80 CTC", tag, owner, clock, "z80ctc", __FILE__),
+		device_z80daisy_interface(mconfig, *this)
 {
 }
+
+
+//-------------------------------------------------
+//  read - standard handler for reading
+//-------------------------------------------------
+
+READ8_MEMBER( z80ctc_device::read )
+{
+	return read(offset & 3);
+}
+
+
+//-------------------------------------------------
+//  write - standard handler for writing
+//-------------------------------------------------
+
+WRITE8_MEMBER( z80ctc_device::write )
+{
+	write(offset & 3, data);
+}
+
+
+//-------------------------------------------------
+//  trg0-3 - standard write line handlers for each
+//  trigger
+//-------------------------------------------------
+
+WRITE_LINE_MEMBER( z80ctc_device::trg0 ) { trigger(0, state); }
+WRITE_LINE_MEMBER( z80ctc_device::trg1 ) { trigger(1, state); }
+WRITE_LINE_MEMBER( z80ctc_device::trg2 ) { trigger(2, state); }
+WRITE_LINE_MEMBER( z80ctc_device::trg3 ) { trigger(3, state); }
 
 
 //-------------------------------------------------
@@ -102,7 +133,6 @@ void z80ctc_device::device_config_complete()
 	// or initialize to defaults if none provided
 	else
 	{
-		m_notimer = 0;
 		memset(&m_intr_cb, 0, sizeof(m_intr_cb));
 		memset(&m_zc0_cb, 0, sizeof(m_zc0_cb));
 		memset(&m_zc1_cb, 0, sizeof(m_zc1_cb));
@@ -125,13 +155,13 @@ void z80ctc_device::device_start()
 
 	// start each channel
 	devcb_write_line nullcb = DEVCB_NULL;
-	m_channel[0].start(this, 0, (m_notimer & NOTIMER_0) != 0, m_zc0_cb);
-	m_channel[1].start(this, 1, (m_notimer & NOTIMER_1) != 0, m_zc1_cb);
-	m_channel[2].start(this, 2, (m_notimer & NOTIMER_2) != 0, m_zc2_cb);
-	m_channel[3].start(this, 3, (m_notimer & NOTIMER_3) != 0, nullcb);
+	m_channel[0].start(this, 0, m_zc0_cb);
+	m_channel[1].start(this, 1, m_zc1_cb);
+	m_channel[2].start(this, 2, m_zc2_cb);
+	m_channel[3].start(this, 3, nullcb);
 
 	// register for save states
-    save_item(NAME(m_vector));
+	save_item(NAME(m_vector));
 }
 
 
@@ -270,13 +300,12 @@ void z80ctc_device::interrupt_check()
 //-------------------------------------------------
 
 z80ctc_device::ctc_channel::ctc_channel()
-	: m_notimer(false),
-	  m_mode(0),
-	  m_tconst(0),
-	  m_down(0),
-	  m_extclk(0),
-	  m_timer(NULL),
-	  m_int_state(0)
+	: m_mode(0),
+		m_tconst(0),
+		m_down(0),
+		m_extclk(0),
+		m_timer(NULL),
+		m_int_state(0)
 {
 	memset(&m_zc, 0, sizeof(m_zc));
 }
@@ -286,21 +315,20 @@ z80ctc_device::ctc_channel::ctc_channel()
 //  start - set up at device start time
 //-------------------------------------------------
 
-void z80ctc_device::ctc_channel::start(z80ctc_device *device, int index, bool notimer, const devcb_write_line &write_line)
+void z80ctc_device::ctc_channel::start(z80ctc_device *device, int index, const devcb_write_line &write_line)
 {
 	// initialize state
 	m_device = device;
 	m_index = index;
 	m_zc.resolve(write_line, *m_device);
-	m_notimer = notimer;
 	m_timer = m_device->machine().scheduler().timer_alloc(FUNC(static_timer_callback), this);
 
 	// register for save states
-    m_device->save_item(NAME(m_mode), m_index);
-    m_device->save_item(NAME(m_tconst), m_index);
-    m_device->save_item(NAME(m_down), m_index);
-    m_device->save_item(NAME(m_extclk), m_index);
-    m_device->save_item(NAME(m_int_state), m_index);
+	m_device->save_item(NAME(m_mode), m_index);
+	m_device->save_item(NAME(m_tconst), m_index);
+	m_device->save_item(NAME(m_down), m_index);
+	m_device->save_item(NAME(m_extclk), m_index);
+	m_device->save_item(NAME(m_int_state), m_index);
 }
 
 
@@ -391,13 +419,8 @@ void z80ctc_device::ctc_channel::write(UINT8 data)
 			// if we're triggering on the time constant, reset the down counter now
 			if ((m_mode & TRIGGER) == TRIGGER_AUTO)
 			{
-				if (!m_notimer)
-				{
-					attotime curperiod = period();
-					m_timer->adjust(curperiod, m_index, curperiod);
-				}
-				else
-					m_timer->adjust(attotime::never);
+				attotime curperiod = period();
+				m_timer->adjust(curperiod, m_index, curperiod);
 			}
 
 			// else set the bit indicating that we're waiting for the appropriate trigger
@@ -410,7 +433,7 @@ void z80ctc_device::ctc_channel::write(UINT8 data)
 	}
 
 	// if we're writing the interrupt vector, handle it specially
-#if 0	/* Tatsuyuki Satoh changes */
+#if 0   /* Tatsuyuki Satoh changes */
 	// The 'Z80family handbook' wrote,
 	// interrupt vector is able to set for even channel (0 or 2)
 	else if ((data & CONTROL) == CONTROL_VECTOR && (m_index & 1) == 0)
@@ -460,17 +483,9 @@ void z80ctc_device::ctc_channel::trigger(UINT8 data)
 			// if we're waiting for a trigger, start the timer
 			if ((m_mode & WAITING_FOR_TRIG) && (m_mode & MODE) == MODE_TIMER)
 			{
-				if (!m_notimer)
-				{
-					attotime curperiod = period();
-					VPRINTF(("CTC period %s\n", curperiod.as_string()));
-					m_timer->adjust(curperiod, m_index, curperiod);
-				}
-				else
-				{
-					VPRINTF(("CTC disabled\n"));
-					m_timer->adjust(attotime::never);
-				}
+				attotime curperiod = period();
+				VPRINTF(("CTC period %s\n", curperiod.as_string()));
+				m_timer->adjust(curperiod, m_index, curperiod);
 			}
 
 			// we're no longer waiting
@@ -510,17 +525,3 @@ void z80ctc_device::ctc_channel::timer_callback()
 	// reset the down counter
 	m_down = m_tconst;
 }
-
-
-
-//**************************************************************************
-//  GLOBAL STUBS
-//**************************************************************************
-
-WRITE8_DEVICE_HANDLER( z80ctc_w ) { downcast<z80ctc_device *>(device)->write(offset & 3, data); }
-READ8_DEVICE_HANDLER( z80ctc_r ) { return downcast<z80ctc_device *>(device)->read(offset & 3); }
-
-WRITE_LINE_DEVICE_HANDLER( z80ctc_trg0_w ) { downcast<z80ctc_device *>(device)->trigger(0, state); }
-WRITE_LINE_DEVICE_HANDLER( z80ctc_trg1_w ) { downcast<z80ctc_device *>(device)->trigger(1, state); }
-WRITE_LINE_DEVICE_HANDLER( z80ctc_trg2_w ) { downcast<z80ctc_device *>(device)->trigger(2, state); }
-WRITE_LINE_DEVICE_HANDLER( z80ctc_trg3_w ) { downcast<z80ctc_device *>(device)->trigger(3, state); }

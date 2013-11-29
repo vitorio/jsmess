@@ -11,11 +11,12 @@
 
 #include "emu.h"
 #include "emuopts.h"
+#include "drivenum.h"
 #include "config.h"
 #include "xmlfile.h"
 
 
-#define DEBUG_CONFIG		0
+#define DEBUG_CONFIG        0
 
 
 
@@ -23,13 +24,12 @@
     TYPE DEFINITIONS
 ***************************************************************************/
 
-typedef struct _config_type config_type;
-struct _config_type
+struct config_type
 {
-	struct _config_type *	next;				/* next in line */
-	const char *			name;				/* node name */
-	config_saveload_delegate load;				/* load callback */
-	config_saveload_delegate save;				/* save callback */
+	config_type *           next;               /* next in line */
+	const char *            name;               /* node name */
+	config_saveload_delegate load;              /* load callback */
+	config_saveload_delegate save;              /* save callback */
 };
 
 

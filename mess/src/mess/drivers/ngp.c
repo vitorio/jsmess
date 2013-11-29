@@ -94,7 +94,6 @@ the Neogeo Pocket.
 
 ******************************************************************************/
 
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/tlcs900/tlcs900.h"
@@ -107,23 +106,44 @@ the Neogeo Pocket.
 
 enum flash_state
 {
-	F_READ,						/* xxxx F0 or 5555 AA 2AAA 55 5555 F0 */
+	F_READ,                     /* xxxx F0 or 5555 AA 2AAA 55 5555 F0 */
 	F_PROG1,
 	F_PROG2,
 	F_COMMAND,
-	F_ID_READ,					/* 5555 AA 2AAA 55 5555 90 */
-	F_AUTO_PROGRAM,				/* 5555 AA 2AAA 55 5555 A0 address data */
-	F_AUTO_CHIP_ERASE,			/* 5555 AA 2AAA 55 5555 80 5555 AA 2AAA 55 5555 10 */
-	F_AUTO_BLOCK_ERASE,			/* 5555 AA 2AAA 55 5555 80 5555 AA 2AAA 55 block_address 30 */
-	F_BLOCK_PROTECT,			/* 5555 AA 2AAA 55 5555 9A 5555 AA 2AAA 55 5555 9A */
+	F_ID_READ,                  /* 5555 AA 2AAA 55 5555 90 */
+	F_AUTO_PROGRAM,             /* 5555 AA 2AAA 55 5555 A0 address data */
+	F_AUTO_CHIP_ERASE,          /* 5555 AA 2AAA 55 5555 80 5555 AA 2AAA 55 5555 10 */
+	F_AUTO_BLOCK_ERASE,         /* 5555 AA 2AAA 55 5555 80 5555 AA 2AAA 55 block_address 30 */
+	F_BLOCK_PROTECT,            /* 5555 AA 2AAA 55 5555 9A 5555 AA 2AAA 55 5555 9A */
 };
 
 
-class ngp_state : public driver_device
+class ngp_state : public driver_device, public device_nvram_interface
 {
 public:
 	ngp_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		device_nvram_interface(mconfig, *this),
+		m_tlcs900( *this, "maincpu" ),
+		m_z80( *this, "soundcpu" ),
+		m_t6w28( *this, "t6w28" ),
+		m_dac_l( *this, "dac_l" ),
+		m_dac_r( *this, "dac_r" ),
+		m_mainram( *this, "mainram" ),
+		m_k1ge( *this, "k1ge" ),
+		m_io_controls( *this, "Controls" ),
+		m_io_power( *this, "Power" ) ,
+		m_maincpu(*this, "maincpu") {
+			m_flash_chip[0].present = 0;
+			m_flash_chip[0].state = F_READ;
+			m_flash_chip[0].data = NULL;
+
+			m_flash_chip[1].present = 0;
+			m_flash_chip[1].state = F_READ;
+			m_flash_chip[1].data = NULL;
+
+			m_nvram_loaded = false;
+		}
 
 	virtual void machine_start();
 	virtual void machine_reset();
@@ -133,21 +153,22 @@ public:
 	emu_timer* m_seconds_timer;
 
 	struct {
-		int		present;
-		UINT8	manufacturer_id;
-		UINT8	device_id;
-		UINT8	*data;
-		UINT8	org_data[16];
-		int		state;
-		UINT8	command[2];
+		int     present;
+		UINT8   manufacturer_id;
+		UINT8   device_id;
+		UINT8   *data;
+		UINT8   org_data[16];
+		int     state;
+		UINT8   command[2];
 	} m_flash_chip[2];
 
-	device_t *m_tlcs900;
-	device_t *m_z80;
-	device_t *m_t6w28;
-	device_t *m_dac_l;
-	device_t *m_dac_r;
-	device_t *m_k1ge;
+	required_device<cpu_device> m_tlcs900;
+	required_device<cpu_device> m_z80;
+	required_device<t6w28_device> m_t6w28;
+	required_device<dac_device> m_dac_l;
+	required_device<dac_device> m_dac_r;
+	required_shared_ptr<UINT8> m_mainram;
+	required_device<k1ge_device> m_k1ge;
 
 	DECLARE_READ8_MEMBER( ngp_io_r );
 	DECLARE_WRITE8_MEMBER( ngp_io_w );
@@ -162,41 +183,55 @@ public:
 
 	DECLARE_WRITE8_MEMBER( ngp_z80_clear_irq );
 
-	DECLARE_WRITE8_MEMBER( ngp_vblank_pin_w );
-	DECLARE_WRITE8_MEMBER( ngp_hblank_pin_w );
-	DECLARE_WRITE8_MEMBER( ngp_tlcs900_to3 );
+	DECLARE_WRITE_LINE_MEMBER( ngp_vblank_pin_w );
+	DECLARE_WRITE_LINE_MEMBER( ngp_hblank_pin_w );
+	DECLARE_WRITE8_MEMBER( ngp_tlcs900_porta );
+	UINT32 screen_update_ngp(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	DECLARE_INPUT_CHANGED_MEMBER(power_callback);
+	TIMER_CALLBACK_MEMBER(ngp_seconds_callback);
+
+	DECLARE_DEVICE_IMAGE_LOAD_MEMBER( ngp_cart);
+	DECLARE_DEVICE_IMAGE_UNLOAD_MEMBER( ngp_cart );
+
+protected:
+	bool m_nvram_loaded;
+	required_ioport m_io_controls;
+	required_ioport m_io_power;
+
+	virtual void nvram_default();
+	virtual void nvram_read(emu_file &file);
+	virtual void nvram_write(emu_file &file);
+	required_device<cpu_device> m_maincpu;
 };
 
 
-static TIMER_CALLBACK( ngp_seconds_callback )
+TIMER_CALLBACK_MEMBER(ngp_state::ngp_seconds_callback)
 {
-	ngp_state *state = machine.driver_data<ngp_state>();
-
-	state->m_io_reg[0x16] += 1;
-	if ( ( state->m_io_reg[0x16] & 0x0f ) == 0x0a )
+	m_io_reg[0x16] += 1;
+	if ( ( m_io_reg[0x16] & 0x0f ) == 0x0a )
 	{
-		state->m_io_reg[0x16] += 0x06;
+		m_io_reg[0x16] += 0x06;
 	}
 
-	if ( state->m_io_reg[0x16] >= 0x60 )
+	if ( m_io_reg[0x16] >= 0x60 )
 	{
-		state->m_io_reg[0x16] = 0;
-		state->m_io_reg[0x15] += 1;
-		if ( ( state->m_io_reg[0x15] & 0x0f ) == 0x0a ) {
-			state->m_io_reg[0x15] += 0x06;
+		m_io_reg[0x16] = 0;
+		m_io_reg[0x15] += 1;
+		if ( ( m_io_reg[0x15] & 0x0f ) == 0x0a ) {
+			m_io_reg[0x15] += 0x06;
 		}
 
-		if ( state->m_io_reg[0x15] >= 0x60 )
+		if ( m_io_reg[0x15] >= 0x60 )
 		{
-			state->m_io_reg[0x15] = 0;
-			state->m_io_reg[0x14] += 1;
-			if ( ( state->m_io_reg[0x14] & 0x0f ) == 0x0a ) {
-				state->m_io_reg[0x14] += 0x06;
+			m_io_reg[0x15] = 0;
+			m_io_reg[0x14] += 1;
+			if ( ( m_io_reg[0x14] & 0x0f ) == 0x0a ) {
+				m_io_reg[0x14] += 0x06;
 			}
 
-			if ( state->m_io_reg[0x14] == 0x24 )
+			if ( m_io_reg[0x14] == 0x24 )
 			{
-				state->m_io_reg[0x14] = 0;
+				m_io_reg[0x14] = 0;
 			}
 		}
 	}
@@ -209,11 +244,11 @@ READ8_MEMBER( ngp_state::ngp_io_r )
 
 	switch( offset )
 	{
-	case 0x30:	/* Read controls */
-		data = input_port_read( machine(), "Controls" );
+	case 0x30:  /* Read controls */
+		data = m_io_controls->read();
 		break;
 	case 0x31:
-		data = input_port_read( machine(), "Power" ) & 0x01;
+		data = m_io_power->read() & 0x01;
 		/* Sub-batttery OK */
 		data |= 0x02;
 		break;
@@ -226,51 +261,53 @@ WRITE8_MEMBER( ngp_state::ngp_io_w )
 {
 	switch( offset )
 	{
-	case 0x20:		/* t6w28 "right" */
-	case 0x21:		/* t6w28 "left" */
+	case 0x20:      /* t6w28 "right" */
+	case 0x21:      /* t6w28 "left" */
 		if ( m_io_reg[0x38] == 0x55 && m_io_reg[0x39] == 0xAA )
 		{
-			t6w28_w( m_t6w28, 0, data );
+			m_t6w28->write( space, 0, data );
 		}
 		break;
 
-	case 0x22:		/* DAC right */
-		dac_w( m_dac_r, 0, data );
+	case 0x22:      /* DAC right */
+		m_dac_r->write_unsigned8(data );
 		break;
-	case 0x23:		/* DAC left */
-		dac_w( m_dac_l, 0, data );
+	case 0x23:      /* DAC left */
+		m_dac_l->write_unsigned8(data );
 		break;
 
 	/* Internal eeprom related? */
 	case 0x36:
 	case 0x37:
 		break;
-	case 0x38:	/* Sound enable/disable. */
+	case 0x38:  /* Sound enable/disable. */
 		switch( data )
 		{
-		case 0x55:		/* Enabled sound */
+		case 0x55:      /* Enabled sound */
+			m_t6w28->set_enable( true );
 			break;
-		case 0xAA:		/* Disable sound */
+		case 0xAA:      /* Disable sound */
+			m_t6w28->set_enable( false );
 			break;
 		}
 		break;
 
-	case 0x39:	/* Z80 enable/disable. */
+	case 0x39:  /* Z80 enable/disable. */
 		switch( data )
 		{
-		case 0x55:		/* Enable Z80 */
-			device_resume( m_z80, SUSPEND_REASON_HALT );
+		case 0x55:      /* Enable Z80 */
+			m_z80->resume(SUSPEND_REASON_HALT );
 			m_z80->reset();
-			device_set_input_line( m_z80, 0, CLEAR_LINE );
+			m_z80->set_input_line(0, CLEAR_LINE );
 			break;
-		case 0xAA:		/* Disable Z80 */
-			device_suspend( m_z80, SUSPEND_REASON_HALT, 1 );
+		case 0xAA:      /* Disable Z80 */
+			m_z80->suspend(SUSPEND_REASON_HALT, 1 );
 			break;
 		}
 		break;
 
-	case 0x3a:	/* Trigger Z80 NMI */
-		device_set_input_line( m_z80, INPUT_LINE_NMI, PULSE_LINE );
+	case 0x3a:  /* Trigger Z80 NMI */
+		m_z80->set_input_line(INPUT_LINE_NMI, PULSE_LINE );
 		break;
 	}
 	m_io_reg[offset] = data;
@@ -300,7 +337,7 @@ void ngp_state::flash_w( int which, offs_t offset, UINT8 data )
 		{
 			if ( m_flash_chip[which].command[0] == 0x80 )
 			{
-				int	size = 0x10000;
+				int size = 0x10000;
 				UINT8 *block = m_flash_chip[which].data;
 
 				m_flash_chip[which].state = F_AUTO_BLOCK_ERASE;
@@ -501,14 +538,14 @@ WRITE8_MEMBER( ngp_state::flash1_w )
 
 
 static ADDRESS_MAP_START( ngp_mem, AS_PROGRAM, 8, ngp_state )
-	AM_RANGE( 0x000080, 0x0000bf )	AM_READWRITE(ngp_io_r, ngp_io_w)							/* ngp/c specific i/o */
-	AM_RANGE( 0x004000, 0x006fff )	AM_RAM														/* work ram */
-	AM_RANGE( 0x007000, 0x007fff )	AM_RAM AM_SHARE("share1")									/* shared with sound cpu */
-	AM_RANGE( 0x008000, 0x0087ff )	AM_DEVREADWRITE_LEGACY("k1ge", k1ge_r, k1ge_w)						/* video registers */
-	AM_RANGE( 0x008800, 0x00bfff )	AM_RAM AM_REGION("vram", 0x800 )							/* Video RAM area */
-	AM_RANGE( 0x200000, 0x3fffff )	AM_ROM AM_WRITE(flash0_w) AM_REGION("cart", 0)				/* cart area #1 */
-	AM_RANGE( 0x800000, 0x9fffff )	AM_ROM AM_WRITE(flash1_w) AM_REGION("cart", 0x200000)		/* cart area #2 */
-	AM_RANGE( 0xff0000, 0xffffff )	AM_ROM AM_REGION("maincpu", 0)								/* system rom */
+	AM_RANGE( 0x000080, 0x0000bf )  AM_READWRITE(ngp_io_r, ngp_io_w)                            /* ngp/c specific i/o */
+	AM_RANGE( 0x004000, 0x006fff )  AM_RAM AM_SHARE("mainram")                                  /* work ram */
+	AM_RANGE( 0x007000, 0x007fff )  AM_RAM AM_SHARE("share1")                                   /* shared with sound cpu */
+	AM_RANGE( 0x008000, 0x0087ff )  AM_DEVREADWRITE("k1ge", k1ge_device, reg_read, reg_write)   /* video registers */
+	AM_RANGE( 0x008800, 0x00bfff )  AM_DEVREADWRITE("k1ge", k1ge_device, vram_read, vram_write) /* Video RAM area */
+	AM_RANGE( 0x200000, 0x3fffff )  AM_ROM AM_WRITE(flash0_w) AM_REGION("cart", 0)              /* cart area #1 */
+	AM_RANGE( 0x800000, 0x9fffff )  AM_ROM AM_WRITE(flash1_w) AM_REGION("cart", 0x200000)       /* cart area #2 */
+	AM_RANGE( 0xff0000, 0xffffff )  AM_ROM AM_REGION("maincpu", 0)                              /* system rom */
 ADDRESS_MAP_END
 
 
@@ -526,40 +563,37 @@ WRITE8_MEMBER( ngp_state::ngp_z80_comm_w )
 
 WRITE8_MEMBER( ngp_state::ngp_z80_signal_main_w )
 {
-	device_set_input_line( m_tlcs900, TLCS900_INT5, ASSERT_LINE );
+	m_tlcs900->set_input_line(TLCS900_INT5, ASSERT_LINE );
 }
 
 
 static ADDRESS_MAP_START( z80_mem, AS_PROGRAM, 8, ngp_state )
-	AM_RANGE( 0x0000, 0x0FFF )	AM_RAM AM_SHARE("share1")								/* shared with tlcs900 */
-	AM_RANGE( 0x4000, 0x4001 )	AM_DEVWRITE_LEGACY( "t6w28", t6w28_w )					/* sound chip (right, left) */
-	AM_RANGE( 0x8000, 0x8000 )	AM_READWRITE( ngp_z80_comm_r, ngp_z80_comm_w )	/* main-sound communication */
-	AM_RANGE( 0xc000, 0xc000 )	AM_WRITE( ngp_z80_signal_main_w )				/* signal irq to main cpu */
+	AM_RANGE( 0x0000, 0x0FFF )  AM_RAM AM_SHARE("share1")                               /* shared with tlcs900 */
+	AM_RANGE( 0x4000, 0x4001 )  AM_DEVWRITE("t6w28", t6w28_device, write )                  /* sound chip (right, left) */
+	AM_RANGE( 0x8000, 0x8000 )  AM_READWRITE( ngp_z80_comm_r, ngp_z80_comm_w )  /* main-sound communication */
+	AM_RANGE( 0xc000, 0xc000 )  AM_WRITE( ngp_z80_signal_main_w )               /* signal irq to main cpu */
 ADDRESS_MAP_END
 
 
 WRITE8_MEMBER( ngp_state::ngp_z80_clear_irq )
 {
-	device_set_input_line( m_z80, 0, CLEAR_LINE );
+	m_z80->set_input_line(0, CLEAR_LINE );
 
 	/* I am not exactly sure what causes the maincpu INT5 signal to be cleared. This will do for now. */
-	device_set_input_line( m_tlcs900, TLCS900_INT5, CLEAR_LINE );
+	m_tlcs900->set_input_line(TLCS900_INT5, CLEAR_LINE );
 }
 
 
 static ADDRESS_MAP_START( z80_io, AS_IO, 8, ngp_state )
-	AM_RANGE( 0x0000, 0xffff )	AM_WRITE( ngp_z80_clear_irq )
+	AM_RANGE( 0x0000, 0xffff )  AM_WRITE( ngp_z80_clear_irq )
 ADDRESS_MAP_END
 
 
-static INPUT_CHANGED( power_callback )
+INPUT_CHANGED_MEMBER(ngp_state::power_callback)
 {
-	ngp_state *state = field.machine().driver_data<ngp_state>();
-
-	if ( state->m_io_reg[0x33] & 0x04 )
+	if ( m_io_reg[0x33] & 0x04 )
 	{
-		device_set_input_line( state->m_tlcs900, TLCS900_NMI,
-			(input_port_read(field.machine(), "Power") & 0x01 ) ? CLEAR_LINE : ASSERT_LINE );
+		m_tlcs900->set_input_line(TLCS900_NMI, (m_io_power->read() & 0x01 ) ? CLEAR_LINE : ASSERT_LINE );
 	}
 }
 
@@ -576,93 +610,130 @@ static INPUT_PORTS_START( ngp )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNUSED )
 
 	PORT_START("Power")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_CODE(KEYCODE_Q) PORT_NAME("Power") PORT_CHANGED(power_callback, NULL)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_CODE(KEYCODE_Q) PORT_NAME("Power") PORT_CHANGED_MEMBER(DEVICE_SELF, ngp_state, power_callback, NULL)
 INPUT_PORTS_END
 
 
-WRITE8_MEMBER( ngp_state::ngp_vblank_pin_w )
+WRITE_LINE_MEMBER( ngp_state::ngp_vblank_pin_w )
 {
-	device_set_input_line( m_tlcs900, TLCS900_INT4, data ? ASSERT_LINE : CLEAR_LINE );
+	m_tlcs900->set_input_line(TLCS900_INT4, state ? ASSERT_LINE : CLEAR_LINE );
 }
 
 
-WRITE8_MEMBER( ngp_state::ngp_hblank_pin_w )
+WRITE_LINE_MEMBER( ngp_state::ngp_hblank_pin_w )
 {
-	device_set_input_line( m_tlcs900, TLCS900_TIO, data ? ASSERT_LINE : CLEAR_LINE );
+	m_tlcs900->set_input_line(TLCS900_TIO, state ? ASSERT_LINE : CLEAR_LINE );
 }
 
 
-WRITE8_MEMBER( ngp_state::ngp_tlcs900_to3 )
+WRITE8_MEMBER( ngp_state::ngp_tlcs900_porta )
 {
-	if ( data && ! m_old_to3 )
-		device_set_input_line( m_z80, 0, ASSERT_LINE );
+	int to3 = BIT(data,3);
+	if ( to3 && ! m_old_to3 )
+		m_z80->set_input_line(0, ASSERT_LINE );
 
-	m_old_to3 = data;
+	m_old_to3 = to3;
 }
 
 
 void ngp_state::machine_start()
 {
-	m_seconds_timer = machine().scheduler().timer_alloc(FUNC(ngp_seconds_callback));
+	UINT8 *cart = memregion("cart")->base();
+
+	m_flash_chip[0].data = cart;
+	m_flash_chip[0].org_data[0] = m_flash_chip[0].data[0];
+	m_flash_chip[0].org_data[1] = m_flash_chip[0].data[1];
+	m_flash_chip[0].org_data[2] = m_flash_chip[0].data[2];
+	m_flash_chip[0].org_data[3] = m_flash_chip[0].data[3];
+	m_flash_chip[0].org_data[4] = m_flash_chip[0].data[0x7c000];
+	m_flash_chip[0].org_data[5] = m_flash_chip[0].data[0x7c001];
+	m_flash_chip[0].org_data[6] = m_flash_chip[0].data[0x7c002];
+	m_flash_chip[0].org_data[7] = m_flash_chip[0].data[0x7c003];
+	m_flash_chip[0].org_data[8] = m_flash_chip[0].data[0xfc000];
+	m_flash_chip[0].org_data[9] = m_flash_chip[0].data[0xfc001];
+	m_flash_chip[0].org_data[10] = m_flash_chip[0].data[0xfc002];
+	m_flash_chip[0].org_data[11] = m_flash_chip[0].data[0xfc003];
+	m_flash_chip[0].org_data[12] = m_flash_chip[0].data[0x1fc000];
+	m_flash_chip[0].org_data[13] = m_flash_chip[0].data[0x1fc001];
+	m_flash_chip[0].org_data[14] = m_flash_chip[0].data[0x1fc002];
+	m_flash_chip[0].org_data[15] = m_flash_chip[0].data[0x1fc003];
+
+	m_flash_chip[1].data = cart + 0x200000;
+	m_flash_chip[1].org_data[0] = m_flash_chip[1].data[0];
+	m_flash_chip[1].org_data[1] = m_flash_chip[1].data[1];
+	m_flash_chip[1].org_data[2] = m_flash_chip[1].data[2];
+	m_flash_chip[1].org_data[3] = m_flash_chip[1].data[3];
+	m_flash_chip[1].org_data[4] = m_flash_chip[1].data[0x7c000];
+	m_flash_chip[1].org_data[5] = m_flash_chip[1].data[0x7c001];
+	m_flash_chip[1].org_data[6] = m_flash_chip[1].data[0x7c002];
+	m_flash_chip[1].org_data[7] = m_flash_chip[1].data[0x7c003];
+	m_flash_chip[1].org_data[8] = m_flash_chip[1].data[0xfc000];
+	m_flash_chip[1].org_data[9] = m_flash_chip[1].data[0xfc001];
+	m_flash_chip[1].org_data[10] = m_flash_chip[1].data[0xfc002];
+	m_flash_chip[1].org_data[11] = m_flash_chip[1].data[0xfc003];
+	m_flash_chip[1].org_data[12] = m_flash_chip[1].data[0x1fc000];
+	m_flash_chip[1].org_data[13] = m_flash_chip[1].data[0x1fc001];
+	m_flash_chip[1].org_data[14] = m_flash_chip[1].data[0x1fc002];
+	m_flash_chip[1].org_data[15] = m_flash_chip[1].data[0x1fc003];
+
+	m_seconds_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(ngp_state::ngp_seconds_callback),this));
 	m_seconds_timer->adjust( attotime::from_seconds(1), 0, attotime::from_seconds(1) );
+
+	save_item(NAME(m_io_reg));
+	save_item(NAME(m_old_to3));
+	// TODO: check if these are handled correctly...
+	save_item(NAME(m_flash_chip[0].present));
+	save_item(NAME(m_flash_chip[0].manufacturer_id));
+	save_item(NAME(m_flash_chip[0].device_id));
+	save_item(NAME(m_flash_chip[0].org_data));
+	save_item(NAME(m_flash_chip[0].state));
+	save_item(NAME(m_flash_chip[0].command));
+	save_item(NAME(m_flash_chip[1].present));
+	save_item(NAME(m_flash_chip[1].manufacturer_id));
+	save_item(NAME(m_flash_chip[1].device_id));
+	save_item(NAME(m_flash_chip[1].org_data));
+	save_item(NAME(m_flash_chip[1].state));
+	save_item(NAME(m_flash_chip[1].command));
 }
 
 
 void ngp_state::machine_reset()
 {
 	m_old_to3 = 0;
-	m_tlcs900 = machine().device( "maincpu" );
-	m_z80 = machine().device( "soundcpu" );
-	m_t6w28 = machine().device( "t6w28" );
-	m_dac_l = machine().device( "dac_l" );
-	m_dac_r = machine().device( "dac_r" );
-	m_k1ge = machine().device( "k1ge" );
 
-	device_suspend( m_z80, SUSPEND_REASON_HALT, 1 );
-	device_set_input_line( m_z80, 0, CLEAR_LINE );
+	m_z80->suspend(SUSPEND_REASON_HALT, 1);
+	m_z80->set_input_line(0, CLEAR_LINE);
+
+	if ( m_nvram_loaded )
+	{
+		m_tlcs900->set_state_int(TLCS900_PC, 0xFF1800);
+	}
 }
 
 
-static SCREEN_UPDATE( ngp )
+UINT32 ngp_state::screen_update_ngp(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	ngp_state *state = screen->machine().driver_data<ngp_state>();
-
-	k1ge_update( state->m_k1ge, bitmap, cliprect );
+	m_k1ge->update( bitmap, cliprect );
 	return 0;
 }
 
 
-static DEVICE_START( ngp_cart )
+DEVICE_IMAGE_LOAD_MEMBER( ngp_state, ngp_cart )
 {
-	ngp_state *state = device->machine().driver_data<ngp_state>();
-	UINT8 *cart = device->machine().region("cart")->base();
-
-	state->m_flash_chip[0].present = 0;
-	state->m_flash_chip[0].state = F_READ;
-	state->m_flash_chip[0].data = cart;
-
-	state->m_flash_chip[1].present = 0;
-	state->m_flash_chip[1].state = F_READ;
-	state->m_flash_chip[1].data = cart + 0x200000;
-}
-
-
-static DEVICE_IMAGE_LOAD( ngp_cart )
-{
-	ngp_state *state = image.device().machine().driver_data<ngp_state>();
+	UINT8 *cart = memregion("cart")->base();
 	UINT32 filesize;
 
 	if (image.software_entry() == NULL)
 	{
 		filesize = image.length();
 
-		if (filesize != 0x80000 && filesize != 0x100000 && filesize != 0x200000 && filesize != 0x400000)
+		if (filesize != 0x8000 && filesize != 0x80000 && filesize != 0x100000 && filesize != 0x200000 && filesize != 0x400000)
 		{
 			image.seterror(IMAGE_ERROR_UNSPECIFIED, "Incorrect or not support cartridge size");
 			return IMAGE_INIT_FAIL;
 		}
 
-		if (image.fread( image.device().machine().region("cart")->base(), filesize) != filesize)
+		if (image.fread( cart, filesize) != filesize)
 		{
 			image.seterror(IMAGE_ERROR_UNSPECIFIED, "Error loading file");
 			return IMAGE_INIT_FAIL;
@@ -671,115 +742,82 @@ static DEVICE_IMAGE_LOAD( ngp_cart )
 	else
 	{
 		filesize = image.get_software_region_length("rom");
-		memcpy(image.device().machine().region("cart")->base(), image.get_software_region("rom"), filesize);
+		memcpy(cart, image.get_software_region("rom"), filesize);
 	}
 
-	//printf("%2x%2x - %x - %x\n", (unsigned int) image.device().machine().region("cart")->u8(0x20), (unsigned int) image.device().machine().region("cart")->u8(0x21),
-	//        (unsigned int) image.device().machine().region("cart")->u8(0x22), (unsigned int) image.device().machine().region("cart")->u8(0x23));
-	state->m_flash_chip[0].manufacturer_id = 0x98;
+	//printf("%2x%2x - %x - %x\n", (unsigned int) memregion("cart")->u8(0x20), (unsigned int) memregion("cart")->u8(0x21),
+	//        (unsigned int) memregion("cart")->u8(0x22), (unsigned int) memregion("cart")->u8(0x23));
+	m_flash_chip[0].manufacturer_id = 0x98;
 	switch( filesize )
 	{
+	case 0x8000:
 	case 0x80000:
-		state->m_flash_chip[0].device_id = 0xab;
+		m_flash_chip[0].device_id = 0xab;
 		break;
 	case 0x100000:
-		state->m_flash_chip[0].device_id = 0x2c;
+		m_flash_chip[0].device_id = 0x2c;
 		break;
 	case 0x200000:
-		state->m_flash_chip[0].device_id = 0x2f;
+		m_flash_chip[0].device_id = 0x2f;
 		break;
 	case 0x400000:
-		state->m_flash_chip[0].device_id = 0x2f;
-		state->m_flash_chip[1].manufacturer_id = 0x98;
-		state->m_flash_chip[1].device_id = 0x2f;
-		state->m_flash_chip[1].present = 0;
-		state->m_flash_chip[1].state = F_READ;
+		m_flash_chip[0].device_id = 0x2f;
+		m_flash_chip[1].manufacturer_id = 0x98;
+		m_flash_chip[1].device_id = 0x2f;
+		m_flash_chip[1].present = 0;
+		m_flash_chip[1].state = F_READ;
 		break;
 	}
 
-	state->m_flash_chip[0].org_data[0] = state->m_flash_chip[0].data[0];
-	state->m_flash_chip[0].org_data[1] = state->m_flash_chip[0].data[1];
-	state->m_flash_chip[0].org_data[2] = state->m_flash_chip[0].data[2];
-	state->m_flash_chip[0].org_data[3] = state->m_flash_chip[0].data[3];
-	state->m_flash_chip[0].org_data[4] = state->m_flash_chip[0].data[0x7c000];
-	state->m_flash_chip[0].org_data[5] = state->m_flash_chip[0].data[0x7c001];
-	state->m_flash_chip[0].org_data[6] = state->m_flash_chip[0].data[0x7c002];
-	state->m_flash_chip[0].org_data[7] = state->m_flash_chip[0].data[0x7c003];
-	state->m_flash_chip[0].org_data[8] = state->m_flash_chip[0].data[0xfc000];
-	state->m_flash_chip[0].org_data[9] = state->m_flash_chip[0].data[0xfc001];
-	state->m_flash_chip[0].org_data[10] = state->m_flash_chip[0].data[0xfc002];
-	state->m_flash_chip[0].org_data[11] = state->m_flash_chip[0].data[0xfc003];
-	state->m_flash_chip[0].org_data[12] = state->m_flash_chip[0].data[0x1fc000];
-	state->m_flash_chip[0].org_data[13] = state->m_flash_chip[0].data[0x1fc001];
-	state->m_flash_chip[0].org_data[14] = state->m_flash_chip[0].data[0x1fc002];
-	state->m_flash_chip[0].org_data[15] = state->m_flash_chip[0].data[0x1fc003];
-
-	state->m_flash_chip[1].org_data[0] = state->m_flash_chip[1].data[0];
-	state->m_flash_chip[1].org_data[1] = state->m_flash_chip[1].data[1];
-	state->m_flash_chip[1].org_data[2] = state->m_flash_chip[1].data[2];
-	state->m_flash_chip[1].org_data[3] = state->m_flash_chip[1].data[3];
-	state->m_flash_chip[1].org_data[4] = state->m_flash_chip[1].data[0x7c000];
-	state->m_flash_chip[1].org_data[5] = state->m_flash_chip[1].data[0x7c001];
-	state->m_flash_chip[1].org_data[6] = state->m_flash_chip[1].data[0x7c002];
-	state->m_flash_chip[1].org_data[7] = state->m_flash_chip[1].data[0x7c003];
-	state->m_flash_chip[1].org_data[8] = state->m_flash_chip[1].data[0xfc000];
-	state->m_flash_chip[1].org_data[9] = state->m_flash_chip[1].data[0xfc001];
-	state->m_flash_chip[1].org_data[10] = state->m_flash_chip[1].data[0xfc002];
-	state->m_flash_chip[1].org_data[11] = state->m_flash_chip[1].data[0xfc003];
-	state->m_flash_chip[1].org_data[12] = state->m_flash_chip[1].data[0x1fc000];
-	state->m_flash_chip[1].org_data[13] = state->m_flash_chip[1].data[0x1fc001];
-	state->m_flash_chip[1].org_data[14] = state->m_flash_chip[1].data[0x1fc002];
-	state->m_flash_chip[1].org_data[15] = state->m_flash_chip[1].data[0x1fc003];
-
-	state->m_flash_chip[0].present = 1;
-	state->m_flash_chip[0].state = F_READ;
+	m_flash_chip[0].present = 1;
+	m_flash_chip[0].state = F_READ;
 
 	return IMAGE_INIT_PASS;
 }
 
 
-static DEVICE_IMAGE_UNLOAD( ngp_cart )
+DEVICE_IMAGE_UNLOAD_MEMBER( ngp_state, ngp_cart )
 {
-	ngp_state *state = image.device().machine().driver_data<ngp_state>();
+	m_flash_chip[0].present = 0;
+	m_flash_chip[0].state = F_READ;
 
-	state->m_flash_chip[0].present = 0;
-	state->m_flash_chip[0].state = F_READ;
-
-	state->m_flash_chip[1].present = 0;
-	state->m_flash_chip[1].state = F_READ;
+	m_flash_chip[1].present = 0;
+	m_flash_chip[1].state = F_READ;
 }
 
 
-static const k1ge_interface ngp_k1ge_interface =
+void ngp_state::nvram_default()
 {
-	"screen",
-	"vram",
-	DEVCB_DRIVER_MEMBER( ngp_state, ngp_vblank_pin_w ),
-	DEVCB_DRIVER_MEMBER( ngp_state, ngp_hblank_pin_w )
-};
+}
 
 
-static const tlcs900_interface ngp_tlcs900_interface =
+void ngp_state::nvram_read(emu_file &file)
 {
-	DEVCB_NULL,
-	DEVCB_DRIVER_MEMBER( ngp_state, ngp_tlcs900_to3 )
-};
+	file.read(m_mainram, 0x3000);
+	m_nvram_loaded = true;
+}
+
+
+void ngp_state::nvram_write(emu_file &file)
+{
+	file.write(m_mainram, 0x3000);
+}
 
 
 static MACHINE_CONFIG_START( ngp_common, ngp_state )
 
-	MCFG_CPU_ADD( "maincpu", TLCS900H, XTAL_6_144MHz )
+	MCFG_CPU_ADD( "maincpu", TMP95C061, XTAL_6_144MHz )
+	MCFG_TLCS900H_AM8_16(1)
 	MCFG_CPU_PROGRAM_MAP( ngp_mem)
-	MCFG_CPU_CONFIG( ngp_tlcs900_interface )
+	MCFG_TMP95C061_PORTA_WRITE(WRITE8(ngp_state,ngp_tlcs900_porta))
 
 	MCFG_CPU_ADD( "soundcpu", Z80, XTAL_6_144MHz/2 )
 	MCFG_CPU_PROGRAM_MAP( z80_mem)
 	MCFG_CPU_IO_MAP( z80_io)
 
 	MCFG_SCREEN_ADD( "screen", LCD )
-	MCFG_SCREEN_FORMAT( BITMAP_FORMAT_INDEXED16 )
 	MCFG_SCREEN_RAW_PARAMS( XTAL_6_144MHz, 515, 0, 160 /*480*/, 199, 0, 152 )
-	MCFG_SCREEN_UPDATE( ngp )
+	MCFG_SCREEN_UPDATE_DRIVER(ngp_state, screen_update_ngp)
 
 	MCFG_DEFAULT_LAYOUT(layout_lcd)
 
@@ -800,17 +838,15 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_DERIVED( ngp, ngp_common )
 
 	MCFG_PALETTE_LENGTH( 8 )
-	MCFG_PALETTE_INIT( k1ge )
 
-	MCFG_K1GE_ADD( "k1ge", XTAL_6_144MHz, ngp_k1ge_interface )
+	MCFG_K1GE_ADD( "k1ge", XTAL_6_144MHz, "screen", WRITELINE( ngp_state, ngp_vblank_pin_w ), WRITELINE( ngp_state, ngp_hblank_pin_w ) )
 
 	MCFG_CARTSLOT_ADD("cart")
 	MCFG_CARTSLOT_EXTENSION_LIST("bin,ngp,npc,ngc")
 	MCFG_CARTSLOT_NOT_MANDATORY
-	MCFG_CARTSLOT_START(ngp_cart)
-	MCFG_CARTSLOT_LOAD(ngp_cart)
+	MCFG_CARTSLOT_LOAD(ngp_state, ngp_cart)
 	MCFG_CARTSLOT_INTERFACE("ngp_cart")
-	MCFG_CARTSLOT_UNLOAD(ngp_cart)
+	MCFG_CARTSLOT_UNLOAD(ngp_state, ngp_cart)
 
 	/* software lists */
 	MCFG_SOFTWARE_LIST_ADD("cart_list","ngp")
@@ -821,17 +857,15 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_DERIVED( ngpc, ngp_common )
 
 	MCFG_PALETTE_LENGTH( 4096 )
-	MCFG_PALETTE_INIT( k2ge )
 
-	MCFG_K2GE_ADD( "k1ge", XTAL_6_144MHz, ngp_k1ge_interface )
+	MCFG_K2GE_ADD( "k1ge", XTAL_6_144MHz, "screen", WRITELINE( ngp_state, ngp_vblank_pin_w ), WRITELINE( ngp_state, ngp_hblank_pin_w ) )
 
 	MCFG_CARTSLOT_ADD("cart")
 	MCFG_CARTSLOT_EXTENSION_LIST("bin,ngp,npc,ngc")
 	MCFG_CARTSLOT_NOT_MANDATORY
-	MCFG_CARTSLOT_START(ngp_cart)
-	MCFG_CARTSLOT_LOAD(ngp_cart)
+	MCFG_CARTSLOT_LOAD(ngp_state,ngp_cart)
 	MCFG_CARTSLOT_INTERFACE("ngp_cart")
-	MCFG_CARTSLOT_UNLOAD(ngp_cart)
+	MCFG_CARTSLOT_UNLOAD(ngp_state,ngp_cart)
 
 	/* software lists */
 	MCFG_SOFTWARE_LIST_ADD("cart_list","ngpc")
@@ -843,8 +877,6 @@ ROM_START( ngp )
 	ROM_REGION( 0x10000, "maincpu" , 0 )
 	ROM_LOAD( "ngp_bios.ngp", 0x0000, 0x10000, CRC(6232df8d) SHA1(2f6429b68446536d8b03f35d02f1e98beb6460a0) )
 
-	ROM_REGION( 0x4000, "vram", ROMREGION_ERASE00 )
-
 	ROM_REGION( 0x400000, "cart", ROMREGION_ERASEFF )
 ROM_END
 
@@ -853,12 +885,9 @@ ROM_START( ngpc )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "ngpcbios.rom", 0x0000, 0x10000, CRC(6eeb6f40) SHA1(edc13192054a59be49c6d55f83b70e2510968e86) )
 
-	ROM_REGION( 0x4000, "vram", ROMREGION_ERASE00 )
-
 	ROM_REGION( 0x400000, "cart", ROMREGION_ERASEFF )
 ROM_END
 
 
-CONS( 1998, ngp, 0, 0, ngp, ngp, 0,  "SNK", "NeoGeo Pocket", 0 )
-CONS( 1999, ngpc, ngp, 0, ngpc, ngp, 0, "SNK", "NeoGeo Pocket Color", 0 )
-
+CONS( 1998, ngp, 0, 0, ngp, ngp, driver_device, 0,  "SNK", "NeoGeo Pocket", GAME_SUPPORTS_SAVE )
+CONS( 1999, ngpc, ngp, 0, ngpc, ngp, driver_device, 0, "SNK", "NeoGeo Pocket Color", GAME_SUPPORTS_SAVE )

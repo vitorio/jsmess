@@ -1,4 +1,7 @@
-/*
+// license:MAME|LGPL-2.1+
+// copyright-holders:Michael Zapf
+/****************************************************************************
+
     TI-99/4 Handset support (TI99/4 only)
 
     The ti99/4 was intended to support some so-called "IR remote handsets".
@@ -17,132 +20,121 @@
 
     Originally written by R. Nabet
 
+    **************************************************
+
+    TI-99/4(A) Twin Joystick
+
+    This file also contains the implementation of the twin joystick;
+    actually, no big deal, as it contains no logic but only switches.
+
+    **************************************************
+
     Michael Zapf
     2010-10-24 Rewriten as device
-*/
 
-#include "emu.h"
+    January 2012: Rewritten as class
+
+*****************************************************************************/
+
 #include "handset.h"
 #include "machine/tms9901.h"
 
-#define MAX_HANDSETS 4
-
-typedef struct _ti99_handset_state
-{
-	int 		buf;
-	int 		buflen;
-	int 		clock;
-	int 		ack;
-	UINT8		previous_joy[MAX_HANDSETS];
-	UINT8		previous_key[MAX_HANDSETS];
-
-	emu_timer		*timer;
-	device_t	*console9901;
-
-} ti99_handset_state;
+#define LOG logerror
+#define VERBOSE 1
 
 static const char *const joynames[2][4] =
 {
-	{ "JOY0", "JOY2", "JOY4", "JOY6" },		// X axis
-	{ "JOY1", "JOY3", "JOY5", "JOY7" }		// Y axis
+	{ "JOY0", "JOY2", "JOY4", "JOY6" },     // X axis
+	{ "JOY1", "JOY3", "JOY5", "JOY7" }      // Y axis
 };
 
 static const char *const keynames[] = { "KP0", "KP1", "KP2", "KP3", "KP4" };
 
-INLINE ti99_handset_state *get_safe_token(device_t *device)
+ti99_handset_device::ti99_handset_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+: joyport_attached_device(mconfig, HANDSET, "TI-99/4 IR handset", tag, owner, clock, "handset", __FILE__)
 {
-	assert(device != NULL);
-	assert(device->type() == HANDSET);
-
-	return (ti99_handset_state *)downcast<legacy_device_base *>(device)->token();
 }
 
-INLINE const ti99_handset_config *get_config(device_t *device)
-{
-	assert(device != NULL);
-	assert(device->type() == HANDSET);
-
-	return (const ti99_handset_config *) downcast<const legacy_device_base *>(device)->inline_config();
-}
+#define POLL_TIMER 1
+#define DELAY_TIMER 2
 
 /*****************************************************************************/
 
 /*
-    ti99_handset_poll_bus()
+    Return the status of the handset via the joystick port.
+    B = bus
+    C = clock
+    I = int (neg logic)
 
-    Poll the current state of the 4-bit data bus that goes from the I/R
-    receiver to the tms9901.
+    answer = |0|I|C|1|B|B|B|B|
 */
-int ti99_handset_poll_bus(device_t *device)
+UINT8 ti99_handset_device::read_dev()
 {
-	ti99_handset_state *handset = get_safe_token(device);
-	return (handset->buf & 0xf);
+	return (m_buf & 0xf) | 0x10 | (m_clock_high? 0x20:0) | ( m_buflen==3? 0x00:0x40);
 }
 
-int ti99_handset_get_clock(device_t *device)
+void ti99_handset_device::write_dev(UINT8 data)
 {
-	ti99_handset_state *handset = get_safe_token(device);
-	return handset->clock;
-}
-
-int ti99_handset_get_int(device_t *device)
-{
-	ti99_handset_state *handset = get_safe_token(device);
-	return handset->buflen==3;
+	if (VERBOSE>7) LOG("ti99_handset_device: Set ack %d\n", data);
+	set_acknowledge(data);
 }
 
 /*
-    ti99_handset_ack_callback()
-
     Handle data acknowledge sent by the ti-99/4 handset ISR (through tms9901
     line P0).  This function is called by a delayed timer 30us after the state
     of P0 is changed, because, in one occasion, the ISR asserts the line before
     it reads the data, so we need to delay the acknowledge process.
 */
-static TIMER_CALLBACK(ti99_handset_ack_callback)
+void ti99_handset_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	device_t *device = (device_t *)ptr;
-	ti99_handset_state *handset = get_safe_token(device);
-
-	handset->clock = !handset->clock;
-	handset->buf >>= 4;
-	handset->buflen--;
-
-	tms9901_set_single_int(handset->console9901, 12, 0);
-
-	if (handset->buflen == 1)
+	if (id==DELAY_TIMER)
 	{
-		// Unless I am missing something, the third and last nybble of the
-		// message is not acknowledged by the DSR in any way, and the first nybble
-		// of next message is not requested for either, so we need to decide on
-		// our own when we can post a new event.  Currently, we wait for 1000us
-		// after the DSR acknowledges the second nybble.
-		handset->timer->adjust(attotime::from_usec(1000));
-	}
+		m_clock_high = !m_clock_high;
+		m_buf >>= 4;
+		m_buflen--;
 
-	if (handset->buflen == 0)
-		/* See if we need to post a new event */
-		ti99_handset_task(device);
+		// Clear the INT12 line
+		m_joyport->set_interrupt(CLEAR_LINE);
+
+		if (m_buflen == 1)
+		{
+			// Unless I am missing something, the third and last nibble of the
+			// message is not acknowledged by the DSR in any way, and the first nibble
+			// of next message is not requested for either, so we need to decide on
+			// our own when we can post a new event.  Currently, we wait for 1000us
+			// after the DSR acknowledges the second nybble.
+			m_delay_timer->adjust(attotime::from_usec(1000));
+		}
+
+		if (m_buflen == 0)
+			/* See if we need to post a new event */
+			do_task();
+	}
+	else
+	{
+		// Poll timer
+		do_task();
+	}
 }
 
 /*
-    ti99_handset_set_ack()
     Handler for tms9901 P0 pin (handset data acknowledge)
 */
-void ti99_handset_set_acknowledge(device_t *device, UINT8 data)
+void ti99_handset_device::set_acknowledge(int data)
 {
-	ti99_handset_state *handset = get_safe_token(device);
-	if (handset->buflen && (data != handset->ack))
+	if ((m_buflen !=0) && (data != m_ack))
 	{
-		handset->ack = data;
-		if (data == handset->clock)
-			/* I don't know what the real delay is, but 30us apears to be enough */
-			handset->timer->adjust(attotime::from_usec(30));
+		m_ack = data;
+		if ((data!=0) == m_clock_high)
+		{
+			// I don't know what the real delay is, but 30us apears to be enough
+			m_delay_timer->adjust(attotime::from_usec(30));
+		}
 	}
 }
 
 /*
-    ti99_handset_post_message()
+    post_message()
 
     Post a 12-bit message: trigger an interrupt on the tms9901, and store the
     message in the I/R receiver buffer so that the handset ISR will read this
@@ -150,70 +142,66 @@ void ti99_handset_set_acknowledge(device_t *device, UINT8 data)
 
     message: 12-bit message to post (only the 12 LSBits are meaningful)
 */
-static void ti99_handset_post_message(device_t *device, int message)
+void ti99_handset_device::post_message(int message)
 {
-	ti99_handset_state *handset = get_safe_token(device);
 	/* post message and assert interrupt */
-	handset->clock = 1;
-	handset->buf = ~message;
-	handset->buflen = 3;
-
-	tms9901_set_single_int(handset->console9901, 12, 1);
+	m_clock_high = true;
+	m_buf = ~message;
+	m_buflen = 3;
+	if (VERBOSE>5) LOG("ti99_handset_device: trigger interrupt\n");
+	m_joyport->set_interrupt(ASSERT_LINE);
 }
 
 /*
-    ti99_handset_poll_keyboard()
+    poll_keyboard()
     Poll the current state of one given handset keypad.
     num: number of the keypad to poll (0-3)
     Returns TRUE if the handset state has changed and a message was posted.
 */
-static int ti99_handset_poll_keyboard(device_t *device, int num)
+bool ti99_handset_device::poll_keyboard(int num)
 {
-	ti99_handset_state *handset = get_safe_token(device);
 	UINT32 key_buf;
 	UINT8 current_key;
 	int i;
 
 	/* read current key state */
-	key_buf = ( input_port_read(device->machine(), keynames[num]) | (input_port_read(device->machine(), keynames[num + 1]) << 16) ) >> (4*num);
+	key_buf = (ioport(keynames[num])->read() | (ioport(keynames[num + 1])->read() << 16) ) >> (4*num);
 
 	// If a key was previously pressed, this key was not shift, and this key is
 	// still down, then don't change the current key press.
-	if (handset->previous_key[num] && (handset->previous_key[num] != 0x24)
-		&& (key_buf & (1 << (handset->previous_key[num] & 0x1f))))
+	if (previous_key[num] !=0 && (previous_key[num] != 0x24)
+		&& (key_buf & (1 << (previous_key[num] & 0x1f))))
 	{
 		/* check the shift modifier state */
-		if (((handset->previous_key[num] & 0x20) != 0) == ((key_buf & 0x0008) != 0))
+		if (((previous_key[num] & 0x20) != 0) == ((key_buf & 0x0008) != 0))
 			/* the shift modifier state has not changed */
-		return FALSE;
+			return false;
 		else
 		{
 			// The shift modifier state has changed: we need to update the
 			// keyboard state
 			if (key_buf & 0x0008)
-			{	/* shift has been pressed down */
-				handset->previous_key[num] = current_key = handset->previous_key[num] | 0x20;
+			{   /* shift has been pressed down */
+				previous_key[num] = current_key = previous_key[num] | 0x20;
 			}
 			else
-			{	/* shift has been pressed down */
-				handset->previous_key[num] = current_key = handset->previous_key[num] & ~0x20;
+			{
+				previous_key[num] = current_key = previous_key[num] & ~0x20;
 			}
 			/* post message */
-			ti99_handset_post_message(device, (((unsigned) current_key) << 4) | (num << 1));
-
-			return TRUE;
+			post_message((((unsigned)current_key) << 4) | (num << 1));
+			return true;
 		}
-
 	}
 
-	current_key = 0;	/* default value if no key is down */
+	current_key = 0;    /* default value if no key is down */
 	for (i=0; i<20; i++)
 	{
 		if (key_buf & (1 << i))
 		{
 			current_key = i + 1;
 			if (key_buf & 0x0008)
-				current_key |= 0x20;	/* set shift flag */
+				current_key |= 0x20;    /* set shift flag */
 
 			if (current_key != 0x24)
 				// If this is the shift key, any other key we may find will
@@ -223,43 +211,39 @@ static int ti99_handset_poll_keyboard(device_t *device, int num)
 		}
 	}
 
-	if (current_key != handset->previous_key[num])
+	if (current_key != previous_key[num])
 	{
-		handset->previous_key[num] = current_key;
+		previous_key[num] = current_key;
 
 		/* post message */
-		ti99_handset_post_message(device, (((unsigned) current_key) << 4) | (num << 1));
-
-		return TRUE;
+		post_message((((unsigned) current_key) << 4) | (num << 1));
+		return true;
 	}
-	return FALSE;
+	return false;
 }
 
 /*
-    ti99_handset_poll_joystick()
+    poll_joystick()
 
     Poll the current state of one given handset joystick.
     num: number of the joystick to poll (0-3)
     Returns TRUE if the handset state has changed and a message was posted.
 */
-static int ti99_handset_poll_joystick(device_t *device, int num)
+bool ti99_handset_device::poll_joystick(int num)
 {
-	ti99_handset_state *handset = get_safe_token(device);
-
 	UINT8 current_joy;
 	int current_joy_x, current_joy_y;
 	int message;
-
 	/* read joystick position */
-	current_joy_x = input_port_read(device->machine(), joynames[0][num]);
-	current_joy_y = input_port_read(device->machine(), joynames[1][num]);
+	current_joy_x = ioport(joynames[0][num])->read();
+	current_joy_y = ioport(joynames[1][num])->read();
 
 	/* compare with last saved position */
 	current_joy = current_joy_x | (current_joy_y << 4);
-	if (current_joy != handset->previous_joy[num])
+	if (current_joy != previous_joy[num])
 	{
 		/* save position */
-		handset->previous_joy[num] = current_joy;
+		previous_joy[num] = current_joy;
 
 		/* transform position to signed quantity */
 		current_joy_x -= 7;
@@ -299,69 +283,253 @@ static int ti99_handset_poll_joystick(device_t *device, int num)
 		message |= (num << 1) | 0x1;
 
 		/* post message */
-		ti99_handset_post_message(device, message);
-		return TRUE;
+		post_message(message);
+		return true;
 	}
-	return FALSE;
+	return false;
 }
 
 /*
     ti99_handset_task()
     Manage handsets, posting an event if the state of any handset has changed.
 */
-void ti99_handset_task(device_t *device)
+void ti99_handset_device::do_task()
 {
 	int i;
-	ti99_handset_state *handset = get_safe_token(device);
 
-	if (handset->buflen == 0)
+	if (m_buflen == 0)
 	{
 		/* poll every handset */
 		for (i=0; i < MAX_HANDSETS; i++)
-			if (ti99_handset_poll_joystick(device, i)) return;
+			if (poll_joystick(i)==true) return;
 		for (i=0; i < MAX_HANDSETS; i++)
-			if (ti99_handset_poll_keyboard(device, i)) return;
+			if (poll_keyboard(i)==true) return;
 	}
-	else if (handset->buflen == 3)
-	{	/* update messages after they have been posted */
-		if (handset->buf & 1)
-		{	/* keyboard */
-			ti99_handset_poll_keyboard(device, (~(handset->buf >> 1)) & 0x3);
+	else if (m_buflen == 3)
+	{   /* update messages after they have been posted */
+		if (m_buf & 1)
+		{   /* keyboard */
+			poll_keyboard((~(m_buf >> 1)) & 0x3);
 		}
 		else
-		{	/* joystick */
-			ti99_handset_poll_joystick(device, (~(handset->buf >> 1)) & 0x3);
+		{   /* joystick */
+			poll_joystick((~(m_buf >> 1)) & 0x3);
 		}
 	}
 }
 
-
-/**************************************************************************/
-
-static DEVICE_START( ti99_handset )
+void ti99_handset_device::device_start(void)
 {
-	ti99_handset_state *handset = get_safe_token(device);
-	handset->timer = device->machine().scheduler().timer_alloc(FUNC(ti99_handset_ack_callback), (void *)device);
+	m_delay_timer = timer_alloc(DELAY_TIMER);
+	m_poll_timer = timer_alloc(POLL_TIMER);
+	m_poll_timer->adjust(attotime::from_hz(m_joyport->clock()), 0, attotime::from_hz(m_joyport->clock()));
 }
 
-static DEVICE_RESET( ti99_handset )
+void ti99_handset_device::device_reset(void)
 {
-	const ti99_handset_config* conf = (const ti99_handset_config*)get_config(device);
-	ti99_handset_state *handset = get_safe_token(device);
-	handset->console9901 = device->machine().device(conf->sysintf);
-	handset->buf = 0;
-	handset->buflen = 0;
-	handset->clock = 0;
-	handset->ack = 0;
+	if (VERBOSE>5) LOG("ti99_handset_device: Reset\n");
+	m_delay_timer->enable(true);
+	m_poll_timer->enable(true);
+	m_buf = 0;
+	m_buflen = 0;
+	m_clock_high = false;
+	m_ack = 0;
 }
 
-static const char DEVTEMPLATE_SOURCE[] = __FILE__;
+#define JOYSTICK_DELTA          10
+#define JOYSTICK_SENSITIVITY    100
 
-#define DEVTEMPLATE_ID(p,s)             p##ti99_handset##s
-#define DEVTEMPLATE_FEATURES            DT_HAS_START | DT_HAS_RESET | DT_HAS_INLINE_CONFIG
-#define DEVTEMPLATE_NAME                "TI-99/4 Handset"
-#define DEVTEMPLATE_FAMILY              "Human-Computer Interface"
-#include "devtempl.h"
+INPUT_PORTS_START( handset )
+	/* 13 pseudo-ports for IR remote handsets */
 
-DEFINE_LEGACY_DEVICE( HANDSET, ti99_handset );
+	/* 8 pseudo-ports for the 4 IR joysticks */
+	PORT_START("JOY0")  /* joystick 1, X axis */
+		PORT_BIT( 0xf, 0x7,  IPT_AD_STICK_X) PORT_SENSITIVITY(JOYSTICK_SENSITIVITY) PORT_KEYDELTA(JOYSTICK_DELTA) PORT_MINMAX(0,0xe) PORT_PLAYER(1)
 
+	PORT_START("JOY1")  /* joystick 1, Y axis */
+		PORT_BIT( 0xf, 0x7,  IPT_AD_STICK_Y) PORT_SENSITIVITY(JOYSTICK_SENSITIVITY) PORT_KEYDELTA(JOYSTICK_DELTA) PORT_MINMAX(0,0xe) PORT_PLAYER(1) PORT_REVERSE
+
+	PORT_START("JOY2")  /* joystick 2, X axis */
+		PORT_BIT( 0xf, 0x7,  IPT_AD_STICK_X) PORT_SENSITIVITY(JOYSTICK_SENSITIVITY) PORT_KEYDELTA(JOYSTICK_DELTA) PORT_MINMAX(0,0xe) PORT_PLAYER(2)
+
+	PORT_START("JOY3")  /* joystick 2, Y axis */
+		PORT_BIT( 0xf, 0x7,  IPT_AD_STICK_Y) PORT_SENSITIVITY(JOYSTICK_SENSITIVITY) PORT_KEYDELTA(JOYSTICK_DELTA) PORT_MINMAX(0,0xe) PORT_PLAYER(2) PORT_REVERSE
+
+	PORT_START("JOY4")  /* joystick 3, X axis */
+		PORT_BIT( 0xf, 0x7,  IPT_AD_STICK_X) PORT_SENSITIVITY(JOYSTICK_SENSITIVITY) PORT_KEYDELTA(JOYSTICK_DELTA) PORT_MINMAX(0,0xe) PORT_PLAYER(3)
+
+	PORT_START("JOY5")  /* joystick 3, Y axis */
+		PORT_BIT( 0xf, 0x7,  IPT_AD_STICK_Y) PORT_SENSITIVITY(JOYSTICK_SENSITIVITY) PORT_KEYDELTA(JOYSTICK_DELTA) PORT_MINMAX(0,0xe) PORT_PLAYER(3) PORT_REVERSE
+
+	PORT_START("JOY6")  /* joystick 4, X axis */
+		PORT_BIT( 0xf, 0x7,  IPT_AD_STICK_X) PORT_SENSITIVITY(JOYSTICK_SENSITIVITY) PORT_KEYDELTA(JOYSTICK_DELTA) PORT_MINMAX(0,0xe) PORT_PLAYER(4)
+
+	PORT_START("JOY7")  /* joystick 4, Y axis */
+		PORT_BIT( 0xf, 0x7,  IPT_AD_STICK_Y) PORT_SENSITIVITY(JOYSTICK_SENSITIVITY) PORT_KEYDELTA(JOYSTICK_DELTA) PORT_MINMAX(0,0xe) PORT_PLAYER(4) PORT_REVERSE
+
+	/* 5 pseudo-ports for the 4 IR remote keypads */
+	PORT_START("KP0")   /* keypad 1, keys 1 to 16 */
+		PORT_BIT(0x0001, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: CLR") PORT_CODE(KEYCODE_1) PORT_PLAYER(1)
+		PORT_BIT(0x0002, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: GO") PORT_CODE(KEYCODE_Q) PORT_PLAYER(1)
+		PORT_BIT(0x0004, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: SET") PORT_CODE(KEYCODE_SPACE) PORT_PLAYER(1)
+		PORT_BIT(0x0008, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: NEXT") PORT_CODE(KEYCODE_LSHIFT) PORT_PLAYER(1)
+		PORT_BIT(0x0010, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: 7") PORT_CODE(KEYCODE_2) PORT_PLAYER(1)
+		PORT_BIT(0x0020, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: 4") PORT_CODE(KEYCODE_W) PORT_PLAYER(1)
+		PORT_BIT(0x0040, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: 1") PORT_CODE(KEYCODE_A) PORT_PLAYER(1)
+		PORT_BIT(0x0080, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: STOP") PORT_CODE(KEYCODE_Z) PORT_PLAYER(1)
+		PORT_BIT(0x0100, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: 8") PORT_CODE(KEYCODE_3) PORT_PLAYER(1)
+		PORT_BIT(0x0200, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: 5") PORT_CODE(KEYCODE_E) PORT_PLAYER(1)
+		PORT_BIT(0x0400, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: 2") PORT_CODE(KEYCODE_S) PORT_PLAYER(1)
+		PORT_BIT(0x0800, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: 0") PORT_CODE(KEYCODE_X) PORT_PLAYER(1)
+		PORT_BIT(0x1000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: 9") PORT_CODE(KEYCODE_4) PORT_PLAYER(1)
+		PORT_BIT(0x2000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: 6") PORT_CODE(KEYCODE_R) PORT_PLAYER(1)
+		PORT_BIT(0x4000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: 3") PORT_CODE(KEYCODE_D) PORT_PLAYER(1)
+		PORT_BIT(0x8000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: E =") PORT_CODE(KEYCODE_C) PORT_PLAYER(1)
+
+	PORT_START("KP1")   /* keypad 1, keys 17 to 20 */
+		PORT_BIT(0x0001, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: (div)") PORT_CODE(KEYCODE_5) PORT_PLAYER(1)
+		PORT_BIT(0x0002, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: (mul)") PORT_CODE(KEYCODE_T) PORT_PLAYER(1)
+		PORT_BIT(0x0004, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: NO -") PORT_CODE(KEYCODE_F) PORT_PLAYER(1)
+		PORT_BIT(0x0008, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1: YES +") PORT_CODE(KEYCODE_V) PORT_PLAYER(1)
+				/* keypad 2, keys 1 to 12 */
+		PORT_BIT(0x0010, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: CLR") PORT_CODE(KEYCODE_6) PORT_PLAYER(2)
+		PORT_BIT(0x0020, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: GO") PORT_CODE(KEYCODE_Y) PORT_PLAYER(2)
+		PORT_BIT(0x0040, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: SET") PORT_CODE(KEYCODE_G) PORT_PLAYER(2)
+		PORT_BIT(0x0080, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: NEXT") PORT_CODE(KEYCODE_B) PORT_PLAYER(2)
+		PORT_BIT(0x0100, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: 7") PORT_CODE(KEYCODE_7) PORT_PLAYER(2)
+		PORT_BIT(0x0200, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: 4") PORT_CODE(KEYCODE_U) PORT_PLAYER(2)
+		PORT_BIT(0x0400, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: 1") PORT_CODE(KEYCODE_H) PORT_PLAYER(2)
+		PORT_BIT(0x0800, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: STOP") PORT_CODE(KEYCODE_N) PORT_PLAYER(2)
+		PORT_BIT(0x1000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: 8") PORT_CODE(KEYCODE_8) PORT_PLAYER(2)
+		PORT_BIT(0x2000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: 5") PORT_CODE(KEYCODE_I) PORT_PLAYER(2)
+		PORT_BIT(0x4000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: 2") PORT_CODE(KEYCODE_J) PORT_PLAYER(2)
+		PORT_BIT(0x8000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: 0") PORT_CODE(KEYCODE_M) PORT_PLAYER(2)
+
+	PORT_START("KP2")   /* keypad 2, keys 13 to 20 */
+		PORT_BIT(0x0001, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: 9") PORT_CODE(KEYCODE_9) PORT_PLAYER(2)
+		PORT_BIT(0x0002, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: 6") PORT_CODE(KEYCODE_O) PORT_PLAYER(2)
+		PORT_BIT(0x0004, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: 3") PORT_CODE(KEYCODE_K) PORT_PLAYER(2)
+		PORT_BIT(0x0008, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: E =") PORT_CODE(KEYCODE_STOP) PORT_PLAYER(2)
+		PORT_BIT(0x0010, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: (div)") PORT_CODE(KEYCODE_0) PORT_PLAYER(2)
+		PORT_BIT(0x0020, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: (mul)") PORT_CODE(KEYCODE_P) PORT_PLAYER(2)
+		PORT_BIT(0x0040, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: NO -") PORT_CODE(KEYCODE_L) PORT_PLAYER(2)
+		PORT_BIT(0x0080, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2: YES +") PORT_CODE(KEYCODE_ENTER) PORT_PLAYER(2)
+				/* keypad 3, keys 1 to 8 */
+		PORT_BIT(0x0100, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: CLR") PORT_CODE(KEYCODE_1) PORT_PLAYER(3)
+		PORT_BIT(0x0200, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: GO") PORT_CODE(KEYCODE_Q) PORT_PLAYER(3)
+		PORT_BIT(0x0400, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: SET") PORT_CODE(KEYCODE_SPACE) PORT_PLAYER(3)
+		PORT_BIT(0x0800, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: NEXT") PORT_CODE(KEYCODE_LSHIFT) PORT_PLAYER(3)
+		PORT_BIT(0x1000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: 7") PORT_CODE(KEYCODE_2) PORT_PLAYER(3)
+		PORT_BIT(0x2000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: 4") PORT_CODE(KEYCODE_W) PORT_PLAYER(3)
+		PORT_BIT(0x4000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: 1") PORT_CODE(KEYCODE_A) PORT_PLAYER(3)
+		PORT_BIT(0x8000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: STOP") PORT_CODE(KEYCODE_Z) PORT_PLAYER(3)
+
+	PORT_START("KP3")   /* keypad 3, keys 9 to 20 */
+		PORT_BIT(0x0001, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: 8") PORT_CODE(KEYCODE_3) PORT_PLAYER(3)
+		PORT_BIT(0x0002, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: 5") PORT_CODE(KEYCODE_E) PORT_PLAYER(3)
+		PORT_BIT(0x0004, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: 2") PORT_CODE(KEYCODE_S) PORT_PLAYER(3)
+		PORT_BIT(0x0008, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: 0") PORT_CODE(KEYCODE_X) PORT_PLAYER(3)
+		PORT_BIT(0x0010, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: 9") PORT_CODE(KEYCODE_4) PORT_PLAYER(3)
+		PORT_BIT(0x0020, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: 6") PORT_CODE(KEYCODE_R) PORT_PLAYER(3)
+		PORT_BIT(0x0040, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: 3") PORT_CODE(KEYCODE_D) PORT_PLAYER(3)
+		PORT_BIT(0x0080, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: E =") PORT_CODE(KEYCODE_C) PORT_PLAYER(3)
+		PORT_BIT(0x0100, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: (div)") PORT_CODE(KEYCODE_5) PORT_PLAYER(3)
+		PORT_BIT(0x0200, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: (mul)") PORT_CODE(KEYCODE_T) PORT_PLAYER(3)
+		PORT_BIT(0x0400, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: NO -") PORT_CODE(KEYCODE_F) PORT_PLAYER(3)
+		PORT_BIT(0x0800, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3: YES +") PORT_CODE(KEYCODE_V) PORT_PLAYER(3)
+				/* keypad 4, keys 1 to 4 */
+		PORT_BIT(0x1000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: CLR") PORT_CODE(KEYCODE_6) PORT_PLAYER(4)
+		PORT_BIT(0x2000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: GO") PORT_CODE(KEYCODE_Y) PORT_PLAYER(4)
+		PORT_BIT(0x4000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: SET") PORT_CODE(KEYCODE_G) PORT_PLAYER(4)
+		PORT_BIT(0x8000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: NEXT") PORT_CODE(KEYCODE_B) PORT_PLAYER(4)
+
+	PORT_START("KP4")   /* keypad 4, keys 5 to 20 */
+		PORT_BIT(0x0001, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: 7") PORT_CODE(KEYCODE_7) PORT_PLAYER(4)
+		PORT_BIT(0x0002, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: 4") PORT_CODE(KEYCODE_U) PORT_PLAYER(4)
+		PORT_BIT(0x0004, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: 1") PORT_CODE(KEYCODE_H) PORT_PLAYER(4)
+		PORT_BIT(0x0008, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: STOP") PORT_CODE(KEYCODE_N) PORT_PLAYER(4)
+		PORT_BIT(0x0010, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: 8") PORT_CODE(KEYCODE_8) PORT_PLAYER(4)
+		PORT_BIT(0x0020, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: 5") PORT_CODE(KEYCODE_I) PORT_PLAYER(4)
+		PORT_BIT(0x0040, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: 2") PORT_CODE(KEYCODE_J) PORT_PLAYER(4)
+		PORT_BIT(0x0080, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: 0") PORT_CODE(KEYCODE_M) PORT_PLAYER(4)
+		PORT_BIT(0x0100, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: 9") PORT_CODE(KEYCODE_9) PORT_PLAYER(4)
+		PORT_BIT(0x0200, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: 6") PORT_CODE(KEYCODE_O) PORT_PLAYER(4)
+		PORT_BIT(0x0400, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: 3") PORT_CODE(KEYCODE_K) PORT_PLAYER(4)
+		PORT_BIT(0x0800, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: E =") PORT_CODE(KEYCODE_STOP) PORT_PLAYER(4)
+		PORT_BIT(0x1000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: (div)") PORT_CODE(KEYCODE_0) PORT_PLAYER(4)
+		PORT_BIT(0x2000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: (mul)") PORT_CODE(KEYCODE_P) PORT_PLAYER(4)
+		PORT_BIT(0x4000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: NO -") PORT_CODE(KEYCODE_L) PORT_PLAYER(4)
+		PORT_BIT(0x8000, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4: YES +") PORT_CODE(KEYCODE_ENTER) PORT_PLAYER(4)
+INPUT_PORTS_END
+
+ioport_constructor ti99_handset_device::device_input_ports() const
+{
+	return INPUT_PORTS_NAME( handset );
+}
+
+const device_type HANDSET = &device_creator<ti99_handset_device>;
+
+/******************************************************************************
+    Twin Joystick
+******************************************************************************/
+
+/* col 6: "wired handset 1" (= joystick 1) */
+/* col 7: "wired handset 2" (= joystick 2) */
+
+INPUT_PORTS_START( joysticks )
+	PORT_START("JOY1")
+		PORT_BIT(0xE0, IP_ACTIVE_LOW, IPT_UNUSED)
+		PORT_BIT(0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_UP/*, "(1UP)", CODE_NONE, OSD_JOY_UP*/) PORT_PLAYER(1)
+		PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN/*, "(1DOWN)", CODE_NONE, OSD_JOY_DOWN, 0*/) PORT_PLAYER(1)
+		PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT/*, "(1RIGHT)", CODE_NONE, OSD_JOY_RIGHT, 0*/) PORT_PLAYER(1)
+		PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT/*, "(1LEFT)", CODE_NONE, OSD_JOY_LEFT, 0*/) PORT_PLAYER(1)
+		PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_BUTTON1/*, "(1FIRE)", CODE_NONE, OSD_JOY_FIRE, 0*/) PORT_PLAYER(1)
+
+	PORT_START("JOY2")
+		PORT_BIT(0xE0, IP_ACTIVE_LOW, IPT_UNUSED)
+		PORT_BIT(0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_UP/*, "(2UP)", CODE_NONE, OSD_JOY2_UP, 0*/) PORT_PLAYER(2)
+		PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN/*, "(2DOWN)", CODE_NONE, OSD_JOY2_DOWN, 0*/) PORT_PLAYER(2)
+		PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT/*, "(2RIGHT)", CODE_NONE, OSD_JOY2_RIGHT, 0*/) PORT_PLAYER(2)
+		PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT/*, "(2LEFT)", CODE_NONE, OSD_JOY2_LEFT, 0*/) PORT_PLAYER(2)
+		PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_BUTTON1/*, "(2FIRE)", CODE_NONE, OSD_JOY2_FIRE, 0*/) PORT_PLAYER(2)
+INPUT_PORTS_END
+
+ti99_twin_joystick::ti99_twin_joystick(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+: joyport_attached_device(mconfig, HANDSET, "TI-99/4(A) Twin Joystick", tag, owner, clock, "twinjoy", __FILE__)
+{
+}
+
+void ti99_twin_joystick::device_start(void)
+{
+}
+
+/*
+    Return the status of the joysticks.
+
+    answer = |0|0|0|U|D|R|L|B|
+*/
+UINT8 ti99_twin_joystick::read_dev()
+{
+	UINT8 value;
+	if (m_joystick==1) value = ioport("JOY1")->read();
+	else
+	{
+		if (m_joystick==2) value = ioport("JOY2")->read();
+		else value = 0xff;
+	}
+	if (VERBOSE>6) LOG("ti99_twin_joystick: joy%d = %02x\n", m_joystick, value);
+	return value;
+}
+
+void ti99_twin_joystick::write_dev(UINT8 data)
+{
+	if (VERBOSE>7) LOG("ti99_twin_joystick: Select joystick %d\n", data);
+	m_joystick = data & 0x03;
+}
+
+ioport_constructor ti99_twin_joystick::device_input_ports() const
+{
+	return INPUT_PORTS_NAME( joysticks );
+}
+
+const device_type TI99_JOYSTICK = &device_creator<ti99_twin_joystick>;

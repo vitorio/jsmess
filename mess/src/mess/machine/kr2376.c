@@ -9,6 +9,7 @@
 
 #include "emu.h"
 #include "kr2376.h"
+#include "devlegcy.h"
 
 static const UINT8 KR2376_KEY_CODES[3][8][11] =
 {
@@ -64,23 +65,23 @@ static const UINT8 KR2376_KEY_CODES[3][8][11] =
 	}
 };
 
-typedef struct _kr2376_t kr2376_t;
-struct _kr2376_t
+struct kr2376_t
 {
 	const kr2376_interface *intf;
-	int	pins[41];
+	int pins[41];
 
-	int ring11;						/* sense input scan counter */
-	int ring8;						/* drive output scan counter */
-	int modifiers;					/* modifier inputs */
+	int ring11;                     /* sense input scan counter */
+	int ring8;                      /* drive output scan counter */
+	int modifiers;                  /* modifier inputs */
 
-	int strobe;						/* strobe output */
+	int strobe;                     /* strobe output */
 	int strobe_old;
 	int parity;
 	int data;
 
 	/* timers */
-	emu_timer *scan_timer;			/* keyboard scan timer */
+	emu_timer *scan_timer;          /* keyboard scan timer */
+	devcb_resolved_write_line on_strobe_changed;
 };
 
 INLINE kr2376_t *get_safe_token(device_t *device)
@@ -88,7 +89,7 @@ INLINE kr2376_t *get_safe_token(device_t *device)
 	assert(device != NULL);
 	assert(device->type() == KR2376);
 
-	return (kr2376_t *)downcast<legacy_device_base *>(device)->token();
+	return (kr2376_t *)downcast<kr2376_device *>(device)->token();
 }
 
 /*-------------------------------------------------
@@ -114,7 +115,7 @@ void kr2376_set_input_pin( device_t *device, kr2376_input_pin_t pin, int data )
 -------------------------------------------------*/
 int kr2376_get_output_pin( device_t *device, kr2376_output_pin_t pin )
 {
-	kr2376_t	*kr2376 = get_safe_token(device);
+	kr2376_t    *kr2376 = get_safe_token(device);
 
 	return kr2376->pins[pin];
 }
@@ -134,8 +135,8 @@ static void change_output_lines(device_t *device)
 			kr2376->pins[KR2376_PO] = kr2376->parity ^ kr2376->pins[KR2376_PII];
 		}
 		kr2376->pins[KR2376_SO] = kr2376->strobe ^ kr2376->pins[KR2376_DSII];
-		if (kr2376->intf->on_strobe_changed)
-			kr2376->intf->on_strobe_changed(device, 0, kr2376->strobe ^ kr2376->pins[KR2376_DSII]);
+		if (!kr2376->on_strobe_changed.isnull())
+			kr2376->on_strobe_changed(kr2376->strobe ^ kr2376->pins[KR2376_DSII]);
 	}
 }
 
@@ -163,9 +164,9 @@ static void detect_keypress(device_t *device)
 
 	static const char *const keynames[] = { "X0", "X1", "X2", "X3", "X4", "X5", "X6", "X7" };
 
-	if (input_port_read(device->machine(), keynames[kr2376->ring8]) == (1 << kr2376->ring11))
+	if (device->machine().root_device().ioport(keynames[kr2376->ring8])->read() == (1 << kr2376->ring11))
 	{
-		kr2376->modifiers = input_port_read(device->machine(), "MODIFIERS");
+		kr2376->modifiers = device->machine().root_device().ioport("MODIFIERS")->read();
 
 		kr2376->strobe = 1;
 		/*  strobe 0->1 transition, encode char and update parity */
@@ -348,6 +349,8 @@ static DEVICE_START( kr2376 )
 	assert(kr2376->intf != NULL);
 	assert(kr2376->intf->clock > 0);
 
+	kr2376->on_strobe_changed.resolve(kr2376->intf->on_strobe_changed_cb, *device);
+
 	/* set initial values */
 	kr2376->ring11 = 0;
 	kr2376->ring8 = 0;
@@ -372,26 +375,29 @@ static DEVICE_START( kr2376 )
 	device->save_item(NAME(kr2376->data));
 }
 
-DEVICE_GET_INFO( kr2376 )
+const device_type KR2376 = &device_creator<kr2376_device>;
+
+kr2376_device::kr2376_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, KR2376, "SMC KR2376", tag, owner, clock, "kr2376", __FILE__)
 {
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(kr2376_t);				break;
-		case DEVINFO_INT_INLINE_CONFIG_BYTES:			info->i = 0;								break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(kr2376);	break;
-		case DEVINFO_FCT_STOP:							/* Nothing */								break;
-		case DEVINFO_FCT_RESET:							/* Nothing */								break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "SMC KR2376");					break;
-		case DEVINFO_STR_FAMILY:						strcpy(info->s, "SMC");					break;
-		case DEVINFO_STR_VERSION:						strcpy(info->s, "1.0");							break;
-		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);							break;
-		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright MESS Team");			break;
-	}
+	m_token = global_alloc_clear(kr2376_t);
 }
 
-DEFINE_LEGACY_DEVICE(KR2376, kr2376);
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void kr2376_device::device_config_complete()
+{
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void kr2376_device::device_start()
+{
+	DEVICE_START_NAME( kr2376 )(this);
+}

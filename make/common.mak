@@ -59,7 +59,7 @@ TEMPLATE_FILES := $(foreach TFILE,$(TEMPLATE_FILES),$(TEMPLATE_DIR)/$(TFILE))
 MESS_EXE := mess$(SUBTARGET)
 
 ifeq ($(IS_64_BIT),1)
-NATIVE_OBJ := $(CURDIR)/mess/obj/sdl/nativemame64
+NATIVE_OBJ := $(CURDIR)/mess/obj/nativesdl64
 else
-NATIVE_OBJ := $(CURDIR)/mess/obj/sdl/nativemame
+NATIVE_OBJ := $(CURDIR)/mess/obj/nativesdl
 endif

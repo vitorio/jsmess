@@ -1,44 +1,63 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 #pragma once
 
 #ifndef __TEK405X__
 #define __TEK405X__
 
+#include "emu.h"
+#include "cpu/m6800/m6800.h"
+#include "imagedev/cartslot.h"
 #include "machine/ram.h"
+#include "machine/6821pia.h"
+#include "machine/6850acia.h"
+#include "bus/ieee488/ieee488.h"
+#include "machine/ram.h"
+#include "sound/speaker.h"
+#include "video/vector.h"
 
-#define MC6800_TAG			"u61"
-#define MC6820_Y_TAG		"u561"
-#define MC6820_X_TAG		"u565"
-#define MC6820_TAPE_TAG		"u361"
-#define MC6820_KB_TAG		"u461"
-#define MC6820_GPIB_TAG		"u265"
-#define MC6820_COM_TAG		"u5"
-#define MC6850_TAG			"u25"
-#define RS232_TAG			"rs232"
-#define SCREEN_TAG			"screen"
+#define MC6800_TAG          "u61"
+#define MC6820_Y_TAG        "u561"
+#define MC6820_X_TAG        "u565"
+#define MC6820_TAPE_TAG     "u361"
+#define MC6820_KB_TAG       "u461"
+#define MC6820_GPIB_TAG     "u265"
+#define MC6820_COM_TAG      "u5"
+#define MC6850_TAG          "u25"
+#define RS232_TAG           "rs232"
+#define SCREEN_TAG          "screen"
 
-#define AM2901A_TAG			"am2901a"
+#define AM2901A_TAG         "am2901a"
 
 class tek4051_state : public driver_device
 {
 public:
 	tek4051_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, MC6800_TAG),
-		  m_gpib_pia(*this, MC6820_GPIB_TAG),
-		  m_com_pia(*this, MC6820_COM_TAG),
-		  m_acia(*this, MC6850_TAG),
-		  m_gpib(*this, IEEE488_TAG),
-		  m_speaker(*this, SPEAKER_TAG),
-		  m_ram(*this, RAM_TAG)
-	 { }
+			m_maincpu(*this, MC6800_TAG),
+			m_gpib_pia(*this, MC6820_GPIB_TAG),
+			m_com_pia(*this, MC6820_COM_TAG),
+			m_acia(*this, MC6850_TAG),
+			m_gpib(*this, IEEE488_TAG),
+			m_speaker(*this, "speaker"),
+			m_ram(*this, RAM_TAG),
+			m_rom(*this, MC6800_TAG),
+			m_bsofl_rom(*this, "020_0147_00"),
+			m_bscom_rom(*this, "021_0188_00"),
+			m_special(*this, "SPECIAL")
+		{ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_gpib_pia;
-	required_device<device_t> m_com_pia;
+	required_device<pia6821_device> m_gpib_pia;
+	required_device<pia6821_device> m_com_pia;
 	required_device<acia6850_device> m_acia;
 	required_device<ieee488_device> m_gpib;
-	required_device<device_t> m_speaker;
-	required_device<device_t> m_ram;
+	required_device<speaker_sound_device> m_speaker;
+	required_device<ram_device> m_ram;
+	required_memory_region m_rom;
+	required_memory_region m_bsofl_rom;
+	required_memory_region m_bscom_rom;
+	required_ioport m_special;
 
 	virtual void machine_start();
 
@@ -124,6 +143,7 @@ public:
 
 	// GPIB
 	int m_talk;
+	TIMER_DEVICE_CALLBACK_MEMBER(keyboard_tick);
 };
 
 class tek4052_state : public driver_device
@@ -131,12 +151,12 @@ class tek4052_state : public driver_device
 public:
 	tek4052_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, AM2901A_TAG),
-		  m_ram(*this, RAM_TAG)
-	 { }
+			m_maincpu(*this, AM2901A_TAG),
+			m_ram(*this, RAM_TAG)
+		{ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_ram;
+	required_device<ram_device> m_ram;
 
 	virtual void machine_start();
 

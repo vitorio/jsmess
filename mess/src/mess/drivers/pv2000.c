@@ -33,154 +33,154 @@ For BIOS CRC confirmation
 #include "video/tms9928a.h"
 #include "imagedev/cartslot.h"
 #include "imagedev/cassette.h"
+#include "sound/wave.h"
 
 
 class pv2000_state : public driver_device
 {
 public:
 	pv2000_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { m_last_state = 0; }
+		: driver_device(mconfig, type, tag),
+	m_maincpu(*this, "maincpu"),
+	m_cass(*this, "cassette"),
+	m_last_state(0)
+	{ }
 
-	int		m_last_state;
-	UINT8	m_keyb_column;
-	UINT8	m_cass_conf;
-	UINT8	m_key_pressed;
+	required_device<cpu_device> m_maincpu;
+	required_device<cassette_image_device> m_cass;
+	DECLARE_WRITE8_MEMBER(pv2000_cass_conf_w);
+	DECLARE_WRITE8_MEMBER(pv2000_keys_w);
+	DECLARE_READ8_MEMBER(pv2000_keys_hi_r);
+	DECLARE_READ8_MEMBER(pv2000_keys_lo_r);
+	DECLARE_READ8_MEMBER(pv2000_keys_mod_r);
+	DECLARE_WRITE_LINE_MEMBER(pv2000_vdp_interrupt);
+	DECLARE_READ8_MEMBER(cass_in);
+	DECLARE_WRITE8_MEMBER(cass_out);
+	bool m_last_state;
+	UINT8 m_key_pressed;
+	UINT8 m_keyb_column;
+	UINT8 m_cass_conf;
+	virtual void machine_start();
+	virtual void machine_reset();
+	DECLARE_DEVICE_IMAGE_LOAD_MEMBER( pv2000_cart );
 };
 
 
-static WRITE8_HANDLER( pv2000_cass_conf_w )
+WRITE8_MEMBER( pv2000_state::pv2000_cass_conf_w )
 {
-	pv2000_state *state = space->machine().driver_data<pv2000_state>();
+	logerror( "%s: pv2000_cass_conf_w %02x\n", machine().describe_context(), data );
 
-	logerror( "%s: pv2000_cass_conf_w %02x\n", space->machine().describe_context(), data );
+	m_cass_conf = data & 0x0f;
 
-	state->m_cass_conf = data & 0x0f;
-
-	if ( state->m_cass_conf & 0x01 )
-		space->machine().device<cassette_image_device>(CASSETTE_TAG)->change_state(CASSETTE_MOTOR_ENABLED, CASSETTE_MASK_MOTOR );
+	if ( m_cass_conf & 0x01 )
+		m_cass->change_state(CASSETTE_MOTOR_ENABLED, CASSETTE_MASK_MOTOR );
 	else
-		space->machine().device<cassette_image_device>(CASSETTE_TAG)->change_state(CASSETTE_MOTOR_DISABLED, CASSETTE_MASK_MOTOR );
+		m_cass->change_state(CASSETTE_MOTOR_DISABLED, CASSETTE_MASK_MOTOR );
 }
 
 
-static WRITE8_HANDLER( pv2000_keys_w )
+WRITE8_MEMBER( pv2000_state::pv2000_keys_w )
 {
-	pv2000_state *state = space->machine().driver_data<pv2000_state>();
+	logerror( "%s: pv2000_keys_w %02x\n", machine().describe_context(), data );
 
-	logerror( "%s: pv2000_keys_w %02x\n", space->machine().describe_context(), data );
+	m_keyb_column = data & 0x0f;
 
-	state->m_keyb_column = data & 0x0f;
-
-	cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_IRQ0, CLEAR_LINE);
+	m_maincpu->set_input_line(INPUT_LINE_IRQ0, CLEAR_LINE);
 }
 
 
-static READ8_HANDLER( pv2000_keys_hi_r )
+READ8_MEMBER( pv2000_state::pv2000_keys_hi_r )
 {
-	pv2000_state *state = space->machine().driver_data<pv2000_state>();
 	UINT8 data = 0;
+	char kbdrow[6];
 
-	switch ( state->m_keyb_column )
+	switch ( m_keyb_column )
 	{
 	case 0:
-		data = input_port_read( space->machine(), "IN0" ) >> 4;
-		break;
 	case 1:
-		data = input_port_read( space->machine(), "IN1" ) >> 4;
-		break;
 	case 2:
-		data = input_port_read( space->machine(), "IN2" ) >> 4;
-		break;
 	case 3:
-		data = input_port_read( space->machine(), "IN3" ) >> 4;
-		break;
 	case 4:
-		data = input_port_read( space->machine(), "IN4" ) >> 4;
-		break;
 	case 5:
-		data = input_port_read( space->machine(), "IN5" ) >> 4;
-		break;
 	case 6:
-		data = input_port_read( space->machine(), "IN6" ) >> 4;
-		break;
 	case 7:
-		data = input_port_read( space->machine(), "IN7" ) >> 4;
-		break;
 	case 8:
-		data = input_port_read( space->machine(), "IN8" ) >> 4;
-		break;
+		sprintf(kbdrow,"IN%d",m_keyb_column);
+		data = ioport( kbdrow )->read() >> 4;
 	}
 
 	return data;
 }
 
 
-static READ8_HANDLER( pv2000_keys_lo_r )
+READ8_MEMBER( pv2000_state::pv2000_keys_lo_r )
 {
-	pv2000_state *state = space->machine().driver_data<pv2000_state>();
 	UINT8 data = 0;
+	char kbdrow[6];
 
-	logerror("%s: pv2000_keys_r\n", space->machine().describe_context() );
+	logerror("%s: pv2000_keys_r\n", machine().describe_context() );
 
-	switch ( state->m_keyb_column )
+	switch ( m_keyb_column )
 	{
 	case 0:
-		data = input_port_read( space->machine(), "IN0" ) & 0x0f;
-		break;
 	case 1:
-		data = input_port_read( space->machine(), "IN1" ) & 0x0f;
-		break;
 	case 2:
-		data = input_port_read( space->machine(), "IN2" ) & 0x0f;
-		break;
 	case 3:
-		data = input_port_read( space->machine(), "IN3" ) & 0x0f;
-		break;
 	case 4:
-		data = input_port_read( space->machine(), "IN4" ) & 0x0f;
-		break;
 	case 5:
-		data = input_port_read( space->machine(), "IN5" ) & 0x0f;
-		break;
 	case 6:
-		data = input_port_read( space->machine(), "IN6" ) & 0x0f;
-		break;
 	case 7:
-		data = input_port_read( space->machine(), "IN7" ) & 0x0f;
-		break;
 	case 8:
-		data = input_port_read( space->machine(), "IN8" ) & 0x0f;
-		break;
 	case 9:
-		data = input_port_read( space->machine(), "IN9" ) & 0x0f;
-		break;
+		sprintf(kbdrow,"IN%d",m_keyb_column);
+		data = ioport( kbdrow )->read() & 0x0f;
 	}
 
 	return 0xf0 | data;
 }
 
 
-static READ8_HANDLER(pv2000_keys_mod_r)
+READ8_MEMBER( pv2000_state::pv2000_keys_mod_r )
 {
-	return 0xf0 | input_port_read( space->machine(), "MOD" );
+	return 0xf0 | ioport( "MOD" )->read();
+}
+
+READ8_MEMBER( pv2000_state::cass_in )
+{
+	// from what i can tell,
+	// 0 = data in
+	// 1 = must be high
+	// 2 = must be low
+	// bits 1 & 2 are checked while reading and writing tapes
+	// Press STOP key (F1) to cancel LOAD or SAVE
+
+	return 2 | ((m_cass->input() > +0.03) ? 1 : 0);
+}
+
+WRITE8_MEMBER( pv2000_state::cass_out )
+{
+	// it outputs 8-bit values here which are not the bytes in the file
+	// result is not readable
+
+	m_cass->output( BIT(data, 0) ? -1.0 : +1.0);
 }
 
 
 /* Memory Maps */
 
-static ADDRESS_MAP_START( pv2000_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( pv2000_map, AS_PROGRAM, 8, pv2000_state )
 	AM_RANGE(0x0000, 0x3FFF) AM_ROM
 
-	AM_RANGE(0x4000, 0x4000) AM_READWRITE(TMS9928A_vram_r, TMS9928A_vram_w)
-	AM_RANGE(0x4001, 0x4001) AM_READWRITE(TMS9928A_register_r, TMS9928A_register_w)
+	AM_RANGE(0x4000, 0x4000) AM_DEVREADWRITE("tms9928a", tms9928a_device, vram_read, vram_write)
+	AM_RANGE(0x4001, 0x4001) AM_DEVREADWRITE("tms9928a", tms9928a_device, register_read, register_write)
 
 	AM_RANGE(0x7000, 0x7FFF) AM_RAM
-  //AM_RANGE(0x8000, 0xBFFF) ext ram?
+	//AM_RANGE(0x8000, 0xBFFF) ext ram?
 	AM_RANGE(0xC000, 0xFFFF) AM_ROM  //cart
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( pv2000_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( pv2000_io_map, AS_IO, 8, pv2000_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 
 	//theres also printer and tape I/O (TODO)
@@ -191,93 +191,93 @@ static ADDRESS_MAP_START( pv2000_io_map, AS_IO, 8 )
 	AM_RANGE(0x20, 0x20) AM_READWRITE(pv2000_keys_lo_r, pv2000_keys_w)
 
 	//sn76489a
-	AM_RANGE(0x40, 0x40) AM_READ(pv2000_keys_mod_r) AM_DEVWRITE("sn76489a", sn76496_w)
+	AM_RANGE(0x40, 0x40) AM_READ(pv2000_keys_mod_r) AM_DEVWRITE("sn76489a", sn76489a_device, write)
 
 	/* Cassette input. Gets hit a lot after a GLOAD command */
-//  AM_RANGE(0x60, 0x60)
+	AM_RANGE(0x60, 0x60) AM_READWRITE(cass_in,cass_out)
 ADDRESS_MAP_END
 
 
 static INPUT_PORTS_START( pv2000 )
 	PORT_START("IN0")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_4) PORT_CHAR('4')
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_3) PORT_CHAR('3')
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_2) PORT_CHAR('2')
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_1) PORT_CHAR('1')
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_8) PORT_CHAR('8')
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_7) PORT_CHAR('7')
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_6) PORT_CHAR('6')
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_5) PORT_CHAR('5')
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_4) PORT_CHAR('4') PORT_CHAR('$')
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_3) PORT_CHAR('3') PORT_CHAR('#')
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_2) PORT_CHAR('2') PORT_CHAR('"')
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_1) PORT_CHAR('1') PORT_CHAR('!')
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_8) PORT_CHAR('8') PORT_CHAR('(')
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_7) PORT_CHAR('7') PORT_CHAR('\'')
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_6) PORT_CHAR('6') PORT_CHAR('&')
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_5) PORT_CHAR('5') PORT_CHAR('%')
 
 	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_R) PORT_CHAR('R')
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_E) PORT_CHAR('E')
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_W) PORT_CHAR('W')
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Q) PORT_CHAR('Q')
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_I) PORT_CHAR('I')
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_U) PORT_CHAR('U')
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Y) PORT_CHAR('Y')
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_T) PORT_CHAR('T')
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_R) PORT_CHAR('R') PORT_CHAR('r')
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_E) PORT_CHAR('E') PORT_CHAR('e')
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_W) PORT_CHAR('W') PORT_CHAR('w')
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Q) PORT_CHAR('Q') PORT_CHAR('q')
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_I) PORT_CHAR('I') PORT_CHAR('i')
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_U) PORT_CHAR('U') PORT_CHAR('u')
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Y) PORT_CHAR('Y') PORT_CHAR('y')
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_T) PORT_CHAR('T') PORT_CHAR('t')
 
 	PORT_START("IN2")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F) PORT_CHAR('F')
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_D) PORT_CHAR('D')
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_S) PORT_CHAR('S')
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_A) PORT_CHAR('A')
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_K) PORT_CHAR('K')
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_J) PORT_CHAR('J')
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_H) PORT_CHAR('H')
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_G) PORT_CHAR('G')
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F) PORT_CHAR('F') PORT_CHAR('f')
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_D) PORT_CHAR('D') PORT_CHAR('d')
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_S) PORT_CHAR('S') PORT_CHAR('s')
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_A) PORT_CHAR('A') PORT_CHAR('a')
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_K) PORT_CHAR('K') PORT_CHAR('k')
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_J) PORT_CHAR('J') PORT_CHAR('j')
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_H) PORT_CHAR('H') PORT_CHAR('h')
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_G) PORT_CHAR('G') PORT_CHAR('g')
 
 	PORT_START("IN3")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_C) PORT_CHAR('C')
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_X) PORT_CHAR('X')
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Z) PORT_CHAR('Z')
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_C) PORT_CHAR('C') PORT_CHAR('c')
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_X) PORT_CHAR('X') PORT_CHAR('x')
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Z) PORT_CHAR('Z') PORT_CHAR('z')
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Hiragana")
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_SPACE) PORT_CHAR(' ')
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_N) PORT_CHAR('N')
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_B) PORT_CHAR('B')
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_V) PORT_CHAR('V')
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_N) PORT_CHAR('N') PORT_CHAR('n')
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_B) PORT_CHAR('B') PORT_CHAR('b')
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_V) PORT_CHAR('V') PORT_CHAR('v')
 
 	PORT_START("IN4")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Yen")
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("IN4_1") /* Game?? DEL / MODE / STOP ??, no beep in basic, START in galaga */
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("IN4_2") /* DEL / MODE / STOP ??, no beep in basic, SELECT in galaga */
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_HOME) PORT_CHAR(UCHAR_MAMEKEY(HOME))
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_9) PORT_CHAR('9')
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_MINUS) PORT_CHAR('-')
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_EQUALS) PORT_CHAR('^')
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_9) PORT_CHAR('9') PORT_CHAR(')')
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_MINUS) PORT_CHAR('-') PORT_CHAR('=')
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_EQUALS) PORT_CHAR('^') PORT_CHAR('~')
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_0) PORT_CHAR('0')
 
 	PORT_START("IN5")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("CRSR Up+Left")
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("CRSR Down+Left")
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("CRSR Up+Right")
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("CRSR Down+Right")
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_O) PORT_CHAR('O')
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_OPENBRACE) PORT_CHAR('@')
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_CLOSEBRACE) PORT_CHAR('[')
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_P) PORT_CHAR('P')
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("CRSR Up+Left") PORT_CODE(KEYCODE_7_PAD)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("CRSR Down+Left") PORT_CODE(KEYCODE_1_PAD)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("CRSR Down+Right") PORT_CODE(KEYCODE_3_PAD)
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("CRSR Up+Right") PORT_CODE(KEYCODE_9_PAD)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_O) PORT_CHAR('O') PORT_CHAR('o')
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_OPENBRACE) PORT_CHAR('@') PORT_CHAR('`')
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_CLOSEBRACE) PORT_CHAR('[') PORT_CHAR('{')
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_P) PORT_CHAR('P') PORT_CHAR('p')
 
 	PORT_START("IN6")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_DOWN) PORT_CHAR(UCHAR_MAMEKEY(DOWN))
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_RIGHT) PORT_CHAR(UCHAR_MAMEKEY(RIGHT))
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_DOWN) PORT_CODE(KEYCODE_2_PAD) PORT_CHAR(UCHAR_MAMEKEY(DOWN))
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_RIGHT) PORT_CODE(KEYCODE_6_PAD) PORT_CHAR(UCHAR_MAMEKEY(RIGHT))
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("IN6_2") /* Unknown ??, no beep in basic */
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("IN6_3") /* Unknown ??, no beep in basic */
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_L) PORT_CHAR('L')
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_QUOTE) PORT_CHAR(':')
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_BACKSLASH) PORT_CHAR(']')
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_COLON) PORT_CHAR(';')
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_L) PORT_CHAR('L') PORT_CHAR('l')
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_QUOTE) PORT_CHAR(':') PORT_CHAR('*')
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_BACKSLASH) PORT_CHAR(']') PORT_CHAR('}')
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_COLON) PORT_CHAR(';') PORT_CHAR('+')
 
 	PORT_START("IN7")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_LEFT) PORT_CHAR(UCHAR_MAMEKEY(LEFT))
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_UP) PORT_CHAR(UCHAR_MAMEKEY(UP))
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_LEFT) PORT_CODE(KEYCODE_4_PAD) PORT_CHAR(UCHAR_MAMEKEY(LEFT))
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_UP) PORT_CODE(KEYCODE_8_PAD) PORT_CHAR(UCHAR_MAMEKEY(UP))
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("IN7_2") /* Unknown ??, no beep in basic */
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("IN7_3") /* Unknown ??, no beep in basic */
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_M) PORT_CHAR('M')
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_STOP) PORT_CHAR('.')
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_SLASH) PORT_CHAR('/')
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_COMMA) PORT_CHAR(',')
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_M) PORT_CHAR('M') PORT_CHAR('m')
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_STOP) PORT_CHAR('.') PORT_CHAR('>')
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_SLASH) PORT_CHAR('/') PORT_CHAR('?')
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_COMMA) PORT_CHAR(',') PORT_CHAR('<')
 
 	PORT_START("IN8")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_LCONTROL) PORT_NAME("Attack 0")
@@ -287,7 +287,7 @@ static INPUT_PORTS_START( pv2000 )
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_ENTER) PORT_CHAR(13)
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Mode")
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Del")
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("IN8_7") /* Unknown ?, no beeep in basic */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("IN8_7") /* Unknown ?, no beep in basic */
 
 	PORT_START("IN9")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNUSED )
@@ -298,47 +298,40 @@ static INPUT_PORTS_START( pv2000 )
 	PORT_START("MOD")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_RALT) PORT_NAME("Color")
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_TAB) PORT_NAME("Func")
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_LSHIFT) PORT_NAME("Shift")
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Shift") PORT_CODE(KEYCODE_LSHIFT) PORT_CODE(KEYCODE_RSHIFT) PORT_CHAR(UCHAR_SHIFT_1)
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNUSED )
 
 INPUT_PORTS_END
 
 
-static INTERRUPT_GEN( pv2000_interrupt )
+WRITE_LINE_MEMBER( pv2000_state::pv2000_vdp_interrupt )
 {
-   TMS9928A_interrupt(device->machine());
-}
+	// only if it goes up
+	if (state && !m_last_state)
+		m_maincpu->set_input_line(INPUT_LINE_NMI, PULSE_LINE);
 
-static void pv2000_vdp_interrupt(running_machine &machine, int new_state)
-{
-	pv2000_state *state = machine.driver_data<pv2000_state>();
-
-    // only if it goes up
-	if (new_state && !state->m_last_state)
-		cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
-
-	state->m_last_state = new_state;
+	m_last_state = state;
 
 	/* Check if irq triggering from keyboard presses is enabled */
-	if ( state->m_keyb_column == 0x0f )
+	if ( m_keyb_column == 0x0f )
 	{
 		/* Check if a key is pressed */
 		UINT8 key_pressed;
 
-		key_pressed = input_port_read( machine, "IN0" )
-			| input_port_read( machine, "IN1" )
-			| input_port_read( machine, "IN2" )
-			| input_port_read( machine, "IN3" )
-			| input_port_read( machine, "IN4" )
-			| input_port_read( machine, "IN5" )
-			| input_port_read( machine, "IN6" )
-			| input_port_read( machine, "IN7" )
-			| input_port_read( machine, "IN8" );
+		key_pressed = ioport( "IN0" )->read()
+			| ioport( "IN1" )->read()
+			| ioport( "IN2" )->read()
+			| ioport( "IN3" )->read()
+			| ioport( "IN4" )->read()
+			| ioport( "IN5" )->read()
+			| ioport( "IN6" )->read()
+			| ioport( "IN7" )->read()
+			| ioport( "IN8" )->read();
 
-		if ( key_pressed && state->m_key_pressed != key_pressed )
-			cputag_set_input_line(machine, "maincpu", INPUT_LINE_IRQ0, ASSERT_LINE);
+		if ( key_pressed && m_key_pressed != key_pressed )
+			m_maincpu->set_input_line(INPUT_LINE_IRQ0, ASSERT_LINE);
 
-		state->m_key_pressed = key_pressed;
+		m_key_pressed = key_pressed;
 	}
 }
 
@@ -346,34 +339,47 @@ static void pv2000_vdp_interrupt(running_machine &machine, int new_state)
 
 /* Machine Initialization */
 
-static const TMS9928a_interface tms9928a_interface =
+static TMS9928A_INTERFACE(pv2000_tms9928a_interface)
 {
-	TMS99x8A,
 	0x4000,
-	0, 0,
-	pv2000_vdp_interrupt
+	DEVCB_DRIVER_LINE_MEMBER(pv2000_state, pv2000_vdp_interrupt)
 };
 
-static MACHINE_START( pv2000 )
+
+/*************************************
+ *
+ *  Sound interface
+ *
+ *************************************/
+
+
+//-------------------------------------------------
+//  sn76496_config psg_intf
+//-------------------------------------------------
+
+static const sn76496_config psg_intf =
 {
-	TMS9928A_configure(&tms9928a_interface);
+	DEVCB_NULL
+};
+
+
+void pv2000_state::machine_start()
+{
 }
 
-static MACHINE_RESET( pv2000 )
+void pv2000_state::machine_reset()
 {
-	pv2000_state *state = machine.driver_data<pv2000_state>();
+	m_last_state = 0;
+	m_key_pressed = 0;
+	m_keyb_column = 0;
 
-	state->m_last_state = 0;
-	state->m_key_pressed = 0;
-	state->m_keyb_column = 0;
-
-	device_set_input_line_vector(machine.device("maincpu"), INPUT_LINE_IRQ0, 0xff);
-	memset(&machine.region("maincpu")->base()[0x7000], 0xff, 0x1000);	// initialize RAM
+	m_maincpu->set_input_line_vector(INPUT_LINE_IRQ0, 0xff);
+	memset(&memregion("maincpu")->base()[0x7000], 0xff, 0x1000);    // initialize RAM
 }
 
-static DEVICE_IMAGE_LOAD( pv2000_cart )
+DEVICE_IMAGE_LOAD_MEMBER( pv2000_state, pv2000_cart )
 {
-	UINT8 *cart = image.device().machine().region("maincpu")->base() + 0xC000;
+	UINT8 *cart = memregion("maincpu")->base() + 0xC000;
 	UINT32 size;
 
 	if (image.software_entry() == NULL)
@@ -415,33 +421,32 @@ static const cassette_interface pv2000_cassette_interface =
 static MACHINE_CONFIG_START( pv2000, pv2000_state )
 
 	// basic machine hardware
-	MCFG_CPU_ADD("maincpu", Z80, XTAL_7_15909MHz/2)	// 3.579545 MHz
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_7_15909MHz/2) // 3.579545 MHz
 	MCFG_CPU_PROGRAM_MAP(pv2000_map)
 	MCFG_CPU_IO_MAP(pv2000_io_map)
-	MCFG_CPU_VBLANK_INT("screen", pv2000_interrupt)
 
-	MCFG_MACHINE_START(pv2000)
-	MCFG_MACHINE_RESET(pv2000)
 
-    // video hardware
-	MCFG_FRAGMENT_ADD(tms9928a)
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_REFRESH_RATE((float)XTAL_10_738635MHz/2/342/262)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
+	// video hardware
+	MCFG_TMS9928A_ADD( "tms9928a", TMS9928A, pv2000_tms9928a_interface )
+	MCFG_TMS9928A_SCREEN_ADD_NTSC( "screen" )
+	MCFG_SCREEN_UPDATE_DEVICE( "tms9928a", tms9928a_device, screen_update )
 
 	// sound hardware
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("sn76489a", SN76489A, XTAL_7_15909MHz/2)	/* 3.579545 MHz */
+	MCFG_SOUND_ADD("sn76489a", SN76489A, XTAL_7_15909MHz/2) /* 3.579545 MHz */
+	MCFG_SOUND_CONFIG(psg_intf)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	/* cassette */
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, pv2000_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", pv2000_cassette_interface )
 
 	/* cartridge */
 	MCFG_CARTSLOT_ADD("cart")
 	MCFG_CARTSLOT_EXTENSION_LIST("rom,col,bin")
 	MCFG_CARTSLOT_NOT_MANDATORY
-	MCFG_CARTSLOT_LOAD(pv2000_cart)
+	MCFG_CARTSLOT_LOAD(pv2000_state,pv2000_cart)
 	MCFG_CARTSLOT_INTERFACE("pv2000_cart")
 
 	/* Software lists */
@@ -461,4 +466,4 @@ ROM_END
 /* System Drivers */
 
 //    YEAR  NAME     PARENT  COMPAT  MACHINE  INPUT     INIT COMPANY   FULLNAME    FLAGS
-CONS( 1983, pv2000,  0,      0,      pv2000,  pv2000,   0,   "Casio",  "PV-2000",  GAME_NOT_WORKING )
+CONS( 1983, pv2000,  0,      0,      pv2000,  pv2000, driver_device,   0,   "Casio",  "PV-2000",  GAME_NOT_WORKING )

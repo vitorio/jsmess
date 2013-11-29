@@ -32,37 +32,84 @@ should be 312, but 312 = 39*8 so it doesn't look right because a divider by 39 i
 */
 #define CLOCK_DIVIDER (7*6*8)
 
-typedef struct _sp0250_state sp0250_state;
-struct _sp0250_state
+const device_type SP0250 = &device_creator<sp0250_device>;
+
+sp0250_device::sp0250_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, SP0250, "SP0250", tag, owner, clock, "sp0250", __FILE__),
+		device_sound_interface(mconfig, *this),
+		m_amp(0),
+		m_pitch(0),
+		m_repeat(0),
+		m_pcount(0),
+		m_rcount(0),
+		m_playing(0),
+		m_RNG(0),
+		m_stream(NULL),
+		m_voiced(0),
+		m_fifo_pos(0)
 {
-	INT16 amp;
-	UINT8 pitch;
-	UINT8 repeat;
-	int pcount, rcount;
-	int playing;
-	UINT32 RNG;
-	sound_stream * stream;
-	int voiced;
-	UINT8 fifo[15];
-	int fifo_pos;
-
-	device_t *device;
-	void (*drq)(device_t *device, int state);
-
-	struct
+	for (int i = 0; i < 15; i++)
 	{
-		INT16 F, B;
-		INT16 z1, z2;
-	} filter[6];
-};
+		m_fifo[i] = 0;
+	}
 
-INLINE sp0250_state *get_safe_token(device_t *device)
-{
-	assert(device != NULL);
-	assert(device->type() == SP0250);
-	return (sp0250_state *)downcast<legacy_device_base *>(device)->token();
+	for (int i = 0; i < 6; i++)
+	{
+		m_filter[i].F = 0;
+		m_filter[i].B = 0;
+		m_filter[i].z1 = 0;
+		m_filter[i].z2 = 0;
+	}
 }
 
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void sp0250_device::device_config_complete()
+{
+	// inherit a copy of the static data
+	const sp0250_interface *intf = reinterpret_cast<const sp0250_interface *>(static_config());
+	if (intf != NULL)
+		*static_cast<sp0250_interface *>(this) = *intf;
+
+	// or initialize to defaults if none provided
+	else
+	{
+	}
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void sp0250_device::device_start()
+{
+	const sp0250_interface *intf = reinterpret_cast<const sp0250_interface *>(static_config());
+
+	m_RNG = 1;
+	m_drq = ( intf!= NULL) ? m_drq_callback : NULL;
+	if (m_drq != NULL)
+	{
+		m_drq(this, ASSERT_LINE);
+		machine().scheduler().timer_pulse(attotime::from_hz(clock()) * CLOCK_DIVIDER, timer_expired_delegate(FUNC(sp0250_device::timer_tick), this));
+	}
+
+	m_stream = machine().sound().stream_alloc(*this, 0, 1, clock() / CLOCK_DIVIDER, this);
+
+	save_item(NAME(m_amp));
+	save_item(NAME(m_pitch));
+	save_item(NAME(m_repeat));
+	save_item(NAME(m_pcount));
+	save_item(NAME(m_rcount));
+	save_item(NAME(m_playing));
+	save_item(NAME(m_RNG));
+	save_item(NAME(m_voiced));
+	save_item(NAME(m_fifo));
+	save_item(NAME(m_fifo_pos));
+}
 
 static UINT16 sp0250_ga(UINT8 v)
 {
@@ -74,7 +121,7 @@ static INT16 sp0250_gc(UINT8 v)
 	// Internal ROM to the chip, cf. manual
 	static const UINT16 coefs[128] =
 	{
-		  0,   9,  17,  25,  33,  41,  49,  57,  65,  73,  81,  89,  97, 105, 113, 121,
+			0,   9,  17,  25,  33,  41,  49,  57,  65,  73,  81,  89,  97, 105, 113, 121,
 		129, 137, 145, 153, 161, 169, 177, 185, 193, 201, 203, 217, 225, 233, 241, 249,
 		257, 265, 273, 281, 289, 297, 301, 305, 309, 313, 317, 321, 325, 329, 333, 337,
 		341, 345, 349, 353, 357, 361, 365, 369, 373, 377, 381, 385, 389, 393, 397, 401,
@@ -90,85 +137,107 @@ static INT16 sp0250_gc(UINT8 v)
 	return res;
 }
 
-static void sp0250_load_values(sp0250_state *sp)
+void sp0250_device::load_values()
 {
 	int f;
 
 
-	sp->filter[0].B = sp0250_gc(sp->fifo[ 0]);
-	sp->filter[0].F = sp0250_gc(sp->fifo[ 1]);
-	sp->amp         = sp0250_ga(sp->fifo[ 2]);
-	sp->filter[1].B = sp0250_gc(sp->fifo[ 3]);
-	sp->filter[1].F = sp0250_gc(sp->fifo[ 4]);
-	sp->pitch       =           sp->fifo[ 5];
-	sp->filter[2].B = sp0250_gc(sp->fifo[ 6]);
-	sp->filter[2].F = sp0250_gc(sp->fifo[ 7]);
-	sp->repeat      =           sp->fifo[ 8] & 0x3f;
-	sp->voiced      =           sp->fifo[ 8] & 0x40;
-	sp->filter[3].B = sp0250_gc(sp->fifo[ 9]);
-	sp->filter[3].F = sp0250_gc(sp->fifo[10]);
-	sp->filter[4].B = sp0250_gc(sp->fifo[11]);
-	sp->filter[4].F = sp0250_gc(sp->fifo[12]);
-	sp->filter[5].B = sp0250_gc(sp->fifo[13]);
-	sp->filter[5].F = sp0250_gc(sp->fifo[14]);
-	sp->fifo_pos = 0;
-	if (sp->drq != NULL)
-		sp->drq(sp->device, ASSERT_LINE);
+	m_filter[0].B = sp0250_gc(m_fifo[ 0]);
+	m_filter[0].F = sp0250_gc(m_fifo[ 1]);
+	m_amp         = sp0250_ga(m_fifo[ 2]);
+	m_filter[1].B = sp0250_gc(m_fifo[ 3]);
+	m_filter[1].F = sp0250_gc(m_fifo[ 4]);
+	m_pitch       =           m_fifo[ 5];
+	m_filter[2].B = sp0250_gc(m_fifo[ 6]);
+	m_filter[2].F = sp0250_gc(m_fifo[ 7]);
+	m_repeat      =           m_fifo[ 8] & 0x3f;
+	m_voiced      =           m_fifo[ 8] & 0x40;
+	m_filter[3].B = sp0250_gc(m_fifo[ 9]);
+	m_filter[3].F = sp0250_gc(m_fifo[10]);
+	m_filter[4].B = sp0250_gc(m_fifo[11]);
+	m_filter[4].F = sp0250_gc(m_fifo[12]);
+	m_filter[5].B = sp0250_gc(m_fifo[13]);
+	m_filter[5].F = sp0250_gc(m_fifo[14]);
+	m_fifo_pos = 0;
+	if (m_drq != NULL)
+		m_drq(this, ASSERT_LINE);
 
-	sp->pcount = 0;
-	sp->rcount = 0;
+	m_pcount = 0;
+	m_rcount = 0;
 
 	for (f = 0; f < 6; f++)
-		sp->filter[f].z1 = sp->filter[f].z2 = 0;
+		m_filter[f].z1 = m_filter[f].z2 = 0;
 
-	sp->playing = 1;
+	m_playing = 1;
 }
 
-static TIMER_CALLBACK( sp0250_timer_tick )
+TIMER_CALLBACK_MEMBER( sp0250_device::timer_tick )
 {
-	sp0250_state *sp = (sp0250_state *)ptr;
-	sp->stream->update();
+	m_stream->update();
 }
 
-static STREAM_UPDATE( sp0250_update )
+WRITE8_MEMBER( sp0250_device::write )
 {
-	sp0250_state *sp = (sp0250_state *)param;
+	m_stream->update();
+	if (m_fifo_pos != 15)
+	{
+		m_fifo[m_fifo_pos++] = data;
+		if (m_fifo_pos == 15 && m_drq != NULL)
+			m_drq(this, CLEAR_LINE);
+	}
+	else
+		logerror("%s: overflow SP0250 FIFO\n", machine().describe_context());
+}
+
+
+UINT8 sp0250_device::drq_r()
+{
+	m_stream->update();
+	return (m_fifo_pos == 15) ? CLEAR_LINE : ASSERT_LINE;
+}
+
+//-------------------------------------------------
+//  sound_stream_update - handle a stream update
+//-------------------------------------------------
+
+void sp0250_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
+{
 	stream_sample_t *output = outputs[0];
 	int i;
 	for (i = 0; i < samples; i++)
 	{
-		if (sp->playing)
+		if (m_playing)
 		{
 			INT16 z0;
 			int f;
 
-			if (sp->voiced)
+			if (m_voiced)
 			{
-				if(!sp->pcount)
-					z0 = sp->amp;
+				if(!m_pcount)
+					z0 = m_amp;
 				else
 					z0 = 0;
 			}
 			else
 			{
 				// Borrowing the ay noise generation LFSR
-				if(sp->RNG & 1)
+				if(m_RNG & 1)
 				{
-					z0 = sp->amp;
-					sp->RNG ^= 0x24000;
+					z0 = m_amp;
+					m_RNG ^= 0x24000;
 				}
 				else
-					z0 = -sp->amp;
+					z0 = -m_amp;
 
-				sp->RNG >>= 1;
+				m_RNG >>= 1;
 			}
 
 			for (f = 0; f < 6; f++)
 			{
-				z0 += ((sp->filter[f].z1 * sp->filter[f].F) >> 8)
-					+ ((sp->filter[f].z2 * sp->filter[f].B) >> 9);
-				sp->filter[f].z2 = sp->filter[f].z1;
-				sp->filter[f].z1 = z0;
+				z0 += ((m_filter[f].z1 * m_filter[f].F) >> 8)
+					+ ((m_filter[f].z2 * m_filter[f].B) >> 9);
+				m_filter[f].z2 = m_filter[f].z1;
+				m_filter[f].z1 = z0;
 			}
 
 			// Physical resolution is only 7 bits, but heh
@@ -176,94 +245,22 @@ static STREAM_UPDATE( sp0250_update )
 			// max amplitude is 0x0f80 so we have margin to push up the output
 			output[i] = z0 << 3;
 
-			sp->pcount++;
-			if (sp->pcount >= sp->pitch)
+			m_pcount++;
+			if (m_pcount >= m_pitch)
 			{
-				sp->pcount = 0;
-				sp->rcount++;
-				if (sp->rcount >= sp->repeat)
-					sp->playing = 0;
+				m_pcount = 0;
+				m_rcount++;
+				if (m_rcount >= m_repeat)
+					m_playing = 0;
 			}
 		}
 		else
 			output[i] = 0;
 
-		if (!sp->playing)
+		if (!m_playing)
 		{
-			if(sp->fifo_pos == 15)
-				sp0250_load_values(sp);
+			if(m_fifo_pos == 15)
+				load_values();
 		}
 	}
 }
-
-
-static DEVICE_START( sp0250 )
-{
-	const struct sp0250_interface *intf = (const struct sp0250_interface *)device->static_config();
-	sp0250_state *sp = get_safe_token(device);
-
-	sp->device = device;
-	sp->RNG = 1;
-	sp->drq = (intf != NULL) ? intf->drq_callback : NULL;
-	if (sp->drq != NULL)
-	{
-		sp->drq(sp->device, ASSERT_LINE);
-		device->machine().scheduler().timer_pulse(attotime::from_hz(device->clock()) * CLOCK_DIVIDER, FUNC(sp0250_timer_tick), 0, sp);
-	}
-
-	sp->stream = device->machine().sound().stream_alloc(*device, 0, 1, device->clock() / CLOCK_DIVIDER, sp, sp0250_update);
-}
-
-
-WRITE8_DEVICE_HANDLER( sp0250_w )
-{
-	sp0250_state *sp = get_safe_token(device);
-	sp->stream->update();
-	if (sp->fifo_pos != 15)
-	{
-		sp->fifo[sp->fifo_pos++] = data;
-		if (sp->fifo_pos == 15 && sp->drq != NULL)
-			sp->drq(sp->device, CLEAR_LINE);
-	}
-	else
-		logerror("%s: overflow SP0250 FIFO\n", device->machine().describe_context());
-}
-
-
-UINT8 sp0250_drq_r(device_t *device)
-{
-	sp0250_state *sp = get_safe_token(device);
-	sp->stream->update();
-	return (sp->fifo_pos == 15) ? CLEAR_LINE : ASSERT_LINE;
-}
-
-
-
-/**************************************************************************
- * Generic get_info
- **************************************************************************/
-
-DEVICE_GET_INFO( sp0250 )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(sp0250_state); 				break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME( sp0250 );			break;
-		case DEVINFO_FCT_STOP:							/* Nothing */									break;
-		case DEVINFO_FCT_RESET:							/* Nothing */									break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "SP0250");						break;
-		case DEVINFO_STR_FAMILY:					strcpy(info->s, "GI speech");					break;
-		case DEVINFO_STR_VERSION:					strcpy(info->s, "1.1");							break;
-		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);						break;
-		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
-	}
-}
-
-
-
-DEFINE_LEGACY_SOUND_DEVICE(SP0250, sp0250);

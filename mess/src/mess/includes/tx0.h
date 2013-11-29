@@ -7,6 +7,8 @@
 #ifndef TX0_H_
 #define TX0_H_
 
+#include "video/crt.h"
+
 enum state_t
 {
 	MTS_UNSELECTED,
@@ -55,43 +57,43 @@ enum irg_pos_t
 
 
 /* tape reader registers */
-typedef struct tape_reader_t
+struct tape_reader_t
 {
-	device_image_interface *fd;	/* file descriptor of tape image */
+	device_image_interface *fd; /* file descriptor of tape image */
 
-	int motor_on;	/* 1-bit reader motor on */
+	int motor_on;   /* 1-bit reader motor on */
 
-	int rcl;		/* 1-bit reader clutch */
-	int rc;			/* 2-bit reader counter */
+	int rcl;        /* 1-bit reader clutch */
+	int rc;         /* 2-bit reader counter */
 
-	emu_timer *timer;	/* timer to simulate reader timing */
-} tape_reader_t;
+	emu_timer *timer;   /* timer to simulate reader timing */
+};
 
 
 
 /* tape puncher registers */
-typedef struct tape_puncher_t
+struct tape_puncher_t
 {
-	device_image_interface *fd;	/* file descriptor of tape image */
+	device_image_interface *fd; /* file descriptor of tape image */
 
-	emu_timer *timer;	/* timer to generate completion pulses */
-} tape_puncher_t;
+	emu_timer *timer;   /* timer to generate completion pulses */
+};
 
 
 
 /* typewriter registers */
-typedef struct typewriter_t
+struct typewriter_t
 {
-	device_image_interface *fd;	/* file descriptor of output image */
+	device_image_interface *fd; /* file descriptor of output image */
 
 	emu_timer *prt_timer;/* timer to generate completion pulses */
-} typewriter_t;
+};
 
 
 /* magnetic tape unit registers */
-typedef struct magtape_t
+struct magtape_t
 {
-	device_image_interface *img;		/* image descriptor */
+	device_image_interface *img;        /* image descriptor */
 
 	state_t state;
 
@@ -116,19 +118,20 @@ typedef struct magtape_t
 	int sel_pending;
 	int cpy_pending;
 
-	irg_pos_t irg_pos;			/* position relative to inter-record gap */
+	irg_pos_t irg_pos;          /* position relative to inter-record gap */
 
 	int long_parity;
 
-	emu_timer *timer;	/* timer to simulate reader timing */
-} magtape_t;
+	emu_timer *timer;   /* timer to simulate reader timing */
+};
 
 
 class tx0_state : public driver_device
 {
 public:
 	tx0_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this, "maincpu") { }
 
 	tape_reader_t m_tape_reader;
 	tape_puncher_t m_tape_puncher;
@@ -140,40 +143,65 @@ public:
 	int m_old_tsr_keys;
 	int m_tsr_index;
 	int m_typewriter_color;
-	bitmap_t *m_panel_bitmap;
-	bitmap_t *m_typewriter_bitmap;
+	bitmap_ind16 m_panel_bitmap;
+	bitmap_ind16 m_typewriter_bitmap;
 	int m_pos;
 	int m_case_shift;
-	device_t *m_crt;
+	crt_device *m_crt;
+	DECLARE_DRIVER_INIT(tx0);
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void video_start();
+	virtual void palette_init();
+	UINT32 screen_update_tx0(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void screen_eof_tx0(screen_device &screen, bool state);
+	INTERRUPT_GEN_MEMBER(tx0_interrupt);
+	TIMER_CALLBACK_MEMBER(reader_callback);
+	TIMER_CALLBACK_MEMBER(puncher_callback);
+	TIMER_CALLBACK_MEMBER(prt_callback);
+	TIMER_CALLBACK_MEMBER(dis_callback);
+	void tx0_machine_stop();
+	required_device<cpu_device> m_maincpu;
+	inline void tx0_plot_pixel(bitmap_ind16 &bitmap, int x, int y, UINT32 color);
+	void tx0_plot(int x, int y);
+	void tx0_draw_led(bitmap_ind16 &bitmap, int x, int y, int state);
+	void tx0_draw_multipleled(bitmap_ind16 &bitmap, int x, int y, int value, int nb_bits);
+	void tx0_draw_switch(bitmap_ind16 &bitmap, int x, int y, int state);
+	void tx0_draw_multipleswitch(bitmap_ind16 &bitmap, int x, int y, int value, int nb_bits);
+	void tx0_draw_char(bitmap_ind16 &bitmap, char character, int x, int y, int color);
+	void tx0_draw_string(bitmap_ind16 &bitmap, const char *buf, int x, int y, int color);
+	void tx0_draw_vline(bitmap_ind16 &bitmap, int x, int y, int height, int color);
+	void tx0_draw_hline(bitmap_ind16 &bitmap, int x, int y, int width, int color);
+	void tx0_draw_panel_backdrop(bitmap_ind16 &bitmap);
+	void tx0_draw_panel(bitmap_ind16 &bitmap);
+	void tx0_typewriter_linefeed();
+	void tx0_typewriter_drawchar(int character);
+	int tape_read(UINT8 *reply);
+	void tape_write(UINT8 data);
+	void begin_tape_read(int binary);
+	void typewriter_out(UINT8 data);
+	void schedule_select();
+	void schedule_unselect();
+	void tx0_keyboard();
 };
-
-
-/*----------- defined in video/tx0.c -----------*/
-
-VIDEO_START( tx0 );
-SCREEN_EOF( tx0 );
-SCREEN_UPDATE( tx0 );
-
-void tx0_plot(running_machine &machine, int x, int y);
-void tx0_typewriter_drawchar(running_machine &machine, int character);
 
 /* defines for each bit and mask in input port "CSW" */
 enum
 {
 	/* bit numbers */
-	tx0_control_bit		= 0,
+	tx0_control_bit     = 0,
 
-	tx0_stop_c0_bit		= 1,
-	tx0_stop_c1_bit		= 2,
-	tx0_gbl_cm_sel_bit	= 3,
-	tx0_stop_bit		= 4,
-	tx0_restart_bit		= 5,
-	tx0_read_in_bit		= 6,
+	tx0_stop_c0_bit     = 1,
+	tx0_stop_c1_bit     = 2,
+	tx0_gbl_cm_sel_bit  = 3,
+	tx0_stop_bit        = 4,
+	tx0_restart_bit     = 5,
+	tx0_read_in_bit     = 6,
 
-	tx0_toggle_dn_bit	= 12,
-	tx0_toggle_up_bit	= 13,
-	tx0_cm_sel_bit		= 14,
-	tx0_lr_sel_bit		= 15,
+	tx0_toggle_dn_bit   = 12,
+	tx0_toggle_up_bit   = 13,
+	tx0_cm_sel_bit      = 14,
+	tx0_lr_sel_bit      = 15,
 
 	/* masks */
 	tx0_control = (1 << tx0_control_bit),
@@ -194,7 +222,7 @@ enum
 /* defines for our font */
 enum
 {
-	tx0_charnum = /*96*/128,	/* ASCII set + xx special characters */
+	tx0_charnum = /*96*/128,    /* ASCII set + xx special characters */
 									/* for whatever reason, 96 breaks some characters */
 
 	tx0_fontdata_size = 8 * tx0_charnum
@@ -234,7 +262,7 @@ enum
 };
 
 enum
-{	/* refresh rate in Hz: can be changed at will */
+{   /* refresh rate in Hz: can be changed at will */
 	refresh_rate = 60
 };
 
@@ -264,8 +292,8 @@ enum
 
 	/* color constants for typewriter */
 	pen_typewriter_bg = pen_white,
-	color_typewriter_black = 1,		/* palette 1 = black on white */
-	color_typewriter_red = 2,		/* palette 2 = red on white */
+	color_typewriter_black = 1,     /* palette 1 = black on white */
+	color_typewriter_red = 2,       /* palette 2 = red on white */
 
 	/* color constants used for light pen */
 	pen_lightpen_nonpressed = pen_red,

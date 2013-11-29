@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /***************************************************************************
 
     Tiki 100
@@ -12,10 +14,9 @@
 
     TODO:
 
+    - floppy broken
     - palette RAM should be written during HBLANK
-    - double sided disks have t0s0,t0s1,t1s0,t1s1... format
     - DART clocks
-    - daisy chain order?
     - winchester hard disk
     - analog/digital I/O
     - light pen
@@ -43,24 +44,24 @@ WRITE8_MEMBER( tiki100_state::gfxram_w )
 
 void tiki100_state::bankswitch()
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
+	address_space &program = m_maincpu->space(AS_PROGRAM);
 
 	if (m_vire)
 	{
 		if (!m_rome)
 		{
 			/* reserved */
-			program->unmap_readwrite(0x0000, 0xffff);
+			program.unmap_readwrite(0x0000, 0xffff);
 		}
 		else
 		{
 			/* GFXRAM, GFXRAM, RAM */
-			program->install_readwrite_handler(0x0000, 0x7fff, read8_delegate(FUNC(tiki100_state::gfxram_r), this), write8_delegate(FUNC(tiki100_state::gfxram_w), this));
-			program->install_readwrite_bank(0x8000, 0xffff, "bank3");
+			program.install_readwrite_handler(0x0000, 0x7fff, READ8_DELEGATE(tiki100_state, gfxram_r), WRITE8_DELEGATE(tiki100_state, gfxram_w));
+			program.install_readwrite_bank(0x8000, 0xffff, "bank3");
 
-			memory_set_bank(machine(), "bank1", BANK_VIDEO_RAM);
-			memory_set_bank(machine(), "bank2", BANK_VIDEO_RAM);
-			memory_set_bank(machine(), "bank3", BANK_RAM);
+			membank("bank1")->set_entry(BANK_VIDEO_RAM);
+			membank("bank2")->set_entry(BANK_VIDEO_RAM);
+			membank("bank3")->set_entry(BANK_RAM);
 		}
 	}
 	else
@@ -68,25 +69,25 @@ void tiki100_state::bankswitch()
 		if (!m_rome)
 		{
 			/* ROM, RAM, RAM */
-			program->install_read_bank(0x0000, 0x3fff, "bank1");
-			program->unmap_write(0x0000, 0x3fff);
-			program->install_readwrite_bank(0x4000, 0x7fff, "bank2");
-			program->install_readwrite_bank(0x8000, 0xffff, "bank3");
+			program.install_read_bank(0x0000, 0x3fff, "bank1");
+			program.unmap_write(0x0000, 0x3fff);
+			program.install_readwrite_bank(0x4000, 0x7fff, "bank2");
+			program.install_readwrite_bank(0x8000, 0xffff, "bank3");
 
-			memory_set_bank(machine(), "bank1", BANK_ROM);
-			memory_set_bank(machine(), "bank2", BANK_RAM);
-			memory_set_bank(machine(), "bank3", BANK_RAM);
+			membank("bank1")->set_entry(BANK_ROM);
+			membank("bank2")->set_entry(BANK_RAM);
+			membank("bank3")->set_entry(BANK_RAM);
 		}
 		else
 		{
 			/* RAM, RAM, RAM */
-			program->install_readwrite_bank(0x0000, 0x3fff, "bank1");
-			program->install_readwrite_bank(0x4000, 0x7fff, "bank2");
-			program->install_readwrite_bank(0x8000, 0xffff, "bank3");
+			program.install_readwrite_bank(0x0000, 0x3fff, "bank1");
+			program.install_readwrite_bank(0x4000, 0x7fff, "bank2");
+			program.install_readwrite_bank(0x8000, 0xffff, "bank3");
 
-			memory_set_bank(machine(), "bank1", BANK_RAM);
-			memory_set_bank(machine(), "bank2", BANK_RAM);
-			memory_set_bank(machine(), "bank3", BANK_RAM);
+			membank("bank1")->set_entry(BANK_RAM);
+			membank("bank2")->set_entry(BANK_RAM);
+			membank("bank3")->set_entry(BANK_RAM);
 		}
 	}
 }
@@ -95,8 +96,7 @@ void tiki100_state::bankswitch()
 
 READ8_MEMBER( tiki100_state::keyboard_r )
 {
-	static const char *const keynames[] = { "ROW1", "ROW2", "ROW3", "ROW4", "ROW5", "ROW6", "ROW7", "ROW8", "ROW9", "ROW10", "ROW11", "ROW12" };
-	UINT8 data = input_port_read(machine(), keynames[m_keylatch]);
+	UINT8 data = m_key_row[m_keylatch]->read();
 
 	m_keylatch++;
 
@@ -114,18 +114,18 @@ WRITE8_MEMBER( tiki100_state::video_mode_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       palette entry bit 0
-        1       palette entry bit 1
-        2       palette entry bit 2
-        3       palette entry bit 3
-        4       mode select bit 0
-        5       mode select bit 1
-        6       unused
-        7       write color during HBLANK
+	    0       palette entry bit 0
+	    1       palette entry bit 1
+	    2       palette entry bit 2
+	    3       palette entry bit 3
+	    4       mode select bit 0
+	    5       mode select bit 1
+	    6       unused
+	    7       write color during HBLANK
 
-    */
+	*/
 
 	m_mode = data;
 
@@ -142,18 +142,18 @@ WRITE8_MEMBER( tiki100_state::palette_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       blue intensity bit 0
-        1       blue intensity bit 1
-        2       green intensity bit 0
-        3       green intensity bit 1
-        4       green intensity bit 2
-        5       red intensity bit 0
-        6       red intensity bit 1
-        7       red intensity bit 2
+	    0       blue intensity bit 0
+	    1       blue intensity bit 1
+	    2       green intensity bit 0
+	    3       green intensity bit 1
+	    4       green intensity bit 2
+	    5       red intensity bit 0
+	    6       red intensity bit 1
+	    7       red intensity bit 2
 
-    */
+	*/
 
 	m_palette = data;
 }
@@ -162,31 +162,32 @@ WRITE8_MEMBER( tiki100_state::system_w )
 {
 	/*
 
-        bit     signal  description
+	    bit     signal  description
 
-        0       DRIS0   drive select 0
-        1       DRIS1   drive select 1
-        2       _ROME   enable ROM at 0000-3fff
-        3       VIRE    enable video RAM at 0000-7fff
-        4       SDEN    single density select (0=DD, 1=SD)
-        5       _LMP0   GRAFIKK key led
-        6       MOTON   floppy motor
-        7       _LMP1   LOCK key led
+	    0       DRIS0   drive select 0
+	    1       DRIS1   drive select 1
+	    2       _ROME   enable ROM at 0000-3fff
+	    3       VIRE    enable video RAM at 0000-7fff
+	    4       SDEN    single density select (0=DD, 1=SD)
+	    5       _LMP0   GRAFIKK key led
+	    6       MOTON   floppy motor
+	    7       _LMP1   LOCK key led
 
-    */
+	*/
 
-	/* drive select */
-	if (BIT(data, 0)) wd17xx_set_drive(m_fdc, 0);
-	if (BIT(data, 1)) wd17xx_set_drive(m_fdc, 1);
+	// drive select
+	floppy_image_device *floppy = NULL;
 
-	/* density select */
-	wd17xx_dden_w(m_fdc, BIT(data, 4));
+	if (BIT(data, 0)) floppy = m_floppy0->get_device();
+	if (BIT(data, 1)) floppy = m_floppy1->get_device();
 
-	/* floppy motor */
-	floppy_mon_w(m_floppy0, !BIT(data, 6));
-	floppy_mon_w(m_floppy1, !BIT(data, 6));
-	floppy_drive_set_ready_state(m_floppy0, BIT(data, 6), 1);
-	floppy_drive_set_ready_state(m_floppy1, BIT(data, 6), 1);
+	m_fdc->set_floppy(floppy);
+
+	// density select
+	m_fdc->dden_w(BIT(data, 4));
+
+	// floppy motor
+	if (floppy) floppy->mon_w(!BIT(data, 6));
 
 	/* GRAFIKK key led */
 	set_led_status(machine(), 1, BIT(data, 5));
@@ -214,16 +215,16 @@ static ADDRESS_MAP_START( tiki100_io, AS_IO, 8, tiki100_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_MIRROR(0x03) AM_READWRITE(keyboard_r, keyboard_w)
-	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE_LEGACY(Z80DART_TAG, z80dart_cd_ba_r, z80dart_cd_ba_w)
-	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE_LEGACY(Z80PIO_TAG, z80pio_cd_ba_r, z80pio_cd_ba_w)
+	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE(Z80DART_TAG, z80dart_device, cd_ba_r, cd_ba_w)
+	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE(Z80PIO_TAG, z80pio_device, read, write)
 	AM_RANGE(0x0c, 0x0c) AM_MIRROR(0x03) AM_WRITE(video_mode_w)
-	AM_RANGE(0x10, 0x13) AM_DEVREADWRITE_LEGACY(FD1797_TAG, wd17xx_r, wd17xx_w)
+	AM_RANGE(0x10, 0x13) AM_DEVREADWRITE(FD1797_TAG, fd1797_t, read, write)
 	AM_RANGE(0x14, 0x14) AM_MIRROR(0x01) AM_WRITE(palette_w)
-	AM_RANGE(0x16, 0x16) AM_DEVWRITE_LEGACY(AY8912_TAG, ay8910_address_w)
-	AM_RANGE(0x17, 0x17) AM_DEVREADWRITE_LEGACY(AY8912_TAG, ay8910_r, ay8910_data_w)
-	AM_RANGE(0x18, 0x1b) AM_DEVREADWRITE_LEGACY(Z80CTC_TAG, z80ctc_r, z80ctc_w)
+	AM_RANGE(0x16, 0x16) AM_DEVWRITE(AY8912_TAG, ay8910_device, address_w)
+	AM_RANGE(0x17, 0x17) AM_DEVREADWRITE(AY8912_TAG, ay8910_device, data_r, data_w)
+	AM_RANGE(0x18, 0x1b) AM_DEVREADWRITE(Z80CTC_TAG, z80ctc_device, read, write)
 	AM_RANGE(0x1c, 0x1c) AM_MIRROR(0x03) AM_WRITE(system_w)
-//  AM_RANGE(0x20, 0x27) winchester controller
+	AM_RANGE(0x20, 0x27) AM_NOP // winchester controller
 //  AM_RANGE(0x60, 0x6f) analog I/O (SINTEF)
 //  AM_RANGE(0x60, 0x67) digital I/O (RVO)
 //  AM_RANGE(0x70, 0x77) analog/digital I/O
@@ -251,7 +252,7 @@ static INPUT_PORTS_START( tiki100 )
      12 | HJEM    | H?YRE   | 2 (num) | 3 (num) | ENTER   |         |         |         |
     ----+---------+---------+---------+---------+---------+---------+---------+---------+
 */
-	PORT_START("ROW1")
+	PORT_START("Y1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("CTRL") PORT_CODE(KEYCODE_LCONTROL) PORT_CHAR(UCHAR_MAMEKEY(LCONTROL))
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("SHIFT") PORT_CODE(KEYCODE_LSHIFT) PORT_CODE(KEYCODE_RSHIFT) PORT_CHAR(UCHAR_SHIFT_1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("BRYTT") PORT_CODE(KEYCODE_ESC)
@@ -261,7 +262,7 @@ static INPUT_PORTS_START( tiki100 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("SLETT") PORT_CODE(KEYCODE_BACKSPACE) PORT_CHAR(8)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("ROW2")
+	PORT_START("Y2")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("GRAFIKK") PORT_CODE(KEYCODE_LALT) PORT_CHAR(UCHAR_MAMEKEY(LALT))
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_1) PORT_CHAR('1') PORT_CHAR('!')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("ANGRE") PORT_CODE(KEYCODE_DEL) PORT_CHAR(UCHAR_MAMEKEY(DEL))
@@ -271,7 +272,7 @@ static INPUT_PORTS_START( tiki100 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Q) PORT_CHAR('q') PORT_CHAR('Q')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LOCK") PORT_CODE(KEYCODE_CAPSLOCK) PORT_CHAR(UCHAR_MAMEKEY(CAPSLOCK))
 
-	PORT_START("ROW3")
+	PORT_START("Y3")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_2) PORT_CHAR('2') PORT_CHAR('"')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_W) PORT_CHAR('w') PORT_CHAR('W')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_S) PORT_CHAR('s') PORT_CHAR('S')
@@ -281,7 +282,7 @@ static INPUT_PORTS_START( tiki100 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_D) PORT_CHAR('d') PORT_CHAR('D')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_C) PORT_CHAR('c') PORT_CHAR('C')
 
-	PORT_START("ROW4")
+	PORT_START("Y4")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_4) PORT_CHAR('4') PORT_CHAR('$')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_R) PORT_CHAR('r') PORT_CHAR('R')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F) PORT_CHAR('f') PORT_CHAR('F')
@@ -291,7 +292,7 @@ static INPUT_PORTS_START( tiki100 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_G) PORT_CHAR('g') PORT_CHAR('G')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_B) PORT_CHAR('b') PORT_CHAR('B')
 
-	PORT_START("ROW5")
+	PORT_START("Y5")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_6) PORT_CHAR('6') PORT_CHAR('&')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Y) PORT_CHAR('y') PORT_CHAR('Y')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_H) PORT_CHAR('h') PORT_CHAR('H')
@@ -301,7 +302,7 @@ static INPUT_PORTS_START( tiki100 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_J) PORT_CHAR('j') PORT_CHAR('J')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_M) PORT_CHAR('m') PORT_CHAR('M')
 
-	PORT_START("ROW6")
+	PORT_START("Y6")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_8) PORT_CHAR('8') PORT_CHAR('(')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_I) PORT_CHAR('i') PORT_CHAR('I')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_K) PORT_CHAR('k') PORT_CHAR('K')
@@ -311,7 +312,7 @@ static INPUT_PORTS_START( tiki100 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_L) PORT_CHAR('l') PORT_CHAR('L')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_STOP) PORT_CHAR('.') PORT_CHAR(':')
 
-	PORT_START("ROW7")
+	PORT_START("Y7")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_0) PORT_CHAR('0') PORT_CHAR('=')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_P) PORT_CHAR('p') PORT_CHAR('P')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("\xC3\xB8 \xC3\x98") PORT_CODE(KEYCODE_COLON) PORT_CHAR(0x00f8) PORT_CHAR(0x00d8)
@@ -321,7 +322,7 @@ static INPUT_PORTS_START( tiki100 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("\xC3\xA6 \xC3\x86") PORT_CODE(KEYCODE_QUOTE) PORT_CHAR(0x00e6) PORT_CHAR(0x00c6)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("HJELP")
 
-	PORT_START("ROW8")
+	PORT_START("Y8")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_EQUALS) PORT_CHAR('@') PORT_CHAR('`')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_CLOSEBRACE) PORT_CHAR('^') PORT_CHAR('|')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_BACKSLASH) PORT_CHAR('\'') PORT_CHAR('*')
@@ -331,7 +332,7 @@ static INPUT_PORTS_START( tiki100 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("F4") PORT_CODE(KEYCODE_F4) PORT_CHAR(UCHAR_MAMEKEY(F4))
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("SIDEOPP") PORT_CODE(KEYCODE_PGUP) PORT_CHAR(UCHAR_MAMEKEY(PGUP))
 
-	PORT_START("ROW9")
+	PORT_START("Y9")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("F2") PORT_CODE(KEYCODE_F2) PORT_CHAR(UCHAR_MAMEKEY(F2))
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("F3") PORT_CODE(KEYCODE_F3) PORT_CHAR(UCHAR_MAMEKEY(F3))
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("F5") PORT_CODE(KEYCODE_F5) PORT_CHAR(UCHAR_MAMEKEY(F5))
@@ -341,7 +342,7 @@ static INPUT_PORTS_START( tiki100 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("VTAB")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME(UTF8_DOWN) PORT_CODE(KEYCODE_DOWN) PORT_CHAR(UCHAR_MAMEKEY(DOWN))
 
-	PORT_START("ROW10")
+	PORT_START("Y10")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad +") PORT_CODE(KEYCODE_PLUS_PAD)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad -") PORT_CODE(KEYCODE_MINUS_PAD)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad *") PORT_CODE(KEYCODE_ASTERISK)
@@ -351,7 +352,7 @@ static INPUT_PORTS_START( tiki100 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad %")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad =")
 
-	PORT_START("ROW11")
+	PORT_START("Y11")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 4") PORT_CODE(KEYCODE_4_PAD)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 5") PORT_CODE(KEYCODE_5_PAD)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 6") PORT_CODE(KEYCODE_6_PAD)
@@ -361,7 +362,7 @@ static INPUT_PORTS_START( tiki100 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad .") PORT_CODE(KEYCODE_DEL_PAD)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("ROW12")
+	PORT_START("Y12")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("HJEM") PORT_CODE(KEYCODE_HOME) PORT_CHAR(UCHAR_MAMEKEY(HOME))
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME(UTF8_RIGHT) PORT_CODE(KEYCODE_RIGHT) PORT_CHAR(UCHAR_MAMEKEY(RIGHT))
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("Keypad 2") PORT_CODE(KEYCODE_2_PAD)
@@ -374,8 +375,9 @@ INPUT_PORTS_END
 
 /* Video */
 
-bool tiki100_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
+UINT32 tiki100_state::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
 	UINT16 addr = (m_scroll << 7);
 	int sx, y, pixel, mode = (m_mode >> 4) & 0x03;
 
@@ -392,7 +394,7 @@ bool tiki100_state::screen_update(screen_device &screen, bitmap_t &bitmap, const
 				{
 					int x = (sx * 8) + pixel;
 
-					*BITMAP_ADDR16(&bitmap, y, x) = 0;
+					bitmap.pix32(y, x) = palette[0];
 				}
 				break;
 
@@ -402,7 +404,7 @@ bool tiki100_state::screen_update(screen_device &screen, bitmap_t &bitmap, const
 					int x = (sx * 8) + pixel;
 					int color = BIT(data, 0);
 
-					*BITMAP_ADDR16(&bitmap, y, x) = color;
+					bitmap.pix32(y, x) = palette[color];
 
 					data >>= 1;
 				}
@@ -414,8 +416,8 @@ bool tiki100_state::screen_update(screen_device &screen, bitmap_t &bitmap, const
 					int x = (sx * 8) + (pixel * 2);
 					int color = data & 0x03;
 
-					*BITMAP_ADDR16(&bitmap, y, x) = color;
-					*BITMAP_ADDR16(&bitmap, y, x + 1) = color;
+					bitmap.pix32(y, x) = palette[color];
+					bitmap.pix32(y, x + 1) = palette[color];
 
 					data >>= 2;
 				}
@@ -427,10 +429,10 @@ bool tiki100_state::screen_update(screen_device &screen, bitmap_t &bitmap, const
 					int x = (sx * 8) + (pixel * 4);
 					int color = data & 0x0f;
 
-					*BITMAP_ADDR16(&bitmap, y, x) = color;
-					*BITMAP_ADDR16(&bitmap, y, x + 1) = color;
-					*BITMAP_ADDR16(&bitmap, y, x + 2) = color;
-					*BITMAP_ADDR16(&bitmap, y, x + 3) = color;
+					bitmap.pix32(y, x) = palette[color];
+					bitmap.pix32(y, x + 1) = palette[color];
+					bitmap.pix32(y, x + 2) = palette[color];
+					bitmap.pix32(y, x + 3) = palette[color];
 
 					data >>= 4;
 				}
@@ -471,26 +473,24 @@ static Z80DART_INTERFACE( dart_intf )
 
 static Z80PIO_INTERFACE( pio_intf )
 {
-	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0),	/* callback when change interrupt status */
-	DEVCB_NULL,						/* port A read callback */
-	DEVCB_NULL,						/* port A write callback */
-	DEVCB_NULL,						/* portA ready active callback */
-	DEVCB_NULL,						/* port B read callback */
-	DEVCB_NULL,						/* port B write callback */
-	DEVCB_NULL						/* portB ready active callback */
+	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0), /* callback when change interrupt status */
+	DEVCB_NULL,                     /* port A read callback */
+	DEVCB_NULL,                     /* port A write callback */
+	DEVCB_NULL,                     /* portA ready active callback */
+	DEVCB_NULL,                     /* port B read callback */
+	DEVCB_NULL,                     /* port B write callback */
+	DEVCB_NULL                      /* portB ready active callback */
 };
 
 /* Z80-CTC Interface */
 
-static TIMER_DEVICE_CALLBACK( ctc_tick )
+TIMER_DEVICE_CALLBACK_MEMBER(tiki100_state::ctc_tick)
 {
-	tiki100_state *state = timer.machine().driver_data<tiki100_state>();
+	m_ctc->trg0(1);
+	m_ctc->trg0(0);
 
-	z80ctc_trg0_w(state->m_ctc, 1);
-	z80ctc_trg0_w(state->m_ctc, 0);
-
-	z80ctc_trg1_w(state->m_ctc, 1);
-	z80ctc_trg1_w(state->m_ctc, 0);
+	m_ctc->trg1(1);
+	m_ctc->trg1(0);
 }
 
 WRITE_LINE_MEMBER( tiki100_state::ctc_z1_w )
@@ -499,22 +499,22 @@ WRITE_LINE_MEMBER( tiki100_state::ctc_z1_w )
 
 static Z80CTC_INTERFACE( ctc_intf )
 {
-	0,              			/* timer disables */
-	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0),	/* interrupt handler */
-	DEVCB_LINE(z80ctc_trg2_w),	/* ZC/TO0 callback */
-	DEVCB_DRIVER_LINE_MEMBER(tiki100_state, ctc_z1_w),		/* ZC/TO1 callback */
-	DEVCB_LINE(z80ctc_trg3_w)	/* ZC/TO2 callback */
+	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0), /* interrupt handler */
+	DEVCB_DEVICE_LINE_MEMBER(DEVICE_SELF, z80ctc_device, trg2), /* ZC/TO0 callback */
+	DEVCB_DRIVER_LINE_MEMBER(tiki100_state, ctc_z1_w),      /* ZC/TO1 callback */
+	DEVCB_DEVICE_LINE_MEMBER(DEVICE_SELF, z80ctc_device, trg3)  /* ZC/TO2 callback */
 };
 
 /* FD1797 Interface */
 
-static const wd17xx_interface fdc_intf =
-{
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	{ FLOPPY_0, FLOPPY_1, NULL, NULL }
-};
+FLOPPY_FORMATS_MEMBER( tiki100_state::floppy_formats )
+	FLOPPY_TIKI100_FORMAT
+FLOPPY_FORMATS_END
+
+static SLOT_INTERFACE_START( tiki100_floppies )
+	SLOT_INTERFACE( "525dd", FLOPPY_525_DD ) // Tead FD-55A
+	SLOT_INTERFACE( "525qd", FLOPPY_525_QD ) // Teac FD-55F
+SLOT_INTERFACE_END
 
 /* AY-3-8912 Interface */
 
@@ -525,7 +525,7 @@ WRITE8_MEMBER( tiki100_state::video_scroll_w )
 
 static const ay8910_interface ay8910_intf =
 {
-	AY8910_LEGACY_OUTPUT,
+	AY8910_SINGLE_OUTPUT,
 	AY8910_DEFAULT_LOADS,
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -538,8 +538,8 @@ static const ay8910_interface ay8910_intf =
 static const z80_daisy_config tiki100_daisy_chain[] =
 {
 	{ Z80CTC_TAG },
-	{ Z80PIO_TAG },
 	{ Z80DART_TAG },
+	{ Z80PIO_TAG },
 	{ NULL }
 };
 
@@ -548,108 +548,86 @@ static const z80_daisy_config tiki100_daisy_chain[] =
 void tiki100_state::machine_start()
 {
 	/* allocate video RAM */
-	m_video_ram = auto_alloc_array(machine(), UINT8, TIKI100_VIDEORAM_SIZE);
+	m_video_ram.allocate(TIKI100_VIDEORAM_SIZE);
 
 	/* setup memory banking */
-	UINT8 *ram = ram_get_ptr(m_ram);
+	UINT8 *ram = m_ram->pointer();
 
-	memory_configure_bank(machine(), "bank1", BANK_ROM, 1, machine().region(Z80_TAG)->base(), 0);
-	memory_configure_bank(machine(), "bank1", BANK_RAM, 1, ram, 0);
-	memory_configure_bank(machine(), "bank1", BANK_VIDEO_RAM, 1, m_video_ram, 0);
+	membank("bank1")->configure_entry(BANK_ROM, m_rom->base());
+	membank("bank1")->configure_entry(BANK_RAM, ram);
+	membank("bank1")->configure_entry(BANK_VIDEO_RAM, m_video_ram);
 
-	memory_configure_bank(machine(), "bank2", BANK_RAM, 1, ram + 0x4000, 0);
-	memory_configure_bank(machine(), "bank2", BANK_VIDEO_RAM, 1, m_video_ram + 0x4000, 0);
+	membank("bank2")->configure_entry(BANK_RAM, ram + 0x4000);
+	membank("bank2")->configure_entry(BANK_VIDEO_RAM, m_video_ram + 0x4000);
 
-	memory_configure_bank(machine(), "bank3", BANK_RAM, 1, ram + 0x8000, 0);
+	membank("bank3")->configure_entry(BANK_RAM, ram + 0x8000);
 
 	bankswitch();
+
+	// find keyboard rows
+	m_key_row[0] = m_y1;
+	m_key_row[1] = m_y2;
+	m_key_row[2] = m_y3;
+	m_key_row[3] = m_y4;
+	m_key_row[4] = m_y5;
+	m_key_row[5] = m_y6;
+	m_key_row[6] = m_y7;
+	m_key_row[7] = m_y8;
+	m_key_row[8] = m_y9;
+	m_key_row[9] = m_y10;
+	m_key_row[10] = m_y11;
+	m_key_row[11] = m_y12;
 
 	/* register for state saving */
 	save_item(NAME(m_rome));
 	save_item(NAME(m_vire));
-	save_pointer(NAME(m_video_ram), TIKI100_VIDEORAM_SIZE);
 	save_item(NAME(m_scroll));
 	save_item(NAME(m_mode));
 	save_item(NAME(m_palette));
 	save_item(NAME(m_keylatch));
 }
 
-static FLOPPY_OPTIONS_START(tiki100)
-	FLOPPY_OPTION(tiki100, "dsk", "SSSD disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
-		HEADS([1])
-		TRACKS([40])
-		SECTORS([18])
-		SECTOR_LENGTH([128])
-		FIRST_SECTOR_ID([1]))
-	FLOPPY_OPTION(tiki100, "dsk", "SSDD disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
-		HEADS([1])
-		TRACKS([40])
-		SECTORS([10])
-		SECTOR_LENGTH([512])
-		FIRST_SECTOR_ID([1]))
-	FLOPPY_OPTION(tiki100, "dsk", "DSDD disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
-		HEADS([2])
-		TRACKS([40])
-		SECTORS([10])
-		SECTOR_LENGTH([512])
-		FIRST_SECTOR_ID([1]))
-	FLOPPY_OPTION(tiki100, "dsk", "DSHD disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
-		HEADS([2])
-		TRACKS([80])
-		SECTORS([10])
-		SECTOR_LENGTH([512])
-		FIRST_SECTOR_ID([1]))
-FLOPPY_OPTIONS_END
-
-static const floppy_interface tiki100_floppy_interface =
-{
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	FLOPPY_STANDARD_5_25_DSHD,
-	FLOPPY_OPTIONS_NAME(tiki100),
-	NULL,
-	NULL
-};
-
 /* Machine Driver */
 
 static MACHINE_CONFIG_START( tiki100, tiki100_state )
 	/* basic machine hardware */
-    MCFG_CPU_ADD(Z80_TAG, Z80, 2000000)
-    MCFG_CPU_PROGRAM_MAP(tiki100_mem)
-    MCFG_CPU_IO_MAP(tiki100_io)
+	MCFG_CPU_ADD(Z80_TAG, Z80, XTAL_8MHz/4)
+	MCFG_CPU_PROGRAM_MAP(tiki100_mem)
+	MCFG_CPU_IO_MAP(tiki100_io)
 	MCFG_CPU_CONFIG(tiki100_daisy_chain)
 
-    /* video hardware */
-    MCFG_SCREEN_ADD(SCREEN_TAG, RASTER)
-    MCFG_SCREEN_REFRESH_RATE(50)
-    MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-    MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-    MCFG_SCREEN_SIZE(1024, 256)
-    MCFG_SCREEN_VISIBLE_AREA(0, 1024-1, 0, 256-1)
+	/* video hardware */
+	MCFG_SCREEN_ADD(SCREEN_TAG, RASTER)
+	MCFG_SCREEN_REFRESH_RATE(50)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
+	MCFG_SCREEN_UPDATE_DRIVER(tiki100_state, screen_update)
+	MCFG_SCREEN_SIZE(1024, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 1024-1, 0, 256-1)
 
 	MCFG_PALETTE_LENGTH(16)
+	// pixel clock 20.01782 MHz
 
 	/* devices */
-	MCFG_Z80DART_ADD(Z80DART_TAG, 2000000, dart_intf)
-	MCFG_Z80PIO_ADD(Z80PIO_TAG, 2000000, pio_intf)
-	MCFG_Z80CTC_ADD(Z80CTC_TAG, 2000000, ctc_intf)
-	MCFG_TIMER_ADD_PERIODIC("ctc", ctc_tick, attotime::from_hz(2000000))
-	MCFG_FD1797_ADD(FD1797_TAG, fdc_intf) // FD1767PL-02 or FD1797-PL
-	MCFG_FLOPPY_2_DRIVES_ADD(tiki100_floppy_interface)
+	MCFG_Z80DART_ADD(Z80DART_TAG, XTAL_8MHz/4, dart_intf)
+	MCFG_Z80PIO_ADD(Z80PIO_TAG, XTAL_8MHz/4, pio_intf)
+	MCFG_Z80CTC_ADD(Z80CTC_TAG, XTAL_8MHz/4, ctc_intf)
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("ctc", tiki100_state, ctc_tick, attotime::from_hz(XTAL_8MHz/4))
+	MCFG_FD1797x_ADD(FD1797_TAG, XTAL_8MHz/8) // FD1767PL-02 or FD1797-PL
+	MCFG_FLOPPY_DRIVE_ADD(FD1797_TAG":0", tiki100_floppies, "525dd", tiki100_state::floppy_formats)
+	MCFG_FLOPPY_DRIVE_ADD(FD1797_TAG":1", tiki100_floppies, "525dd", tiki100_state::floppy_formats)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(AY8912_TAG, AY8912, 2000000)
+	MCFG_SOUND_ADD(AY8912_TAG, AY8912, XTAL_8MHz/4)
 	MCFG_SOUND_CONFIG(ay8910_intf)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
 	MCFG_RAM_DEFAULT_SIZE("64K")
+
+	// software list
+	MCFG_SOFTWARE_LIST_ADD("flop_list", "tiki100")
 MACHINE_CONFIG_END
 
 /* ROMs */
@@ -657,6 +635,9 @@ MACHINE_CONFIG_END
 ROM_START( kontiki )
 	ROM_REGION( 0x10000, Z80_TAG, ROMREGION_ERASEFF )
 	ROM_LOAD( "tikirom-1.30.u10",  0x0000, 0x2000, CRC(c482dcaf) SHA1(d140706bb7fc8b1fbb37180d98921f5bdda73cf9) )
+
+	ROM_REGION( 0x100, "proms", 0 )
+	ROM_LOAD( "63ls140.u4", 0x000, 0x100, NO_DUMP )
 ROM_END
 
 ROM_START( tiki100 )
@@ -667,10 +648,13 @@ ROM_START( tiki100 )
 	ROMX_LOAD( "tikirom-1.35.u10",  0x0000, 0x2000, CRC(7dac5ee7) SHA1(14d622fd843833faec346bf5357d7576061f5a3d), ROM_BIOS(1) )
 	ROM_SYSTEM_BIOS( 1, "v203w", "TIKI ROM v2.03 W" )
 	ROMX_LOAD( "tikirom-2.03w.u10", 0x0000, 0x2000, CRC(79662476) SHA1(96336633ecaf1b2190c36c43295ac9f785d1f83a), ROM_BIOS(2) )
+
+	ROM_REGION( 0x100, "proms", 0 )
+	ROM_LOAD( "63ls140.u4", 0x000, 0x100, NO_DUMP )
 ROM_END
 
 /* System Drivers */
 
 /*    YEAR  NAME        PARENT      COMPAT  MACHINE     INPUT       INIT    COMPANY             FULLNAME        FLAGS */
-COMP( 1984, kontiki,	0,			0,		tiki100,	tiki100,	0,		"Kontiki Data A/S",	"KONTIKI 100",	GAME_SUPPORTS_SAVE )
-COMP( 1984, tiki100,	kontiki,	0,		tiki100,	tiki100,	0,		"Tiki Data A/S",	"TIKI 100",		GAME_SUPPORTS_SAVE )
+COMP( 1984, kontiki,    0,          0,      tiki100,    tiki100, driver_device, 0,      "Kontiki Data A/S", "KONTIKI 100",  GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+COMP( 1984, tiki100,    kontiki,    0,      tiki100,    tiki100, driver_device, 0,      "Tiki Data A/S",    "TIKI 100",     GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )

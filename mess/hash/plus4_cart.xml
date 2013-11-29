@@ -1,16 +1,14 @@
 <?xml version="1.0"?>
 <!DOCTYPE softwarelist SYSTEM "softwarelist.dtd">
 <!--
-	Missing dumps:
-	
-	325201-01 	C16/C116/plus4 Burn In
-	325057-01	C16/C116/plus4 DIAGNOSE
-	325062-01	C16/C116/plus4 Diagnostic Test
+    Missing dumps:
+
+    325057-01   C16/C116/plus4 DIAGNOSE
 -->
 <softwarelist name="plus4_cart" description="Commodore Plus/4 cartridges">
-	
+
 	<!-- Games -->
-	
+
 	<software name="atomicmi">
 		<description>Atomic Mission</description>
 		<year>1984</year>
@@ -22,7 +20,7 @@
 			</dataarea>
 		</part>
 	</software>
-	
+
 	<software name="jackattk">
 		<description>Jack Attack</description>
 		<year>1984</year>
@@ -40,7 +38,7 @@
 		|=|                                 |
 		|=|                                 |
 		|===================================|
-		
+
 		ROM     - MOS 23128 "317040-01 (C) 1984 CBM 26011D-722"
 		-->
 		<part name="cart" interface="plus4_cart">
@@ -49,7 +47,7 @@
 			</dataarea>
 		</part>
 	</software>
-	
+
 	<software name="piratead">
 		<description>Pirate Adventure</description>
 		<year>1984</year>
@@ -61,7 +59,7 @@
 			</dataarea>
 		</part>
 	</software>
-	
+
 	<software name="strngeod">
 		<description>Strange Odyssey</description>
 		<year>1984</year>
@@ -79,7 +77,7 @@
 		|=|                                 |
 		|=|                                 |
 		|===================================|
-		
+
 		ROM     - MOS 23128 "317043-01 (C) 1984 CBM 26011D-787"
 		-->
 		<part name="cart" interface="plus4_cart">
@@ -106,7 +104,7 @@
 		|=|                                 |
 		|=|                                 |
 		|===================================|
-		
+
 		ROM     - MOS 23128 "317050-02 (C) 1984 CBM"
 		-->
 		<part name="cart" interface="plus4_cart">
@@ -115,9 +113,9 @@
 			</dataarea>
 		</part>
 	</software>
-	
+
 	<!-- Applications -->
-	
+
 	<software name="calcplus">
 		<description>Calc/Plus</description>
 		<year>1984</year>
@@ -132,7 +130,7 @@
 			</dataarea>
 		</part>
 	</software>
-	
+
 	<software name="c16kbtut">
 		<description>Commodore 16 Keyboard Tutorial</description>
 		<year>1984</year>
@@ -147,7 +145,33 @@
 			</dataarea>
 		</part>
 	</software>
-	
+
+	<software name="diag264p">
+		<description>Diag 264 (PAL)</description>
+		<year>2012</year>
+		<publisher>crock</publisher>
+		<sharedfeat name="compatibility" value="PAL"/>
+
+		<part name="cart" interface="plus4_cart">
+			<dataarea name="c1l" size="0x4000">
+				<rom name="diag264c_pal.bin" size="0x4000" crc="c314c674" sha1="4acadaf84ecc3eb252ad765fdab583c45e771fd0" offset="0" />
+			</dataarea>
+		</part>
+	</software>
+
+	<software name="diag264n" cloneof="diag264p">
+		<description>Diag 264 (NTSC)</description>
+		<year>2012</year>
+		<publisher>crock</publisher>
+		<sharedfeat name="compatibility" value="NTSC"/>
+
+		<part name="cart" interface="plus4_cart">
+			<dataarea name="c1l" size="0x4000">
+				<rom name="diag264c_ntsc.bin" size="0x4000" crc="9398ae1c" sha1="d75a28a1a9727914620d57157768c3a84b23544a" offset="0" />
+			</dataarea>
+		</part>
+	</software>
+
 	<software name="finadvis">
 		<description>Financial Advisor</description>
 		<year>1984</year>
@@ -159,7 +183,7 @@
 			</dataarea>
 		</part>
 	</software>
-	
+
 	<software name="logo">
 		<description>LOGO: A Language for Learning</description>
 		<year>1984</year>
@@ -180,7 +204,7 @@
 			</dataarea>
 		</part>
 	</software>
-	
+
 	<software name="basic7">
 		<description>Octasoft BASIC 7.0 (Hun)</description>
 		<year>1988</year>
@@ -191,7 +215,7 @@
 			</dataarea>
 		</part>
 	</software>
-	
+
 	<software name="scriptpl">
 		<description>Script/Plus</description>
 		<year>1984</year>
@@ -209,7 +233,7 @@
 		|=|                                 |
 		|=|                                 |
 		|===================================|
-		
+
 		ROM0    - MOS 23128 "317051-01 (C) 1984 CBM 26011D-723"
 		ROM1    - MOS 23128 "317052-01 (C) 1984 CBM 26011D-724"
 		-->
@@ -222,7 +246,7 @@
 			</dataarea>
 		</part>
 	</software>
-	
+
 	<software name="speedy">
 		<description>Speedy</description>
 		<year>1988</year>
@@ -234,7 +258,7 @@
 			</dataarea>
 		</part>
 	</software>
-	
+
 	<software name="turbopls">
 		<description>TurboPlus</description>
 		<year>1987</year>
@@ -244,6 +268,30 @@
 			<dataarea name="c1l" size="0x4000">
 				<rom name="turboplus.u1" size="0x2000" crc="88b40daf" sha1="bb02e863193b9f7731e9bf5b554bb1e743a0a573" offset="0" />
 				<rom size="0x2000" offset="0x2000" loadflag="reload" />
+			</dataarea>
+		</part>
+	</software>
+
+	<software name="burnin">
+		<description>Burn In</description>
+		<year>1988</year>
+		<publisher>Commodore</publisher>
+
+		<part name="cart" interface="plus4_cart">
+			<dataarea name="c1l" size="0x4000">
+				<rom name="325201-01" size="0x2000" crc="27119f88" sha1="8276558f6c2a519dd668fa17dd5e8787acde1de7" offset="0" />
+			</dataarea>
+		</part>
+	</software>
+
+	<software name="diagtest">
+		<description>Diagnostic Test</description>
+		<year>1988</year>
+		<publisher>Commodore</publisher>
+
+		<part name="cart" interface="plus4_cart">
+			<dataarea name="c1l" size="0x4000">
+				<rom name="325062-01" size="0x2000" crc="c3d81a03" sha1="b5997e44f9d6d5b4aaa9f2e607f1532caeb01b08" offset="0" />
 			</dataarea>
 		</part>
 	</software>

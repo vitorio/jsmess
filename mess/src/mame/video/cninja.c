@@ -5,30 +5,25 @@
 ****************************************************************************/
 
 #include "emu.h"
-#include "video/deco16ic.h"
 #include "includes/cninja.h"
-#include "video/decospr.h"
-#include "video/decocomn.h"
 
 /******************************************************************************/
 
-VIDEO_START( stoneage )
+VIDEO_START_MEMBER(cninja_state,stoneage)
 {
-	cninja_state *state = machine.driver_data<cninja_state>();
-
 	/* The bootleg has broken scroll registers */
-	deco16ic_set_scrolldx(state->m_deco_tilegen1, 3, 0, -10, -10);	/* pf4 16x16 tilemap */
-	deco16ic_set_scrolldx(state->m_deco_tilegen1, 1, 0, -10, -10);	/* pf2 16x16 tilemap */
-	deco16ic_set_scrolldx(state->m_deco_tilegen1, 0, 1, 2, 2);	/* pf1 8x8 tilemap */
+	m_deco_tilegen1->set_scrolldx(3, 0, -10, -10); /* pf4 16x16 tilemap */
+	m_deco_tilegen1->set_scrolldx(1, 0, -10, -10); /* pf2 16x16 tilemap */
+	m_deco_tilegen1->set_scrolldx(0, 1, 2, 2); /* pf1 8x8 tilemap */
 }
 
 /******************************************************************************/
 
 
 /* The bootleg sprites are in a different format! */
-static void cninjabl_draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
+void cninja_state::cninjabl_draw_sprites( screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
-	UINT16 *buffered_spriteram = machine.generic.buffered_spriteram.u16;
+	UINT16 *buffered_spriteram = m_spriteram->buffer();
 	int offs;
 	int endoffs;
 
@@ -68,7 +63,7 @@ static void cninjabl_draw_sprites( running_machine &machine, bitmap_t *bitmap, c
 		}
 
 		flash = y & 0x1000;
-		if (flash && (machine.primary_screen->frame_number() & 1))
+		if (flash && (m_screen->frame_number() & 1))
 			continue;
 
 		colour = (x >> 9) & 0x1f;
@@ -76,7 +71,7 @@ static void cninjabl_draw_sprites( running_machine &machine, bitmap_t *bitmap, c
 		fx = y & 0x2000;
 		fy = y & 0x4000;
 
-		multi = (1 << ((y & 0x0600) >> 9)) - 1;	/* 1x, 2x, 4x, 8x height */
+		multi = (1 << ((y & 0x0600) >> 9)) - 1; /* 1x, 2x, 4x, 8x height */
 
 		y -= multi * 16; // changed on bootleg!
 		y += 4;
@@ -97,7 +92,7 @@ static void cninjabl_draw_sprites( running_machine &machine, bitmap_t *bitmap, c
 			inc = 1;
 		}
 
-		if (flip_screen_get(machine))
+		if (flip_screen())
 		{
 			y = 240 - y;
 			x = 240 - x;
@@ -110,12 +105,12 @@ static void cninjabl_draw_sprites( running_machine &machine, bitmap_t *bitmap, c
 
 		while (multi >= 0)
 		{
-			pdrawgfx_transpen(bitmap,cliprect,machine.gfx[3],
+			pdrawgfx_transpen(bitmap,cliprect,machine().gfx[3],
 					sprite - multi * inc,
 					colour,
 					fx,fy,
 					x,y + mult * multi,
-					machine.priority_bitmap,pri,0);
+					screen.priority(),pri,0);
 
 			multi--;
 		}
@@ -124,170 +119,174 @@ static void cninjabl_draw_sprites( running_machine &machine, bitmap_t *bitmap, c
 
 /******************************************************************************/
 
-SCREEN_UPDATE( cninja )
+UINT32 cninja_state::screen_update_cninja(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	cninja_state *state = screen->machine().driver_data<cninja_state>();
-	UINT16 flip = deco16ic_pf_control_r(state->m_deco_tilegen1, 0, 0xffff);
+	address_space &space = machine().driver_data()->generic_space();
+	UINT16 flip = m_deco_tilegen1->pf_control_r(space, 0, 0xffff);
 
-	flip_screen_set(screen->machine(), BIT(flip, 7));
-	deco16ic_pf_update(state->m_deco_tilegen1, state->m_pf1_rowscroll, state->m_pf2_rowscroll);
-	deco16ic_pf_update(state->m_deco_tilegen2, state->m_pf3_rowscroll, state->m_pf4_rowscroll);
+	flip_screen_set(BIT(flip, 7));
+	m_deco_tilegen1->pf_update(m_pf1_rowscroll, m_pf2_rowscroll);
+	m_deco_tilegen2->pf_update(m_pf3_rowscroll, m_pf4_rowscroll);
 
 	/* Draw playfields */
-	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
-	bitmap_fill(bitmap, cliprect, 512);
-	deco16ic_tilemap_2_draw(state->m_deco_tilegen2, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 1);
-	deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 2);
-	deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, TILEMAP_DRAW_LAYER1, 2);
-	deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, TILEMAP_DRAW_LAYER0, 4);
-	screen->machine().device<decospr_device>("spritegen")->draw_sprites(screen->machine(), bitmap, cliprect, screen->machine().generic.buffered_spriteram.u16, 0x400);
-	deco16ic_tilemap_1_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
+	screen.priority().fill(0, cliprect);
+	bitmap.fill(512, cliprect);
+	m_deco_tilegen2->tilemap_2_draw(screen, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 1);
+	m_deco_tilegen2->tilemap_1_draw(screen, bitmap, cliprect, 0, 2);
+	m_deco_tilegen1->tilemap_2_draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER1, 2);
+	m_deco_tilegen1->tilemap_2_draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER0, 4);
+	m_sprgen->draw_sprites(bitmap, cliprect, m_spriteram->buffer(), 0x400);
+	m_deco_tilegen1->tilemap_1_draw(screen, bitmap, cliprect, 0, 0);
 	return 0;
 }
 
-SCREEN_UPDATE( cninjabl )
+UINT32 cninja_state::screen_update_cninjabl(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	cninja_state *state = screen->machine().driver_data<cninja_state>();
-	UINT16 flip = deco16ic_pf_control_r(state->m_deco_tilegen1, 0, 0xffff);
+	address_space &space = machine().driver_data()->generic_space();
+	UINT16 flip = m_deco_tilegen1->pf_control_r(space, 0, 0xffff);
 
-	flip_screen_set(screen->machine(), BIT(flip, 7));
-	deco16ic_pf_update(state->m_deco_tilegen1, state->m_pf1_rowscroll, state->m_pf2_rowscroll);
-	deco16ic_pf_update(state->m_deco_tilegen2, state->m_pf3_rowscroll, state->m_pf4_rowscroll);
+	/* force layers to be enabled */
+	m_deco_tilegen2->set_enable(0, 1 );
+	m_deco_tilegen2->set_enable(1, 1 );
+
+	flip_screen_set(BIT(flip, 7));
+	m_deco_tilegen1->pf_update(m_pf1_rowscroll, m_pf2_rowscroll);
+	m_deco_tilegen2->pf_update(m_pf3_rowscroll, m_pf4_rowscroll);
 
 	/* Draw playfields */
-	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
-	bitmap_fill(bitmap, cliprect, 512);
-	deco16ic_tilemap_2_draw(state->m_deco_tilegen2, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 1);
-	deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 2);
-	deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, TILEMAP_DRAW_LAYER1, 2);
-	deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, TILEMAP_DRAW_LAYER0, 4);
-	cninjabl_draw_sprites(screen->machine(), bitmap, cliprect);
-	deco16ic_tilemap_1_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
+	screen.priority().fill(0, cliprect);
+	bitmap.fill(512, cliprect);
+	m_deco_tilegen2->tilemap_2_draw(screen, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 1);
+	m_deco_tilegen2->tilemap_1_draw(screen, bitmap, cliprect, 0, 2);
+	m_deco_tilegen1->tilemap_2_draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER1, 2);
+	m_deco_tilegen1->tilemap_2_draw(screen, bitmap, cliprect, TILEMAP_DRAW_LAYER0, 4);
+	cninjabl_draw_sprites(screen, bitmap, cliprect);
+	m_deco_tilegen1->tilemap_1_draw(screen, bitmap, cliprect, 0, 0);
 	return 0;
 }
 
-SCREEN_UPDATE( edrandy )
+UINT32 cninja_state::screen_update_edrandy(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	cninja_state *state = screen->machine().driver_data<cninja_state>();
-	UINT16 flip = deco16ic_pf_control_r(state->m_deco_tilegen1, 0, 0xffff);
+	address_space &space = machine().driver_data()->generic_space();
+	UINT16 flip = m_deco_tilegen1->pf_control_r(space, 0, 0xffff);
 
-	flip_screen_set(screen->machine(), BIT(flip, 7));
-	deco16ic_pf_update(state->m_deco_tilegen1, state->m_pf1_rowscroll, state->m_pf2_rowscroll);
-	deco16ic_pf_update(state->m_deco_tilegen2, state->m_pf3_rowscroll, state->m_pf4_rowscroll);
+	flip_screen_set(BIT(flip, 7));
+	m_deco_tilegen1->pf_update(m_pf1_rowscroll, m_pf2_rowscroll);
+	m_deco_tilegen2->pf_update(m_pf3_rowscroll, m_pf4_rowscroll);
 
-	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
-	bitmap_fill(bitmap, cliprect, 0);
-	deco16ic_tilemap_2_draw(state->m_deco_tilegen2, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 1);
-	deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 2);
-	deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 4);
-	screen->machine().device<decospr_device>("spritegen")->draw_sprites(screen->machine(), bitmap, cliprect, screen->machine().generic.buffered_spriteram.u16, 0x400);
-	deco16ic_tilemap_1_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
+	screen.priority().fill(0, cliprect);
+	bitmap.fill(0, cliprect);
+	m_deco_tilegen2->tilemap_2_draw(screen, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 1);
+	m_deco_tilegen2->tilemap_1_draw(screen, bitmap, cliprect, 0, 2);
+	m_deco_tilegen1->tilemap_2_draw(screen, bitmap, cliprect, 0, 4);
+	m_sprgen->draw_sprites(bitmap, cliprect, m_spriteram->buffer(), 0x400);
+	m_deco_tilegen1->tilemap_1_draw(screen, bitmap, cliprect, 0, 0);
 	return 0;
 }
 
-SCREEN_UPDATE( robocop2 )
+UINT32 cninja_state::screen_update_robocop2(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	cninja_state *state = screen->machine().driver_data<cninja_state>();
-	UINT16 flip = deco16ic_pf_control_r(state->m_deco_tilegen1, 0, 0xffff);
-	UINT16 priority = decocomn_priority_r(state->m_decocomn, 0, 0xffff);
+	address_space &space = machine().driver_data()->generic_space();
+	UINT16 flip = m_deco_tilegen1->pf_control_r(space, 0, 0xffff);
+	UINT16 priority = m_decocomn->priority_r(space, 0, 0xffff);
 
 	/* One of the tilemap chips can switch between 2 tilemaps at 4bpp, or 1 at 8bpp */
 	if (priority & 4)
 	{
-		deco16ic_set_tilemap_colour_mask(state->m_deco_tilegen1, 2, 0);
-		deco16ic_set_tilemap_colour_mask(state->m_deco_tilegen1, 3, 0);
-		deco16ic_pf12_set_gfxbank(state->m_deco_tilegen2, 0, 4);
+		m_deco_tilegen1->set_tilemap_colour_mask(2, 0);
+		m_deco_tilegen1->set_tilemap_colour_mask(3, 0);
+		m_deco_tilegen2->pf12_set_gfxbank(0, 4);
 	}
 	else
 	{
-		deco16ic_set_tilemap_colour_mask(state->m_deco_tilegen1, 2, 0xf);
-		deco16ic_set_tilemap_colour_mask(state->m_deco_tilegen1, 3, 0xf);
-		deco16ic_pf12_set_gfxbank(state->m_deco_tilegen2, 0, 2);
+		m_deco_tilegen1->set_tilemap_colour_mask(2, 0xf);
+		m_deco_tilegen1->set_tilemap_colour_mask(3, 0xf);
+		m_deco_tilegen2->pf12_set_gfxbank(0, 2);
 	}
 
 	/* Update playfields */
-	flip_screen_set(screen->machine(), BIT(flip, 7));
-	deco16ic_pf_update(state->m_deco_tilegen1, state->m_pf1_rowscroll, state->m_pf2_rowscroll);
-	deco16ic_pf_update(state->m_deco_tilegen2, state->m_pf3_rowscroll, state->m_pf4_rowscroll);
+	flip_screen_set(BIT(flip, 7));
+	m_deco_tilegen1->pf_update(m_pf1_rowscroll, m_pf2_rowscroll);
+	m_deco_tilegen2->pf_update(m_pf3_rowscroll, m_pf4_rowscroll);
 
 	/* Draw playfields */
-	bitmap_fill(screen->machine().priority_bitmap, cliprect, 0);
-	bitmap_fill(bitmap, cliprect, 0x200);
+	screen.priority().fill(0, cliprect);
+	bitmap.fill(0x200, cliprect);
 
 	if ((priority & 4) == 0)
-		deco16ic_tilemap_2_draw(state->m_deco_tilegen2, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 1);
+		m_deco_tilegen2->tilemap_2_draw(screen, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 1);
 
 	/* Switchable priority */
 	switch (priority & 0x8)
 	{
 		case 8:
-			deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 2);
-			deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 4);
+			m_deco_tilegen1->tilemap_2_draw(screen, bitmap, cliprect, 0, 2);
+			m_deco_tilegen2->tilemap_1_draw(screen, bitmap, cliprect, 0, 4);
 			break;
 		default:
 		case 0:
-			deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 2);
-			deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 4);
+			m_deco_tilegen2->tilemap_1_draw(screen, bitmap, cliprect, 0, 2);
+			m_deco_tilegen1->tilemap_2_draw(screen, bitmap, cliprect, 0, 4);
 			break;
 	}
 
-	screen->machine().device<decospr_device>("spritegen")->draw_sprites(screen->machine(), bitmap, cliprect, screen->machine().generic.buffered_spriteram.u16, 0x400);
-	deco16ic_tilemap_1_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
+	m_sprgen->draw_sprites(bitmap, cliprect, m_spriteram->buffer(), 0x400);
+	m_deco_tilegen1->tilemap_1_draw(screen, bitmap, cliprect, 0, 0);
 	return 0;
 }
 
-VIDEO_START( mutantf )
+VIDEO_START_MEMBER(cninja_state,mutantf)
 {
-	machine.device<decospr_device>("spritegen1")->alloc_sprite_bitmap(machine);
-	machine.device<decospr_device>("spritegen2")->alloc_sprite_bitmap(machine);
+	m_sprgen1->alloc_sprite_bitmap();
+	m_sprgen2->alloc_sprite_bitmap();
 }
 
-SCREEN_UPDATE( mutantf )
+UINT32 cninja_state::screen_update_mutantf(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-	cninja_state *state = screen->machine().driver_data<cninja_state>();
-	UINT16 flip = deco16ic_pf_control_r(state->m_deco_tilegen1, 0, 0xffff);
-	UINT16 priority = decocomn_priority_r(state->m_decocomn, 0, 0xffff);
+	address_space &space = machine().driver_data()->generic_space();
+	UINT16 flip = m_deco_tilegen1->pf_control_r(space, 0, 0xffff);
+	UINT16 priority = m_decocomn->priority_r(space, 0, 0xffff);
 
 
-	flip_screen_set(screen->machine(), BIT(flip, 7));
-	deco16ic_pf_update(state->m_deco_tilegen1, state->m_pf1_rowscroll, state->m_pf2_rowscroll);
-	deco16ic_pf_update(state->m_deco_tilegen2, state->m_pf3_rowscroll, state->m_pf4_rowscroll);
+	flip_screen_set(BIT(flip, 7));
+	m_deco_tilegen1->pf_update(m_pf1_rowscroll, m_pf2_rowscroll);
+	m_deco_tilegen2->pf_update(m_pf3_rowscroll, m_pf4_rowscroll);
 
 	/* Draw playfields */
-	bitmap_fill(bitmap, cliprect, 0x400); /* Confirmed */
+	bitmap.fill(0x400, cliprect); /* Confirmed */
 
-	screen->machine().device<decospr_device>("spritegen1")->set_alt_format(true);
-	screen->machine().device<decospr_device>("spritegen2")->set_alt_format(true);
-	screen->machine().device<decospr_device>("spritegen2")->draw_sprites(screen->machine(), bitmap, cliprect, screen->machine().generic.buffered_spriteram2.u16, 0x400, true);
-	screen->machine().device<decospr_device>("spritegen1")->draw_sprites(screen->machine(), bitmap, cliprect, screen->machine().generic.buffered_spriteram.u16, 0x400, true);
+	m_sprgen1->set_alt_format(true);
+	m_sprgen2->set_alt_format(true);
+	m_sprgen2->draw_sprites(bitmap, cliprect, m_spriteram2->buffer(), 0x400, true);
+	m_sprgen1->draw_sprites(bitmap, cliprect, m_spriteram->buffer(), 0x400, true);
 
 
 	/* There is no priority prom on this board, but there is a
-    priority control word, the only values used in game appear
-    to be 2, 6 & 7 though:
+	priority control word, the only values used in game appear
+	to be 2, 6 & 7 though:
 
-    Bit 0:  If set sprite chip 2 above sprite chip 1 else vice versa
-    Bit 1:  Always set?
-    Bit 2:  Almost always set  (Sometimes not set on screen transitions)
+	Bit 0:  If set sprite chip 2 above sprite chip 1 else vice versa
+	Bit 1:  Always set?
+	Bit 2:  Almost always set  (Sometimes not set on screen transitions)
 
-    The other bits may control alpha blend on the 2nd sprite chip, or
-    layer order.
-    */
-	deco16ic_tilemap_2_draw(state->m_deco_tilegen2, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
-	deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
-	deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 0);
+	The other bits may control alpha blend on the 2nd sprite chip, or
+	layer order.
+	*/
+	m_deco_tilegen2->tilemap_2_draw(screen, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
+	m_deco_tilegen1->tilemap_2_draw(screen, bitmap, cliprect, 0, 0);
+	m_deco_tilegen2->tilemap_1_draw(screen, bitmap, cliprect, 0, 0);
 
 
 	if (priority & 1)
 	{
-		screen->machine().device<decospr_device>("spritegen1")->inefficient_copy_sprite_bitmap(screen->machine(), bitmap, cliprect, 0x0000, 0x0000, 0x100, 0x1ff);
-		screen->machine().device<decospr_device>("spritegen2")->inefficient_copy_sprite_bitmap(screen->machine(), bitmap, cliprect, 0x0000, 0x0000, 1024+768, 0x0ff, 0x80); // fixed alpha of 0x80 for this layer?
+		m_sprgen1->inefficient_copy_sprite_bitmap(bitmap, cliprect, 0x0000, 0x0000, 0x100, 0x1ff);
+		m_sprgen2->inefficient_copy_sprite_bitmap(bitmap, cliprect, 0x0000, 0x0000, 1024+768, 0x0ff, 0x80); // fixed alpha of 0x80 for this layer?
 	}
 	else
 	{
-		screen->machine().device<decospr_device>("spritegen2")->inefficient_copy_sprite_bitmap(screen->machine(), bitmap, cliprect, 0x0000, 0x0000, 1024+768, 0x0ff, 0x80);  // fixed alpha of 0x80 for this layer?
-		screen->machine().device<decospr_device>("spritegen1")->inefficient_copy_sprite_bitmap(screen->machine(), bitmap, cliprect, 0x0000, 0x0000, 0x100, 0x1ff);
+		m_sprgen2->inefficient_copy_sprite_bitmap(bitmap, cliprect, 0x0000, 0x0000, 1024+768, 0x0ff, 0x80);  // fixed alpha of 0x80 for this layer?
+		m_sprgen1->inefficient_copy_sprite_bitmap(bitmap, cliprect, 0x0000, 0x0000, 0x100, 0x1ff);
 	}
-	deco16ic_tilemap_1_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
+	m_deco_tilegen1->tilemap_1_draw(screen, bitmap, cliprect, 0, 0);
 	return 0;
 }

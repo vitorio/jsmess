@@ -1,231 +1,161 @@
-/*
+// license:MAME|LGPL-2.1+
+// copyright-holders:Michael Zapf
+/****************************************************************************
+
     TI-99/8 Speech synthesizer subsystem
 
     The TI-99/8 contains a speech synthesizer inside the console, so we cannot
     reuse the spchsyn implementation of the P-Box speech synthesizer.
+    Accordingly, this is not a ti_expansion_card_device.
 
-    Note that this subsystem also contains the speech roms.
-*/
-#include "emu.h"
+    Michael Zapf
+    February 2012: Rewritten as class
+
+*****************************************************************************/
+
 #include "speech8.h"
-#include "sound/tms5220.h"
 #include "sound/wave.h"
+#include "machine/spchrom.h"
 
-#define TMS5220_ADDRESS_MASK 0x3FFFFUL	/* 18-bit mask for tms5220 address */
-#define speech8_region "speech8_region"
+#define TMS5220_ADDRESS_MASK 0x3FFFFUL  /* 18-bit mask for tms5220 address */
 
-typedef struct _ti99_speech8_state
-{
-	device_t			*vsp;
-	UINT8					*speechrom_data;		/* pointer to speech ROM data */
-	int 					load_pointer;			/* which 4-bit nibble will be affected by load address */
-	int 					ROM_bits_count;				/* current bit position in ROM */
-	UINT32					speechROMaddr;				/* 18 bit pointer in ROM */
-	UINT32					speechROMlen;			/* length of data pointed by speechrom_data, from 0 to 2^18 */
+#define VERBOSE 1
+#define LOG logerror
 
-} ti99_speech8_state;
+#define SPEECHSYN_TAG "speechsyn"
 
-INLINE ti99_speech8_state *get_safe_token(device_t *device)
-{
-	assert(device != NULL);
-	assert(device->type() == TISPEECH8);
-
-	return (ti99_speech8_state *)downcast<legacy_device_base *>(device)->token();
-}
-
-/*****************************************************************************/
+#define REAL_TIMING 0
 
 /*
-    Read 'count' bits serially from speech ROM
+    For comments on real timing see ti99/spchsyn.c
 */
-static int ti99_spchroms_read(device_t *vspdev, int count)
+/****************************************************************************/
+
+ti998_spsyn_device::ti998_spsyn_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+: bus8z_device(mconfig, TI99_SPEECH8, "TI-99/8 Speech synthesizer (onboard)", tag, owner, clock, "ti99_speech8", __FILE__)
 {
-	device_t *device = vspdev->owner();
-	ti99_speech8_state *spsys = get_safe_token(device);
-
-	int val;
-
-	if (spsys->load_pointer)
-	{	/* first read after load address is ignored */
-		spsys->load_pointer = 0;
-		count--;
-	}
-
-	if (spsys->speechROMaddr < spsys->speechROMlen)
-	{
-		if (count < spsys->ROM_bits_count)
-		{
-			spsys->ROM_bits_count -= count;
-			val = (spsys->speechrom_data[spsys->speechROMaddr] >> spsys->ROM_bits_count) & (0xFF >> (8 - count));
-		}
-		else
-		{
-			val = ((int)spsys->speechrom_data[spsys->speechROMaddr]) << 8;
-
-			spsys->speechROMaddr = (spsys->speechROMaddr + 1) & TMS5220_ADDRESS_MASK;
-
-			if (spsys->speechROMaddr < spsys->speechROMlen)
-				val |= spsys->speechrom_data[spsys->speechROMaddr];
-
-			spsys->ROM_bits_count += 8 - count;
-
-			val = (val >> spsys->ROM_bits_count) & (0xFF >> (8 - count));
-		}
-	}
-	else
-		val = 0;
-
-	return val;
 }
-
-/*
-    Write an address nibble to speech ROM
-*/
-static void ti99_spchroms_load_address(device_t *vspdev, int data)
-{
-	device_t *device = vspdev->owner();
-	ti99_speech8_state *spsys = get_safe_token(device);
-	// tms5220 data sheet says that if we load only one 4-bit nibble, it won't work.
-	// This code does not care about this.
-	spsys->speechROMaddr = ((spsys->speechROMaddr & ~(0xf << spsys->load_pointer))
-		| (((unsigned long) (data & 0xf)) << spsys->load_pointer) ) & TMS5220_ADDRESS_MASK;
-	spsys->load_pointer += 4;
-	spsys->ROM_bits_count = 8;
-}
-
-/*
-    Perform a read and branch command
-*/
-static void ti99_spchroms_read_and_branch(device_t *vspdev)
-{
-	device_t *device = vspdev->owner();
-	ti99_speech8_state *spsys = get_safe_token(device);
-	// tms5220 data sheet says that if more than one speech ROM (tms6100) is present,
-	// there is a bus contention.  This code does not care about this. */
-	if (spsys->speechROMaddr < spsys->speechROMlen-1)
-		spsys->speechROMaddr = (spsys->speechROMaddr & 0x3c000UL)
-			| (((((unsigned long) spsys->speechrom_data[spsys->speechROMaddr]) << 8)
-			| spsys->speechrom_data[spsys->speechROMaddr+1]) & 0x3fffUL);
-	else if (spsys->speechROMaddr == spsys->speechROMlen-1)
-		spsys->speechROMaddr = (spsys->speechROMaddr & 0x3c000UL)
-			| ((((unsigned long) spsys->speechrom_data[spsys->speechROMaddr]) << 8) & 0x3fffUL);
-	else
-		spsys->speechROMaddr = (spsys->speechROMaddr & 0x3c000UL);
-
-	spsys->ROM_bits_count = 8;
-}
-
-/*****************************************************************************/
 
 /*
     Memory read
 */
-READ8Z_DEVICE_HANDLER( ti998spch_rz )
+#if REAL_TIMING
+// ======  This is the version with real timing =======
+READ8Z_MEMBER( ti998_spsyn_device::readz )
 {
-	ti99_speech8_state *spsys = get_safe_token(device);
-
-	if ((offset & 0xfc01)==0x9000)
-	{
-		device_adjust_icount(device->machine().device("maincpu"),-(18+3));		/* this is just a minimum, it can be more */
-		*value = tms5220_status_r(spsys->vsp, offset) & 0xff;
-	}
+	m_vsp->wsq_w(TRUE);
+	m_vsp->rsq_w(FALSE);
+	*value = m_vsp->read(offset) & 0xff;
+	if (VERBOSE>4) LOG("speech8: read value = %02x\n", *value);
 }
 
 /*
     Memory write
 */
-WRITE8_DEVICE_HANDLER( ti998spch_w )
+WRITE8_MEMBER( ti998_spsyn_device::write )
 {
-	ti99_speech8_state *spsys = get_safe_token(device);
-
-	if ((offset & 0xfc01)==0x9400)
-	{
-		device_adjust_icount(device->machine().device("maincpu"),-(54+3));		/* this is just an approx. minimum, it can be much more */
-
-		/* RN: the stupid design of the tms5220 core means that ready is cleared */
-		/* when there are 15 bytes in FIFO.  It should be 16.  Of course, if */
-		/* it were the case, we would need to store the value on the bus, */
-		/* which would be more complex. */
-		if (!tms5220_readyq_r(spsys->vsp))
-		{
-			attotime time_to_ready = attotime::from_double(tms5220_time_to_ready(spsys->vsp));
-			int cycles_to_ready = device->machine().device<cpu_device>("maincpu")->attotime_to_cycles(time_to_ready);
-			logerror("time to ready: %f -> %d\n", time_to_ready.as_double(), (int) cycles_to_ready);
-
-			device_adjust_icount(device->machine().device("maincpu"),-cycles_to_ready);
-			device->machine().scheduler().timer_set(attotime::zero, FUNC_NULL);
-		}
-		tms5220_data_w(spsys->vsp, offset, data);
-	}
+	m_vsp->rsq_w(m_vsp, TRUE);
+	m_vsp->wsq_w(m_vsp, FALSE);
+	if (VERBOSE>4) LOG("speech8: write value = %02x\n", data);
+	m_vsp->write(offset, data);
 }
 
-/**************************************************************************/
+#else
+// ======  This is the version without real timing =======
 
-static DEVICE_START( ti99_speech8 )
+READ8Z_MEMBER( ti998_spsyn_device::readz )
 {
-	ti99_speech8_state *spsys = get_safe_token(device);
-	/* Resolve the callbacks to the PEB */
-	spsys->vsp = device->subdevice("speechsyn");
-}
-
-static DEVICE_STOP( ti99_speech8 )
-{
-}
-
-static DEVICE_RESET( ti99_speech8 )
-{
-	ti99_speech8_state *spsys = get_safe_token(device);
-
-	astring *region = new astring();
-	astring_assemble_3(region, device->tag(), ":", speech8_region);
-
-	spsys->speechrom_data = device->machine().region(astring_c(region))->base();
-	spsys->speechROMlen = device->machine().region(astring_c(region))->bytes();
-	spsys->speechROMaddr = 0;
-	spsys->load_pointer = 0;
-	spsys->ROM_bits_count = 0;
-}
-
-static WRITE_LINE_DEVICE_HANDLER( speech8_ready )
-{
-	//ti99_speech8_state *spsys = get_safe_token(device->owner());
-	logerror("speech8: READY called by VSP\n");
+	machine().device("maincpu")->execute().adjust_icount(-(18+3));      /* this is just a minimum, it can be more */
+	*value = m_vsp->status_r(space, offset, 0xff) & 0xff;
+	if (VERBOSE>4) LOG("speech8: read value = %02x\n", *value);
 }
 
 /*
-    TMS5220 speech synthesizer
-    Note that in the real hardware, the predecessor TMC0285 was used.
+    Memory write
 */
-static const tms5220_interface ti99_4x_tms5200interface =
+WRITE8_MEMBER( ti998_spsyn_device::write )
 {
-	DEVCB_NULL,					/* no IRQ callback */
-	DEVCB_LINE(speech8_ready),
-	ti99_spchroms_read,				/* speech ROM read handler */
-	ti99_spchroms_load_address,		/* speech ROM load address handler */
-	ti99_spchroms_read_and_branch	/* speech ROM read and branch handler */
-};
+	machine().device("maincpu")->execute().adjust_icount(-(54+3));      /* this is just an approx. minimum, it can be much more */
 
-MACHINE_CONFIG_FRAGMENT( ti99_speech8 )
+	/* RN: the stupid design of the tms5220 core means that ready is cleared */
+	/* when there are 15 bytes in FIFO.  It should be 16.  Of course, if */
+	/* it were the case, we would need to store the value on the bus, */
+	/* which would be more complex. */
+	if (!m_vsp->readyq_r())
+	{
+		attotime time_to_ready = attotime::from_double(m_vsp->time_to_ready());
+		int cycles_to_ready = machine().device<cpu_device>("maincpu")->attotime_to_cycles(time_to_ready);
+		if (VERBOSE>8) LOG("speech8: time to ready: %f -> %d\n", time_to_ready.as_double(), (int) cycles_to_ready);
+
+		machine().device("maincpu")->execute().adjust_icount(-cycles_to_ready);
+		machine().scheduler().timer_set(attotime::zero, FUNC_NULL);
+	}
+	if (VERBOSE>4) LOG("speech8: write value = %02x\n", data);
+	m_vsp->data_w(space, offset, data);
+}
+#endif
+
+/**************************************************************************/
+
+WRITE_LINE_MEMBER( ti998_spsyn_device::speech8_ready )
+{
+	// The TMS5200 implementation uses TRUE/FALSE, not ASSERT/CLEAR semantics
+	m_ready((state==0)? ASSERT_LINE : CLEAR_LINE);
+	if (VERBOSE>5) LOG("spchsyn: READY = %d\n", (state==0));
+
+#if REAL_TIMING
+	// Need to do that here (see explanations in spchsyn.c)
+	if (state==0)
+	{
+		m_vsp->rsq_w(TRUE);
+		m_vsp->wsq_w(TRUE);
+	}
+#endif
+}
+
+void ti998_spsyn_device::device_start()
+{
+	const speech8_config *conf = reinterpret_cast<const speech8_config *>(static_config());
+	m_ready.resolve(conf->ready, *this);
+	m_vsp = subdevice<tms5220_device>(SPEECHSYN_TAG);
+}
+
+void ti998_spsyn_device::device_reset()
+{
+	if (VERBOSE>4) LOG("speech8: reset\n");
+}
+
+// Unlike the TI-99/4A, the 99/8 uses the CD2501ECD
+// The CD2501ECD is a tms5200/cd2501e with the rate control from the tms5220c added in.
+// (it's probably actually a tms5220c die with the cd2501e/tms5200 lpc rom masked onto it)
+MACHINE_CONFIG_FRAGMENT( ti998_speech )
+	MCFG_DEVICE_ADD("vsm", SPEECHROM, 0)
+
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("speechsyn", TMS5220, 680000L)
-	MCFG_SOUND_CONFIG(ti99_4x_tms5200interface)
+	MCFG_SOUND_ADD(SPEECHSYN_TAG, CD2501ECD, 640000L)
+	MCFG_TMS52XX_READYQ_HANDLER(WRITELINE(ti998_spsyn_device, speech8_ready))
+	MCFG_TMS52XX_SPEECHROM("vsm")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_CONFIG_END
 
-ROM_START( ti99_speech8 )
-	ROM_REGION(0x8000, speech8_region, 0)
-	ROM_LOAD_OPTIONAL("spchrom.bin", 0x0000, 0x8000, BAD_DUMP CRC(58b155f7) SHA1(382292295c00dff348d7e17c5ce4da12a1d87763)) /* system speech ROM */
+/* Verified on a real machine: TI-99/8 uses the same speech rom contents
+   as the TI speech synthesizer. */
+ROM_START( ti998_speech )
+	ROM_REGION(0x8000, "vsm", 0)
+	// Note: the following line is actually wrong; the speech roms in the ti 99/4a and 99/8 are two VSM roms labeled CD2325A and CD2326A, and contain the same data as the following line rom does, but with the byte bit order reversed. This bit ordering issue needs to be fixed elsewhere in the code here before the original/real roms can be used.
+	ROM_LOAD_OPTIONAL("spchrom.bin", 0x0000, 0x8000, CRC(58b155f7) SHA1(382292295c00dff348d7e17c5ce4da12a1d87763)) /* system speech ROM */
+	// correct lines are:
+	// ROM_LOAD_OPTIONAL("cd2325a.vsm", 0x0000, 0x4000, CRC(1f58b571) SHA1(0ef4f178716b575a1c0c970c56af8a8d97561ffe))
+	// ROM_LOAD_OPTIONAL("cd2326a.vsm", 0x4000, 0x4000, CRC(65d00401) SHA1(a367242c2c96cebf0e2bf21862f3f6734b2b3020))
 ROM_END
 
-static const char DEVTEMPLATE_SOURCE[] = __FILE__;
+machine_config_constructor ti998_spsyn_device::device_mconfig_additions() const
+{
+	return MACHINE_CONFIG_NAME( ti998_speech );
+}
 
-#define DEVTEMPLATE_ID(p,s)             p##ti99_speech8##s
-#define DEVTEMPLATE_FEATURES            DT_HAS_START | DT_HAS_STOP | DT_HAS_RESET | DT_HAS_ROM_REGION | DT_HAS_MACHINE_CONFIG
-#define DEVTEMPLATE_NAME                "TI-99/8 Speech Synthesizer"
-#define DEVTEMPLATE_SHORTNAME           "ti998sp"
-#define DEVTEMPLATE_FAMILY              "Internal subsystem"
-#include "devtempl.h"
-
-DEFINE_LEGACY_DEVICE( TISPEECH8, ti99_speech8 );
-
+const rom_entry *ti998_spsyn_device::device_rom_region() const
+{
+	return ROM_NAME( ti998_speech );
+}
+const device_type TI99_SPEECH8 = &device_creator<ti998_spsyn_device>;

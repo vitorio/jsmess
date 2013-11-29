@@ -81,12 +81,21 @@ video card
 #include "video/pc_vga.h"
 
 
-class magtouch_state : public driver_device
+class magtouch_state : public pcat_base_state
 {
 public:
 	magtouch_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: pcat_base_state(mconfig, type, tag),
+			m_uart(*this, "ns16450_0"),
+			m_microtouch(*this, "microtouch"){ }
 
+	required_device<ns16450_device> m_uart;
+	required_device<microtouch_serial_device> m_microtouch;
+
+	DECLARE_READ8_MEMBER(magtouch_io_r);
+	DECLARE_WRITE8_MEMBER(magtouch_io_w);
+	DECLARE_DRIVER_INIT(magtouch);
+	virtual void machine_start();
 };
 
 
@@ -96,29 +105,14 @@ public:
  *
  *************************************/
 
-static void magtouch_microtouch_tx_callback(running_machine &machine, UINT8 data)
-{
-	ins8250_receive(machine.device("ns16450_0"), data);
-};
-
-static INS8250_TRANSMIT( magtouch_com_transmit )
-{
-	UINT8 data8 = data;
-	microtouch_rx(1, &data8);
-}
-
-static WRITE_LINE_DEVICE_HANDLER( at_com_interrupt_1 )
-{
-	pic8259_ir4_w(device->machine().device("pic8259_1"), state);
-}
-
 static const ins8250_interface magtouch_com0_interface =
 {
-	1843200,
-	DEVCB_LINE(at_com_interrupt_1),
-	magtouch_com_transmit,
-	NULL,
-	NULL
+	DEVCB_DEVICE_LINE_MEMBER("microtouch", microtouch_serial_device, rx),
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_DEVICE_LINE_MEMBER("pic8259_1", pic8259_device, ir4_w),
+	DEVCB_NULL,
+	DEVCB_NULL
 };
 
 /*************************************
@@ -127,30 +121,30 @@ static const ins8250_interface magtouch_com0_interface =
  *
  *************************************/
 
-static READ8_HANDLER(magtouch_io_r)
+READ8_MEMBER(magtouch_state::magtouch_io_r)
 {
 	switch(offset)
 	{
 		case 1:
-			return input_port_read(space->machine(), "IN0");
+			return ioport("IN0")->read();
 		default:
 			return 0;
 	}
 }
 
-static WRITE8_HANDLER(magtouch_io_w)
+WRITE8_MEMBER(magtouch_state::magtouch_io_w)
 {
 	switch(offset)
 	{
 		case 6:
-			memory_set_bank(space->machine(), "rombank", data & 0x7f );
+			membank("rombank")->set_entry(data & 0x7f );
 			break;
 	}
 }
 
-static ADDRESS_MAP_START( magtouch_map, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( magtouch_map, AS_PROGRAM, 32, magtouch_state )
 	AM_RANGE(0x00000000, 0x0009ffff) AM_RAM
-	AM_RANGE(0x000a0000, 0x000bffff) AM_RAM
+	AM_RANGE(0x000a0000, 0x000bffff) AM_DEVREADWRITE8("vga", vga_device, mem_r, mem_w, 0xffffffff)
 	AM_RANGE(0x000c0000, 0x000c7fff) AM_ROM AM_REGION("video_bios", 0)
 	AM_RANGE(0x000d8000, 0x000dffff) AM_ROMBANK("rombank")
 	AM_RANGE(0x000f0000, 0x000fffff) AM_RAM AM_REGION("bios", 0 )
@@ -158,15 +152,16 @@ static ADDRESS_MAP_START( magtouch_map, AS_PROGRAM, 32 )
 	AM_RANGE(0xffff0000, 0xffffffff) AM_ROM AM_REGION("bios", 0 )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( magtouch_io, AS_IO, 32 )
+static ADDRESS_MAP_START( magtouch_io, AS_IO, 32, magtouch_state )
 	AM_IMPORT_FROM(pcat32_io_common)
 	AM_RANGE(0x02e0, 0x02e7) AM_READWRITE8(magtouch_io_r, magtouch_io_w, 0xffffffff)
-	AM_RANGE(0x03f8, 0x03ff) AM_DEVREADWRITE8("ns16450_0", ins8250_r, ins8250_w, 0xffffffff)
+	AM_RANGE(0x03b0, 0x03bf) AM_DEVREADWRITE8("vga", vga_device, port_03b0_r, port_03b0_w, 0xffffffff)
+	AM_RANGE(0x03c0, 0x03cf) AM_DEVREADWRITE8("vga", vga_device, port_03c0_r, port_03c0_w, 0xffffffff)
+	AM_RANGE(0x03d0, 0x03df) AM_DEVREADWRITE8("vga", vga_device, port_03d0_r, port_03d0_w, 0xffffffff)
+	AM_RANGE(0x03f8, 0x03ff) AM_DEVREADWRITE8("ns16450_0", ns16450_device, ins8250_r, ins8250_w, 0xffffffff)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( magtouch )
-	PORT_INCLUDE(microtouch)
-
 	PORT_START("IN0")
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_OTHER) PORT_NAME("Clear") PORT_CODE(KEYCODE_C)
 	PORT_BIT(0x40, IP_ACTIVE_LOW, IPT_SERVICE)
@@ -175,35 +170,17 @@ static INPUT_PORTS_START( magtouch )
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_COIN3) PORT_IMPULSE(1)
 INPUT_PORTS_END
 
-static void magtouch_set_keyb_int(running_machine &machine, int state)
+void magtouch_state::machine_start()
 {
-	pic8259_ir1_w(machine.device("pic8259_1"), state);
-}
+	m_maincpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(magtouch_state::irq_callback),this));
 
-static const struct pc_vga_interface vga_interface =
-{
-	NULL,
-	NULL,
-	NULL,
-	AS_IO,
-	0x0000
-};
-
-static MACHINE_START( magtouch )
-{
-	device_set_irq_callback(machine.device("maincpu"), pcat_irq_callback);
-
-	init_pc_common(machine, PCCOMMON_KEYBOARD_AT, magtouch_set_keyb_int);
-
-	memory_configure_bank(machine, "rombank", 0, 0x80, machine.region("game_prg")->base(), 0x8000 );
-	memory_set_bank(machine, "rombank", 0);
-
-	microtouch_init(machine, magtouch_microtouch_tx_callback, NULL);
+	membank("rombank")->configure_entries(0, 0x80, memregion("game_prg")->base(), 0x8000 );
+	membank("rombank")->set_entry(0);
 }
 
 static MACHINE_CONFIG_START( magtouch, magtouch_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", I386, 14318180*2)	/* I386 ?? Mhz */
+	MCFG_CPU_ADD("maincpu", I386, 14318180*2)   /* I386 ?? Mhz */
 	MCFG_CPU_PROGRAM_MAP(magtouch_map)
 	MCFG_CPU_IO_MAP(magtouch_io)
 
@@ -214,33 +191,29 @@ static MACHINE_CONFIG_START( magtouch, magtouch_state )
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
 
-	MCFG_MACHINE_START(magtouch)
-	MCFG_MC146818_ADD( "rtc", MC146818_STANDARD )
-
-//  MCFG_FRAGMENT_ADD( at_kbdc8042 )
 	MCFG_FRAGMENT_ADD( pcat_common )
-	MCFG_NS16450_ADD( "ns16450_0", magtouch_com0_interface )
-
+	MCFG_NS16450_ADD( "ns16450_0", magtouch_com0_interface, XTAL_1_8432MHz )
+	MCFG_MICROTOUCH_SERIAL_ADD( "microtouch", 9600, DEVWRITELINE("ns16450_0", ins8250_uart_device, rx_w) ) // rate?
 MACHINE_CONFIG_END
 
 
 ROM_START(magtouch)
-	ROM_REGION32_LE(0x10000, "bios", 0)	/* motherboard bios */
+	ROM_REGION32_LE(0x10000, "bios", 0) /* motherboard bios */
 	ROM_LOAD("mtouch.u13", 0x00000, 0x10000, CRC(e74fb144) SHA1(abc99e84832c30606374da542fd94f0fbc8cbaa6) )
 
 	ROM_REGION(0x08000, "video_bios", 0)
 	ROM_LOAD16_BYTE("vga1-bios-ver-b-1.00-07.u8",     0x00000, 0x04000, CRC(a40551d6) SHA1(db38190f06e4af2c2d59ae310e65883bb16cd3d6))
 	ROM_CONTINUE(                                     0x00001, 0x04000 )
 
-	ROM_REGION(0x400000, "game_prg", 0)	/* proper game */
+	ROM_REGION(0x400000, "game_prg", 0) /* proper game */
 	ROM_LOAD("mtouch.u20", 0x000000,0x100000, CRC(fb7b529b) SHA1(ecf8792ce7b6b2f59c2178dc1524c3830a4b4ebc) )
 	ROM_LOAD("mtouch.u21", 0x100000,0x100000, CRC(af1491a6) SHA1(2d09506a3368fd64b1081017c58065635be5a62f) )
 	ROM_LOAD("mtouch.u22", 0x200000,0x100000, CRC(da39c860) SHA1(7648e063ec68575abd808d5dea933f292197a2c2) )
 ROM_END
 
-static DRIVER_INIT(magtouch)
+DRIVER_INIT_MEMBER(magtouch_state,magtouch)
 {
-	pc_vga_init(machine, &vga_interface, NULL);
 }
 
-GAME( 1995, magtouch,   0,         magtouch,  magtouch, magtouch, ROT0, "Micro Manufacturing",     "Magical Touch", GAME_NOT_WORKING | GAME_NO_SOUND )
+
+GAME( 1995, magtouch,   0,         magtouch,  magtouch, magtouch_state, magtouch, ROT0, "Micro Manufacturing",     "Magical Touch", GAME_NOT_WORKING | GAME_NO_SOUND )

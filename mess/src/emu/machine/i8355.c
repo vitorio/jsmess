@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     Intel 8355 - 16,384-Bit ROM with I/O emulation
@@ -43,7 +45,7 @@ enum
 const device_type I8355 = &device_creator<i8355_device>;
 
 // default address map
-static ADDRESS_MAP_START( i8355, AS_0, 8 )
+static ADDRESS_MAP_START( i8355, AS_0, 8, i8355_device )
 	AM_RANGE(0x000, 0x7ff) AM_ROM
 ADDRESS_MAP_END
 
@@ -92,11 +94,10 @@ inline void i8355_device::write_port(int port, UINT8 data)
 //-------------------------------------------------
 
 i8355_device::i8355_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, I8355, "Intel 8355", tag, owner, clock),
-	  device_memory_interface(mconfig, *this),
-	  m_space_config("ram", ENDIANNESS_LITTLE, 8, 11, 0, NULL, *ADDRESS_MAP_NAME(i8355))
+	: device_t(mconfig, I8355, "Intel 8355", tag, owner, clock, "i8355", __FILE__),
+		device_memory_interface(mconfig, *this),
+		m_space_config("ram", ENDIANNESS_LITTLE, 8, 11, 0, NULL, *ADDRESS_MAP_NAME(i8355))
 {
-
 }
 
 
@@ -227,5 +228,5 @@ WRITE8_MEMBER( i8355_device::io_w )
 
 READ8_MEMBER( i8355_device::memory_r )
 {
-	return this->space()->read_byte(offset);
+	return this->space().read_byte(offset);
 }

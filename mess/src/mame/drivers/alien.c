@@ -13,35 +13,49 @@
 
 ***********************************************************************************/
 
+
 #include "emu.h"
 #include "cpu/sh4/sh4.h"
 
-#define MASTER_CLOCK	XTAL_200MHz
+#define MASTER_CLOCK    XTAL_200MHz
 
 class alien_state : public driver_device
 {
 public:
 	alien_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+			m_maincpu(*this, "maincpu")
+	{ }
 
+	DECLARE_READ64_MEMBER(test_r);
+
+	UINT32 screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect);
+
+protected:
+
+	// devices
+	required_device<cpu_device> m_maincpu;
+
+	// driver_device overrides
+	virtual void machine_reset();
+	virtual void video_start();
 };
 
-static VIDEO_START( alien )
+void alien_state::video_start()
 {
-
 }
 
-static SCREEN_UPDATE( alien )
+UINT32 alien_state::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
 	return 0;
 }
 
-static READ64_HANDLER( test_r )
+READ64_MEMBER( alien_state::test_r )
 {
-	return space->machine().rand();
+	return machine().rand();
 }
 
-static ADDRESS_MAP_START( alien_map, AS_PROGRAM, 64 )
+static ADDRESS_MAP_START( alien_map, AS_PROGRAM, 64, alien_state )
 	AM_RANGE(0x00000000, 0x0003ffff) AM_ROM
 	AM_RANGE(0x08000000, 0x08000007) AM_READ(test_r) //hangs if zero
 	AM_RANGE(0x0cfe0000, 0x0cffffff) AM_RAM
@@ -56,14 +70,15 @@ static INPUT_PORTS_START( alien )
 
 INPUT_PORTS_END
 
-static MACHINE_RESET( alien )
+
+void alien_state::machine_reset()
 {
-	//cputag_set_input_line(machine, "maincpu", INPUT_LINE_HALT, ASSERT_LINE);
+	//m_maincpu->set_input_line(INPUT_LINE_HALT, ASSERT_LINE);
 }
 
 static MACHINE_CONFIG_START( alien, alien_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", SH4, MASTER_CLOCK)	/* 200MHz */
+	MCFG_CPU_ADD("maincpu", SH4LE, MASTER_CLOCK)    /* 200MHz */
 	MCFG_CPU_PROGRAM_MAP(alien_map)
 
 	/* video hardware */
@@ -71,14 +86,9 @@ static MACHINE_CONFIG_START( alien, alien_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MCFG_SCREEN_UPDATE_DRIVER(alien_state, screen_update)
 	MCFG_SCREEN_SIZE((32)*8, (32)*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
-
-	MCFG_MACHINE_RESET(alien)
-
-	MCFG_VIDEO_START(alien)
-	MCFG_SCREEN_UPDATE(alien)
 
 	MCFG_PALETTE_LENGTH(0x1000)
 
@@ -95,7 +105,7 @@ MACHINE_CONFIG_END
 ROM_START( alien )
 	ROM_REGION( 0x800000, "maincpu", 0 ) // BIOS code
 	ROM_LOAD32_WORD( "aln_s04.4.ic30", 0x000000, 0x400000, CRC(11777d3f) SHA1(8cc9fcae7911e6be273b4532d89b44a309687ead) )
-    ROM_LOAD32_WORD( "aln_s05.5.ic33", 0x000002, 0x400000, CRC(71d2f22c) SHA1(16b25aa34f8b0d988565e7ab7cecc4df62ee8cf3) )
+	ROM_LOAD32_WORD( "aln_s05.5.ic33", 0x000002, 0x400000, CRC(71d2f22c) SHA1(16b25aa34f8b0d988565e7ab7cecc4df62ee8cf3) )
 
 	ROM_REGION( 0x800100, "unk", 0 ) //sound samples flash rom
 	ROM_LOAD( "s29jl064hxxtfi00.u35", 0x000000, 0x800100, CRC(01890c61) SHA1(4fad321f42eab835351c6d5f73539bdbed80affe) )
@@ -108,4 +118,4 @@ ROM_START( alien )
 ROM_END
 
 
-GAME( 2005, alien,  0,      alien, alien, 0, ROT0, "Capcom", "Alien: The Arcade Medal Edition", GAME_NO_SOUND | GAME_NOT_WORKING )
+GAME( 2005, alien,  0,      alien, alien, driver_device, 0, ROT0, "Capcom", "Alien: The Arcade Medal Edition", GAME_NO_SOUND | GAME_NOT_WORKING )

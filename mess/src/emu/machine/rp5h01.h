@@ -8,13 +8,51 @@
 #ifndef __RP5H01_H__
 #define __RP5H01_H__
 
-#include "devlegcy.h"
+
+/***************************************************************************
+    PARAMETERS
+***************************************************************************/
+
+/* these also work as the address masks */
+enum {
+	COUNTER_MODE_6_BITS = 0x3f,
+	COUNTER_MODE_7_BITS = 0x7f
+};
 
 /***************************************************************************
     MACROS / CONSTANTS
 ***************************************************************************/
 
-DECLARE_LEGACY_DEVICE(RP5H01, rp5h01);
+class rp5h01_device : public device_t
+{
+public:
+	rp5h01_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+
+	DECLARE_WRITE8_MEMBER( enable_w );   /* /CE */
+	DECLARE_WRITE8_MEMBER( reset_w );    /* RESET */
+	DECLARE_WRITE8_MEMBER( cs_w );   /* CS */
+	DECLARE_WRITE8_MEMBER( clock_w );    /* DATA CLOCK (active low) */
+	DECLARE_WRITE8_MEMBER( test_w );     /* TEST */
+	DECLARE_READ8_MEMBER( counter_r );   /* COUNTER OUT */
+	DECLARE_READ8_MEMBER( data_r );      /* DATA */
+
+protected:
+	// device-level overrides
+	virtual void device_config_complete();
+	virtual void device_start();
+	virtual void device_reset();
+private:
+	// internal state
+	int m_counter;
+	int m_counter_mode;   /* test pin */
+	int m_enabled;        /* chip enable */
+	int m_old_reset;      /* reset pin state (level-triggered) */
+	int m_old_clock;      /* clock pin state (level-triggered) */
+	UINT8 *m_data;
+};
+
+extern const device_type RP5H01;
+
 
 #define MCFG_RP5H01_ADD(_tag) \
 	MCFG_DEVICE_ADD(_tag, RP5H01, 0)
@@ -24,16 +62,5 @@ DECLARE_LEGACY_DEVICE(RP5H01, rp5h01);
  * with the same tag as the one
  * assigned to device.
  */
-
-/***************************************************************************
-    PROTOTYPES
-***************************************************************************/
-
-WRITE8_DEVICE_HANDLER( rp5h01_enable_w );	/* /CE */
-WRITE8_DEVICE_HANDLER( rp5h01_reset_w );	/* RESET */
-WRITE8_DEVICE_HANDLER( rp5h01_clock_w );	/* DATA CLOCK (active low) */
-WRITE8_DEVICE_HANDLER( rp5h01_test_w );		/* TEST */
-READ8_DEVICE_HANDLER( rp5h01_counter_r );	/* COUNTER OUT */
-READ8_DEVICE_HANDLER( rp5h01_data_r );		/* DATA */
 
 #endif /* __RP5H01_H__ */

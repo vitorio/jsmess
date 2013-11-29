@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     input.h
 
     Handle input from the user.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -60,7 +31,7 @@ const INT32 INPUT_ABSOLUTE_MAX = 65536;
 
 // maximum number of axis/buttons/hats with ITEM_IDs for use by osd layer
 const int INPUT_MAX_AXIS = 8;
-const int INPUT_MAX_BUTTONS = 16;
+const int INPUT_MAX_BUTTONS = 32;
 const int INPUT_MAX_HATS = 4;
 const int INPUT_MAX_ADD_SWITCH = 16;
 const int INPUT_MAX_ADD_ABSOLUTE = 16;
@@ -254,6 +225,22 @@ enum input_item_id
 	ITEM_ID_BUTTON14,
 	ITEM_ID_BUTTON15,
 	ITEM_ID_BUTTON16,
+	ITEM_ID_BUTTON17,
+	ITEM_ID_BUTTON18,
+	ITEM_ID_BUTTON19,
+	ITEM_ID_BUTTON20,
+	ITEM_ID_BUTTON21,
+	ITEM_ID_BUTTON22,
+	ITEM_ID_BUTTON23,
+	ITEM_ID_BUTTON24,
+	ITEM_ID_BUTTON25,
+	ITEM_ID_BUTTON26,
+	ITEM_ID_BUTTON27,
+	ITEM_ID_BUTTON28,
+	ITEM_ID_BUTTON29,
+	ITEM_ID_BUTTON30,
+	ITEM_ID_BUTTON31,
+	ITEM_ID_BUTTON32,
 	ITEM_ID_START,
 	ITEM_ID_SELECT,
 
@@ -384,12 +371,12 @@ public:
 	UINT8 update(INT32 xaxisval, INT32 yaxisval);
 
 	// joystick mapping codes
-	static const UINT8 JOYSTICK_MAP_NEUTRAL	= 0x00;
-	static const UINT8 JOYSTICK_MAP_LEFT	= 0x01;
-	static const UINT8 JOYSTICK_MAP_RIGHT	= 0x02;
-	static const UINT8 JOYSTICK_MAP_UP		= 0x04;
-	static const UINT8 JOYSTICK_MAP_DOWN	= 0x08;
-	static const UINT8 JOYSTICK_MAP_STICKY	= 0x0f;
+	static const UINT8 JOYSTICK_MAP_NEUTRAL = 0x00;
+	static const UINT8 JOYSTICK_MAP_LEFT    = 0x01;
+	static const UINT8 JOYSTICK_MAP_RIGHT   = 0x02;
+	static const UINT8 JOYSTICK_MAP_UP      = 0x04;
+	static const UINT8 JOYSTICK_MAP_DOWN    = 0x08;
+	static const UINT8 JOYSTICK_MAP_STICKY  = 0x0f;
 
 private:
 	// internal helpers
@@ -401,9 +388,9 @@ private:
 	}
 
 	// internal state
-	UINT8					m_map[9][9];			// 9x9 grid
-	UINT8					m_lastmap;				// last value returned (for sticky tracking)
-	astring					m_origstring;			// originally parsed string
+	UINT8                   m_map[9][9];            // 9x9 grid
+	UINT8                   m_lastmap;              // last value returned (for sticky tracking)
+	astring                 m_origstring;           // originally parsed string
 };
 
 
@@ -448,7 +435,7 @@ public:
 
 private:
 	// internal state
-	UINT32		m_internal;
+	UINT32      m_internal;
 };
 
 
@@ -493,7 +480,7 @@ public:
 
 private:
 	// internal state
-	input_code	m_code[16];
+	input_code  m_code[16];
 };
 
 
@@ -532,19 +519,19 @@ public:
 
 private:
 	// internal state
-	input_class &			m_class;				// reference to our class
-	astring					m_name;					// string name of device
-	int						m_devindex;				// device index of this device
-	input_device_item *		m_item[ITEM_ID_ABSOLUTE_MAXIMUM];	// array of pointers to items
-	input_item_id			m_maxitem;				// maximum item index
-	void *					m_internal;				// internal callback pointer
+	input_class &           m_class;                // reference to our class
+	astring                 m_name;                 // string name of device
+	int                     m_devindex;             // device index of this device
+	input_device_item *     m_item[ITEM_ID_ABSOLUTE_MAXIMUM+1]; // array of pointers to items
+	input_item_id           m_maxitem;              // maximum item index
+	void *                  m_internal;             // internal callback pointer
 
 	// joystick information
-	joystick_map			m_joymap;				// joystick map for this device
-	INT32					m_joystick_deadzone;	// deadzone for joystick
-	INT32					m_joystick_saturation;	// saturation position for joystick
-	bool					m_steadykey_enabled;	// steadykey enabled for keyboards
-	bool					m_lightgun_reload_button; // lightgun reload hack
+	joystick_map            m_joymap;               // joystick map for this device
+	INT32                   m_joystick_deadzone;    // deadzone for joystick
+	INT32                   m_joystick_saturation;  // saturation position for joystick
+	bool                    m_steadykey_enabled;    // steadykey enabled for keyboards
+	bool                    m_lightgun_reload_button; // lightgun reload hack
 };
 
 
@@ -582,12 +569,12 @@ private:
 	void frame_callback();
 
 	// internal state
-	input_manager &			m_manager;				// reference to our manager
-	input_device *			m_device[DEVICE_INDEX_MAXIMUM];	// array of devices in this class
-	input_device_class		m_devclass;				// our device class
-	int						m_maxindex;				// maximum populated index
-	bool					m_enabled;				// is this class enabled?
-	bool					m_multi;				// are multiple instances of this class allowed?
+	input_manager &         m_manager;              // reference to our manager
+	input_device *          m_device[DEVICE_INDEX_MAXIMUM]; // array of devices in this class
+	input_device_class      m_devclass;             // our device class
+	int                     m_maxindex;             // maximum populated index
+	bool                    m_enabled;              // is this class enabled?
+	bool                    m_multi;                // are multiple instances of this class allowed?
 };
 
 
@@ -646,20 +633,20 @@ private:
 	bool code_check_axis(input_device_item &item, input_code code);
 
 	// internal state
-	running_machine &	m_machine;
-	input_code			m_switch_memory[64];
+	running_machine &   m_machine;
+	input_code          m_switch_memory[64];
 
 	// classes
-	input_class			m_keyboard_class;
-	input_class			m_mouse_class;
-	input_class			m_joystick_class;
-	input_class			m_lightgun_class;
-	input_class *		m_class[DEVICE_CLASS_MAXIMUM];
+	input_class         m_keyboard_class;
+	input_class         m_mouse_class;
+	input_class         m_joystick_class;
+	input_class         m_lightgun_class;
+	input_class *       m_class[DEVICE_CLASS_MAXIMUM];
 
 	// sequence polling state
-	input_seq			m_poll_seq;
-	osd_ticks_t			m_poll_seq_last_ticks;
-	input_item_class	m_poll_seq_class;
+	input_seq           m_poll_seq;
+	osd_ticks_t         m_poll_seq_last_ticks;
+	input_item_class    m_poll_seq_class;
 };
 
 
@@ -1037,6 +1024,22 @@ private:
 #define JOYCODE_BUTTON14_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON14)
 #define JOYCODE_BUTTON15_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON15)
 #define JOYCODE_BUTTON16_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON16)
+#define JOYCODE_BUTTON17_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON17)
+#define JOYCODE_BUTTON18_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON18)
+#define JOYCODE_BUTTON19_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON19)
+#define JOYCODE_BUTTON20_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON20)
+#define JOYCODE_BUTTON21_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON21)
+#define JOYCODE_BUTTON22_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON22)
+#define JOYCODE_BUTTON23_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON23)
+#define JOYCODE_BUTTON24_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON24)
+#define JOYCODE_BUTTON25_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON25)
+#define JOYCODE_BUTTON26_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON26)
+#define JOYCODE_BUTTON27_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON27)
+#define JOYCODE_BUTTON28_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON28)
+#define JOYCODE_BUTTON29_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON29)
+#define JOYCODE_BUTTON30_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON30)
+#define JOYCODE_BUTTON31_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON31)
+#define JOYCODE_BUTTON32_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_BUTTON32)
 #define JOYCODE_START_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_START)
 #define JOYCODE_SELECT_INDEXED(n) input_code(DEVICE_CLASS_JOYSTICK, n, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, ITEM_ID_SELECT)
 
@@ -1056,6 +1059,22 @@ private:
 #define JOYCODE_BUTTON14 JOYCODE_BUTTON14_INDEXED(0)
 #define JOYCODE_BUTTON15 JOYCODE_BUTTON15_INDEXED(0)
 #define JOYCODE_BUTTON16 JOYCODE_BUTTON16_INDEXED(0)
+#define JOYCODE_BUTTON17 JOYCODE_BUTTON17_INDEXED(0)
+#define JOYCODE_BUTTON18 JOYCODE_BUTTON18_INDEXED(0)
+#define JOYCODE_BUTTON19 JOYCODE_BUTTON19_INDEXED(0)
+#define JOYCODE_BUTTON20 JOYCODE_BUTTON20_INDEXED(0)
+#define JOYCODE_BUTTON21 JOYCODE_BUTTON21_INDEXED(0)
+#define JOYCODE_BUTTON22 JOYCODE_BUTTON22_INDEXED(0)
+#define JOYCODE_BUTTON23 JOYCODE_BUTTON23_INDEXED(0)
+#define JOYCODE_BUTTON24 JOYCODE_BUTTON24_INDEXED(0)
+#define JOYCODE_BUTTON25 JOYCODE_BUTTON25_INDEXED(0)
+#define JOYCODE_BUTTON26 JOYCODE_BUTTON26_INDEXED(0)
+#define JOYCODE_BUTTON27 JOYCODE_BUTTON27_INDEXED(0)
+#define JOYCODE_BUTTON28 JOYCODE_BUTTON28_INDEXED(0)
+#define JOYCODE_BUTTON29 JOYCODE_BUTTON29_INDEXED(0)
+#define JOYCODE_BUTTON30 JOYCODE_BUTTON30_INDEXED(0)
+#define JOYCODE_BUTTON31 JOYCODE_BUTTON31_INDEXED(0)
+#define JOYCODE_BUTTON32 JOYCODE_BUTTON32_INDEXED(0)
 #define JOYCODE_START JOYCODE_START_INDEXED(0)
 #define JOYCODE_SELECT JOYCODE_SELECT_INDEXED(0)
 
@@ -1084,4 +1103,4 @@ inline input_device_class input_device::devclass() const { return m_class.devcla
 inline running_machine &input_class::machine() const { return m_manager.machine(); }
 
 
-#endif	// __INPUT_H__
+#endif  // __INPUT_H__

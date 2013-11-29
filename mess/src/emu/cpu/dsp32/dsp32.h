@@ -1,38 +1,9 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     dsp32.h
     Interface file for the portable DSP32 emulator.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -47,8 +18,7 @@
 //**************************************************************************
 
 #define MCFG_DSP32C_CONFIG(_config) \
-	dsp32c_device::static_set_config(*device, _config); \
-
+	dsp32c_device::static_set_config(*device, _config);
 
 
 //**************************************************************************
@@ -56,11 +26,12 @@
 //**************************************************************************
 
 // IRQ sources
-const int DSP32_IRQ0		= 0;		// IRQ0
-const int DSP32_IRQ1		= 1;		// IRQ1
+const int DSP32_IRQ0        = 0;        // IRQ0
+const int DSP32_IRQ1        = 1;        // IRQ1
 
 // pin signal bits
-const int DSP32_OUTPUT_PIF = 0x01;
+const int DSP32_OUTPUT_PIF  = 0x01;
+const int DSP32_OUTPUT_PDF  = 0x02;
 
 // register enumeration
 enum
@@ -131,7 +102,7 @@ class dsp32c_device;
 
 struct dsp32_config
 {
-	void (*m_output_pins_changed)(dsp32c_device &device, UINT32 pins);	// a change has occurred on an output pin
+	void (*m_output_pins_changed)(dsp32c_device &device, UINT32 pins);  // a change has occurred on an output pin
 };
 
 
@@ -139,7 +110,7 @@ struct dsp32_config
 // ======================> dsp32c_device
 
 class dsp32c_device : public cpu_device,
-					  public dsp32_config
+						public dsp32_config
 {
 public:
 	// construction/destruction
@@ -191,6 +162,7 @@ protected:
 	void set_irq_line(int irqline, int state);
 
 	void update_pcr(UINT16 newval);
+	void update_pins(void);
 	void illegal(UINT32 op);
 	void unimplemented(UINT32 op);
 	void execute_one();
@@ -421,54 +393,54 @@ protected:
 	void dma_store();
 
 	// configuration
-	const address_space_config		m_program_config;
+	const address_space_config      m_program_config;
 
 	// internal state
-	UINT32			m_r[32];
-	UINT32			m_pin, m_pout;
-	UINT32			m_ivtp;
-	UINT32			m_nzcflags;
-	UINT32			m_vflags;
+	UINT32          m_r[32];
+	UINT32          m_pin, m_pout;
+	UINT32          m_ivtp;
+	UINT32          m_nzcflags;
+	UINT32          m_vflags;
 
-	double			m_a[6];
-	double			m_NZflags;
-	UINT8			m_VUflags;
+	double          m_a[6];
+	double          m_NZflags;
+	UINT8           m_VUflags;
 
-	double			m_abuf[4];
-	UINT8			m_abufreg[4];
-	UINT8			m_abufVUflags[4];
-	UINT8			m_abufNZflags[4];
-	int				m_abufcycle[4];
-	int				m_abuf_index;
+	double          m_abuf[4];
+	UINT8           m_abufreg[4];
+	UINT8           m_abufVUflags[4];
+	UINT8           m_abufNZflags[4];
+	int             m_abufcycle[4];
+	int             m_abuf_index;
 
-	INT32			m_mbufaddr[4];
-	UINT32			m_mbufdata[4];
-	int				m_mbuf_index;
+	INT32           m_mbufaddr[4];
+	UINT32          m_mbufdata[4];
+	int             m_mbuf_index;
 
-	UINT16			m_par;
-	UINT8			m_pare;
-	UINT16			m_pdr;
-	UINT16			m_pdr2;
-	UINT16			m_pir;
-	UINT16			m_pcr;
-	UINT16			m_emr;
-	UINT8			m_esr;
-	UINT16			m_pcw;
-	UINT8			m_piop;
+	UINT16          m_par;
+	UINT8           m_pare;
+	UINT16          m_pdr;
+	UINT16          m_pdr2;
+	UINT16          m_pir;
+	UINT16          m_pcr;
+	UINT16          m_emr;
+	UINT8           m_esr;
+	UINT16          m_pcw;
+	UINT8           m_piop;
 
-	UINT32			m_ibuf;
-	UINT32			m_isr;
-	UINT32			m_obuf;
-	UINT32			m_osr;
+	UINT32          m_ibuf;
+	UINT32          m_isr;
+	UINT32          m_obuf;
+	UINT32          m_osr;
 
-	UINT32			m_iotemp;
+	UINT32          m_iotemp;
 
 	// internal stuff
-	int 			m_lastp;
-	int				m_icount;
-	UINT8			m_lastpins;
-	UINT32			m_ppc;
-	address_space *	m_program;
+	int             m_lastp;
+	int             m_icount;
+	UINT8           m_lastpins;
+	UINT32          m_ppc;
+	address_space * m_program;
 	direct_read_data *m_direct;
 
 	// tables

@@ -31,11 +31,23 @@
 #include "machine/x2212.h"
 #include "includes/starwars.h"
 #include "includes/slapstic.h"
+#include "drivlgcy.h"
+#include "scrlegcy.h"
 
 #define MASTER_CLOCK (12096000)
 #define CLOCK_3KHZ  (MASTER_CLOCK / 4096)
 
 
+WRITE8_MEMBER(starwars_state::quad_pokeyn_w)
+{
+	static const char *const devname[4] = { "pokey1", "pokey2", "pokey3", "pokey4" };
+	int pokey_num = (offset >> 3) & ~0x04;
+	int control = (offset & 0x20) >> 2;
+	int pokey_reg = (offset % 8) | control;
+	pokey_device *pokey = machine().device<pokey_device>(devname[pokey_num]);
+
+	pokey->write(pokey_reg, data);
+}
 
 /*************************************
  *
@@ -43,25 +55,24 @@
  *
  *************************************/
 
-static MACHINE_RESET( starwars )
+void starwars_state::machine_reset()
 {
-	starwars_state *state = machine.driver_data<starwars_state>();
 	/* ESB-specific */
-	if (state->m_is_esb)
+	if (m_is_esb)
 	{
-		address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+		address_space &space = m_maincpu->space(AS_PROGRAM);
 
 		/* reset the slapstic */
 		slapstic_reset();
-		state->m_slapstic_current_bank = slapstic_bank();
-		memcpy(state->m_slapstic_base, &state->m_slapstic_source[state->m_slapstic_current_bank * 0x2000], 0x2000);
+		m_slapstic_current_bank = slapstic_bank();
+		memcpy(m_slapstic_base, &m_slapstic_source[m_slapstic_current_bank * 0x2000], 0x2000);
 
 		/* reset all the banks */
 		starwars_out_w(space, 4, 0);
 	}
 
 	/* reset the matrix processor */
-	starwars_mproc_reset(machine);
+	starwars_mproc_reset();
 }
 
 
@@ -72,9 +83,9 @@ static MACHINE_RESET( starwars )
  *
  *************************************/
 
-static WRITE8_HANDLER( irq_ack_w )
+WRITE8_MEMBER(starwars_state::irq_ack_w)
 {
-	cputag_set_input_line(space->machine(), "maincpu", M6809_IRQ_LINE, CLEAR_LINE);
+	m_maincpu->set_input_line(M6809_IRQ_LINE, CLEAR_LINE);
 }
 
 
@@ -85,30 +96,28 @@ static WRITE8_HANDLER( irq_ack_w )
  *
  *************************************/
 
-static void esb_slapstic_tweak(address_space *space, offs_t offset)
+void starwars_state::esb_slapstic_tweak(address_space &space, offs_t offset)
 {
-	starwars_state *state = space->machine().driver_data<starwars_state>();
 	int new_bank = slapstic_tweak(space, offset);
 
 	/* update for the new bank */
-	if (new_bank != state->m_slapstic_current_bank)
+	if (new_bank != m_slapstic_current_bank)
 	{
-		state->m_slapstic_current_bank = new_bank;
-		memcpy(state->m_slapstic_base, &state->m_slapstic_source[state->m_slapstic_current_bank * 0x2000], 0x2000);
+		m_slapstic_current_bank = new_bank;
+		memcpy(m_slapstic_base, &m_slapstic_source[m_slapstic_current_bank * 0x2000], 0x2000);
 	}
 }
 
 
-static READ8_HANDLER( esb_slapstic_r )
+READ8_MEMBER(starwars_state::esb_slapstic_r)
 {
-	starwars_state *state = space->machine().driver_data<starwars_state>();
-	int result = state->m_slapstic_base[offset];
+	int result = m_slapstic_base[offset];
 	esb_slapstic_tweak(space, offset);
 	return result;
 }
 
 
-static WRITE8_HANDLER( esb_slapstic_w )
+WRITE8_MEMBER(starwars_state::esb_slapstic_w)
 {
 	esb_slapstic_tweak(space, offset);
 }
@@ -121,24 +130,23 @@ static WRITE8_HANDLER( esb_slapstic_w )
  *
  *************************************/
 
-DIRECT_UPDATE_HANDLER( esb_setdirect )
+DIRECT_UPDATE_MEMBER(starwars_state::esb_setdirect)
 {
-	starwars_state *state = machine.driver_data<starwars_state>();
 	/* if we are in the slapstic region, process it */
 	if ((address & 0xe000) == 0x8000)
 	{
-		offs_t pc = cpu_get_pc(&direct.space().device());
+		offs_t pc = direct.space().device().safe_pc();
 
 		/* filter out duplicates; we get these because the handler gets called for
-           multiple reasons:
-            1. Because we have read/write handlers backing the current address
-            2. Because the CPU core executed a jump to a new address
-        */
-		if (pc != state->m_slapstic_last_pc || address != state->m_slapstic_last_address)
+		   multiple reasons:
+		    1. Because we have read/write handlers backing the current address
+		    2. Because the CPU core executed a jump to a new address
+		*/
+		if (pc != m_slapstic_last_pc || address != m_slapstic_last_address)
 		{
-			state->m_slapstic_last_pc = pc;
-			state->m_slapstic_last_address = address;
-			esb_slapstic_tweak(&direct.space(), address & 0x1fff);
+			m_slapstic_last_pc = pc;
+			m_slapstic_last_address = address;
+			esb_slapstic_tweak(direct.space(), address & 0x1fff);
 		}
 		return ~0;
 	}
@@ -153,19 +161,19 @@ DIRECT_UPDATE_HANDLER( esb_setdirect )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x2fff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0)
-	AM_RANGE(0x3000, 0x3fff) AM_ROM								/* vector_rom */
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8, starwars_state )
+	AM_RANGE(0x0000, 0x2fff) AM_RAM AM_SHARE("vectorram") AM_REGION("maincpu", 0)
+	AM_RANGE(0x3000, 0x3fff) AM_ROM                             /* vector_rom */
 	AM_RANGE(0x4300, 0x431f) AM_READ_PORT("IN0")
 	AM_RANGE(0x4320, 0x433f) AM_READ_PORT("IN1")
 	AM_RANGE(0x4340, 0x435f) AM_READ_PORT("DSW0")
 	AM_RANGE(0x4360, 0x437f) AM_READ_PORT("DSW1")
-	AM_RANGE(0x4380, 0x439f) AM_READ(starwars_adc_r)			/* a-d control result */
+	AM_RANGE(0x4380, 0x439f) AM_READ(starwars_adc_r)            /* a-d control result */
 	AM_RANGE(0x4400, 0x4400) AM_READWRITE(starwars_main_read_r, starwars_main_wr_w)
 	AM_RANGE(0x4401, 0x4401) AM_READ(starwars_main_ready_flag_r)
-	AM_RANGE(0x4500, 0x45ff) AM_DEVREADWRITE_MODERN("x2212", x2212_device, read, write)
-	AM_RANGE(0x4600, 0x461f) AM_WRITE(avgdvg_go_w)
-	AM_RANGE(0x4620, 0x463f) AM_WRITE(avgdvg_reset_w)
+	AM_RANGE(0x4500, 0x45ff) AM_DEVREADWRITE("x2212", x2212_device, read, write)
+	AM_RANGE(0x4600, 0x461f) AM_WRITE_LEGACY(avgdvg_go_w)
+	AM_RANGE(0x4620, 0x463f) AM_WRITE_LEGACY(avgdvg_reset_w)
 	AM_RANGE(0x4640, 0x465f) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x4660, 0x467f) AM_WRITE(irq_ack_w)
 	AM_RANGE(0x4680, 0x469f) AM_READNOP AM_WRITE(starwars_out_w)
@@ -175,11 +183,11 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x4700, 0x4707) AM_WRITE(starwars_math_w)
 	AM_RANGE(0x4700, 0x4700) AM_READ(starwars_div_reh_r)
 	AM_RANGE(0x4701, 0x4701) AM_READ(starwars_div_rel_r)
-	AM_RANGE(0x4703, 0x4703) AM_READ(starwars_prng_r)			/* pseudo random number generator */
-	AM_RANGE(0x4800, 0x4fff) AM_RAM								/* CPU and Math RAM */
-	AM_RANGE(0x5000, 0x5fff) AM_RAM AM_BASE_MEMBER(starwars_state, m_mathram)	/* CPU and Math RAM */
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")						/* banked ROM */
-	AM_RANGE(0x8000, 0xffff) AM_ROM								/* rest of main_rom */
+	AM_RANGE(0x4703, 0x4703) AM_READ(starwars_prng_r)           /* pseudo random number generator */
+	AM_RANGE(0x4800, 0x4fff) AM_RAM                             /* CPU and Math RAM */
+	AM_RANGE(0x5000, 0x5fff) AM_RAM AM_SHARE("mathram") /* CPU and Math RAM */
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")                        /* banked ROM */
+	AM_RANGE(0x8000, 0xffff) AM_ROM                             /* rest of main_rom */
 ADDRESS_MAP_END
 
 
@@ -190,15 +198,15 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8, starwars_state )
 	AM_RANGE(0x0000, 0x07ff) AM_WRITE(starwars_sout_w)
-	AM_RANGE(0x0800, 0x0fff) AM_READ(starwars_sin_r)		/* SIN Read */
-	AM_RANGE(0x1000, 0x107f) AM_RAM							/* 6532 ram */
-	AM_RANGE(0x1080, 0x109f) AM_DEVREADWRITE("riot", riot6532_r, riot6532_w)
-	AM_RANGE(0x1800, 0x183f) AM_WRITE(quad_pokey_w)
-	AM_RANGE(0x2000, 0x27ff) AM_RAM							/* program RAM */
-	AM_RANGE(0x4000, 0x7fff) AM_ROM							/* sound roms */
-	AM_RANGE(0xb000, 0xffff) AM_ROM							/* more sound roms */
+	AM_RANGE(0x0800, 0x0fff) AM_READ(starwars_sin_r)        /* SIN Read */
+	AM_RANGE(0x1000, 0x107f) AM_RAM                         /* 6532 ram */
+	AM_RANGE(0x1080, 0x109f) AM_DEVREADWRITE("riot", riot6532_device, read, write)
+	AM_RANGE(0x1800, 0x183f) AM_WRITE(quad_pokeyn_w)
+	AM_RANGE(0x2000, 0x27ff) AM_RAM                         /* program RAM */
+	AM_RANGE(0x4000, 0x7fff) AM_ROM                         /* sound roms */
+	AM_RANGE(0xb000, 0xffff) AM_ROM                         /* more sound roms */
 ADDRESS_MAP_END
 
 
@@ -233,7 +241,7 @@ static INPUT_PORTS_START( starwars )
 	/* Bit 6 is VG_HALT */
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(avgdvg_done_r, NULL)
 	/* Bit 7 is MATH_RUN - see machine/starwars.c */
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(matrix_flag_r, NULL)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM_MEMBER(DEVICE_SELF, starwars_state,matrix_flag_r, NULL)
 
 	PORT_START("DSW0")
 	PORT_DIPNAME( 0x03, 0x02, "Starting Shields" )  PORT_DIPLOCATION("10D:1,2")
@@ -264,13 +272,13 @@ static INPUT_PORTS_START( starwars )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
-        /* Manual shows Coin_B (Right) as Bit 4,5 - actually Bit 3,4 */
+		/* Manual shows Coin_B (Right) as Bit 4,5 - actually Bit 3,4 */
 	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Coin_B ) )  PORT_DIPLOCATION("10EF:3,4")
 	PORT_DIPSETTING(    0x00, "*1" )
 	PORT_DIPSETTING(    0x04, "*4" )
 	PORT_DIPSETTING(    0x08, "*5" )
 	PORT_DIPSETTING(    0x0c, "*6" )
-        /* Manual shows Coin_A (Left) as Bit 3 - actually Bit 5 */
+		/* Manual shows Coin_A (Left) as Bit 3 - actually Bit 5 */
 	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Coin_A ) )  PORT_DIPLOCATION("10EF:5")
 	PORT_DIPSETTING(    0x00, "*1" )
 	PORT_DIPSETTING(    0x10, "*2" )
@@ -321,41 +329,40 @@ static MACHINE_CONFIG_START( starwars, starwars_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M6809, MASTER_CLOCK / 8)
 	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_assert, (double)MASTER_CLOCK / 4096 / 12)
+	MCFG_CPU_PERIODIC_INT_DRIVER(starwars_state, irq0_line_assert,  (double)MASTER_CLOCK / 4096 / 12)
 	MCFG_WATCHDOG_TIME_INIT(attotime::from_hz(CLOCK_3KHZ / 128))
 
 	MCFG_CPU_ADD("audiocpu", M6809, MASTER_CLOCK / 8)
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MCFG_MACHINE_RESET(starwars)
 
 	MCFG_RIOT6532_ADD("riot", MASTER_CLOCK / 8, starwars_riot6532_intf)
 
 	MCFG_X2212_ADD_AUTOSAVE("x2212") /* nvram */
 
 	/* video hardware */
+	MCFG_VECTOR_ADD("vector")
 	MCFG_SCREEN_ADD("screen", VECTOR)
 	MCFG_SCREEN_REFRESH_RATE(40)
 	MCFG_SCREEN_SIZE(400, 300)
 	MCFG_SCREEN_VISIBLE_AREA(0, 250, 0, 280)
-	MCFG_SCREEN_UPDATE(vector)
+	MCFG_SCREEN_UPDATE_DEVICE("vector", vector_device, screen_update)
 
 	MCFG_VIDEO_START(avg_starwars)
 
 	/* sound hardware */
-	MCFG_SOUND_START(starwars)
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("pokey1", POKEY, MASTER_CLOCK / 8)
+	MCFG_POKEY_ADD("pokey1", MASTER_CLOCK / 8)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MCFG_SOUND_ADD("pokey2", POKEY, MASTER_CLOCK / 8)
+	MCFG_POKEY_ADD("pokey2", MASTER_CLOCK / 8)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MCFG_SOUND_ADD("pokey3", POKEY, MASTER_CLOCK / 8)
+	MCFG_POKEY_ADD("pokey3", MASTER_CLOCK / 8)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MCFG_SOUND_ADD("pokey4", POKEY, MASTER_CLOCK / 8)
+	MCFG_POKEY_ADD("pokey4", MASTER_CLOCK / 8)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
 	MCFG_SOUND_ADD("tms", TMS5220, MASTER_CLOCK/2/9)
@@ -392,10 +399,10 @@ ROM_START( starwars1 )
 
 	/* Mathbox PROMs */
 	ROM_REGION( 0x1000, "user2", 0)
-	ROM_LOAD( "136021.110",   0x0000, 0x0400, CRC(01061762) SHA1(199549ead9ff9a5d5db75a2d15aef0240feb1aca) ) /* PROM 0 */
-	ROM_LOAD( "136021.111",   0x0400, 0x0400, CRC(2e619b70) SHA1(f76132b884ffdf3a4fe58637238c5235aab50408) ) /* PROM 1 */
-	ROM_LOAD( "136021.112",   0x0800, 0x0400, CRC(6cfa3544) SHA1(be059bfffe6b5bfcb4af78e9e7a98870ccf21985) ) /* PROM 2 */
-	ROM_LOAD( "136021.113",   0x0c00, 0x0400, CRC(03f6acb2) SHA1(1bad540950575581067b97e3a1cadd479c68adf1) ) /* PROM 3 */
+	ROM_LOAD( "136021.110",   0x0000, 0x0400, CRC(810e040e) SHA1(d247cbb0afb4538d5161f8ce9eab337cdb3f2da4) ) /* PROM 0 */
+	ROM_LOAD( "136021.111",   0x0400, 0x0400, CRC(ae69881c) SHA1(f3420c6e15602956fd94982a5d8d4ddd015ed977) ) /* PROM 1 */
+	ROM_LOAD( "136021.112",   0x0800, 0x0400, CRC(ecf22628) SHA1(4dcf5153221feca329b8e8d199bd4fc00b151d9c) ) /* PROM 2 */
+	ROM_LOAD( "136021.113",   0x0c00, 0x0400, CRC(83febfde) SHA1(e13541b09d1724204fdb171528e9a1c83c799c1c) ) /* PROM 3 */
 ROM_END
 
 
@@ -421,10 +428,10 @@ ROM_START( starwars )
 
 	/* Mathbox PROMs */
 	ROM_REGION( 0x1000, "user2", 0 )
-	ROM_LOAD( "136021.110",   0x0000, 0x0400, CRC(01061762) SHA1(199549ead9ff9a5d5db75a2d15aef0240feb1aca) ) /* PROM 0 */
-	ROM_LOAD( "136021.111",   0x0400, 0x0400, CRC(2e619b70) SHA1(f76132b884ffdf3a4fe58637238c5235aab50408) ) /* PROM 1 */
-	ROM_LOAD( "136021.112",   0x0800, 0x0400, CRC(6cfa3544) SHA1(be059bfffe6b5bfcb4af78e9e7a98870ccf21985) ) /* PROM 2 */
-	ROM_LOAD( "136021.113",   0x0c00, 0x0400, CRC(03f6acb2) SHA1(1bad540950575581067b97e3a1cadd479c68adf1) ) /* PROM 3 */
+	ROM_LOAD( "136021.110",   0x0000, 0x0400, CRC(810e040e) SHA1(d247cbb0afb4538d5161f8ce9eab337cdb3f2da4) ) /* PROM 0 */
+	ROM_LOAD( "136021.111",   0x0400, 0x0400, CRC(ae69881c) SHA1(f3420c6e15602956fd94982a5d8d4ddd015ed977) ) /* PROM 1 */
+	ROM_LOAD( "136021.112",   0x0800, 0x0400, CRC(ecf22628) SHA1(4dcf5153221feca329b8e8d199bd4fc00b151d9c) ) /* PROM 2 */
+	ROM_LOAD( "136021.113",   0x0c00, 0x0400, CRC(83febfde) SHA1(e13541b09d1724204fdb171528e9a1c83c799c1c) ) /* PROM 3 */
 ROM_END
 
 ROM_START( tomcatsw )
@@ -447,10 +454,10 @@ ROM_START( tomcatsw )
 
 	/* Mathbox PROMs */
 	ROM_REGION( 0x1000, "user2", 0 )
-	ROM_LOAD( "136021.110",   0x0000, 0x0400, CRC(01061762) SHA1(199549ead9ff9a5d5db75a2d15aef0240feb1aca) ) /* PROM 0 */
-	ROM_LOAD( "136021.111",   0x0400, 0x0400, CRC(2e619b70) SHA1(f76132b884ffdf3a4fe58637238c5235aab50408) ) /* PROM 1 */
-	ROM_LOAD( "136021.112",   0x0800, 0x0400, CRC(6cfa3544) SHA1(be059bfffe6b5bfcb4af78e9e7a98870ccf21985) ) /* PROM 2 */
-	ROM_LOAD( "136021.113",   0x0c00, 0x0400, CRC(03f6acb2) SHA1(1bad540950575581067b97e3a1cadd479c68adf1) ) /* PROM 3 */
+	ROM_LOAD( "136021.110",   0x0000, 0x0400, CRC(810e040e) SHA1(d247cbb0afb4538d5161f8ce9eab337cdb3f2da4) ) /* PROM 0 */
+	ROM_LOAD( "136021.111",   0x0400, 0x0400, CRC(ae69881c) SHA1(f3420c6e15602956fd94982a5d8d4ddd015ed977) ) /* PROM 1 */
+	ROM_LOAD( "136021.112",   0x0800, 0x0400, CRC(ecf22628) SHA1(4dcf5153221feca329b8e8d199bd4fc00b151d9c) ) /* PROM 2 */
+	ROM_LOAD( "136021.113",   0x0c00, 0x0400, CRC(83febfde) SHA1(e13541b09d1724204fdb171528e9a1c83c799c1c) ) /* PROM 3 */
 ROM_END
 
 
@@ -496,53 +503,51 @@ ROM_END
  *
  *************************************/
 
-static DRIVER_INIT( starwars )
+DRIVER_INIT_MEMBER(starwars_state,starwars)
 {
-	starwars_state *state = machine.driver_data<starwars_state>();
 	/* prepare the mathbox */
-	state->m_is_esb = 0;
-	starwars_mproc_init(machine);
+	m_is_esb = 0;
+	starwars_mproc_init();
 
 	/* initialize banking */
-	memory_configure_bank(machine, "bank1", 0, 2, machine.region("maincpu")->base() + 0x6000, 0x10000 - 0x6000);
-	memory_set_bank(machine, "bank1", 0);
+	membank("bank1")->configure_entries(0, 2, memregion("maincpu")->base() + 0x6000, 0x10000 - 0x6000);
+	membank("bank1")->set_entry(0);
 }
 
 
-static DRIVER_INIT( esb )
+DRIVER_INIT_MEMBER(starwars_state,esb)
 {
-	starwars_state *state = machine.driver_data<starwars_state>();
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = memregion("maincpu")->base();
 
 	/* init the slapstic */
-	slapstic_init(machine, 101);
-	state->m_slapstic_source = &rom[0x14000];
-	state->m_slapstic_base = &rom[0x08000];
+	slapstic_init(machine(), 101);
+	m_slapstic_source = &rom[0x14000];
+	m_slapstic_base = &rom[0x08000];
 
 	/* install an opcode base handler */
-	address_space *space = machine.device<m6809_device>("maincpu")->space(AS_PROGRAM);
-	space->set_direct_update_handler(direct_update_delegate(FUNC(esb_setdirect), &machine));
+	address_space &space = m_maincpu->space(AS_PROGRAM);
+	space.set_direct_update_handler(direct_update_delegate(FUNC(starwars_state::esb_setdirect), this));
 
 	/* install read/write handlers for it */
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x8000, 0x9fff, FUNC(esb_slapstic_r), FUNC(esb_slapstic_w));
+	m_maincpu->space(AS_PROGRAM).install_readwrite_handler(0x8000, 0x9fff, read8_delegate(FUNC(starwars_state::esb_slapstic_r),this), write8_delegate(FUNC(starwars_state::esb_slapstic_w),this));
 
 	/* install additional banking */
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0xa000, 0xffff, "bank2");
+	m_maincpu->space(AS_PROGRAM).install_read_bank(0xa000, 0xffff, "bank2");
 
 	/* prepare the matrix processor */
-	state->m_is_esb = 1;
-	starwars_mproc_init(machine);
+	m_is_esb = 1;
+	starwars_mproc_init();
 
 	/* initialize banking */
-	memory_configure_bank(machine, "bank1", 0, 2, rom + 0x6000, 0x10000 - 0x6000);
-	memory_set_bank(machine, "bank1", 0);
-	memory_configure_bank(machine, "bank2", 0, 2, rom + 0xa000, 0x1c000 - 0xa000);
-	memory_set_bank(machine, "bank2", 0);
+	membank("bank1")->configure_entries(0, 2, rom + 0x6000, 0x10000 - 0x6000);
+	membank("bank1")->set_entry(0);
+	membank("bank2")->configure_entries(0, 2, rom + 0xa000, 0x1c000 - 0xa000);
+	membank("bank2")->set_entry(0);
 
 	/* additional globals for state saving */
-	state->save_item(NAME(state->m_slapstic_current_bank));
-	state->save_item(NAME(state->m_slapstic_last_pc));
-	state->save_item(NAME(state->m_slapstic_last_address));
+	save_item(NAME(m_slapstic_current_bank));
+	save_item(NAME(m_slapstic_last_pc));
+	save_item(NAME(m_slapstic_last_address));
 }
 
 
@@ -553,7 +558,7 @@ static DRIVER_INIT( esb )
  *
  *************************************/
 
-GAME( 1983, starwars, 0,        starwars, starwars, starwars, ROT0, "Atari", "Star Wars (rev 2)", 0 )
-GAME( 1983, starwars1,starwars, starwars, starwars, starwars, ROT0, "Atari", "Star Wars (rev 1)", 0 )
-GAME( 1983, tomcatsw, tomcat,   starwars, starwars, starwars, ROT0, "Atari", "TomCat (Star Wars hardware, prototype)", GAME_NO_SOUND )
-GAME( 1985, esb,      0,        starwars, esb,      esb,      ROT0, "Atari Games", "The Empire Strikes Back", 0 )
+GAME( 1983, starwars, 0,        starwars, starwars, starwars_state, starwars, ROT0, "Atari", "Star Wars (rev 2)", 0 )
+GAME( 1983, starwars1,starwars, starwars, starwars, starwars_state, starwars, ROT0, "Atari", "Star Wars (rev 1)", 0 )
+GAME( 1983, tomcatsw, tomcat,   starwars, starwars, starwars_state, starwars, ROT0, "Atari", "TomCat (Star Wars hardware, prototype)", GAME_NO_SOUND )
+GAME( 1985, esb,      0,        starwars, esb, starwars_state,      esb,      ROT0, "Atari Games", "The Empire Strikes Back", 0 )

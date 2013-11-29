@@ -1,8 +1,20 @@
+#include "includes/nb1413m3.h"
+
 class nbmj8900_state : public driver_device
 {
 public:
+	enum
+	{
+		TIMER_BLITTER
+	};
+
 	nbmj8900_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu"),
+		m_nb1413m3(*this, "nb1413m3")   { }
+
+	required_device<cpu_device> m_maincpu;
+	required_device<nb1413m3_device> m_nb1413m3;
 
 	int m_scrolly;
 	int m_blitter_destx;
@@ -21,27 +33,35 @@ public:
 	int m_gfxdraw_mode;
 	int m_screen_height;
 	int m_screen_width;
-	bitmap_t *m_tmpbitmap0;
-	bitmap_t *m_tmpbitmap1;
+	bitmap_ind16 m_tmpbitmap0;
+	bitmap_ind16 m_tmpbitmap1;
 	UINT8 *m_videoram0;
 	UINT8 *m_videoram1;
 	UINT8 *m_palette;
 	UINT8 *m_clut;
 	int m_flipscreen_old;
+	DECLARE_READ8_MEMBER(nbmj8900_palette_type1_r);
+	DECLARE_WRITE8_MEMBER(nbmj8900_palette_type1_w);
+	DECLARE_READ8_MEMBER(nbmj8900_palette_type2_r);
+	DECLARE_WRITE8_MEMBER(nbmj8900_palette_type2_w);
+	DECLARE_READ8_MEMBER(nbmj8900_palette_type3_r);
+	DECLARE_WRITE8_MEMBER(nbmj8900_palette_type3_w);
+	DECLARE_WRITE8_MEMBER(nbmj8900_clutsel_w);
+	DECLARE_READ8_MEMBER(nbmj8900_clut_r);
+	DECLARE_WRITE8_MEMBER(nbmj8900_clut_w);
+	DECLARE_WRITE8_MEMBER(nbmj8900_blitter_w);
+	DECLARE_WRITE8_MEMBER(nbmj8900_scrolly_w);
+	DECLARE_WRITE8_MEMBER(nbmj8900_vramsel_w);
+	DECLARE_WRITE8_MEMBER(nbmj8900_romsel_w);
+	DECLARE_DRIVER_INIT(togenkyo);
+	DECLARE_DRIVER_INIT(ohpaipee);
+	virtual void video_start();
+	UINT32 screen_update_nbmj8900(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void nbmj8900_vramflip(int vram);
+	void update_pixel0(int x, int y);
+	void update_pixel1(int x, int y);
+	void nbmj8900_gfxdraw();
+
+protected:
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 };
-
-
-/*----------- defined in video/nbmj8900.c -----------*/
-
-SCREEN_UPDATE( nbmj8900 );
-VIDEO_START( nbmj8900_2layer );
-
-READ8_HANDLER( nbmj8900_palette_type1_r );
-WRITE8_HANDLER( nbmj8900_palette_type1_w );
-WRITE8_HANDLER( nbmj8900_blitter_w );
-WRITE8_HANDLER( nbmj8900_scrolly_w );
-WRITE8_HANDLER( nbmj8900_vramsel_w );
-WRITE8_HANDLER( nbmj8900_romsel_w );
-WRITE8_HANDLER( nbmj8900_clutsel_w );
-READ8_HANDLER( nbmj8900_clut_r );
-WRITE8_HANDLER( nbmj8900_clut_w );

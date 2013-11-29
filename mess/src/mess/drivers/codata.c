@@ -1,34 +1,54 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
         Contel Codata Corporation Codata
 
-        11/01/2010 Skeleton driver.
+        2010-01-11 Skeleton driver.
+        2013-08-26 Connected to a terminal.
+
+        Chips: uPD7201C, AM9513, SCN68000. Crystal: 16 MHz
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
+#include "machine/terminal.h"
 
 
 class codata_state : public driver_device
 {
 public:
 	codata_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag)
+		, m_p_base(*this, "rambase")
+		, m_terminal(*this, TERMINAL_TAG)
+		, m_maincpu(*this, "maincpu")
+	{ }
 
-	UINT8 *m_p_base;
+	DECLARE_READ16_MEMBER(keyin_r);
+	DECLARE_READ16_MEMBER(status_r);
+	DECLARE_WRITE8_MEMBER(kbd_put);
+private:
+	UINT8 m_term_data;
+	virtual void machine_reset();
+	required_shared_ptr<UINT16> m_p_base;
+	required_device<generic_terminal_device> m_terminal;
+	required_device<cpu_device> m_maincpu;
 };
-
-
 
 static ADDRESS_MAP_START(codata_mem, AS_PROGRAM, 16, codata_state)
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x000000, 0x0fffff) AM_RAM AM_BASE(m_p_base)
+	AM_RANGE(0x000000, 0x0fffff) AM_RAM AM_SHARE("rambase")
 	AM_RANGE(0x200000, 0x203fff) AM_ROM AM_REGION("user1", 0);
 	AM_RANGE(0x400000, 0x403fff) AM_ROM AM_REGION("user1", 0x4000);
-	//AM_RANGE(0x600000, 0x600003) some device
-	//AM_RANGE(0x800000, 0x800003) another device
+	AM_RANGE(0x600000, 0x600001) AM_READ(keyin_r) AM_DEVWRITE8(TERMINAL_TAG, generic_terminal_device, write, 0xff00)
+	AM_RANGE(0x600002, 0x600003) AM_READ(status_r)
+	//AM_RANGE(0x600000, 0x600003) uPD7201 SIO
+	//AM_RANGE(0x800000, 0x800003) AM9513 5 channel timer
+	//AM_RANGE(0xa00000, 0xbfffff) page map (rw)
+	//AM_RANGE(0xc00000, 0xdfffff) segment map (rw), context register (r)
+	//AM_RANGE(0xe00000, 0xffffff) context register (w), 16-bit parallel input port (r)
 ADDRESS_MAP_END
 
 /* Input ports */
@@ -36,21 +56,34 @@ static INPUT_PORTS_START( codata )
 INPUT_PORTS_END
 
 
-static MACHINE_RESET(codata)
+READ16_MEMBER( codata_state::keyin_r )
 {
-	codata_state *state = machine.driver_data<codata_state>();
-	UINT8* RAM = machine.region("user1")->base();
-	memcpy(state->m_p_base, RAM, 16);
-	machine.device("maincpu")->reset();
+	UINT16 ret = m_term_data;
+	m_term_data = 0;
+	return ret << 8;
 }
 
-static VIDEO_START( codata )
+READ16_MEMBER( codata_state::status_r )
 {
+	return (m_term_data) ? 0x500 : 0x400;
 }
 
-static SCREEN_UPDATE( codata )
+WRITE8_MEMBER( codata_state::kbd_put )
 {
-	return 0;
+	m_term_data = data;
+}
+
+static GENERIC_TERMINAL_INTERFACE( terminal_intf )
+{
+	DEVCB_DRIVER_MEMBER(codata_state, kbd_put)
+};
+
+void codata_state::machine_reset()
+{
+	UINT8* RAM = memregion("user1")->base();
+	memcpy(m_p_base, RAM, 16);
+	m_term_data = 0;
+	m_maincpu->reset();
 }
 
 static MACHINE_CONFIG_START( codata, codata_state )
@@ -58,21 +91,8 @@ static MACHINE_CONFIG_START( codata, codata_state )
 	MCFG_CPU_ADD("maincpu",M68000, XTAL_16MHz / 2)
 	MCFG_CPU_PROGRAM_MAP(codata_mem)
 
-	MCFG_MACHINE_RESET(codata)
-
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(50)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MCFG_SCREEN_SIZE(640, 480)
-	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
-	MCFG_SCREEN_UPDATE(codata)
-
-	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
-
-	MCFG_VIDEO_START(codata)
+	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -92,4 +112,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT     COMPANY   FULLNAME       FLAGS */
-COMP( 1982, codata,  0,     0,       codata,    codata,   0,   "Contel Codata Corporation", "Codata", GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 1982, codata,  0,     0,       codata,    codata, driver_device,   0,   "Contel Codata Corporation", "Codata", GAME_NOT_WORKING | GAME_NO_SOUND)

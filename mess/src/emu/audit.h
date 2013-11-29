@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     audit.h
 
     ROM, disk, and sample auditing functions.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -42,6 +13,7 @@
 #ifndef __AUDIT_H__
 #define __AUDIT_H__
 
+#include "drivenum.h"
 #include "hash.h"
 
 
@@ -51,8 +23,8 @@
 //**************************************************************************
 
 // hashes to use for validation
-#define AUDIT_VALIDATE_FAST				"R"		/* CRC only */
-#define AUDIT_VALIDATE_FULL				"RS"	/* CRC + SHA1 */
+#define AUDIT_VALIDATE_FAST             "R"     /* CRC only */
+#define AUDIT_VALIDATE_FULL             "RS"    /* CRC + SHA1 */
 
 
 
@@ -97,8 +69,6 @@ public:
 		SUBSTATUS_NOT_FOUND,
 		SUBSTATUS_NOT_FOUND_NODUMP,
 		SUBSTATUS_NOT_FOUND_OPTIONAL,
-		SUBSTATUS_NOT_FOUND_PARENT,
-		SUBSTATUS_NOT_FOUND_BIOS,
 		SUBSTATUS_ERROR = 100
 	};
 
@@ -116,6 +86,7 @@ public:
 	UINT64 actual_length() const { return m_length; }
 	const hash_collection &expected_hashes() const { return m_exphashes; }
 	const hash_collection &actual_hashes() const { return m_hashes; }
+	device_t *shared_device() const { return m_shared_device; }
 
 	// setters
 	void set_status(audit_status status, audit_substatus substatus)
@@ -130,17 +101,23 @@ public:
 		m_length = length;
 	}
 
+	void set_shared_device(device_t *shared_device)
+	{
+		m_shared_device = shared_device;
+	}
+
 private:
 	// internal state
-	audit_record *		m_next;
-	media_type			m_type;					/* type of item that was audited */
-	audit_status		m_status;				/* status of audit on this item */
-	audit_substatus		m_substatus;			/* finer-detail status */
-	const char *		m_name;					/* name of item */
-	UINT64				m_explength;			/* expected length of item */
-	UINT64				m_length;				/* actual length of item */
-	hash_collection		m_exphashes;    		/* expected hash data */
-	hash_collection		m_hashes;				/* actual hash information */
+	audit_record *      m_next;
+	media_type          m_type;                 /* type of item that was audited */
+	audit_status        m_status;               /* status of audit on this item */
+	audit_substatus     m_substatus;            /* finer-detail status */
+	const char *        m_name;                 /* name of item */
+	UINT64              m_explength;            /* expected length of item */
+	UINT64              m_length;               /* actual length of item */
+	hash_collection     m_exphashes;            /* expected hash data */
+	hash_collection     m_hashes;               /* actual hash information */
+	device_t *          m_shared_device;        /* device that shares the rom */
 };
 
 
@@ -169,22 +146,24 @@ public:
 
 	// audit operations
 	summary audit_media(const char *validation = AUDIT_VALIDATE_FULL);
+	summary audit_device(device_t *device, const char *validation = AUDIT_VALIDATE_FULL);
+	summary audit_software(const char *list_name, software_info *swinfo, const char *validation = AUDIT_VALIDATE_FULL);
 	summary audit_samples();
-	summary summarize(astring *output = NULL);
+	summary summarize(const char *name,astring *output = NULL);
 
 private:
 	// internal helpers
 	audit_record *audit_one_rom(const rom_entry *rom);
-	audit_record *audit_one_disk(const rom_entry *rom);
+	audit_record *audit_one_disk(const rom_entry *rom, const char *locationtag = NULL);
 	void compute_status(audit_record &record, const rom_entry *rom, bool found);
-	int also_used_by_parent(const hash_collection &romhashes);
+	device_t *find_shared_device(device_t &device, const char *name, const hash_collection &romhashes, UINT64 romlength);
 
 	// internal state
-	simple_list<audit_record>	m_record_list;
-	const driver_enumerator &	m_enumerator;
-	const char *				m_validation;
-	const char *				m_searchpath;
+	simple_list<audit_record>   m_record_list;
+	const driver_enumerator &   m_enumerator;
+	const char *                m_validation;
+	const char *                m_searchpath;
 };
 
 
-#endif	/* __AUDIT_H__ */
+#endif  /* __AUDIT_H__ */

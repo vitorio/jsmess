@@ -17,7 +17,6 @@
 */
 
 #include "kb3600.h"
-#include "machine/devhelpr.h"
 
 
 
@@ -76,7 +75,7 @@ void ay3600_device::device_config_complete()
 //-------------------------------------------------
 
 ay3600_device::ay3600_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, AY3600, "AY-5-3600", tag, owner, clock)
+	: device_t(mconfig, AY3600, "AY-5-3600", tag, owner, clock, "ay3600", __FILE__)
 {
 }
 
@@ -110,6 +109,15 @@ void ay3600_device::device_start()
 	save_item(NAME(m_ako));
 }
 
+
+//-------------------------------------------------
+//  device_start - device-specific reset
+//-------------------------------------------------
+
+void ay3600_device::device_reset()
+{
+	m_ako = 0;
+}
 
 //-------------------------------------------------
 //  device_timer - handler timer events

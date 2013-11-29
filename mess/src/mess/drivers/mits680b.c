@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Miodrag Milanovic, Robbbert
 /***************************************************************************
 
         MITS Altair 680b
@@ -19,14 +21,12 @@ ToDo:
 
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/m6800/m6800.h"
-#include "machine/6551.h"
+#include "machine/mos6551.h"
 #include "machine/terminal.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
 
 class mits680b_state : public driver_device
 {
@@ -38,7 +38,7 @@ public:
 	{ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_terminal;
+	required_device<generic_terminal_device> m_terminal;
 	DECLARE_READ8_MEMBER(terminal_status_r);
 	DECLARE_READ8_MEMBER(terminal_r);
 	DECLARE_READ8_MEMBER(status_check_r);
@@ -68,9 +68,9 @@ READ8_MEMBER( mits680b_state::terminal_r )
 static ADDRESS_MAP_START(mits680b_mem, AS_PROGRAM, 8, mits680b_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE( 0x0000, 0x03ff ) AM_RAM // 1024 bytes RAM
-	//AM_RANGE( 0xf000, 0xf003 ) AM_DEVREADWRITE("acia",  acia_6551_r, acia_6551_w )
+	//AM_RANGE( 0xf000, 0xf003 ) AM_DEVREADWRITE("acia",  mos6551_device, read, write )
 	AM_RANGE( 0xf000, 0xf000 ) AM_READ(terminal_status_r)
-	AM_RANGE( 0xf001, 0xf001 ) AM_READ(terminal_r) AM_DEVWRITE_LEGACY(TERMINAL_TAG, terminal_write)
+	AM_RANGE( 0xf001, 0xf001 ) AM_READ(terminal_r) AM_DEVWRITE(TERMINAL_TAG, generic_terminal_device, write)
 	AM_RANGE( 0xf002, 0xf002 ) AM_READ(status_check_r)
 	AM_RANGE( 0xff00, 0xffff ) AM_ROM
 ADDRESS_MAP_END
@@ -80,7 +80,7 @@ static INPUT_PORTS_START( mits680b )
 INPUT_PORTS_END
 
 
-MACHINE_RESET_MEMBER( mits680b_state )
+void mits680b_state::machine_reset()
 {
 	m_term_data = 0;
 }
@@ -101,7 +101,6 @@ static MACHINE_CONFIG_START( mits680b, mits680b_state )
 	MCFG_CPU_PROGRAM_MAP(mits680b_mem)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 
 	/* acia */
@@ -117,4 +116,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1976, mits680b,  0,     0,     mits680b,  mits680b,  0,  "MITS", "Altair 680b", GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 1976, mits680b,  0,     0,     mits680b,  mits680b, driver_device,  0,  "MITS", "Altair 680b", GAME_NOT_WORKING | GAME_NO_SOUND)

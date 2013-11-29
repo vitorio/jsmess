@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     Xebec S1410 5.25" Winchester Disk Controller emulation
@@ -83,12 +85,11 @@ Notes:
 
 */
 
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "s1410.h"
 #include "cpu/z80/z80.h"
-#include "machine/devhelpr.h"
+#include "imagedev/harddriv.h"
 
 
 
@@ -96,7 +97,7 @@ Notes:
 //  MACROS / CONSTANTS
 //**************************************************************************
 
-#define Z8400A_TAG			"z80"
+#define Z8400A_TAG          "z80"
 
 
 
@@ -107,23 +108,12 @@ Notes:
 const device_type S1410 = &device_creator<s1410_device>;
 
 //-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
-//-------------------------------------------------
-
-void s1410_device::device_config_complete()
-{
-	m_shortname = "s1410";
-}
-
-
-//-------------------------------------------------
 //  ROM( s1410 )
 //-------------------------------------------------
 
 ROM_START( s1410 )
 	ROM_REGION( 0x1000, Z8400A_TAG, 0 )
+	ROM_LOAD( "104521f", 0x0000, 0x1000, CRC(305b8e76) SHA1(9efaa53ae86bc111bd263ad433e083f78a000cab) )
 	ROM_LOAD( "104521g", 0x0000, 0x1000, CRC(24385115) SHA1(c389f6108cd5ed798a090acacce940ee43d77042) )
 	ROM_LOAD( "104788d", 0x0000, 0x1000, CRC(2e385e2d) SHA1(7e2c349b2b6e95f2134f82cffc38d86b8a68390d) )
 
@@ -179,6 +169,9 @@ static MACHINE_CONFIG_FRAGMENT( s1410 )
 	MCFG_CPU_ADD(Z8400A_TAG, Z80, XTAL_16MHz/4)
 	MCFG_CPU_PROGRAM_MAP(s1410_mem)
 	MCFG_CPU_IO_MAP(s1410_io)
+	MCFG_DEVICE_DISABLE()
+
+	MCFG_HARDDISK_ADD("image")
 MACHINE_CONFIG_END
 
 
@@ -192,8 +185,6 @@ machine_config_constructor s1410_device::device_mconfig_additions() const
 	return MACHINE_CONFIG_NAME( s1410 );
 }
 
-
-
 //**************************************************************************
 //  LIVE DEVICE
 //**************************************************************************
@@ -203,24 +194,90 @@ machine_config_constructor s1410_device::device_mconfig_additions() const
 //-------------------------------------------------
 
 s1410_device::s1410_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, S1410, "Xebec S1410", tag, owner, clock)
+	: scsihd_device(mconfig, S1410, "Xebec S1410", tag, owner, clock, "s1410", __FILE__)
 {
 }
 
+#define S1410_CMD_CHECK_TRACK_FORMAT ( 0x05 )
+#define S1410_CMD_INIT_DRIVE_PARAMS ( 0x0c )
+#define S1410_CMD_FORMAT_ALT_TRACK ( 0x0E )
+#define S1410_CMD_WRITE_SEC_BUFFER ( 0x0F )
+#define S1410_CMD_READ_SEC_BUFFER ( 0x10 )
+#define S1410_CMD_RAM_DIAGS ( 0xe0 )
+#define S1410_CMD_DRIVE_DIAGS ( 0xe3 )
+#define S1410_CMD_CONTROLER_DIAGS ( 0xe4 )
 
-//-------------------------------------------------
-//  device_start - device-specific startup
-//-------------------------------------------------
+#define TRANSFERLENGTH_INIT_DRIVE_PARAMS ( 0x08 )
+#define TRANSFERLENGTH_FORMAT_ALT_TRACK ( 0x03 )
+#define TRANSFERLENGTH_SECTOR_BUFFER ( 0x0200 )
 
-void s1410_device::device_start()
+void s1410_device::ExecCommand()
 {
+	switch( command[ 0 ] )
+	{
+	case S1410_CMD_INIT_DRIVE_PARAMS:
+		m_phase = SCSI_PHASE_DATAOUT;
+		m_transfer_length = TRANSFERLENGTH_INIT_DRIVE_PARAMS;
+		break;
+
+	case S1410_CMD_FORMAT_ALT_TRACK:
+		m_phase = SCSI_PHASE_DATAOUT;
+		m_transfer_length = TRANSFERLENGTH_FORMAT_ALT_TRACK;
+		break;
+
+	case S1410_CMD_WRITE_SEC_BUFFER:
+		m_phase = SCSI_PHASE_DATAOUT;
+		m_transfer_length = TRANSFERLENGTH_SECTOR_BUFFER;
+		break;
+
+	case S1410_CMD_READ_SEC_BUFFER:
+		m_phase = SCSI_PHASE_DATAIN;
+		m_transfer_length = TRANSFERLENGTH_SECTOR_BUFFER;
+		break;
+
+	case S1410_CMD_CHECK_TRACK_FORMAT:
+	case S1410_CMD_RAM_DIAGS:
+	case S1410_CMD_DRIVE_DIAGS:
+	case S1410_CMD_CONTROLER_DIAGS:
+		m_phase = SCSI_PHASE_STATUS;
+		m_transfer_length = 0;
+		break;
+
+	default:
+		scsihd_device::ExecCommand();
+		break;
+	}
 }
 
-
-//-------------------------------------------------
-//  device_reset - device-specific reset
-//-------------------------------------------------
-
-void s1410_device::device_reset()
+void s1410_device::WriteData( UINT8 *data, int dataLength )
 {
+	switch( command[ 0 ] )
+	{
+	case S1410_CMD_INIT_DRIVE_PARAMS:
+		{
+			int sectorsPerTrack = 0;
+
+			switch( m_sector_bytes )
+			{
+			case 256:
+				sectorsPerTrack = 32;
+				break;
+
+			case 512:
+				sectorsPerTrack = 17;
+				break;
+			}
+
+			UINT16 tracks = ((data[0]<<8)+data[1]);
+			UINT8 heads = data[2];
+			UINT32 capacity = tracks * heads * sectorsPerTrack * m_sector_bytes;
+
+			logerror("S1410_CMD_INIT_DRIVE_PARAMS Tracks=%d, Heads=%d, Capacity=%d\n",tracks,heads,capacity);
+		}
+		break;
+
+	default:
+		scsihd_device::WriteData( data, dataLength );
+		break;
+	}
 }

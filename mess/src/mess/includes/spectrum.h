@@ -9,10 +9,17 @@
 
 #include "imagedev/snapquik.h"
 #include "imagedev/cartslot.h"
+#include "machine/upd765.h"
+#include "imagedev/cassette.h"
+#include "sound/speaker.h"
+#include "machine/ram.h"
 
 /* Spectrum crystals */
 
-#define X1 XTAL_14MHz		// Main clock
+#define X1 XTAL_14MHz       // Main clock (48k Spectrum)
+#define X1_128_AMSTRAD  35469000 // Main clock (Amstrad 128K model, +2A?)
+#define X1_128_SINCLAIR 17734475 // Main clock (Sinclair 128K model)
+
 #define X2 XTAL_4_433619MHz // PAL color subcarrier
 
 /* Spectrum screen size in pixels */
@@ -51,26 +58,53 @@
 #define TS2068_RIGHT_BORDER  96   /* Number of right hand border pixels */
 #define TS2068_SCREEN_WIDTH (TS2068_LEFT_BORDER + TS2068_DISPLAY_XSIZE + TS2068_RIGHT_BORDER)
 
-typedef struct
+struct EVENT_LIST_ITEM
 {
 	/* driver defined ID for this write */
-	int	Event_ID;
+	int Event_ID;
 	/* driver defined data for this write */
-	int	Event_Data;
-	/* time at which this write occured */
+	int Event_Data;
+	/* time at which this write occurred */
 	int Event_Time;
-} EVENT_LIST_ITEM;
+};
 
 
 class spectrum_state : public driver_device
 {
 public:
 	spectrum_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_video_ram(*this, "video_ram"),
+		m_maincpu(*this, "maincpu"),
+		m_cassette(*this, "cassette"),
+		m_ram(*this, RAM_TAG),
+		m_speaker(*this, "speaker"),
+		m_upd765(*this, "upd765"),
+		m_upd765_0(*this, "upd765:0"),
+		m_upd765_1(*this, "upd765:1"),
+		m_io_line0(*this, "LINE0"),
+		m_io_line1(*this, "LINE1"),
+		m_io_line2(*this, "LINE2"),
+		m_io_line3(*this, "LINE3"),
+		m_io_line4(*this, "LINE4"),
+		m_io_line5(*this, "LINE5"),
+		m_io_line6(*this, "LINE6"),
+		m_io_line7(*this, "LINE7"),
+		m_io_nmi(*this, "NMI"),
+		m_io_config(*this, "CONFIG"),
+		m_io_joy_intf(*this, "JOY_INTF"),
+		m_io_kempston(*this, "KEMPSTON"),
+		m_io_fuller(*this, "FULLER"),
+		m_io_mikrogen(*this, "MIKROGEN"),
+		m_io_plus0(*this, "PLUS0"),
+		m_io_plus1(*this, "PLUS1"),
+		m_io_plus2(*this, "PLUS2"),
+		m_io_plus3(*this, "PLUS3"),
+		m_io_plus4(*this, "PLUS4") { }
 
 	int m_port_fe_data;
 	int m_port_7ffd_data;
-	int m_port_1ffd_data;	/* scorpion and plus3 */
+	int m_port_1ffd_data;   /* scorpion and plus3 */
 	int m_port_ff_data; /* Display enhancement control */
 	int m_port_f4_data; /* Horizontal Select Register */
 
@@ -80,15 +114,11 @@ public:
 	int m_frame_invert_count;
 	int m_frame_number;    /* Used for handling FLASH 1 */
 	int m_flash_invert;
-	UINT8 m_retrace_cycles;
-	UINT8 *m_video_ram;
+	optional_shared_ptr<UINT8> m_video_ram;
 	UINT8 *m_screen_location;
 
 	int m_ROMSelection;
 
-	/* Last border colour output in the previous frame */
-	int m_CurrBorderColor;
-	int m_LastDisplayedBorderColor; /* Negative value indicates redraw */
 
 	EVENT_LIST_ITEM *m_pCurrentItem;
 	int m_NumEvents;
@@ -99,6 +129,98 @@ public:
 
 	UINT8 *m_ram_0000;
 	UINT8 m_ram_disabled_by_beta;
+	DECLARE_WRITE8_MEMBER(spectrum_port_fe_w);
+	DECLARE_READ8_MEMBER(spectrum_port_fe_r);
+	DECLARE_READ8_MEMBER(spectrum_port_1f_r);
+	DECLARE_READ8_MEMBER(spectrum_port_7f_r);
+	DECLARE_READ8_MEMBER(spectrum_port_df_r);
+	DECLARE_READ8_MEMBER(spectrum_port_ula_r);
+
+	DECLARE_WRITE8_MEMBER(spectrum_128_port_7ffd_w);
+	DECLARE_READ8_MEMBER(spectrum_128_ula_r);
+
+	DECLARE_WRITE8_MEMBER(spectrum_plus3_port_3ffd_w);
+	DECLARE_READ8_MEMBER(spectrum_plus3_port_3ffd_r);
+	DECLARE_READ8_MEMBER(spectrum_plus3_port_2ffd_r);
+	DECLARE_WRITE8_MEMBER(spectrum_plus3_port_7ffd_w);
+	DECLARE_WRITE8_MEMBER(spectrum_plus3_port_1ffd_w);
+
+	DECLARE_READ8_MEMBER(ts2068_port_f4_r);
+	DECLARE_WRITE8_MEMBER(ts2068_port_f4_w);
+	DECLARE_READ8_MEMBER(ts2068_port_ff_r);
+	DECLARE_WRITE8_MEMBER(ts2068_port_ff_w);
+	DECLARE_WRITE8_MEMBER(tc2048_port_ff_w);
+
+	DECLARE_DRIVER_INIT(spectrum);
+	DECLARE_DRIVER_INIT(plus2);
+	DECLARE_DRIVER_INIT(plus3);
+	DECLARE_MACHINE_RESET(spectrum);
+	DECLARE_VIDEO_START(spectrum);
+	DECLARE_PALETTE_INIT(spectrum);
+	DECLARE_MACHINE_RESET(tc2048);
+	DECLARE_VIDEO_START(spectrum_128);
+	DECLARE_MACHINE_RESET(spectrum_128);
+	DECLARE_MACHINE_RESET(spectrum_plus3);
+	DECLARE_MACHINE_RESET(ts2068);
+	DECLARE_VIDEO_START(ts2068);
+	UINT32 screen_update_spectrum(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	UINT32 screen_update_tc2048(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	UINT32 screen_update_ts2068(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void screen_eof_spectrum(screen_device &screen, bool state);
+	INTERRUPT_GEN_MEMBER(spec_interrupt);
+	DECLARE_DEVICE_IMAGE_LOAD_MEMBER( spectrum_cart );
+	DECLARE_DEVICE_IMAGE_LOAD_MEMBER( timex_cart );
+	DECLARE_DEVICE_IMAGE_UNLOAD_MEMBER( timex_cart );
+
+	unsigned int m_previous_border_x, m_previous_border_y;
+	bitmap_ind16 m_border_bitmap;
+
+	DECLARE_FLOPPY_FORMATS( floppy_formats );
+	void spectrum_128_update_memory();
+	void spectrum_plus3_update_memory();
+	void ts2068_update_memory();
+
+	DECLARE_SNAPSHOT_LOAD_MEMBER( spectrum );
+	DECLARE_QUICKLOAD_LOAD_MEMBER( spectrum );
+
+
+protected:
+	required_device<cpu_device> m_maincpu;
+	required_device<cassette_image_device> m_cassette;
+	required_device<ram_device> m_ram;
+	required_device<speaker_sound_device> m_speaker;
+	optional_device<upd765a_device> m_upd765;
+	optional_device<floppy_connector> m_upd765_0;
+	optional_device<floppy_connector> m_upd765_1;
+
+	// Regular spectrum ports; marked as optional because of other subclasses
+	optional_ioport m_io_line0;
+	optional_ioport m_io_line1;
+	optional_ioport m_io_line2;
+	optional_ioport m_io_line3;
+	optional_ioport m_io_line4;
+	optional_ioport m_io_line5;
+	optional_ioport m_io_line6;
+	optional_ioport m_io_line7;
+	optional_ioport m_io_nmi;
+	optional_ioport m_io_config;
+	optional_ioport m_io_joy_intf;
+	optional_ioport m_io_kempston;
+	optional_ioport m_io_fuller;
+	optional_ioport m_io_mikrogen;
+	// Plus ports
+	optional_ioport m_io_plus0;
+	optional_ioport m_io_plus1;
+	optional_ioport m_io_plus2;
+	optional_ioport m_io_plus3;
+	optional_ioport m_io_plus4;
+
+	void spectrum_UpdateBorderBitmap();
+	inline unsigned char get_display_color (unsigned char color, int invert);
+	inline void spectrum_plot_pixel(bitmap_ind16 &bitmap, int x, int y, UINT32 color);
+	void ts2068_hires_scanline(bitmap_ind16 &bitmap, int y, int borderlines);
+	void ts2068_64col_scanline(bitmap_ind16 &bitmap, int y, int borderlines, unsigned short inkcolor);
+	void ts2068_lores_scanline(bitmap_ind16 &bitmap, int y, int borderlines, int screen);
 };
 
 
@@ -108,58 +230,9 @@ INPUT_PORTS_EXTERN( spectrum );
 INPUT_PORTS_EXTERN( spec_plus );
 
 MACHINE_CONFIG_EXTERN( spectrum );
-MACHINE_RESET( spectrum );
-
-READ8_HANDLER(spectrum_port_1f_r);
-READ8_HANDLER(spectrum_port_7f_r);
-READ8_HANDLER(spectrum_port_df_r);
-READ8_HANDLER(spectrum_port_fe_r);
-WRITE8_HANDLER(spectrum_port_fe_w);
 
 /*----------- defined in drivers/spec128.c -----------*/
 
 MACHINE_CONFIG_EXTERN( spectrum_128 );
-
-void spectrum_128_update_memory(running_machine &machine);
-
-/*----------- defined in drivers/specpls3.c -----------*/
-
-void spectrum_plus3_update_memory(running_machine &machine);
-
-/*----------- defined in drivers/timex.c -----------*/
-
-void ts2068_update_memory(running_machine &machine);
-
-/*----------- defined in video/spectrum.c -----------*/
-
-PALETTE_INIT( spectrum );
-
-VIDEO_START( spectrum );
-VIDEO_START( spectrum_128 );
-
-SCREEN_UPDATE( spectrum );
-SCREEN_EOF( spectrum );
-
-void spectrum_border_force_redraw (running_machine &machine);
-void spectrum_border_set_last_color (running_machine &machine, int NewColor);
-void spectrum_border_draw(running_machine &machine, bitmap_t *bitmap, int full_refresh,
-                int TopBorderLines, int ScreenLines, int BottomBorderLines,
-                int LeftBorderPixels, int ScreenPixels, int RightBorderPixels,
-                int LeftBorderCycles, int ScreenCycles, int RightBorderCycles,
-                int HorizontalRetraceCycles, int VRetraceTime, int EventID);
-
-void spectrum_EventList_Initialise(running_machine &machine, int NumEntries);
-void spectrum_EventList_Reset(running_machine &machine);
-void spectrum_EventList_SetOffsetStartTime(running_machine &machine, int StartTime);
-void spectrum_EventList_AddItemOffset(running_machine &machine, int ID, int Data,int Time);
-int spectrum_EventList_NumEvents(running_machine &machine);
-EVENT_LIST_ITEM *spectrum_EventList_GetFirstItem(running_machine &machine);
-
-/*----------- defined in video/timex.c -----------*/
-
-VIDEO_START( ts2068 );
-SCREEN_UPDATE( ts2068 );
-
-SCREEN_UPDATE( tc2048 );
 
 #endif /* __SPECTRUM_H__ */

@@ -1,42 +1,9 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 //============================================================
 //
 //  ledutil.c - Win32 example code that tracks changing
 //  outputs and updates the keyboard LEDs in response
-//
-//============================================================
-//
-//  Copyright Aaron Giles
-//  All rights reserved.
-//
-//  Redistribution and use in source and binary forms, with or
-//  without modification, are permitted provided that the
-//  following conditions are met:
-//
-//    * Redistributions of source code must retain the above
-//      copyright notice, this list of conditions and the
-//      following disclaimer.
-//    * Redistributions in binary form must reproduce the
-//      above copyright notice, this list of conditions and
-//      the following disclaimer in the documentation and/or
-//      other materials provided with the distribution.
-//    * Neither the name 'MAME' nor the names of its
-//      contributors may be used to endorse or promote
-//      products derived from this software without specific
-//      prior written permission.
-//
-//  THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND
-//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-//  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
-//  FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
-//  EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-//  DAMAGE (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-//  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-//  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-//  ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-//  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-//  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-//  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //============================================================
 //
@@ -85,10 +52,10 @@ typedef int running_machine;
 
 // note you need to compile as a console app to have any of
 // these printfs show up
-#define DEBUG_VERSION		0
+#define DEBUG_VERSION       0
 
 #if DEBUG_VERSION
-#define DEBUG_PRINTF(x)		printf x
+#define DEBUG_PRINTF(x)     printf x
 #else
 #define DEBUG_PRINTF(x)
 #endif
@@ -99,31 +66,30 @@ typedef int running_machine;
 //============================================================
 
 // unique client ID
-#define CLIENT_ID							(('M' << 24) | ('L' << 16) | ('E' << 8) | ('D' << 0))
+#define CLIENT_ID                           (('M' << 24) | ('L' << 16) | ('E' << 8) | ('D' << 0))
 
 // LED methods
-#define LED_METHOD_PS2						0
-#define LED_METHOD_USB						1
-#define LED_METHOD_WIN9X					2
+#define LED_METHOD_PS2                      0
+#define LED_METHOD_USB                      1
 
 // window parameters
-#define WINDOW_CLASS						TEXT("LEDSample")
-#define WINDOW_NAME							TEXT("LEDSample")
+#define WINDOW_CLASS                        TEXT("LEDSample")
+#define WINDOW_NAME                         TEXT("LEDSample")
 
 // window styles
-#define WINDOW_STYLE						WS_OVERLAPPEDWINDOW
-#define WINDOW_STYLE_EX						0
+#define WINDOW_STYLE                        WS_OVERLAPPEDWINDOW
+#define WINDOW_STYLE_EX                     0
 
 // Define the keyboard indicators.
 // (Definitions borrowed from ntddkbd.h)
 
-#define IOCTL_KEYBOARD_SET_INDICATORS		CTL_CODE(FILE_DEVICE_KEYBOARD, 0x0002, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_KEYBOARD_QUERY_TYPEMATIC		CTL_CODE(FILE_DEVICE_KEYBOARD, 0x0008, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define IOCTL_KEYBOARD_QUERY_INDICATORS		CTL_CODE(FILE_DEVICE_KEYBOARD, 0x0010, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_KEYBOARD_SET_INDICATORS       CTL_CODE(FILE_DEVICE_KEYBOARD, 0x0002, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_KEYBOARD_QUERY_TYPEMATIC      CTL_CODE(FILE_DEVICE_KEYBOARD, 0x0008, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_KEYBOARD_QUERY_INDICATORS     CTL_CODE(FILE_DEVICE_KEYBOARD, 0x0010, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-#define KEYBOARD_SCROLL_LOCK_ON 			1
-#define KEYBOARD_NUM_LOCK_ON				2
-#define KEYBOARD_CAPS_LOCK_ON				4
+#define KEYBOARD_SCROLL_LOCK_ON             1
+#define KEYBOARD_NUM_LOCK_ON                2
+#define KEYBOARD_CAPS_LOCK_ON               4
 
 
 
@@ -131,19 +97,18 @@ typedef int running_machine;
 //  TYPE DEFINITIONS
 //============================================================
 
-typedef struct _KEYBOARD_INDICATOR_PARAMETERS
+struct KEYBOARD_INDICATOR_PARAMETERS
 {
-    USHORT UnitId;             // Unit identifier.
-    USHORT LedFlags;           // LED indicator state.
-} KEYBOARD_INDICATOR_PARAMETERS, *PKEYBOARD_INDICATOR_PARAMETERS;
+	USHORT UnitId;             // Unit identifier.
+	USHORT LedFlags;           // LED indicator state.
+};
 
 
-typedef struct _id_map_entry id_map_entry;
-struct _id_map_entry
+struct id_map_entry
 {
-	id_map_entry *			next;
-	const char *			name;
-	WPARAM					id;
+	id_map_entry *          next;
+	const char *            name;
+	WPARAM                  id;
 };
 
 
@@ -152,24 +117,24 @@ struct _id_map_entry
 //  GLOBAL VARIABLES
 //============================================================
 
-static int					ledmethod;
-static int					original_state;
-static int					current_state;
-static int					pause_state;
-static HANDLE				hKbdDev;
+static int                  ledmethod;
+static int                  original_state;
+static int                  current_state;
+static int                  pause_state;
+static HANDLE               hKbdDev;
 
-static HWND					mame_target;
-static HWND					listener_hwnd;
+static HWND                 mame_target;
+static HWND                 listener_hwnd;
 
-static id_map_entry *		idmaplist;
+static id_map_entry *       idmaplist;
 
 // message IDs
-static UINT					om_mame_start;
-static UINT					om_mame_stop;
-static UINT					om_mame_update_state;
-static UINT					om_mame_register_client;
-static UINT					om_mame_unregister_client;
-static UINT					om_mame_get_id_string;
+static UINT                 om_mame_start;
+static UINT                 om_mame_stop;
+static UINT                 om_mame_update_state;
+static UINT                 om_mame_register_client;
+static UINT                 om_mame_unregister_client;
+static UINT                 om_mame_get_id_string;
 
 
 
@@ -307,9 +272,9 @@ static int create_window_class(void)
 		WNDCLASS wc = { 0 };
 
 		// initialize the description of the window class
-		wc.lpszClassName	= WINDOW_CLASS;
-		wc.hInstance		= GetModuleHandle(NULL);
-		wc.lpfnWndProc		= listener_window_proc;
+		wc.lpszClassName    = WINDOW_CLASS;
+		wc.hInstance        = GetModuleHandle(NULL);
+		wc.lpfnWndProc      = listener_window_proc;
 
 		// register the class; fail if we can't
 		if (!RegisterClass(&wc))
@@ -509,17 +474,10 @@ static LRESULT handle_update_state(WPARAM wparam, LPARAM lparam)
 
 static void output_startup(const char *commandline)
 {
-	OSVERSIONINFO osinfo = { sizeof(OSVERSIONINFO) };
-
 	// default to PS/2, override if USB is specified as a parameter
 	ledmethod = LED_METHOD_PS2;
 	if (commandline != NULL && strcmp(commandline, "-usb") == 0)
 		ledmethod = LED_METHOD_USB;
-
-	// force Win9x method if we're on Win 9x
-	GetVersionEx(&osinfo);
-	if (osinfo.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS)
-		ledmethod = LED_METHOD_WIN9X;
 
 	// output the method
 	switch (ledmethod)
@@ -530,10 +488,6 @@ static void output_startup(const char *commandline)
 
 		case LED_METHOD_USB:
 			DEBUG_PRINTF(("Using USB method\n"));
-			break;
-
-		case LED_METHOD_WIN9X:
-			DEBUG_PRINTF(("Using Win9x method\n"));
 			break;
 	}
 }
@@ -654,7 +608,6 @@ static int led_get_state(void)
 
 	switch (ledmethod)
 	{
-		case LED_METHOD_WIN9X:
 		case LED_METHOD_USB:
 		{
 			BYTE key_states[256];
@@ -671,9 +624,9 @@ static int led_get_state(void)
 
 		case LED_METHOD_PS2:
 		{
-			KEYBOARD_INDICATOR_PARAMETERS OutputBuffer;	  // Output buffer for DeviceIoControl
-			ULONG				DataLength = sizeof(KEYBOARD_INDICATOR_PARAMETERS);
-			ULONG				ReturnedLength; // Number of bytes returned in output buffer
+			KEYBOARD_INDICATOR_PARAMETERS OutputBuffer;   // Output buffer for DeviceIoControl
+			ULONG               DataLength = sizeof(KEYBOARD_INDICATOR_PARAMETERS);
+			ULONG               ReturnedLength; // Number of bytes returned in output buffer
 
 			// Address first keyboard
 			OutputBuffer.UnitId = 0;
@@ -705,23 +658,6 @@ static void led_set_state(int state)
 
 	switch (ledmethod)
 	{
-		case LED_METHOD_WIN9X:
-		{
-			// thanks to Lee Taylor for the original version of this code
-			BYTE key_states[256];
-
-			// get the current state
-			GetKeyboardState(&key_states[0]);
-
-			// mask states and set new states
-			key_states[VK_NUMLOCK] = (key_states[VK_NUMLOCK] & ~1) | ((state >> 0) & 1);
-			key_states[VK_CAPITAL] = (key_states[VK_CAPITAL] & ~1) | ((state >> 1) & 1);
-			key_states[VK_SCROLL] = (key_states[VK_SCROLL] & ~1) | ((state >> 2) & 1);
-
-			SetKeyboardState(&key_states[0]);
-			break;
-		}
-
 		case LED_METHOD_USB:
 		{
 			static const BYTE vk[3] = { VK_NUMLOCK, VK_CAPITAL, VK_SCROLL };
@@ -751,10 +687,10 @@ static void led_set_state(int state)
 
 		case LED_METHOD_PS2:
 		{
-			KEYBOARD_INDICATOR_PARAMETERS InputBuffer;	  // Input buffer for DeviceIoControl
-			ULONG				DataLength = sizeof(KEYBOARD_INDICATOR_PARAMETERS);
-			ULONG				ReturnedLength; // Number of bytes returned in output buffer
-			UINT				LedFlags=0;
+			KEYBOARD_INDICATOR_PARAMETERS InputBuffer;    // Input buffer for DeviceIoControl
+			ULONG               DataLength = sizeof(KEYBOARD_INDICATOR_PARAMETERS);
+			ULONG               ReturnedLength; // Number of bytes returned in output buffer
+			UINT                LedFlags=0;
 
 			// Demangle lights to match 95/98
 			if (state & 0x1) LedFlags |= KEYBOARD_NUM_LOCK_ON;

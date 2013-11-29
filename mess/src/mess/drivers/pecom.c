@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Miodrag Milanovic
 /***************************************************************************
 
         Pecom driver by Miodrag Milanovic
@@ -14,16 +16,16 @@
 #include "includes/pecom.h"
 
 /* Address maps */
-static ADDRESS_MAP_START(pecom64_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(pecom64_mem, AS_PROGRAM, 8, pecom_state )
 	AM_RANGE( 0x0000, 0x3fff ) AM_RAMBANK("bank1")
 	AM_RANGE( 0x4000, 0x7fff ) AM_RAMBANK("bank2")
-    AM_RANGE( 0x8000, 0xbfff ) AM_ROM  // ROM 1
-    AM_RANGE( 0xc000, 0xf3ff ) AM_ROM  // ROM 2
-    AM_RANGE( 0xf000, 0xf7ff ) AM_RAMBANK("bank3") // CDP1869 / ROM
-    AM_RANGE( 0xf800, 0xffff ) AM_RAMBANK("bank4") // CDP1869 / ROM
+	AM_RANGE( 0x8000, 0xbfff ) AM_ROM  // ROM 1
+	AM_RANGE( 0xc000, 0xf3ff ) AM_ROM  // ROM 2
+	AM_RANGE( 0xf000, 0xf7ff ) AM_RAMBANK("bank3") // CDP1869 / ROM
+	AM_RANGE( 0xf800, 0xffff ) AM_RAMBANK("bank4") // CDP1869 / ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pecom64_io, AS_IO, 8 )
+static ADDRESS_MAP_START( pecom64_io, AS_IO, 8, pecom_state )
 	AM_RANGE(0x01, 0x01) AM_WRITE(pecom_bank_w)
 	AM_RANGE(0x03, 0x03) AM_READ(pecom_keyboard_r)
 	AM_RANGE(0x03, 0x07) AM_WRITE(pecom_cdp1869_w)
@@ -47,9 +49,9 @@ on modern keyboards. Hence, we move by default Up/Down/Left/Right to Cursor Keys
 use LEft/Right Ctrl/Alt keys for the remaining keys. Due to the unnatural emulated keyboard
 mappings, this is another situation where natural keyboard comes very handy!          */
 
-static INPUT_CHANGED( ef_w )
+INPUT_CHANGED_MEMBER(pecom_state::ef_w)
 {
-	cputag_set_input_line(field.machine(), CDP1802_TAG, (int)(FPTR)param, newval);
+	m_cdp1802->set_input_line((int)(FPTR)param, newval);
 }
 
 static INPUT_PORTS_START( pecom )
@@ -158,10 +160,10 @@ static INPUT_PORTS_START( pecom )
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Del") PORT_CODE(KEYCODE_TAB) PORT_CHAR(UCHAR_MAMEKEY(DEL))
 
 	PORT_START("CNT")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Ctrl") PORT_CODE(KEYCODE_LSHIFT) PORT_CHAR(UCHAR_SHIFT_2) PORT_CHANGED(ef_w, (void*)COSMAC_INPUT_LINE_EF1)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Ctrl") PORT_CODE(KEYCODE_LSHIFT) PORT_CHAR(UCHAR_SHIFT_2) PORT_CHANGED_MEMBER(DEVICE_SELF, pecom_state, ef_w, (void*)COSMAC_INPUT_LINE_EF1)
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Shift") PORT_CODE(KEYCODE_LCONTROL) PORT_CHAR(UCHAR_SHIFT_1)
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Caps") PORT_CODE(KEYCODE_CAPSLOCK) PORT_CHAR(UCHAR_MAMEKEY(CAPSLOCK)) PORT_TOGGLE PORT_CHANGED(ef_w, (void*)COSMAC_INPUT_LINE_EF3)
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Break") PORT_CODE(KEYCODE_MINUS) PORT_CHANGED(ef_w, (void*)COSMAC_INPUT_LINE_EF4)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Caps") PORT_CODE(KEYCODE_CAPSLOCK) PORT_CHAR(UCHAR_MAMEKEY(CAPSLOCK)) PORT_TOGGLE PORT_CHANGED_MEMBER(DEVICE_SELF, pecom_state, ef_w, (void*)COSMAC_INPUT_LINE_EF3)
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_NAME("Break") PORT_CODE(KEYCODE_MINUS) PORT_CHANGED_MEMBER(DEVICE_SELF, pecom_state, ef_w, (void*)COSMAC_INPUT_LINE_EF4)
 INPUT_PORTS_END
 
 static const cassette_interface pecom_cassette_interface =
@@ -169,27 +171,26 @@ static const cassette_interface pecom_cassette_interface =
 	cassette_default_formats,
 	NULL,
 	(cassette_state)(CASSETTE_STOPPED | CASSETTE_MOTOR_ENABLED | CASSETTE_SPEAKER_ENABLED),
-	NULL,
+	"pecom_cass",
 	NULL
 };
 
 /* Machine driver */
 static MACHINE_CONFIG_START( pecom64, pecom_state )
 
-    /* basic machine hardware */
-	MCFG_CPU_ADD(CDP1802_TAG, COSMAC, CDP1869_DOT_CLK_PAL/3)
+	/* basic machine hardware */
+	MCFG_CPU_ADD(CDP1802_TAG, CDP1802, CDP1869_DOT_CLK_PAL/3)
 	MCFG_CPU_PROGRAM_MAP(pecom64_mem)
 	MCFG_CPU_IO_MAP(pecom64_io)
 	MCFG_CPU_CONFIG(pecom64_cdp1802_config)
 
-	MCFG_MACHINE_START( pecom )
-	MCFG_MACHINE_RESET( pecom )
 
 	// sound and video hardware
 
 	MCFG_FRAGMENT_ADD(pecom_video)
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, pecom_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", pecom_cassette_interface )
+	MCFG_SOFTWARE_LIST_ADD("cass_list","pecom_cass")
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -199,16 +200,16 @@ MACHINE_CONFIG_END
 
 /* ROM definition */
 ROM_START( pecom64 )
-	  ROM_REGION( 0x10000, CDP1802_TAG, ROMREGION_ERASEFF )
-	  ROM_SYSTEM_BIOS(0, "ver4", "version 4")
-	  ROMX_LOAD( "pecom64-1.bin", 0x8000, 0x4000, CRC(9a433b47) SHA1(dadb8c399e0a25a2693e10e42a2d7fc2ea9ad427), ROM_BIOS(1) )
-	  ROMX_LOAD( "pecom64-2.bin", 0xc000, 0x4000, CRC(2116cadc) SHA1(03f11055cd221d438a40a41874af8fba0fa116d9), ROM_BIOS(1) )
-	  ROM_SYSTEM_BIOS(1, "ver1", "version 1")
-	  ROMX_LOAD( "170887-rom1.bin", 0x8000, 0x4000, CRC(43710fb4) SHA1(f84f75061c9ac3e34af93141ecabd3c955881aa2), ROM_BIOS(2) )
-	  ROMX_LOAD( "170887-rom2.bin", 0xc000, 0x4000, CRC(d0d34f08) SHA1(7baab17d1e68771b8dcef97d0fffc655beabef28), ROM_BIOS(2) )
+	ROM_REGION( 0x10000, CDP1802_TAG, ROMREGION_ERASEFF )
+	ROM_SYSTEM_BIOS(0, "ver4", "version 4")
+	ROMX_LOAD( "rom_1_g_24.02.88_l.bin", 0x8000, 0x4000, CRC(9a433b47) SHA1(dadb8c399e0a25a2693e10e42a2d7fc2ea9ad427), ROM_BIOS(1) )
+	ROMX_LOAD( "rom_2_g_24.02.88_d.bin", 0xc000, 0x4000, CRC(2116cadc) SHA1(03f11055cd221d438a40a41874af8fba0fa116d9), ROM_BIOS(1) )
+	ROM_SYSTEM_BIOS(1, "ver1", "version 1")
+	ROMX_LOAD( "170887-rom1.bin", 0x8000, 0x4000, CRC(43710fb4) SHA1(f84f75061c9ac3e34af93141ecabd3c955881aa2), ROM_BIOS(2) )
+	ROMX_LOAD( "170887-rom2.bin", 0xc000, 0x4000, CRC(d0d34f08) SHA1(7baab17d1e68771b8dcef97d0fffc655beabef28), ROM_BIOS(2) )
 ROM_END
 
 /* Driver */
 
 /*    YEAR  NAME   PARENT  COMPAT       MACHINE     INPUT   INIT   COMPANY  FULLNAME      FLAGS */
-COMP( 1987, pecom64,     0,      0, 	pecom64,	pecom,	0,     "Ei Nis", "Pecom 64",	0)
+COMP( 1987, pecom64,     0,      0,     pecom64,    pecom, driver_device,   0,     "Ei Nis", "Pecom 64",    0)

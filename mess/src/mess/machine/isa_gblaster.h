@@ -14,22 +14,20 @@
 
 class isa8_gblaster_device :
 		public device_t,
-		public device_isa8_card_interface,
-		public device_slot_card_interface
+		public device_isa8_card_interface
 {
 public:
-        // construction/destruction
-        isa8_gblaster_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+		// construction/destruction
+		isa8_gblaster_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
 		// optional information overrides
 		virtual machine_config_constructor device_mconfig_additions() const;
 protected:
-        // device-level overrides
-        virtual void device_start();
-        virtual void device_reset();
-
+		// device-level overrides
+		virtual void device_start();
+		virtual void device_reset();
 private:
-        // internal state
+		// internal state
 };
 
 

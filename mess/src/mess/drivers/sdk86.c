@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Miodrag Milanovic, Jonathan Gevaryahu, Robbbert
 /***************************************************************************
 
         Intel SDK-86
@@ -8,7 +10,6 @@
 
     TODO:
     Add 8251A for serial
-    Add 8279 for keypad reading and led display handling
     Add optional 2x 8255A
 
 
@@ -21,74 +22,41 @@ Download the User Manual to get the operating procedures.
 
 ToDo:
 - Artwork
-- Proper emulation of the 8279 chip (there's only just enough to get this
-  driver to work atm)
 - Add INTR and RESET keys
-- Add terminal interface and option to enable it.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i86/i86.h"
+#include "machine/i8251.h"
+#include "machine/i8279.h"
+#include "machine/serial.h"
 #include "sdk86.lh"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
+#define I8251_TAG       "i8251"
+#define RS232_TAG       "rs232"
+
 
 class sdk86_state : public driver_device
 {
 public:
 	sdk86_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag) ,
+			m_maincpu(*this, "maincpu"),
+			m_usart(*this, I8251_TAG)
+	{ }
 
-	DECLARE_READ16_MEMBER(keyboard_r);
-	DECLARE_READ16_MEMBER(status_r);
-	DECLARE_WRITE16_MEMBER(command_w);
-	DECLARE_WRITE16_MEMBER(data_w);
-	UINT8 m_digit; // next digit to display
-	UINT8 m_kbd; // keyscan code being returned
-	UINT8 m_keytemp; // to see when key gets released
-	bool m_kbd_ready; // get ready to return keyscan code
-	virtual void machine_reset();
+	required_device<cpu_device> m_maincpu;
+	required_device<i8251_device> m_usart;
+
+	DECLARE_WRITE8_MEMBER(scanlines_w);
+	DECLARE_WRITE8_MEMBER(digit_w);
+	DECLARE_READ8_MEMBER(kbd_r);
+
+	TIMER_DEVICE_CALLBACK_MEMBER( serial_tick );
+
+	UINT8 m_digit;
 };
-
-READ16_MEMBER( sdk86_state::keyboard_r )
-{
-	if (m_kbd_ready)
-	{
-		UINT16 ret = m_kbd;
-		m_kbd_ready = FALSE;
-		m_kbd = 0xff;
-		return ret;
-	}
-	else
-		return 0;
-}
-
-READ16_MEMBER( sdk86_state::status_r )
-{
-	return (m_kbd==0xff) ? 0 : 7;
-}
-
-WRITE16_MEMBER( sdk86_state::command_w )
-{
-	if ((data & 0x90)==0x90)
-		m_digit = data & 7;
-	else
-	if (data==0x40)
-		m_kbd_ready = TRUE;
-}
-
-WRITE16_MEMBER( sdk86_state::data_w )
-{
-	if (m_digit < 8)
-	{
-		output_set_digit_value(m_digit, data);
-		m_digit++;
-	}
-	else
-		m_digit = 15;
-}
 
 static ADDRESS_MAP_START(sdk86_mem, AS_PROGRAM, 16, sdk86_state)
 	AM_RANGE(0x00000, 0x00fff) AM_RAM //2K standard, or 4k (board fully populated)
@@ -97,15 +65,12 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START(sdk86_io, AS_IO, 16, sdk86_state)
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0xffe8, 0xffe9) AM_MIRROR(4) AM_READWRITE(keyboard_r,data_w)
-	AM_RANGE(0xffea, 0xffeb) AM_MIRROR(4) AM_READWRITE(status_r,command_w)
-
-	// FFE8-FFEB = 8279 kbd/display chip (even -> data, control) AM_MIRROR(4)
-	// FFF0-FFF3 = 8251 serial chip (even -> data, control) AM_MIRROR(4)
+	AM_RANGE(0xfff0, 0xfff1) AM_MIRROR(4) AM_DEVREADWRITE8(I8251_TAG, i8251_device, data_r, data_w, 0xff)
+	AM_RANGE(0xfff2, 0xfff3) AM_MIRROR(4) AM_DEVREADWRITE8(I8251_TAG, i8251_device, status_r, control_w, 0xff)
+	AM_RANGE(0xffe8, 0xffe9) AM_MIRROR(4) AM_DEVREADWRITE8("i8279", i8279_device, data_r, data_w, 0xff)
+	AM_RANGE(0xffea, 0xffeb) AM_MIRROR(4) AM_DEVREADWRITE8("i8279", i8279_device, status_r, cmd_w, 0xff)
 	// FFF8-FFFF = 2 x 8255A i/o chips. chip 1 uses the odd addresses, chip 2 uses the even addresses.
 	//             ports are A,B,C,control in that order.
-	
-	
 ADDRESS_MAP_END
 
 /* Input ports */
@@ -131,83 +96,83 @@ static INPUT_PORTS_START( sdk86 )
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("F") PORT_CODE(KEYCODE_F) PORT_CHAR('F')
 
 	PORT_START("X2")
-	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME(".") PORT_CODE(KEYCODE_Q)
-	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME(",") PORT_CODE(KEYCODE_W)
-	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("-") PORT_CODE(KEYCODE_R)
-	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("+") PORT_CODE(KEYCODE_T)
-	PORT_BIT(0x10, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME(":") PORT_CODE(KEYCODE_Y)
-	PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("REG") PORT_CODE(KEYCODE_U)
+	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME(".") PORT_CODE(KEYCODE_STOP) PORT_CODE(KEYCODE_X)
+	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME(",") PORT_CODE(KEYCODE_COMMA) PORT_CODE(KEYCODE_UP)
+	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("-") PORT_CODE(KEYCODE_MINUS)
+	PORT_BIT(0x08, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("+") PORT_CODE(KEYCODE_EQUALS)
+	PORT_BIT(0x10, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME(":") PORT_CODE(KEYCODE_COLON)
+	PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_NAME("REG") PORT_CODE(KEYCODE_R)
 	PORT_BIT(0xC0, IP_ACTIVE_LOW, IPT_UNUSED)
 INPUT_PORTS_END
 
 
-MACHINE_RESET_MEMBER( sdk86_state )
+WRITE8_MEMBER( sdk86_state::scanlines_w )
 {
-	m_digit = 15;
-	m_kbd_ready = FALSE;
-	m_kbd = 0xff;
-	m_keytemp = 0xfe;
+	m_digit = data;
 }
 
-// This is an internal function of the 8279 chip
-static TIMER_DEVICE_CALLBACK( sdk86_keyscan )
+WRITE8_MEMBER( sdk86_state::digit_w )
 {
-	sdk86_state *state = timer.machine().driver_data<sdk86_state>();
-	UINT8 keyscan, keytemp = 0xff,i;
-	keyscan = input_port_read(timer.machine(), "X0");
-	if (keyscan < 0xff)
-	{
-		for (i = 0; i < 8; i++)
-		{
-			if (!BIT(keyscan, i))
-			{
-				keytemp = i;
-				i = 9;
-			}
-		}
-	}
-	else
-	{
-		keyscan = input_port_read(timer.machine(), "X1");
-		if (keyscan < 0xff)
-		{
-			for (i = 0; i < 8; i++)
-			{
-				if (!BIT(keyscan, i))
-				{
-					keytemp = i+8;
-					i = 9;
-				}
-			}
-		}
-		else
-		{
-			keyscan = input_port_read(timer.machine(), "X2");
-			if (keyscan < 0xff)
-			{
-				for (i = 0; i < 6; i++)
-				{
-					if (!BIT(keyscan, i))
-					{
-						keytemp = i+16;
-						i = 9;
-					}
-				}
-			}
-		}
-	}
-
-	if ((state->m_kbd == 0xff) && (keytemp < 0xff) && (keytemp != state->m_keytemp))
-	{
-		state->m_kbd = keytemp;
-		state->m_keytemp = keytemp;
-	}
-	else
-	if (keytemp==0xff)
-	{
-		state->m_keytemp = 0xfe;
-	}
+	if (m_digit < 8)
+		output_set_digit_value(m_digit, data);
 }
+
+READ8_MEMBER( sdk86_state::kbd_r )
+{
+	UINT8 data = 0xff;
+
+	if (m_digit < 3)
+	{
+		char kbdrow[6];
+		sprintf(kbdrow,"X%X",m_digit);
+		data = ioport(kbdrow)->read();
+	}
+	return data;
+}
+
+TIMER_DEVICE_CALLBACK_MEMBER( sdk86_state::serial_tick )
+{
+	m_usart->receive_clock();
+	m_usart->transmit_clock();
+}
+
+static const i8251_interface usart_intf =
+{
+	DEVCB_DEVICE_LINE_MEMBER(RS232_TAG, serial_port_device, rx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_TAG, serial_port_device, tx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_TAG, rs232_port_device, dsr_r),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_TAG, rs232_port_device, dtr_w),
+	DEVCB_NULL, // connected to CTS
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
+};
+
+static I8279_INTERFACE( sdk86_intf )
+{
+	DEVCB_NULL, // irq
+	DEVCB_DRIVER_MEMBER(sdk86_state, scanlines_w),  // scan SL lines
+	DEVCB_DRIVER_MEMBER(sdk86_state, digit_w),      // display A&B
+	DEVCB_NULL,                     // BD
+	DEVCB_DRIVER_MEMBER(sdk86_state, kbd_r),        // kbd RL lines
+	DEVCB_LINE_GND,                     // Shift key
+	DEVCB_LINE_GND
+};
+
+static DEVICE_INPUT_DEFAULTS_START( terminal )
+	DEVICE_INPUT_DEFAULTS( "TERM_FRAME", 0x0f, 0x05 ) // 4800
+	DEVICE_INPUT_DEFAULTS( "TERM_FRAME", 0x30, 0x20 ) // 8N2
+DEVICE_INPUT_DEFAULTS_END
+
+static const rs232_port_interface rs232_intf =
+{
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
+};
 
 static MACHINE_CONFIG_START( sdk86, sdk86_state )
 	/* basic machine hardware */
@@ -215,32 +180,38 @@ static MACHINE_CONFIG_START( sdk86, sdk86_state )
 	MCFG_CPU_PROGRAM_MAP(sdk86_mem)
 	MCFG_CPU_IO_MAP(sdk86_io)
 
-
 	/* video hardware */
 	MCFG_DEFAULT_LAYOUT(layout_sdk86)
 
-	MCFG_TIMER_ADD_PERIODIC("keyscan", sdk86_keyscan, attotime::from_hz(15))
+	/* Devices */
+	MCFG_I8251_ADD(I8251_TAG, usart_intf)
+	MCFG_I8279_ADD("i8279", 2500000, sdk86_intf) // based on divider
+	MCFG_RS232_PORT_ADD(RS232_TAG, rs232_intf, default_rs232_devices, "serial_terminal")
+	MCFG_DEVICE_CARD_DEVICE_INPUT_DEFAULTS("serial_terminal", terminal)
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("serial", sdk86_state, serial_tick, attotime::from_hz(307200))
 MACHINE_CONFIG_END
 
 /* ROM definition */
 ROM_START( sdk86 )
 	ROM_REGION( 0x100000, "maincpu", ROMREGION_ERASEFF ) // all are Intel D2616 ?eproms with the windows painted over? (factory programmed eproms? this would match the 'i8642' marking on the factory programmed eprom version of the AT keyboard mcu...)
-	// Note that the rom pairs at FE000-FEFFF and FF000-FFFFF are interchangable; the ones at FF000-FFFFF are the ones which start on bootup, and the other ones live at FE000-FEFFF and can be switched in by the user. One pair is the Serial RS232 Monitor and the other is the Keypad/front panel monitor. On the SDK-86 I (LN) dumped, the Keypad monitor was primary, but the other SDK-86 I know of has the roms in the opposite arrangement (Serial primary).
-	// Serial Monitor Version 1.2 (says "  86   1.2" on LED display at startup, and sends a data prompt over serial)
-	ROM_LOAD16_BYTE( "0456_104531-001.a36", 0xfe000, 0x0800, CRC(f9c4a809) SHA1(aea324c3f52dd393f1eed2b856ba11f050a35b93)) /* Label: "iD2616 // T142099WS // (C)INTEL '77 // 0456 // 104531-001" */
-	ROM_LOAD16_BYTE( "0457_104532-001.a37", 0xfe001, 0x0800, CRC(a245ba5c) SHA1(7f67277f866fca5377cb123e9cc405b5fdfe61d3)) /* Label: "iD2616 // T145054WS // (C)INTEL '77 // 0457 // 104532-001" */
+	// Note that the rom pairs at FE000-FEFFF and FF000-FFFFF are interchangeable; the ones at FF000-FFFFF are the ones which start on bootup, and the other ones live at FE000-FEFFF and can be switched in by the user. One pair is the Serial RS232 Monitor and the other is the Keypad/front panel monitor. On the SDK-86 I (LN) dumped, the Keypad monitor was primary, but the other SDK-86 I know of has the roms in the opposite arrangement (Serial primary).
 	// Keypad Monitor Version 1.1 (says "- 86   1.1" on LED display at startup)
-	ROM_LOAD16_BYTE( "0169_102042-001.a27", 0xff000, 0x0800, CRC(3f46311a) SHA1(a97e6861b736f26230b9adbf5cd2576a9f60d626)) /* Label: "iD2616 // T142094WS // (C)INTEL '77 // 0169 // 102042-001" */
-	ROM_LOAD16_BYTE( "0170_102043-001.a30", 0xff001, 0x0800, CRC(65924471) SHA1(5d258695bf585f89179dfa0a113a0eeeabd5ee2b)) /* Label: "iD2616 // T145056WS // (C)INTEL '77 // 0170 // 102043-001" */
+	ROM_SYSTEM_BIOS( 0, "keypad", "Keypad Monitor" )
+	ROMX_LOAD( "0169_102042-001.a27", 0xff000, 0x0800, CRC(3f46311a) SHA1(a97e6861b736f26230b9adbf5cd2576a9f60d626), ROM_SKIP(1) | ROM_BIOS(1) ) /* Label: "iD2616 // T142094WS // (C)INTEL '77 // 0169 // 102042-001" */
+	ROMX_LOAD( "0170_102043-001.a30", 0xff001, 0x0800, CRC(65924471) SHA1(5d258695bf585f89179dfa0a113a0eeeabd5ee2b), ROM_SKIP(1) | ROM_BIOS(1) ) /* Label: "iD2616 // T145056WS // (C)INTEL '77 // 0170 // 102043-001" */
+	// Serial Monitor Version 1.2 (says "  86   1.2" on LED display at startup, and sends a data prompt over serial)
+	ROM_SYSTEM_BIOS( 1, "serial", "Serial Monitor" )
+	ROMX_LOAD( "0456_104531-001.a36", 0xff000, 0x0800, CRC(f9c4a809) SHA1(aea324c3f52dd393f1eed2b856ba11f050a35b93), ROM_SKIP(1) | ROM_BIOS(2) ) /* Label: "iD2616 // T142099WS // (C)INTEL '77 // 0456 // 104531-001" */
+	ROMX_LOAD( "0457_104532-001.a37", 0xff001, 0x0800, CRC(a245ba5c) SHA1(7f67277f866fca5377cb123e9cc405b5fdfe61d3), ROM_SKIP(1) | ROM_BIOS(2) ) /* Label: "iD2616 // T145054WS // (C)INTEL '77 // 0457 // 104532-001" */
 
 	/* proms:
-     * dumped 11/21/09 thru 11/29/09 by LN
-     * purposes: (according to sdk-86 user manual from http://www.bitsavers.org/pdf/intel/8086/9800698A_SDK-86_Users_Man_Apr79.pdf)
-     * A12: main address decoding (selects ram or rom or open bus/offboard, see page 2-7)
-     * A22: I/O decoding for 8251, 8279 and optional pair of 8255 chips (in the FFE8-FFFF I/O area; see page 2-6)
-     * A26: ROM address decoding for selecting which of the 4 pairs of roms is active (note that to use the FCxxx and FDxxx pairs requires wiring them into the prototype area, they are not standard; see page 2-5)
-     * A29: RAM address decoding (see page 2-4)
-     */
+	 * dumped 11/21/09 through 11/29/09 by LN
+	 * purposes: (according to sdk-86 user manual from http://www.bitsavers.org/pdf/intel/8086/9800698A_SDK-86_Users_Man_Apr79.pdf)
+	 * A12: main address decoding (selects ram or rom or open bus/offboard, see page 2-7)
+	 * A22: I/O decoding for 8251, 8279 and optional pair of 8255 chips (in the FFE8-FFFF I/O area; see page 2-6)
+	 * A26: ROM address decoding for selecting which of the 4 pairs of roms is active (note that to use the FCxxx and FDxxx pairs requires wiring them into the prototype area, they are not standard; see page 2-5)
+	 * A29: RAM address decoding (see page 2-4)
+	 */
 	ROM_REGION(0x1000, "proms", 0 ) // all are Intel D3625A 1kx4 (82s137A equivalent)
 	ROM_LOAD( "0036_101993-001.a12", 0x0000, 0x0400, CRC(bb7edbfd) SHA1(8847f9815c7cb8695986743199673920a7d4390d)) /* Label: "iD3625A 0036 // 8142 // 101993-001" */
 	ROM_LOAD( "0035_101992-001.a22", 0x0400, 0x0400, CRC(76aced0c) SHA1(89fa39473e19d8cb6b65d6430d3d683ae2398fb3)) /* Label: "iD3625A 0035 // 8142 // 101992-001" */
@@ -251,4 +222,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1979, sdk86,  0,      0,       sdk86,     sdk86,    0,    "Intel",  "SDK-86", GAME_NO_SOUND_HW)
+COMP( 1979, sdk86,  0,      0,       sdk86,     sdk86, driver_device,    0,    "Intel",  "SDK-86", GAME_NO_SOUND_HW)

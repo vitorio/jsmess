@@ -17,7 +17,6 @@
 #define __TIMEKPR_H__
 
 #include "emu.h"
-#include "devhelpr.h"
 
 
 
@@ -57,16 +56,16 @@ struct timekeeper_config
 
 // ======================> timekeeper_device
 
-class timekeeper_device :	public device_t,
+class timekeeper_device :   public device_t,
 							public device_nvram_interface
 {
 protected:
 	// construction/destruction
-	timekeeper_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock);
+	timekeeper_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source);
 
 public:
-	void write(UINT16 offset, UINT8 data);
-	UINT8 read(UINT16 offset);
+	DECLARE_WRITE8_MEMBER( write );
+	DECLARE_READ8_MEMBER( read );
 
 protected:
 	// device-level overrides
@@ -147,14 +146,5 @@ extern const device_type M48T35;
 extern const device_type M48T37;
 extern const device_type M48T58;
 extern const device_type MK48T08;
-
-
-
-//**************************************************************************
-//  READ/WRITE HANDLERS
-//**************************************************************************
-
-WRITE8_DEVICE_HANDLER( timekeeper_w );
-READ8_DEVICE_HANDLER( timekeeper_r );
 
 #endif // __TIMEKPR_H__

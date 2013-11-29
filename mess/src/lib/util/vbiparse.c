@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     vbiparse.c
 
     Parse Philips codes and other data from VBI lines.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -47,7 +18,7 @@
     DEBUGGING
 ***************************************************************************/
 
-#define PRINTF_WHITE_FLAG	0
+#define PRINTF_WHITE_FLAG   0
 
 
 
@@ -55,8 +26,8 @@
     CONSTANTS
 ***************************************************************************/
 
-#define MAX_SOURCE_WIDTH	1024
-#define MAX_CLOCK_DIFF		3
+#define MAX_SOURCE_WIDTH    1024
+#define MAX_CLOCK_DIFF      3
 
 
 
@@ -249,19 +220,19 @@ int vbi_parse_white_flag(const UINT16 *source, int sourcewidth, int sourceshift)
 	}
 
 	/*
-        At this point, there are two approaches that have been tried:
+	    At this point, there are two approaches that have been tried:
 
-        1. Find the peak value and call it white if the peak is above
-           the 90% line
+	    1. Find the peak value and call it white if the peak is above
+	       the 90% line
 
-        2. Ignore the first and last 20% of the line and count how
-           many pixels are above some threshold (75% line was used).
-           Call it white if at least 80% of the pixels are above
-           the threshold.
+	    2. Ignore the first and last 20% of the line and count how
+	       many pixels are above some threshold (75% line was used).
+	       Call it white if at least 80% of the pixels are above
+	       the threshold.
 
-        Both approaches agree 99% of the time, but the first tends to
-        be more correct when there is a discrepancy.
-    */
+	    Both approaches agree 99% of the time, but the first tends to
+	    be more correct when there is a discrepancy.
+	*/
 
 	/* determine where the peak is */
 	peakval = 0;
@@ -403,4 +374,3 @@ void vbi_metadata_unpack(vbi_metadata *vbi, UINT32 *framenum, const UINT8 *sourc
 	vbi->line18 = (source[10] << 16) | (source[11] << 8) | source[12];
 	vbi->line1718 = (source[13] << 16) | (source[14] << 8) | source[15];
 }
-

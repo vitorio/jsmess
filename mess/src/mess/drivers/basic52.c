@@ -1,11 +1,36 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
         MCS BASIC 52 and MCS BASIC 31 board
 
         03/12/2009 Skeleton driver.
 
+        2012-08-08 Made to work [Robbbert]
+
+BASIC-52 is an official Intel release.
+
+BASIC-31 (and variants) as found on the below url, are homebrews.
+
+http://dsaprojects.110mb.com/electronics/8031-ah/8031-bas.html
+
+
+The driver is working, however there are issues with the cpu serial code.
+When started, you are supposed to press Space and the system works out
+the baud rate and boots up.
+
+However, the way the cpu is written, it actually passes bytes around, so
+the auto-speed detection doesn't work as intended. Also the cpu interface
+is horribly outdated and needs to be brought up to date.
+
+So, as it stands, start the driver, then press d and g in turn until
+something starts happening. Basic-52 usually starts at a very slow rate,
+about 1 character per second, while Basic-31 is much faster.
+
+Once the system starts, all input must be in uppercase. Read the manual
+to discover the special features of this Basic.
+
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/mcs51/mcs51.h"
@@ -17,8 +42,18 @@ class basic52_state : public driver_device
 {
 public:
 	basic52_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+	m_maincpu(*this, "maincpu"),
+	m_terminal(*this, TERMINAL_TAG) { }
 
+	DECLARE_WRITE8_MEMBER(kbd_put);
+	DECLARE_READ8_MEMBER(unk_r);
+	UINT8 m_term_data;
+	required_device<mcs51_cpu_device> m_maincpu;
+	required_device<generic_terminal_device> m_terminal;
+	virtual void machine_reset();
+	DECLARE_WRITE8_MEMBER(to_term);
+	DECLARE_READ8_MEMBER(from_term);
 };
 
 
@@ -26,7 +61,7 @@ static ADDRESS_MAP_START(basic52_mem, AS_PROGRAM, 8, basic52_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0x9fff) AM_ROM // EPROM
+	//AM_RANGE(0x8000, 0x9fff) AM_ROM // EPROM
 	//AM_RANGE(0xc000, 0xdfff) // Expansion block
 	//AM_RANGE(0xe000, 0xffff) // Expansion block
 ADDRESS_MAP_END
@@ -38,35 +73,55 @@ static ADDRESS_MAP_START(basic52_io, AS_IO, 8, basic52_state)
 	AM_RANGE(0xa000, 0xa003) AM_DEVREADWRITE("ppi8255", i8255_device, read, write)  // PPI-8255
 	//AM_RANGE(0xc000, 0xdfff) // Expansion block
 	//AM_RANGE(0xe000, 0xffff) // Expansion block
+	AM_RANGE(0x20003, 0x20003) AM_READ(unk_r);
 ADDRESS_MAP_END
 
 /* Input ports */
 static INPUT_PORTS_START( basic52 )
 INPUT_PORTS_END
 
-
-static MACHINE_RESET(basic52)
+// won't compile unless these are static
+WRITE8_MEMBER( basic52_state::to_term)
 {
+	m_terminal->write(space, 0, data);
 }
 
-static WRITE8_DEVICE_HANDLER( basic52_kbd_put )
+READ8_MEMBER(basic52_state::from_term)
 {
-
+	return m_term_data;
 }
 
-static GENERIC_TERMINAL_INTERFACE( basic52_terminal_intf )
+READ8_MEMBER( basic52_state::unk_r)
 {
-	DEVCB_HANDLER(basic52_kbd_put)
+	return m_term_data; // won't boot without this
+}
+
+void basic52_state::machine_reset()
+{
+	m_maincpu->i8051_set_serial_tx_callback(write8_delegate(FUNC(basic52_state::to_term),this));
+	m_maincpu->i8051_set_serial_rx_callback(read8_delegate(FUNC(basic52_state::from_term),this));
+}
+
+WRITE8_MEMBER( basic52_state::kbd_put )
+{
+	m_maincpu->set_input_line(MCS51_RX_LINE, ASSERT_LINE);
+	m_maincpu->set_input_line(MCS51_RX_LINE, CLEAR_LINE);
+	m_term_data = data;
+}
+
+static GENERIC_TERMINAL_INTERFACE( terminal_intf )
+{
+	DEVCB_DRIVER_MEMBER(basic52_state, kbd_put)
 };
 
 static I8255_INTERFACE( ppi8255_intf )
 {
-	DEVCB_NULL,					/* Port A read */
-	DEVCB_NULL,					/* Port A write */
-	DEVCB_NULL,					/* Port B read */
-	DEVCB_NULL,					/* Port B write */
-	DEVCB_NULL,					/* Port C read */
-	DEVCB_NULL					/* Port C write */
+	DEVCB_NULL,                 /* Port A read */
+	DEVCB_NULL,                 /* Port A write */
+	DEVCB_NULL,                 /* Port B read */
+	DEVCB_NULL,                 /* Port B write */
+	DEVCB_NULL,                 /* Port C read */
+	DEVCB_NULL                  /* Port C write */
 };
 
 static MACHINE_CONFIG_START( basic31, basic52_state )
@@ -75,28 +130,18 @@ static MACHINE_CONFIG_START( basic31, basic52_state )
 	MCFG_CPU_PROGRAM_MAP(basic52_mem)
 	MCFG_CPU_IO_MAP(basic52_io)
 
-	MCFG_MACHINE_RESET(basic52)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
-	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG,basic52_terminal_intf)
+	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 
 	MCFG_I8255_ADD("ppi8255", ppi8255_intf )
 MACHINE_CONFIG_END
 
-static MACHINE_CONFIG_START( basic52, basic52_state )
+static MACHINE_CONFIG_DERIVED( basic52, basic31 )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", I8052, XTAL_11_0592MHz)
+	MCFG_CPU_REPLACE("maincpu", I8052, XTAL_11_0592MHz)
 	MCFG_CPU_PROGRAM_MAP(basic52_mem)
 	MCFG_CPU_IO_MAP(basic52_io)
-
-	MCFG_MACHINE_RESET(basic52)
-
-	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
-	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG,basic52_terminal_intf)
-
-	MCFG_I8255_ADD("ppi8255", ppi8255_intf )
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -119,7 +164,6 @@ ROM_START( basic31 )
 ROM_END
 
 /* Driver */
-/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1985, basic52,  0,       0,	basic52,	basic52,	 0,  "Intel",   "MCS BASIC 52", GAME_NOT_WORKING | GAME_NO_SOUND)
-COMP( 1985, basic31,  basic52, 0,	basic31,	basic52,	 0,  "Intel",   "MCS BASIC 31", GAME_NOT_WORKING | GAME_NO_SOUND)
-
+/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    CLASS          INIT    COMPANY   FULLNAME       FLAGS */
+COMP( 1985, basic52,  0,       0,    basic52,   basic52, driver_device,  0,    "Intel", "MCS BASIC 52", GAME_NO_SOUND_HW)
+COMP( 1985, basic31,  basic52, 0,    basic31,   basic52, driver_device,  0,    "Intel", "MCS BASIC 31", GAME_NO_SOUND_HW)

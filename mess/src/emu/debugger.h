@@ -45,8 +45,10 @@ void debugger_flush_all_traces_on_abnormal_exit(void);
 
 INLINE void debugger_instruction_hook(device_t *device, offs_t curpc)
 {
+#ifndef MAME_DEBUG_FAST
 	if ((device->machine().debug_flags & DEBUG_FLAG_CALL_HOOK) != 0)
 		device->debug()->instruction_hook(curpc);
+#endif
 }
 
 
@@ -137,4 +139,4 @@ INLINE int debugger_within_instruction_hook(running_machine &machine)
 }
 
 
-#endif	/* __DEBUGGER_H__ */
+#endif  /* __DEBUGGER_H__ */

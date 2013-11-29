@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     drcbeut.c
 
     Utility functions for dynamic recompiling backends.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -47,7 +18,7 @@ using namespace uml;
 //  DEBUGGING
 //**************************************************************************
 
-#define LOG_RECOVER			(0)
+#define LOG_RECOVER         (0)
 
 
 
@@ -61,17 +32,17 @@ using namespace uml;
 
 drc_hash_table::drc_hash_table(drc_cache &cache, UINT32 modes, UINT8 addrbits, UINT8 ignorebits)
 	: m_cache(cache),
-	  m_modes(modes),
-	  m_nocodeptr(NULL),
-	  m_l1bits((addrbits - ignorebits) / 2),
-	  m_l2bits((addrbits - ignorebits) - m_l1bits),
-	  m_l1shift(ignorebits + m_l2bits),
-	  m_l2shift(ignorebits),
-	  m_l1mask((1 << m_l1bits) - 1),
-	  m_l2mask((1 << m_l2bits) - 1),
-	  m_base(reinterpret_cast<drccodeptr ***>(cache.alloc(modes * sizeof(**m_base)))),
-	  m_emptyl1(NULL),
-	  m_emptyl2(NULL)
+		m_modes(modes),
+		m_nocodeptr(NULL),
+		m_l1bits((addrbits - ignorebits) / 2),
+		m_l2bits((addrbits - ignorebits) - m_l1bits),
+		m_l1shift(ignorebits + m_l2bits),
+		m_l2shift(ignorebits),
+		m_l1mask((1 << m_l1bits) - 1),
+		m_l2mask((1 << m_l2bits) - 1),
+		m_base(reinterpret_cast<drccodeptr ***>(cache.alloc(modes * sizeof(**m_base)))),
+		m_emptyl1(NULL),
+		m_emptyl2(NULL)
 {
 	reset();
 }
@@ -228,7 +199,7 @@ bool drc_hash_table::set_codeptr(UINT32 mode, UINT32 pc, drccodeptr code)
 
 drc_map_variables::drc_map_variables(drc_cache &cache, UINT64 uniquevalue)
 	: m_cache(cache),
-	  m_uniquevalue(uniquevalue)
+		m_uniquevalue(uniquevalue)
 {
 	memset(m_mapvalue, 0, sizeof(m_mapvalue));
 }
@@ -464,7 +435,7 @@ UINT32 drc_map_variables::get_last_value(UINT32 mapvar)
 
 drc_label_list::drc_label_list(drc_cache &cache)
 	: m_cache(cache),
-	  m_oob_callback_delegate(FUNC(drc_label_list::oob_callback), this)
+		m_oob_callback_delegate(FUNC(drc_label_list::oob_callback), this)
 {
 }
 
@@ -561,7 +532,7 @@ void drc_label_list::reset(bool fatal_on_leftovers)
 	{
 		// fatal if we were a leftover
 		if (fatal_on_leftovers && curlabel->m_codeptr == NULL)
-			fatalerror("Label %08X never defined!", curlabel->m_label.label());
+			fatalerror("Label %08X never defined!\n", curlabel->m_label.label());
 
 		// free the label
 		m_cache.dealloc(curlabel, sizeof(*curlabel));

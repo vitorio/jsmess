@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 #include "includes/pc8401a.h"
 
 /*
@@ -37,12 +39,12 @@ void pc8401a_state::scan_keyboard()
 {
 	int row, strobe = 0;
 
-	static const char *const keynames[] = { "KEY0", "KEY1", "KEY2", "KEY3", "KEY4", "KEY5", "KEY6", "KEY7", "KEY8", "KEY9" };
+	UINT8 keydata[10] = { m_y0->read(), m_y1->read(), m_y2->read(), m_y3->read(), m_y4->read(), m_y5->read(), m_y6->read(), m_y7->read(), m_y8->read(), m_y9->read() };
 
 	/* scan keyboard */
 	for (row = 0; row < 10; row++)
 	{
-		UINT8 data = input_port_read(machine(), keynames[row]);
+		UINT8 data = keydata[row];
 
 		if (data != 0xff)
 		{
@@ -58,21 +60,19 @@ void pc8401a_state::scan_keyboard()
 		logerror("INTERRUPT\n");
 	}
 
-	if (strobe)	m_key_strobe = strobe;
+	if (strobe) m_key_strobe = strobe;
 }
 
-static TIMER_DEVICE_CALLBACK( pc8401a_keyboard_tick )
+TIMER_DEVICE_CALLBACK_MEMBER(pc8401a_state::pc8401a_keyboard_tick)
 {
-	pc8401a_state *state = timer.machine().driver_data<pc8401a_state>();
-
-	state->scan_keyboard();
+	scan_keyboard();
 }
 
 /* Read/Write Handlers */
 
 void pc8401a_state::bankswitch(UINT8 data)
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
+	address_space &program = m_maincpu->space(AS_PROGRAM);
 
 	int rombank = data & 0x03;
 	int ram0000 = (data >> 2) & 0x03;
@@ -84,27 +84,27 @@ void pc8401a_state::bankswitch(UINT8 data)
 		if (rombank < 3)
 		{
 			/* internal ROM */
-			program->install_read_bank(0x0000, 0x7fff, "bank1");
-			program->unmap_write(0x0000, 0x7fff);
-			memory_set_bank(machine(), "bank1", rombank);
+			program.install_read_bank(0x0000, 0x7fff, "bank1");
+			program.unmap_write(0x0000, 0x7fff);
+			membank("bank1")->set_entry(rombank);
 		}
 		else
 		{
 			/* ROM cartridge */
-			program->unmap_readwrite(0x0000, 0x7fff);
+			program.unmap_readwrite(0x0000, 0x7fff);
 		}
 		//logerror("0x0000-0x7fff = ROM %u\n", rombank);
 		break;
 
 	case 1: /* RAM 0000H to 7FFFH */
-		program->install_readwrite_bank(0x0000, 0x7fff, "bank1");
-		memory_set_bank(machine(), "bank1", 4);
+		program.install_readwrite_bank(0x0000, 0x7fff, "bank1");
+		membank("bank1")->set_entry(4);
 		//logerror("0x0000-0x7fff = RAM 0-7fff\n");
 		break;
 
-	case 2:	/* RAM 8000H to FFFFH */
-		program->install_readwrite_bank(0x0000, 0x7fff, "bank1");
-		memory_set_bank(machine(), "bank1", 5);
+	case 2: /* RAM 8000H to FFFFH */
+		program.install_readwrite_bank(0x0000, 0x7fff, "bank1");
+		membank("bank1")->set_entry(5);
 		//logerror("0x0000-0x7fff = RAM 8000-ffff\n");
 		break;
 
@@ -116,32 +116,32 @@ void pc8401a_state::bankswitch(UINT8 data)
 	switch (ram8000)
 	{
 	case 0: /* cell addresses 0000H to 3FFFH */
-		program->install_readwrite_bank(0x8000, 0xbfff, "bank3");
-		memory_set_bank(machine(), "bank3", 0);
+		program.install_readwrite_bank(0x8000, 0xbfff, "bank3");
+		membank("bank3")->set_entry(0);
 		//logerror("0x8000-0xbfff = RAM 0-3fff\n");
 		break;
 
 	case 1: /* cell addresses 4000H to 7FFFH */
-		program->install_readwrite_bank(0x8000, 0xbfff, "bank3");
-		memory_set_bank(machine(), "bank3", 1);
+		program.install_readwrite_bank(0x8000, 0xbfff, "bank3");
+		membank("bank3")->set_entry(1);
 		//logerror("0x8000-0xbfff = RAM 4000-7fff\n");
 		break;
 
 	case 2: /* cell addresses 8000H to BFFFH */
-		program->install_readwrite_bank(0x8000, 0xbfff, "bank3");
-		memory_set_bank(machine(), "bank3", 2);
+		program.install_readwrite_bank(0x8000, 0xbfff, "bank3");
+		membank("bank3")->set_entry(2);
 		//logerror("0x8000-0xbfff = RAM 8000-bfff\n");
 		break;
 
 	case 3: /* RAM cartridge */
-		if (ram_get_size(m_ram) > 64)
+		if (m_ram->size() > 64)
 		{
-			program->install_readwrite_bank(0x8000, 0xbfff, "bank3");
-			memory_set_bank(machine(), "bank3", 3); // TODO or 4
+			program.install_readwrite_bank(0x8000, 0xbfff, "bank3");
+			membank("bank3")->set_entry(3); // TODO or 4
 		}
 		else
 		{
-			program->unmap_readwrite(0x8000, 0xbfff);
+			program.unmap_readwrite(0x8000, 0xbfff);
 		}
 		//logerror("0x8000-0xbfff = RAM cartridge\n");
 		break;
@@ -150,16 +150,16 @@ void pc8401a_state::bankswitch(UINT8 data)
 	if (BIT(data, 6))
 	{
 		/* CRT video RAM */
-		program->install_readwrite_bank(0xc000, 0xdfff, "bank4");
-		program->unmap_readwrite(0xe000, 0xe7ff);
-		memory_set_bank(machine(), "bank4", 1);
+		program.install_readwrite_bank(0xc000, 0xdfff, "bank4");
+		program.unmap_readwrite(0xe000, 0xe7ff);
+		membank("bank4")->set_entry(1);
 		//logerror("0xc000-0xdfff = video RAM\n");
 	}
 	else
 	{
 		/* RAM */
-		program->install_readwrite_bank(0xc000, 0xe7ff, "bank4");
-		memory_set_bank(machine(), "bank4", 0);
+		program.install_readwrite_bank(0xc000, 0xe7ff, "bank4");
+		membank("bank4")->set_entry(0);
 		//logerror("0xc000-0e7fff = RAM c000-e7fff\n");
 	}
 }
@@ -168,18 +168,18 @@ WRITE8_MEMBER( pc8401a_state::mmr_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       ROM section bit 0
-        1       ROM section bit 1
-        2       mapping for CPU addresses 0000H to 7FFFH bit 0
-        3       mapping for CPU addresses 0000H to 7FFFH bit 1
-        4       mapping for CPU addresses 8000H to BFFFH bit 0
-        5       mapping for CPU addresses 8000H to BFFFH bit 1
-        6       mapping for CPU addresses C000H to E7FFH
-        7
+	    0       ROM section bit 0
+	    1       ROM section bit 1
+	    2       mapping for CPU addresses 0000H to 7FFFH bit 0
+	    3       mapping for CPU addresses 0000H to 7FFFH bit 1
+	    4       mapping for CPU addresses 8000H to BFFFH bit 0
+	    5       mapping for CPU addresses 8000H to BFFFH bit 1
+	    6       mapping for CPU addresses C000H to E7FFH
+	    7
 
-    */
+	*/
 
 	if (data != m_mmr)
 	{
@@ -198,18 +198,18 @@ READ8_MEMBER( pc8401a_state::rtc_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       RTC TP?
-        1       RTC DATA OUT
-        2       ?
-        3
-        4
-        5
-        6
-        7
+	    0       RTC TP?
+	    1       RTC DATA OUT
+	    2       ?
+	    3
+	    4
+	    5
+	    6
+	    7
 
-    */
+	*/
 
 	return (m_rtc->data_out_r() << 1) | (m_rtc->tp_r() << 2);
 }
@@ -218,18 +218,18 @@ WRITE8_MEMBER( pc8401a_state::rtc_cmd_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       RTC C0
-        1       RTC C1
-        2       RTC C2
-        3       RTC DATA IN?
-        4
-        5
-        6
-        7
+	    0       RTC C0
+	    1       RTC C1
+	    2       RTC C2
+	    3       RTC DATA IN?
+	    4
+	    5
+	    6
+	    7
 
-    */
+	*/
 
 	m_rtc->c0_w(BIT(data, 0));
 	m_rtc->c1_w(BIT(data, 1));
@@ -241,18 +241,18 @@ WRITE8_MEMBER( pc8401a_state::rtc_ctrl_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       RTC OE or CS?
-        1       RTC STB
-        2       RTC CLK
-        3
-        4
-        5
-        6
-        7
+	    0       RTC OE or CS?
+	    1       RTC STB
+	    2       RTC CLK
+	    3
+	    4
+	    5
+	    6
+	    7
 
-    */
+	*/
 
 	m_rtc->oe_w(BIT(data, 0));
 	m_rtc->stb_w(BIT(data, 1));
@@ -261,11 +261,9 @@ WRITE8_MEMBER( pc8401a_state::rtc_ctrl_w )
 
 READ8_MEMBER( pc8401a_state::io_rom_data_r )
 {
-	UINT8 *iorom = machine().region("iorom")->base();
-
 	//logerror("I/O ROM read from %05x\n", m_io_addr);
 
-	return iorom[m_io_addr];
+	return m_io_rom->base()[m_io_addr];
 }
 
 WRITE8_MEMBER( pc8401a_state::io_rom_addr_w )
@@ -294,18 +292,18 @@ READ8_MEMBER( pc8401a_state::port70_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       key pressed
-        1
-        2
-        3
-        4       must be 1 or CPU goes to HALT
-        5
-        6
-        7
+	    0       key pressed
+	    1
+	    2
+	    3
+	    4       must be 1 or CPU goes to HALT
+	    5
+	    6
+	    7
 
-    */
+	*/
 
 	return 0x10 | m_key_strobe;
 }
@@ -345,19 +343,19 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( pc8500_io, AS_IO, 8, pc8401a_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_READ_PORT("KEY0")
-	AM_RANGE(0x01, 0x01) AM_READ_PORT("KEY1")
-	AM_RANGE(0x02, 0x02) AM_READ_PORT("KEY2")
-	AM_RANGE(0x03, 0x03) AM_READ_PORT("KEY3")
-	AM_RANGE(0x04, 0x04) AM_READ_PORT("KEY4")
-	AM_RANGE(0x05, 0x05) AM_READ_PORT("KEY5")
-	AM_RANGE(0x06, 0x06) AM_READ_PORT("KEY6")
-	AM_RANGE(0x07, 0x07) AM_READ_PORT("KEY7")
-	AM_RANGE(0x08, 0x08) AM_READ_PORT("KEY8")
-	AM_RANGE(0x09, 0x09) AM_READ_PORT("KEY9")
+	AM_RANGE(0x00, 0x00) AM_READ_PORT("Y0")
+	AM_RANGE(0x01, 0x01) AM_READ_PORT("Y1")
+	AM_RANGE(0x02, 0x02) AM_READ_PORT("Y2")
+	AM_RANGE(0x03, 0x03) AM_READ_PORT("Y3")
+	AM_RANGE(0x04, 0x04) AM_READ_PORT("Y4")
+	AM_RANGE(0x05, 0x05) AM_READ_PORT("Y5")
+	AM_RANGE(0x06, 0x06) AM_READ_PORT("Y6")
+	AM_RANGE(0x07, 0x07) AM_READ_PORT("Y7")
+	AM_RANGE(0x08, 0x08) AM_READ_PORT("Y8")
+	AM_RANGE(0x09, 0x09) AM_READ_PORT("Y9")
 	AM_RANGE(0x10, 0x10) AM_WRITE(rtc_cmd_w)
-	AM_RANGE(0x20, 0x20) AM_DEVREADWRITE_LEGACY(MSM8251_TAG, msm8251_data_r, msm8251_data_w)
-	AM_RANGE(0x21, 0x21) AM_DEVREADWRITE_LEGACY(MSM8251_TAG, msm8251_status_r, msm8251_control_w)
+	AM_RANGE(0x20, 0x20) AM_DEVREADWRITE(I8251_TAG, i8251_device, data_r, data_w)
+	AM_RANGE(0x21, 0x21) AM_DEVREADWRITE(I8251_TAG, i8251_device, status_r, control_w)
 	AM_RANGE(0x30, 0x30) AM_READWRITE(mmr_r, mmr_w)
 //  AM_RANGE(0x31, 0x31)
 	AM_RANGE(0x40, 0x40) AM_READWRITE(rtc_r, rtc_ctrl_w)
@@ -382,7 +380,7 @@ ADDRESS_MAP_END
 /* Input Ports */
 
 static INPUT_PORTS_START( pc8401a )
-	PORT_START("KEY0")
+	PORT_START("Y0")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("STOP")// PORT_CODE(KEYCODE_ESC) PORT_CHAR(UCHAR_MAMEKEY(ESC))
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("SHIFT") PORT_CODE(KEYCODE_LSHIFT) PORT_CODE(KEYCODE_RSHIFT) PORT_CHAR(UCHAR_SHIFT_1)
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD )
@@ -392,7 +390,7 @@ static INPUT_PORTS_START( pc8401a )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD )
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD )
 
-	PORT_START("KEY1")
+	PORT_START("Y1")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_G) PORT_CHAR('g') PORT_CHAR('G')
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F) PORT_CHAR('f') PORT_CHAR('F')
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_E) PORT_CHAR('e') PORT_CHAR('E')
@@ -402,7 +400,7 @@ static INPUT_PORTS_START( pc8401a )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_A) PORT_CHAR('a') PORT_CHAR('A')
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("SPACE") PORT_CODE(KEYCODE_SPACE) PORT_CHAR(' ')
 
-	PORT_START("KEY2")
+	PORT_START("Y2")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_O) PORT_CHAR('o') PORT_CHAR('O')
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_N) PORT_CHAR('n') PORT_CHAR('N')
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_M) PORT_CHAR('m') PORT_CHAR('M')
@@ -412,7 +410,7 @@ static INPUT_PORTS_START( pc8401a )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_I) PORT_CHAR('i') PORT_CHAR('I')
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_H) PORT_CHAR('h') PORT_CHAR('H')
 
-	PORT_START("KEY3")
+	PORT_START("Y3")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_W) PORT_CHAR('w') PORT_CHAR('W')
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_V) PORT_CHAR('v') PORT_CHAR('V')
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_U) PORT_CHAR('u') PORT_CHAR('U')
@@ -422,7 +420,7 @@ static INPUT_PORTS_START( pc8401a )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Q) PORT_CHAR('q') PORT_CHAR('Q')
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_P) PORT_CHAR('p') PORT_CHAR('P')
 
-	PORT_START("KEY4")
+	PORT_START("Y4")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_MINUS) PORT_CHAR('-') PORT_CHAR('*')
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_QUOTE) PORT_CHAR('\'') PORT_CHAR('*')
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_CLOSEBRACE) PORT_CHAR(']') PORT_CHAR('*')
@@ -432,7 +430,7 @@ static INPUT_PORTS_START( pc8401a )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Y) PORT_CHAR('y') PORT_CHAR('Y')
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_X) PORT_CHAR('x') PORT_CHAR('X')
 
-	PORT_START("KEY5")
+	PORT_START("Y5")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_7) PORT_CHAR('7') PORT_CHAR('*')
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_6) PORT_CHAR('6') PORT_CHAR('*')
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_5) PORT_CHAR('5') PORT_CHAR('*')
@@ -442,7 +440,7 @@ static INPUT_PORTS_START( pc8401a )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_1) PORT_CHAR('1') PORT_CHAR('*')
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_0) PORT_CHAR('0') PORT_CHAR('*')
 
-	PORT_START("KEY6")
+	PORT_START("Y6")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_EQUALS) PORT_CHAR('=') PORT_CHAR('*')
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_SLASH) PORT_CHAR('/') PORT_CHAR('*')
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_STOP) PORT_CHAR('.') PORT_CHAR('*')
@@ -452,7 +450,7 @@ static INPUT_PORTS_START( pc8401a )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_9) PORT_CHAR('9') PORT_CHAR('*')
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_8) PORT_CHAR('8') PORT_CHAR('*')
 
-	PORT_START("KEY7")
+	PORT_START("Y7")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("ESC") PORT_CODE(KEYCODE_ESC) PORT_CHAR(UCHAR_MAMEKEY(ESC))
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) // ^I
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("F5") PORT_CODE(KEYCODE_F5) PORT_CHAR(UCHAR_MAMEKEY(F5))
@@ -462,7 +460,7 @@ static INPUT_PORTS_START( pc8401a )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("F1") PORT_CODE(KEYCODE_F1) PORT_CHAR(UCHAR_MAMEKEY(F1))
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) // ^C
 
-	PORT_START("KEY8")
+	PORT_START("Y8")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME(UTF8_RIGHT) PORT_CODE(KEYCODE_RIGHT) PORT_CHAR(UCHAR_MAMEKEY(RIGHT))
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F6)
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F7)
@@ -472,7 +470,7 @@ static INPUT_PORTS_START( pc8401a )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("KEY9")
+	PORT_START("Y9")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F8)
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F9)
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F10)
@@ -491,33 +489,32 @@ void pc8401a_state::machine_start()
 	m_rtc->cs_w(1);
 
 	/* allocate CRT video RAM */
-	m_crt_ram = auto_alloc_array(machine(), UINT8, PC8401A_CRT_VIDEORAM_SIZE);
+	m_crt_ram.allocate(PC8401A_CRT_VIDEORAM_SIZE);
 
-	UINT8 *ram = ram_get_ptr(m_ram);
+	UINT8 *ram = m_ram->pointer();
 
 	/* set up A0/A1 memory banking */
-	memory_configure_bank(machine(), "bank1", 0, 4, machine().region(Z80_TAG)->base(), 0x8000);
-	memory_configure_bank(machine(), "bank1", 4, 2, ram, 0x8000);
-	memory_set_bank(machine(), "bank1", 0);
+	membank("bank1")->configure_entries(0, 4, m_rom->base(), 0x8000);
+	membank("bank1")->configure_entries(4, 2, ram, 0x8000);
+	membank("bank1")->set_entry(0);
 
 	/* set up A2 memory banking */
-	memory_configure_bank(machine(), "bank3", 0, 5, ram, 0x4000);
-	memory_set_bank(machine(), "bank3", 0);
+	membank("bank3")->configure_entries(0, 5, ram, 0x4000);
+	membank("bank3")->set_entry(0);
 
 	/* set up A3 memory banking */
-	memory_configure_bank(machine(), "bank4", 0, 1, ram + 0xc000, 0);
-	memory_configure_bank(machine(), "bank4", 1, 1, m_crt_ram, 0);
-	memory_set_bank(machine(), "bank4", 0);
+	membank("bank4")->configure_entry(0, ram + 0xc000);
+	membank("bank4")->configure_entry(1, m_crt_ram);
+	membank("bank4")->set_entry(0);
 
 	/* set up A4 memory banking */
-	memory_configure_bank(machine(), "bank5", 0, 1, ram + 0xe800, 0);
-	memory_set_bank(machine(), "bank5", 0);
+	membank("bank5")->configure_entry(0, ram + 0xe800);
+	membank("bank5")->set_entry(0);
 
 	/* bank switch */
 	bankswitch(0);
 
 	/* register for state saving */
-	save_pointer(NAME(m_crt_ram), PC8401A_CRT_VIDEORAM_SIZE);
 	save_item(NAME(m_mmr));
 	save_item(NAME(m_io_addr));
 }
@@ -526,18 +523,18 @@ READ8_MEMBER( pc8401a_state::ppi_pc_r )
 {
 	/*
 
-        bit     signal          description
+	    bit     signal          description
 
-        PC0
-        PC1
-        PC2
-        PC3
-        PC4     PC-8431A DAV    data valid
-        PC5     PC-8431A RFD    ready for data
-        PC6     PC-8431A DAC    data accepted
-        PC7     PC-8431A ATN    attention
+	    PC0
+	    PC1
+	    PC2
+	    PC3
+	    PC4     PC-8431A DAV    data valid
+	    PC5     PC-8431A RFD    ready for data
+	    PC6     PC-8431A DAC    data accepted
+	    PC7     PC-8431A ATN    attention
 
-    */
+	*/
 
 	return 0;
 }
@@ -546,18 +543,18 @@ WRITE8_MEMBER( pc8401a_state::ppi_pc_w )
 {
 	/*
 
-        bit     signal          description
+	    bit     signal          description
 
-        PC0
-        PC1
-        PC2
-        PC3
-        PC4     PC-8431A DAV    data valid
-        PC5     PC-8431A RFD    ready for data
-        PC6     PC-8431A DAC    data accepted
-        PC7     PC-8431A ATN    attention
+	    PC0
+	    PC1
+	    PC2
+	    PC3
+	    PC4     PC-8431A DAV    data valid
+	    PC5     PC-8431A RFD    ready for data
+	    PC6     PC-8431A DAC    data accepted
+	    PC7     PC-8431A ATN    attention
 
-    */
+	*/
 }
 
 static I8255A_INTERFACE( ppi_intf )
@@ -570,22 +567,27 @@ static I8255A_INTERFACE( ppi_intf )
 	DEVCB_DRIVER_MEMBER(pc8401a_state, ppi_pc_w)
 };
 
-/* uPD1990A Interface */
+/* I8251 Interface */
 
-static UPD1990A_INTERFACE( rtc_intf )
+static const i8251_interface uart_intf =
 {
+	DEVCB_DEVICE_LINE_MEMBER(RS232_TAG, serial_port_device, rx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_TAG, serial_port_device, tx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_TAG, rs232_port_device, dsr_r),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_TAG, rs232_port_device, dtr_w),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_TAG, rs232_port_device, rts_w),
+	DEVCB_NULL,
+	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL
 };
 
-/* MSM8251 Interface */
+//-------------------------------------------------
+//  rs232_port_interface rs232_intf
+//-------------------------------------------------
 
-static const msm8251_interface uart_intf =
+static const rs232_port_interface rs232_intf =
 {
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -602,12 +604,13 @@ static MACHINE_CONFIG_START( pc8401a, pc8401a_state )
 	MCFG_CPU_IO_MAP(pc8401a_io)
 
 	/* fake keyboard */
-	MCFG_TIMER_ADD_PERIODIC("keyboard", pc8401a_keyboard_tick, attotime::from_hz(64))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("keyboard", pc8401a_state, pc8401a_keyboard_tick, attotime::from_hz(64))
 
 	/* devices */
-	MCFG_UPD1990A_ADD(UPD1990A_TAG, XTAL_32_768kHz, rtc_intf)
+	MCFG_UPD1990A_ADD(UPD1990A_TAG, XTAL_32_768kHz, NULL, NULL)
 	MCFG_I8255A_ADD(I8255A_TAG, ppi_intf)
-	MCFG_MSM8251_ADD(MSM8251_TAG, uart_intf)
+	MCFG_I8251_ADD(I8251_TAG, uart_intf)
+	MCFG_RS232_PORT_ADD(RS232_TAG, rs232_intf, default_rs232_devices, NULL)
 
 	/* video hardware */
 	MCFG_FRAGMENT_ADD(pc8401a_video)
@@ -635,12 +638,13 @@ static MACHINE_CONFIG_START( pc8500, pc8500_state )
 	MCFG_CPU_IO_MAP(pc8500_io)
 
 	/* fake keyboard */
-	MCFG_TIMER_ADD_PERIODIC("keyboard", pc8401a_keyboard_tick, attotime::from_hz(64))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("keyboard", pc8401a_state, pc8401a_keyboard_tick, attotime::from_hz(64))
 
 	/* devices */
-	MCFG_UPD1990A_ADD(UPD1990A_TAG, XTAL_32_768kHz, rtc_intf)
+	MCFG_UPD1990A_ADD(UPD1990A_TAG, XTAL_32_768kHz, NULL, NULL)
 	MCFG_I8255A_ADD(I8255A_TAG, ppi_intf)
-	MCFG_MSM8251_ADD(MSM8251_TAG, uart_intf)
+	MCFG_I8251_ADD(I8251_TAG, uart_intf)
+	MCFG_RS232_PORT_ADD(RS232_TAG, rs232_intf, default_rs232_devices, NULL)
 
 	/* video hardware */
 	MCFG_FRAGMENT_ADD(pc8500_video)
@@ -690,6 +694,6 @@ ROM_END
 /* System Drivers */
 
 /*    YEAR  NAME        PARENT  COMPAT  MACHINE     INPUT       INIT    COMPANY FULLNAME */
-COMP( 1984,	pc8401a,	0,		0,		pc8401a,	pc8401a,	0,		"Nippon Electronic Company",	"PC-8401A-LS", GAME_NOT_WORKING )
-//COMP( 1984, pc8401bd,   pc8401a,0,      pc8401a,    pc8401a,    0,      "Nippon Electronic Company",  "PC-8401BD", GAME_NOT_WORKING )
-COMP( 1985, pc8500,		0,		0,		pc8500,		pc8401a,	0,		"Nippon Electronic Company",	"PC-8500", GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 1984, pc8401a,    0,      0,      pc8401a,    pc8401a, driver_device, 0,      "Nippon Electronic Company",    "PC-8401A-LS", GAME_NOT_WORKING )
+//COMP( 1984, pc8401bd,   pc8401a,0,      pc8401a,    pc8401a, driver_device,    0,      "Nippon Electronic Company",  "PC-8401BD", GAME_NOT_WORKING )
+COMP( 1985, pc8500,     0,      0,      pc8500,     pc8401a, driver_device, 0,      "Nippon Electronic Company",    "PC-8500", GAME_NOT_WORKING | GAME_NO_SOUND)

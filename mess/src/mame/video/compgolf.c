@@ -9,11 +9,12 @@
 #include "includes/compgolf.h"
 
 
-PALETTE_INIT( compgolf )
+void compgolf_state::palette_init()
 {
+	const UINT8 *color_prom = memregion("proms")->base();
 	int i;
 
-	for (i = 0; i < machine.total_colors(); i++)
+	for (i = 0; i < machine().total_colors(); i++)
 	{
 		int bit0,bit1,bit2,r,g,b;
 		bit0 = (color_prom[i] >> 0) & 0x01;
@@ -29,54 +30,49 @@ PALETTE_INIT( compgolf )
 		bit2 = (color_prom[i] >> 7) & 0x01;
 		b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
 
-		palette_set_color(machine, i, MAKE_RGB(r,g,b));
+		palette_set_color(machine(), i, MAKE_RGB(r,g,b));
 	}
 }
 
-WRITE8_HANDLER( compgolf_video_w )
+WRITE8_MEMBER(compgolf_state::compgolf_video_w)
 {
-	compgolf_state *state = space->machine().driver_data<compgolf_state>();
-	state->m_videoram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_text_tilemap, offset / 2);
+	m_videoram[offset] = data;
+	m_text_tilemap->mark_tile_dirty(offset / 2);
 }
 
-WRITE8_HANDLER( compgolf_back_w )
+WRITE8_MEMBER(compgolf_state::compgolf_back_w)
 {
-	compgolf_state *state = space->machine().driver_data<compgolf_state>();
-	state->m_bg_ram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_bg_tilemap, offset / 2);
+	m_bg_ram[offset] = data;
+	m_bg_tilemap->mark_tile_dirty(offset / 2);
 }
 
-static TILE_GET_INFO( get_text_info )
+TILE_GET_INFO_MEMBER(compgolf_state::get_text_info)
 {
-	compgolf_state *state = machine.driver_data<compgolf_state>();
 	tile_index <<= 1;
-	SET_TILE_INFO(2, state->m_videoram[tile_index + 1] | (state->m_videoram[tile_index] << 8), state->m_videoram[tile_index] >> 2, 0);
+	SET_TILE_INFO_MEMBER(2, m_videoram[tile_index + 1] | (m_videoram[tile_index] << 8), m_videoram[tile_index] >> 2, 0);
 }
 
-static TILEMAP_MAPPER( back_scan )
+TILEMAP_MAPPER_MEMBER(compgolf_state::back_scan)
 {
 	/* logical (col,row) -> memory offset */
 	return (col & 0x0f) + ((row & 0x0f) << 4) + ((col & 0x10) << 4) + ((row & 0x10) << 5);
 }
 
-static TILE_GET_INFO( get_back_info )
+TILE_GET_INFO_MEMBER(compgolf_state::get_back_info)
 {
-	compgolf_state *state = machine.driver_data<compgolf_state>();
-	int attr = state->m_bg_ram[tile_index * 2];
-	int code = state->m_bg_ram[tile_index * 2 + 1] + ((attr & 1) << 8);
+	int attr = m_bg_ram[tile_index * 2];
+	int code = m_bg_ram[tile_index * 2 + 1] + ((attr & 1) << 8);
 	int color = (attr & 0x3e) >> 1;
 
-	SET_TILE_INFO(1, code, color, 0);
+	SET_TILE_INFO_MEMBER(1, code, color, 0);
 }
 
-VIDEO_START( compgolf )
+void compgolf_state::video_start()
 {
-	compgolf_state *state = machine.driver_data<compgolf_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_back_info, back_scan, 16, 16, 32, 32);
-	state->m_text_tilemap = tilemap_create(machine, get_text_info, tilemap_scan_rows, 8, 8, 32, 32);
+	m_bg_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(compgolf_state::get_back_info),this), tilemap_mapper_delegate(FUNC(compgolf_state::back_scan),this), 16, 16, 32, 32);
+	m_text_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(compgolf_state::get_text_info),this), TILEMAP_SCAN_ROWS, 8, 8, 32, 32);
 
-	tilemap_set_transparent_pen(state->m_text_tilemap, 0);
+	m_text_tilemap->set_transparent_pen(0);
 }
 
 /*
@@ -90,45 +86,43 @@ xx------ xxxxxxxx -------- -------- sprite code
 -----x-- -------- -------- -------- Flip X
 -------- -------- -------- -------- Flip Y(used?)
 */
-static void draw_sprites( running_machine &machine, bitmap_t *bitmap, const rectangle *cliprect )
+void compgolf_state::draw_sprites( bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
-	compgolf_state *state = machine.driver_data<compgolf_state>();
 	int offs, fx, fy, x, y, color, sprite;
 
 	for (offs = 0; offs < 0x60; offs += 4)
 	{
-		sprite = state->m_spriteram[offs + 1] + (((state->m_spriteram[offs] & 0xc0) >> 6) * 0x100);
-		x = 240 - state->m_spriteram[offs + 3];
-		y = state->m_spriteram[offs + 2];
-		color = (state->m_spriteram[offs] & 8)>>3;
-		fx = state->m_spriteram[offs] & 4;
+		sprite = m_spriteram[offs + 1] + (((m_spriteram[offs] & 0xc0) >> 6) * 0x100);
+		x = 240 - m_spriteram[offs + 3];
+		y = m_spriteram[offs + 2];
+		color = (m_spriteram[offs] & 8)>>3;
+		fx = m_spriteram[offs] & 4;
 		fy = 0; /* ? */
 
-		drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
+		drawgfx_transpen(bitmap,cliprect,machine().gfx[0],
 				sprite,
 				color,fx,fy,x,y,0);
 
 		/* Double Height */
-		if(state->m_spriteram[offs] & 0x10)
+		if(m_spriteram[offs] & 0x10)
 		{
-			drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
+			drawgfx_transpen(bitmap,cliprect,machine().gfx[0],
 				sprite + 1,
 				color, fx, fy, x, y + 16, 0);
 		}
 	}
 }
 
-SCREEN_UPDATE( compgolf )
+UINT32 compgolf_state::screen_update_compgolf(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	compgolf_state *state = screen->machine().driver_data<compgolf_state>();
-	int scrollx = state->m_scrollx_hi + state->m_scrollx_lo;
-	int scrolly = state->m_scrolly_hi + state->m_scrolly_lo;
+	int scrollx = m_scrollx_hi + m_scrollx_lo;
+	int scrolly = m_scrolly_hi + m_scrolly_lo;
 
-	tilemap_set_scrollx(state->m_bg_tilemap, 0, scrollx);
-	tilemap_set_scrolly(state->m_bg_tilemap, 0, scrolly);
+	m_bg_tilemap->set_scrollx(0, scrollx);
+	m_bg_tilemap->set_scrolly(0, scrolly);
 
-	tilemap_draw(bitmap, cliprect, state->m_bg_tilemap, 0, 0);
-	tilemap_draw(bitmap, cliprect, state->m_text_tilemap, 0, 0);
-	draw_sprites(screen->machine(), bitmap, cliprect);
+	m_bg_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+	m_text_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+	draw_sprites(bitmap, cliprect);
 	return 0;
 }

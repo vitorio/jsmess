@@ -5,27 +5,27 @@
         12/05/2009 Skeleton driver.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/i8255.h"
 #include "machine/pit8253.h"
-#include "machine/msm8251.h"
+#include "machine/i8251.h"
 #include "machine/ram.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
 class fk1_state : public driver_device
 {
 public:
 	fk1_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-	m_maincpu(*this, "maincpu")
+		m_maincpu(*this, "maincpu"),
+		m_ram(*this, RAM_TAG)
 	{ }
 
 	required_device<cpu_device> m_maincpu;
+	required_device<ram_device> m_ram;
+
 	DECLARE_WRITE8_MEMBER(fk1_ppi_1_a_w);
 	DECLARE_WRITE8_MEMBER(fk1_ppi_1_b_w);
 	DECLARE_WRITE8_MEMBER(fk1_ppi_1_c_w);
@@ -54,7 +54,10 @@ public:
 	UINT8 m_video_rol;
 	UINT8 m_int_vector;
 	virtual void machine_reset();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	TIMER_DEVICE_CALLBACK_MEMBER(keyboard_callback);
+	TIMER_DEVICE_CALLBACK_MEMBER(vsync_callback);
+	IRQ_CALLBACK_MEMBER(fk1_irq_callback);
 };
 
 
@@ -261,7 +264,7 @@ WRITE_LINE_MEMBER( fk1_state::fk1_pit_out2 )
 }
 
 
-static const struct pit8253_config fk1_pit8253_intf =
+static const struct pit8253_interface fk1_pit8253_intf =
 {
 	{
 		{
@@ -296,21 +299,21 @@ WRITE8_MEMBER( fk1_state::fk1_intr_w )
 
 READ8_MEMBER( fk1_state::fk1_bank_ram_r )
 {
-	address_space *space_mem = m_maincpu->memory().space(AS_PROGRAM);
-	UINT8 *ram = ram_get_ptr(machine().device(RAM_TAG));
+	address_space &space_mem = m_maincpu->space(AS_PROGRAM);
+	UINT8 *ram = m_ram->pointer();
 
-	space_mem->install_write_bank(0x0000, 0x3fff, "bank1");
-	memory_set_bankptr(machine(), "bank1", ram);
-	memory_set_bankptr(machine(), "bank2", ram + 0x4000);
+	space_mem.install_write_bank(0x0000, 0x3fff, "bank1");
+	membank("bank1")->set_base(ram);
+	membank("bank2")->set_base(ram + 0x4000);
 	return 0;
 }
 
 READ8_MEMBER( fk1_state::fk1_bank_rom_r )
 {
-	address_space *space_mem = m_maincpu->memory().space(AS_PROGRAM);
-	space_mem->unmap_write(0x0000, 0x3fff);
-	memory_set_bankptr(machine(), "bank1", machine().region("maincpu")->base());
-	memory_set_bankptr(machine(), "bank2", ram_get_ptr(machine().device(RAM_TAG)) + 0x10000);
+	address_space &space_mem = m_maincpu->space(AS_PROGRAM);
+	space_mem.unmap_write(0x0000, 0x3fff);
+	membank("bank1")->set_base(memregion("maincpu")->base());
+	membank("bank2")->set_base(m_ram->pointer() + 0x10000);
 	return 0;
 }
 
@@ -362,11 +365,11 @@ static ADDRESS_MAP_START(fk1_io, AS_IO, 8, fk1_state)
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE( 0x00, 0x03 ) AM_DEVREADWRITE("ppi8255_1", i8255_device, read, write)
-	AM_RANGE( 0x10, 0x13 ) AM_DEVREADWRITE_LEGACY("pit8253", pit8253_r,pit8253_w)
+	AM_RANGE( 0x10, 0x13 ) AM_DEVREADWRITE("pit8253", pit8253_device, read, write)
 	AM_RANGE( 0x20, 0x23 ) AM_DEVREADWRITE("ppi8255_2", i8255_device, read, write)
 	AM_RANGE( 0x30, 0x30 ) AM_READWRITE(fk1_bank_ram_r,fk1_intr_w)
-	AM_RANGE( 0x40, 0x40 ) AM_DEVREADWRITE_LEGACY("uart", msm8251_data_r,msm8251_data_w)
-	AM_RANGE( 0x41, 0x41 ) AM_DEVREADWRITE_LEGACY("uart", msm8251_status_r,msm8251_control_w)
+	AM_RANGE( 0x40, 0x40 ) AM_DEVREADWRITE("uart", i8251_device, data_r, data_w)
+	AM_RANGE( 0x41, 0x41 ) AM_DEVREADWRITE("uart", i8251_device, status_r, control_w)
 	AM_RANGE( 0x50, 0x50 ) AM_READWRITE(fk1_bank_rom_r,fk1_disk_w)
 	AM_RANGE( 0x60, 0x63 ) AM_DEVREADWRITE("ppi8255_3", i8255_device, read, write)
 	AM_RANGE( 0x70, 0x70 ) AM_READWRITE(fk1_mouse_r,fk1_reset_int_w)
@@ -385,14 +388,12 @@ static INPUT_PORTS_START( fk1 )
 		PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_CODE(KEYCODE_7) PORT_CHAR('7') PORT_CHAR('\'')
 INPUT_PORTS_END
 
-static TIMER_DEVICE_CALLBACK(keyboard_callback)
+TIMER_DEVICE_CALLBACK_MEMBER(fk1_state::keyboard_callback)
 {
-	fk1_state *state = timer.machine().driver_data<fk1_state>();
-
-	if (input_port_read(timer.machine(), "LINE0"))
+	if (ioport("LINE0")->read())
 	{
-		state->m_int_vector = 6;
-		cputag_set_input_line(timer.machine(), "maincpu", 0, HOLD_LINE);
+		m_int_vector = 6;
+		m_maincpu->set_input_line(0, HOLD_LINE);
 	}
 }
 
@@ -407,42 +408,38 @@ static TIMER_DEVICE_CALLBACK(keyboard_callback)
 0 ? PRINTER
 */
 
-static IRQ_CALLBACK (fk1_irq_callback)
+IRQ_CALLBACK_MEMBER(fk1_state::fk1_irq_callback)
 {
-	fk1_state *state = device->machine().driver_data<fk1_state>();
-
-	logerror("IRQ %02x\n", state->m_int_vector*2);
-	return state->m_int_vector * 2;
+	logerror("IRQ %02x\n", m_int_vector*2);
+	return m_int_vector * 2;
 }
 
-static TIMER_DEVICE_CALLBACK( vsync_callback )
+TIMER_DEVICE_CALLBACK_MEMBER(fk1_state::vsync_callback)
 {
-	fk1_state *state = timer.machine().driver_data<fk1_state>();
-
-	state->m_int_vector = 3;
-	cputag_set_input_line(timer.machine(), "maincpu", 0, HOLD_LINE);
+	m_int_vector = 3;
+	m_maincpu->set_input_line(0, HOLD_LINE);
 }
 
 
-MACHINE_RESET_MEMBER( fk1_state )
+void fk1_state::machine_reset()
 {
-	address_space *space = m_maincpu->memory().space(AS_PROGRAM);
-	UINT8 *ram = ram_get_ptr(machine().device(RAM_TAG));
+	address_space &space = m_maincpu->space(AS_PROGRAM);
+	UINT8 *ram = m_ram->pointer();
 
-	space->unmap_write(0x0000, 0x3fff);
-	memory_set_bankptr(machine(), "bank1", machine().region("maincpu")->base()); // ROM
-	memory_set_bankptr(machine(), "bank2", ram + 0x10000); // VRAM
-	memory_set_bankptr(machine(), "bank3", ram + 0x8000);
-	memory_set_bankptr(machine(), "bank4", ram + 0xc000);
+	space.unmap_write(0x0000, 0x3fff);
+	membank("bank1")->set_base(memregion("maincpu")->base()); // ROM
+	membank("bank2")->set_base(ram + 0x10000); // VRAM
+	membank("bank3")->set_base(ram + 0x8000);
+	membank("bank4")->set_base(ram + 0xc000);
 
-	device_set_irq_callback(machine().device("maincpu"), fk1_irq_callback);
+	m_maincpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(fk1_state::fk1_irq_callback),this));
 }
 
-SCREEN_UPDATE_MEMBER( fk1_state )
+UINT32 fk1_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	UINT8 code;
 	int y, x, b;
-	UINT8 *ram = ram_get_ptr(machine().device(RAM_TAG));
+	UINT8 *ram = m_ram->pointer();
 
 	for (x = 0; x < 64; x++)
 	{
@@ -451,7 +448,7 @@ SCREEN_UPDATE_MEMBER( fk1_state )
 			code = ram[x * 0x100 + ((y + m_video_rol) & 0xff) + 0x10000];
 			for (b = 0; b < 8; b++)
 			{
-				*BITMAP_ADDR16(&bitmap, y, x*8+b) =  ((code << b) & 0x80) ? 1 : 0;
+				bitmap.pix16(y, x*8+b) =  ((code << b) & 0x80) ? 1 : 0;
 			}
 		}
 	}
@@ -468,32 +465,32 @@ static MACHINE_CONFIG_START( fk1, fk1_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(fk1_state, screen_update)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(monochrome_green)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, monochrome_green)
 
 	MCFG_PIT8253_ADD( "pit8253", fk1_pit8253_intf )
 	MCFG_I8255_ADD( "ppi8255_1", fk1_ppi8255_interface_1 )
 	MCFG_I8255_ADD( "ppi8255_2", fk1_ppi8255_interface_2 )
 	MCFG_I8255_ADD( "ppi8255_3", fk1_ppi8255_interface_3 )
 	/* uart */
-	MCFG_MSM8251_ADD("uart", default_msm8251_interface)
+	MCFG_I8251_ADD("uart", default_i8251_interface)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
 	MCFG_RAM_DEFAULT_SIZE("80K") // 64 + 16
 
-	MCFG_TIMER_ADD_PERIODIC("keyboard_timer", keyboard_callback, attotime::from_hz(24000))
-	MCFG_TIMER_ADD_PERIODIC("vsync_timer", vsync_callback, attotime::from_hz(50))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("keyboard_timer", fk1_state, keyboard_callback, attotime::from_hz(24000))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("vsync_timer", fk1_state, vsync_callback, attotime::from_hz(50))
 MACHINE_CONFIG_END
 
 /* ROM definition */
 ROM_START( fk1 )
 	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
 	ROM_SYSTEM_BIOS( 0, "orig", "Original BIOS" )
-	ROMX_LOAD( "fk1.u65",	   0x0000, 0x0800, CRC(145561f8) SHA1(a4eb17d773e51b34620c508b6cebcb4531ae99c2), ROM_BIOS(1))
+	ROMX_LOAD( "fk1.u65",      0x0000, 0x0800, CRC(145561f8) SHA1(a4eb17d773e51b34620c508b6cebcb4531ae99c2), ROM_BIOS(1))
 	ROM_SYSTEM_BIOS( 1, "diag", "Diag BIOS" )
 	ROMX_LOAD( "fk1-diag.u65", 0x0000, 0x0800, CRC(e0660ae1) SHA1(6ad609049b28f27126af0a8a6224362351073dee), ROM_BIOS(2))
 ROM_END
@@ -501,5 +498,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT COMPANY   FULLNAME       FLAGS */
-COMP( 1989, fk1,    0,      0,       fk1,       fk1,      0,  "Statni statek Klicany", "FK-1", GAME_NOT_WORKING | GAME_NO_SOUND)
-
+COMP( 1989, fk1,    0,      0,       fk1,       fk1, driver_device,      0,  "Statni statek Klicany", "FK-1", GAME_NOT_WORKING | GAME_NO_SOUND)

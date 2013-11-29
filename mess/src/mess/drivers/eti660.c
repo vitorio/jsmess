@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /*
 
     TODO:
@@ -12,28 +14,25 @@
 
 #include "includes/eti660.h"
 
-#define RX \
-	cpu_get_reg(m_maincpu, COSMAC_R0 + cpu_get_reg(m_maincpu, COSMAC_X))
-
 /* Read/Write Handlers */
 
 READ8_MEMBER( eti660_state::pia_r )
 {
-	int pia_offset = RX & 0x03;
+	int pia_offset = m_maincpu->get_memory_address() & 0x03;
 
 	return m_pia->read(space, pia_offset);
 }
 
 WRITE8_MEMBER( eti660_state::pia_w )
 {
-	int pia_offset = RX & 0x03;
+	int pia_offset = m_maincpu->get_memory_address() & 0x03;
 
 	m_pia->write(space, pia_offset, data);
 }
 
 WRITE8_MEMBER( eti660_state::colorram_w )
 {
-	int colorram_offset = RX & 0xff;
+	int colorram_offset = m_maincpu->get_memory_address() & 0xff;
 
 	colorram_offset = ((colorram_offset & 0xf8) >> 1) || (colorram_offset & 0x03);
 
@@ -45,6 +44,7 @@ WRITE8_MEMBER( eti660_state::colorram_w )
 static ADDRESS_MAP_START( eti660_map, AS_PROGRAM, 8, eti660_state )
 	AM_RANGE(0x0000, 0x03ff) AM_ROM
 	AM_RANGE(0x0400, 0x0fff) AM_RAM
+	AM_RANGE(0x0c00, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( eti660_io_map, AS_IO, 8, eti660_state )
@@ -103,46 +103,21 @@ READ_LINE_MEMBER( eti660_state::gdata_r )
 	return BIT(m_color, 2);
 }
 
-static CDP1864_INTERFACE( eti660_cdp1864_intf )
-{
-	CDP1802_TAG,
-	SCREEN_TAG,
-	CDP1864_INTERLACED,
-	DEVCB_DRIVER_LINE_MEMBER(eti660_state, rdata_r),
-	DEVCB_DRIVER_LINE_MEMBER(eti660_state, bdata_r),
-	DEVCB_DRIVER_LINE_MEMBER(eti660_state, gdata_r),
-	DEVCB_CPU_INPUT_LINE(CDP1802_TAG, COSMAC_INPUT_LINE_INT),
-	DEVCB_CPU_INPUT_LINE(CDP1802_TAG, COSMAC_INPUT_LINE_DMAOUT),
-	DEVCB_CPU_INPUT_LINE(CDP1802_TAG, COSMAC_INPUT_LINE_EF1),
-	DEVCB_NULL,
-	RES_K(2.2), /* R7 */
-	RES_K(1),	/* R5 */
-	RES_K(4.7), /* R6 */
-	RES_K(4.7)	/* R4 */
-};
-
-bool eti660_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
-{
-	m_cti->update_screen(&bitmap, &cliprect);
-
-	return 0;
-}
-
 /* CDP1802 Interface */
 
 READ_LINE_MEMBER( eti660_state::clear_r )
 {
-	return BIT(input_port_read(machine(), "SPECIAL"), 0);
+	return BIT(m_special->read(), 0);
 }
 
 READ_LINE_MEMBER( eti660_state::ef2_r )
 {
-	return (m_cassette)->input() < 0;
+	return m_cassette->input() < 0;
 }
 
 READ_LINE_MEMBER( eti660_state::ef4_r )
 {
-	return BIT(input_port_read(machine(), "SPECIAL"), 1);
+	return BIT(m_special->read(), 1);
 }
 
 WRITE_LINE_MEMBER( eti660_state::q_w )
@@ -159,7 +134,7 @@ WRITE_LINE_MEMBER( eti660_state::q_w )
 
 WRITE8_MEMBER( eti660_state::dma_w )
 {
-	UINT8 colorram_offset = ((offset & 0xf8) >> 1) || (offset & 0x03);
+	UINT8 colorram_offset = ((offset & 0xf8) >> 1) | (offset & 0x03);
 
 	m_color = m_color_ram[colorram_offset];
 
@@ -189,25 +164,25 @@ READ8_MEMBER( eti660_state::pia_pa_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     keyboard row 0
-        PA1     keyboard row 1
-        PA2     keyboard row 2
-        PA3     keyboard row 3
-        PA4     keyboard column 0
-        PA5     keyboard column 1
-        PA6     keyboard column 2
-        PA7     keyboard column 3
+	    PA0     keyboard row 0
+	    PA1     keyboard row 1
+	    PA2     keyboard row 2
+	    PA3     keyboard row 3
+	    PA4     keyboard column 0
+	    PA5     keyboard column 1
+	    PA6     keyboard column 2
+	    PA7     keyboard column 3
 
-    */
+	*/
 
 	UINT8 data = 0xf0;
 
-	if (!BIT(m_keylatch, 0)) data &= input_port_read(machine(), "PA0");
-	if (!BIT(m_keylatch, 1)) data &= input_port_read(machine(), "PA1");
-	if (!BIT(m_keylatch, 2)) data &= input_port_read(machine(), "PA2");
-	if (!BIT(m_keylatch, 3)) data &= input_port_read(machine(), "PA3");
+	if (!BIT(m_keylatch, 0)) data &= m_pa0->read();
+	if (!BIT(m_keylatch, 1)) data &= m_pa1->read();
+	if (!BIT(m_keylatch, 2)) data &= m_pa2->read();
+	if (!BIT(m_keylatch, 3)) data &= m_pa3->read();
 
 	return data;
 }
@@ -216,36 +191,36 @@ WRITE8_MEMBER( eti660_state::pia_pa_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PA0     keyboard row 0
-        PA1     keyboard row 1
-        PA2     keyboard row 2
-        PA3     keyboard row 3
-        PA4     keyboard column 0
-        PA5     keyboard column 1
-        PA6     keyboard column 2
-        PA7     keyboard column 3
+	    PA0     keyboard row 0
+	    PA1     keyboard row 1
+	    PA2     keyboard row 2
+	    PA3     keyboard row 3
+	    PA4     keyboard column 0
+	    PA5     keyboard column 1
+	    PA6     keyboard column 2
+	    PA7     keyboard column 3
 
-    */
+	*/
 
 	m_keylatch = data & 0x0f;
 }
 
 static const pia6821_interface eti660_mc6821_intf =
 {
-	DEVCB_DRIVER_MEMBER(eti660_state, pia_pa_r),								/* port A input */
-	DEVCB_NULL,													/* port B input */
-	DEVCB_NULL,													/* CA1 input */
-	DEVCB_NULL,													/* CB1 input */
-	DEVCB_NULL,													/* CA2 input */
-	DEVCB_NULL,													/* CB2 input */
-	DEVCB_DRIVER_MEMBER(eti660_state, pia_pa_w),								/* port A output */
-	DEVCB_NULL,													/* port B output */
-	DEVCB_NULL,													/* CA2 output */
-	DEVCB_NULL,													/* CB2 output */
-	DEVCB_NULL,													/* IRQA output */
-	DEVCB_NULL													/* IRQB output */
+	DEVCB_DRIVER_MEMBER(eti660_state, pia_pa_r),                                /* port A input */
+	DEVCB_NULL,                                                 /* port B input */
+	DEVCB_NULL,                                                 /* CA1 input */
+	DEVCB_NULL,                                                 /* CB1 input */
+	DEVCB_NULL,                                                 /* CA2 input */
+	DEVCB_NULL,                                                 /* CB2 input */
+	DEVCB_DRIVER_MEMBER(eti660_state, pia_pa_w),                                /* port A output */
+	DEVCB_NULL,                                                 /* port B output */
+	DEVCB_NULL,                                                 /* CA2 output */
+	DEVCB_NULL,                                                 /* CB2 output */
+	DEVCB_NULL,                                                 /* IRQA output */
+	DEVCB_NULL                                                  /* IRQB output */
 };
 
 /* Machine Drivers */
@@ -261,24 +236,24 @@ static const cassette_interface eti660_cassette_interface =
 
 static MACHINE_CONFIG_START( eti660, eti660_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD(CDP1802_TAG, COSMAC, XTAL_8_867238MHz/5)
+	MCFG_CPU_ADD(CDP1802_TAG, CDP1802, XTAL_8_867238MHz/5)
 	MCFG_CPU_PROGRAM_MAP(eti660_map)
 	MCFG_CPU_IO_MAP(eti660_io_map)
 	MCFG_CPU_CONFIG(eti660_config)
 
-    /* video hardware */
+	/* video hardware */
 	MCFG_CDP1864_SCREEN_ADD(SCREEN_TAG, XTAL_8_867238MHz/5)
-
-	MCFG_PALETTE_LENGTH(8+8)
+	MCFG_SCREEN_UPDATE_DEVICE(CDP1864_TAG, cdp1864_device, screen_update)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_CDP1864_ADD(CDP1864_TAG, XTAL_8_867238MHz/5, eti660_cdp1864_intf)
+	MCFG_CDP1864_ADD(CDP1864_TAG, SCREEN_TAG, XTAL_8_867238MHz/5, GND, INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_INT), INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_DMAOUT), INPUTLINE(CDP1802_TAG, COSMAC_INPUT_LINE_EF1), NULL, READLINE(eti660_state, rdata_r), READLINE(eti660_state, bdata_r), READLINE(eti660_state, gdata_r))
+	MCFG_CDP1864_CHROMINANCE(RES_K(2.2), RES_K(1), RES_K(4.7), RES_K(4.7)) // R7, R5, R6, R4
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	/* devices */
 	MCFG_PIA6821_ADD(MC6821_TAG, eti660_mc6821_intf)
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, eti660_cassette_interface)
+	MCFG_CASSETTE_ADD("cassette", eti660_cassette_interface)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -293,4 +268,4 @@ ROM_START( eti660 )
 ROM_END
 
 /*    YEAR  NAME        PARENT  COMPAT  MACHINE     INPUT       INIT        COMPANY                             FULLNAME                FLAGS */
-COMP( 1981, eti660,		0,		0,		eti660,		eti660,		0,			"Electronics Today International",	"ETI-660 (Australia)",	GAME_NOT_WORKING )
+COMP( 1981, eti660,     0,      0,      eti660,     eti660, driver_device,      0,          "Electronics Today International",  "ETI-660",  GAME_NOT_WORKING )

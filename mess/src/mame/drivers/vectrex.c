@@ -19,9 +19,9 @@ Bruce Tomlin (hardware info)
 #include "machine/nvram.h"
 
 
-static ADDRESS_MAP_START(vectrex_map, AS_PROGRAM, 8)
-	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0xc800, 0xcbff) AM_RAM AM_MIRROR(0x0400) AM_BASE_MEMBER(vectrex_state, m_gce_vectorram) AM_SIZE_MEMBER(vectrex_state, m_gce_vectorram_size)
+static ADDRESS_MAP_START(vectrex_map, AS_PROGRAM, 8, vectrex_state )
+	AM_RANGE(0x0000, 0x7fff) AM_RAMBANK("bank1") AM_REGION("maincpu", 0)
+	AM_RANGE(0xc800, 0xcbff) AM_RAM AM_MIRROR(0x0400) AM_SHARE("gce_vectorram")
 	AM_RANGE(0xd000, 0xd7ff) AM_READWRITE(vectrex_via_r, vectrex_via_w)
 	AM_RANGE(0xe000, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -92,7 +92,7 @@ static const ay8910_interface vectrex_ay8910_interface =
 	AY8910_DEFAULT_LOADS,
 	DEVCB_INPUT_PORT("BUTTONS"),
 	DEVCB_NULL,
-	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, vectrex_psg_port_w),
+	DEVCB_DRIVER_MEMBER(vectrex_state, vectrex_psg_port_w),
 	DEVCB_NULL
 };
 
@@ -102,18 +102,17 @@ static MACHINE_CONFIG_START( vectrex, vectrex_state )
 	MCFG_CPU_PROGRAM_MAP(vectrex_map)
 
 	/* video hardware */
+	MCFG_VECTOR_ADD("vector")
 	MCFG_SCREEN_ADD("screen", VECTOR)
 	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(400, 300)
 	MCFG_SCREEN_VISIBLE_AREA(0, 399, 0, 299)
-	MCFG_SCREEN_UPDATE(vectrex)
+	MCFG_SCREEN_UPDATE_DRIVER(vectrex_state, screen_update_vectrex)
 
-	MCFG_VIDEO_START(vectrex)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_DAC_ADD("dac")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 	MCFG_SOUND_ADD("ay8912", AY8912, 1500000)
 	MCFG_SOUND_CONFIG(vectrex_ay8910_interface)
@@ -126,7 +125,7 @@ static MACHINE_CONFIG_START( vectrex, vectrex_state )
 	MCFG_CARTSLOT_ADD("cart")
 	MCFG_CARTSLOT_EXTENSION_LIST("bin,gam,vec")
 	MCFG_CARTSLOT_NOT_MANDATORY
-	MCFG_CARTSLOT_LOAD(vectrex_cart)
+	MCFG_CARTSLOT_LOAD(vectrex_state,vectrex_cart)
 	MCFG_CARTSLOT_INTERFACE("vectrex_cart")
 
 	/* software lists */
@@ -134,7 +133,7 @@ static MACHINE_CONFIG_START( vectrex, vectrex_state )
 MACHINE_CONFIG_END
 
 ROM_START(vectrex)
-	ROM_REGION(0x10000,"maincpu", 0)
+	ROM_REGION(0x18000,"maincpu", 0)
 	ROM_LOAD("system.img", 0xe000, 0x2000, CRC(ba13fb57) SHA1(65d07426b520ddd3115d40f255511e0fd2e20ae7))
 ROM_END
 
@@ -174,12 +173,12 @@ ROM_END
 
 *****************************************************************/
 
-static ADDRESS_MAP_START(raaspec_map , AS_PROGRAM, 8)
+static ADDRESS_MAP_START(raaspec_map , AS_PROGRAM, 8, vectrex_state )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(raaspec_led_w)
-	AM_RANGE(0xc800, 0xcbff) AM_RAM AM_MIRROR(0x0400) AM_BASE_MEMBER(vectrex_state, m_gce_vectorram) AM_SIZE_MEMBER(vectrex_state, m_gce_vectorram_size)
-	AM_RANGE(0xd000, 0xd7ff) AM_READWRITE (vectrex_via_r, vectrex_via_w)
+	AM_RANGE(0xc800, 0xcbff) AM_RAM AM_MIRROR(0x0400) AM_SHARE("gce_vectorram")
+	AM_RANGE(0xd000, 0xd7ff) AM_READWRITE(vectrex_via_r, vectrex_via_w)
 	AM_RANGE(0xe000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -207,7 +206,7 @@ static MACHINE_CONFIG_DERIVED( raaspec, vectrex )
 	MCFG_CPU_PROGRAM_MAP(raaspec_map)
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
-	MCFG_VIDEO_START(raaspec)
+	MCFG_VIDEO_START_OVERRIDE(vectrex_state,raaspec)
 
 	/* via */
 	MCFG_DEVICE_REMOVE("via6522_0")
@@ -229,6 +228,6 @@ ROM_END
 ***************************************************************************/
 
 /*    YEAR  NAME      PARENT    COMPAT  MACHINE   INPUT     INIT       COMPANY FULLNAME */
-CONS(1982, vectrex,  0,        0,      vectrex,  vectrex,  vectrex,    "General Consumer Electronics",   "Vectrex" , ROT270)
+CONS(1982, vectrex,  0,        0,      vectrex,  vectrex,  vectrex_state, vectrex,    "General Consumer Electronics",   "Vectrex" , ROT270)
 
-GAME(1984, raaspec,  0,        raaspec,  raaspec,  vectrex, ROT270,    "Roy Abel & Associates",   "Spectrum I+", GAME_NOT_WORKING ) //TODO: button labels & timings, a mandatory artwork too?
+GAME(1984, raaspec,  0,        raaspec,  raaspec, vectrex_state,  vectrex, ROT270,    "Roy Abel & Associates",   "Spectrum I+", GAME_NOT_WORKING ) //TODO: button labels & timings, a mandatory artwork too?

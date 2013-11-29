@@ -11,10 +11,6 @@
 # MESS core defines
 #-------------------------------------------------
 
-ifeq ($(TARGET),mess)
-DEFS += -DMESS
-endif
-
 # add some additional include libraries for the mame files
 INCPATH += \
 	-I$(SRC)/mame \
@@ -32,7 +28,6 @@ EMUSRC = $(SRC)/emu
 EMUOBJ = $(OBJ)/emu
 
 # MAME directories
-EMU_AUDIO = $(EMUOBJ)/audio
 EMU_MACHINE = $(EMUOBJ)/machine
 EMU_VIDEO = $(EMUOBJ)/video
 MAME_AUDIO = $(MAMEOBJ)/audio
@@ -43,15 +38,12 @@ MAME_LAYOUT = $(MAMEOBJ)/layout
 
 # MESS directories
 MESS_AUDIO = $(MESSOBJ)/audio
-MESS_DEVICES = $(MESSOBJ)/devices
 MESS_DRIVERS = $(MESSOBJ)/drivers
-MESS_FORMATS = $(MESSOBJ)/formats
 MESS_LAYOUT = $(MESSOBJ)/layout
 MESS_MACHINE = $(MESSOBJ)/machine
 MESS_VIDEO = $(MESSOBJ)/video
 
 OBJDIRS += \
-	$(EMU_AUDIO) \
 	$(EMU_MACHINE) \
 	$(EMU_VIDEO) \
 	$(MAME_AUDIO) \
@@ -60,11 +52,10 @@ OBJDIRS += \
 	$(MAME_MACHINE) \
 	$(MAME_VIDEO) \
 	$(MESS_AUDIO) \
-	$(MESS_DEVICES) \
 	$(MESS_DRIVERS) \
-	$(MESS_FORMATS) \
 	$(MESS_LAYOUT) \
 	$(MESS_MACHINE) \
+	$(MESS_MACHINE)/c64 \
 	$(MESS_VIDEO) \
 
 # System-specific directories

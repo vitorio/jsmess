@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Miodrag Milanovic, Robbbert
 /***************************************************************************
 
         Robotron K8915
@@ -7,38 +9,34 @@
         When it says DIAGNOSTIC RAZ P, press enter.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
-#include "machine/terminal.h"
+#include "machine/keyboard.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define VIDEO_START_MEMBER(name) void name::video_start()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
 class k8915_state : public driver_device
 {
 public:
 	k8915_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-	m_maincpu(*this, "maincpu"),
-	m_terminal(*this, TERMINAL_TAG)
-	{ }
+	m_maincpu(*this, "maincpu")
+	,
+		m_p_videoram(*this, "p_videoram"){ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_terminal;
 	DECLARE_READ8_MEMBER( k8915_52_r );
 	DECLARE_READ8_MEMBER( k8915_53_r );
 	DECLARE_WRITE8_MEMBER( k8915_a8_w );
 	DECLARE_WRITE8_MEMBER( kbd_put );
-	UINT8 *m_p_videoram;
+	required_shared_ptr<UINT8> m_p_videoram;
 	UINT8 *m_p_chargen;
 	UINT8 m_framecnt;
 	UINT8 m_term_data;
 	virtual void machine_reset();
 	virtual void video_start();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	DECLARE_DRIVER_INIT(k8915);
 };
 
 READ8_MEMBER( k8915_state::k8915_52_r )
@@ -59,15 +57,15 @@ WRITE8_MEMBER( k8915_state::k8915_a8_w )
 {
 // seems to switch ram and rom around.
 	if (data == 0x87)
-		memory_set_bank(machine(), "boot", 0); // ram at 0000
+		membank("boot")->set_entry(0); // ram at 0000
 	else
-		memory_set_bank(machine(), "boot", 1); // rom at 0000
+		membank("boot")->set_entry(1); // rom at 0000
 }
 
 static ADDRESS_MAP_START(k8915_mem, AS_PROGRAM, 8, k8915_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x0fff) AM_RAMBANK("boot")
-	AM_RANGE(0x1000, 0x17ff) AM_RAM AM_BASE(m_p_videoram)
+	AM_RANGE(0x1000, 0x17ff) AM_RAM AM_SHARE("p_videoram")
 	AM_RANGE(0x1800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -82,23 +80,23 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( k8915 )
 INPUT_PORTS_END
 
-MACHINE_RESET_MEMBER(k8915_state)
+void k8915_state::machine_reset()
 {
-	memory_set_bank(machine(), "boot", 1);
+	membank("boot")->set_entry(1);
 }
 
-static DRIVER_INIT(k8915)
+DRIVER_INIT_MEMBER(k8915_state,k8915)
 {
-	UINT8 *RAM = machine.region("maincpu")->base();
-	memory_configure_bank(machine, "boot", 0, 2, &RAM[0x0000], 0x10000);
+	UINT8 *RAM = memregion("maincpu")->base();
+	membank("boot")->configure_entries(0, 2, &RAM[0x0000], 0x10000);
 }
 
-VIDEO_START_MEMBER( k8915_state )
+void k8915_state::video_start()
 {
-	m_p_chargen = machine().region("chargen")->base();
+	m_p_chargen = memregion("chargen")->base();
 }
 
-SCREEN_UPDATE_MEMBER( k8915_state )
+UINT32 k8915_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	UINT8 y,ra,chr,gfx;
 	UINT16 sy=0,ma=0,x;
@@ -109,7 +107,7 @@ SCREEN_UPDATE_MEMBER( k8915_state )
 	{
 		for (ra = 0; ra < 10; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(&bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma + 80; x++)
 			{
@@ -149,7 +147,7 @@ WRITE8_MEMBER( k8915_state::kbd_put )
 	m_term_data = data;
 }
 
-static GENERIC_TERMINAL_INTERFACE( terminal_intf )
+static ASCII_KEYBOARD_INTERFACE( keyboard_intf )
 {
 	DEVCB_DRIVER_MEMBER(k8915_state, kbd_put)
 };
@@ -164,13 +162,13 @@ static MACHINE_CONFIG_START( k8915, k8915_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(k8915_state, screen_update)
 	MCFG_SCREEN_SIZE(640, 250)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 249)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(monochrome_green)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, monochrome_green)
 
-	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf) // keyboard only
+	MCFG_ASCII_KEYBOARD_ADD(KEYBOARD_TAG, keyboard_intf)
 MACHINE_CONFIG_END
 
 
@@ -187,4 +185,4 @@ ROM_END
 /* Driver */
 
 /*   YEAR  NAME    PARENT  COMPAT   MACHINE  INPUT  INIT        COMPANY   FULLNAME       FLAGS */
-COMP( 1982, k8915,  0,       0, 	k8915,	k8915,	 k8915, "Robotron",   "K8915", GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 1982, k8915,  0,       0,     k8915,  k8915, k8915_state,  k8915, "Robotron",   "K8915", GAME_NOT_WORKING | GAME_NO_SOUND)

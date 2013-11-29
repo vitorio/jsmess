@@ -2,8 +2,8 @@
 #include "debugger.h"
 #include "sh2.h"
 
-#define SIGNX8(x)	(((INT32)(x) << 24) >> 24)
-#define SIGNX12(x)	(((INT32)(x) << 20) >> 20)
+#define SIGNX8(x)   (((INT32)(x) << 24) >> 24)
+#define SIGNX12(x)  (((INT32)(x) << 20) >> 20)
 
 #define Rn ((opcode >> 8) & 15)
 #define Rm ((opcode >> 4) & 15)
@@ -482,7 +482,7 @@ static UINT32 op1000(char *buffer, UINT32 pc, UINT16 opcode)
 
 static UINT32 op1001(char *buffer, UINT32 pc, UINT16 opcode)
 {
-	sprintf(buffer, "MOV.W   @($%04X,PC),%s", (opcode & 0xff) * 2, regname[Rn]);
+	sprintf(buffer, "MOV.W   @($%04X,PC),%s [%08X]", (opcode & 0xff) * 2, regname[Rn], pc+((opcode & 0xff) * 2)+2);
 	return 0;
 }
 
@@ -526,7 +526,7 @@ static UINT32 op1100(char *buffer, UINT32 pc, UINT16 opcode)
 		sprintf(buffer, "MOV.L   @($%04X,GBR),R0", (opcode & 0xff) * 4);
 		break;
 	case  7:
-		sprintf(buffer, "MOVA    @($%04X,PC),R0", (opcode & 0xff) * 4);
+		sprintf(buffer, "MOVA    @($%04X,PC),R0 [%08X]", (opcode & 0xff) * 4, ((pc + 2) & ~3) + (opcode & 0xff) * 4);
 		break;
 	case  8:
 		sprintf(buffer, "TST     #$%02X,R0", opcode & 0xff);
@@ -558,7 +558,7 @@ static UINT32 op1100(char *buffer, UINT32 pc, UINT16 opcode)
 
 static UINT32 op1101(char *buffer, UINT32 pc, UINT16 opcode)
 {
-	sprintf(buffer, "MOV.L   @($%02X,PC),%s", (opcode * 4) & 0xff, regname[Rn]);
+	sprintf(buffer, "MOV.L   @($%02X,PC),%s [%08X]", (opcode * 4) & 0xff, regname[Rn], ((pc + 2) & ~3) + (opcode & 0xff) * 4);
 	return 0;
 }
 
@@ -582,22 +582,22 @@ unsigned DasmSH2(char *buffer, unsigned pc, UINT16 opcode)
 
 	switch((opcode >> 12) & 15)
 	{
-	case  0: flags = op0000(buffer,pc,opcode);	  break;
-	case  1: flags = op0001(buffer,pc,opcode);	  break;
-	case  2: flags = op0010(buffer,pc,opcode);	  break;
-	case  3: flags = op0011(buffer,pc,opcode);	  break;
-	case  4: flags = op0100(buffer,pc,opcode);	  break;
-	case  5: flags = op0101(buffer,pc,opcode);	  break;
-	case  6: flags = op0110(buffer,pc,opcode);	  break;
-	case  7: flags = op0111(buffer,pc,opcode);	  break;
-	case  8: flags = op1000(buffer,pc,opcode);	  break;
-	case  9: flags = op1001(buffer,pc,opcode);	  break;
-	case 10: flags = op1010(buffer,pc,opcode);	  break;
-	case 11: flags = op1011(buffer,pc,opcode);	  break;
-	case 12: flags = op1100(buffer,pc,opcode);	  break;
-	case 13: flags = op1101(buffer,pc,opcode);	  break;
-	case 14: flags = op1110(buffer,pc,opcode);	  break;
-	default: flags = op1111(buffer,pc,opcode);	  break;
+	case  0: flags = op0000(buffer,pc,opcode);    break;
+	case  1: flags = op0001(buffer,pc,opcode);    break;
+	case  2: flags = op0010(buffer,pc,opcode);    break;
+	case  3: flags = op0011(buffer,pc,opcode);    break;
+	case  4: flags = op0100(buffer,pc,opcode);    break;
+	case  5: flags = op0101(buffer,pc,opcode);    break;
+	case  6: flags = op0110(buffer,pc,opcode);    break;
+	case  7: flags = op0111(buffer,pc,opcode);    break;
+	case  8: flags = op1000(buffer,pc,opcode);    break;
+	case  9: flags = op1001(buffer,pc,opcode);    break;
+	case 10: flags = op1010(buffer,pc,opcode);    break;
+	case 11: flags = op1011(buffer,pc,opcode);    break;
+	case 12: flags = op1100(buffer,pc,opcode);    break;
+	case 13: flags = op1101(buffer,pc,opcode);    break;
+	case 14: flags = op1110(buffer,pc,opcode);    break;
+	default: flags = op1111(buffer,pc,opcode);    break;
 	}
 	return 2 | flags | DASMFLAG_SUPPORTED;
 }
@@ -606,4 +606,3 @@ CPU_DISASSEMBLE( sh2 )
 {
 	return DasmSH2( buffer, pc, (oprom[0] << 8) | oprom[1] );
 }
-

@@ -1,45 +1,15 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     audit.c
 
     ROM set auditing functions.
 
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-
 ***************************************************************************/
 
 #include "emu.h"
 #include "emuopts.h"
-#include "hash.h"
 #include "audit.h"
 #include "harddisk.h"
 #include "sound/samples.h"
@@ -55,8 +25,8 @@
 
 media_auditor::media_auditor(const driver_enumerator &enumerator)
 	: m_enumerator(enumerator),
-	  m_validation(AUDIT_VALIDATE_FULL),
-	  m_searchpath(NULL)
+		m_validation(AUDIT_VALIDATE_FULL),
+		m_searchpath(NULL)
 {
 }
 
@@ -76,46 +46,41 @@ media_auditor::summary media_auditor::audit_media(const char *validation)
 
 // temporary hack until romload is update: get the driver path and support it for
 // all searches
-const char *driverpath = m_enumerator.config().devicelist().find("root")->searchpath();
+const char *driverpath = m_enumerator.config().root_device().searchpath();
 
-	// iterate over ROM sources and regions
 	int found = 0;
 	int required = 0;
-	int sharedFound = 0;
-	int sharedRequired = 0;
-	for (const rom_source *source = rom_first_source(m_enumerator.config()); source != NULL; source = rom_next_source(*source))
+	int shared_found = 0;
+	int shared_required = 0;
+
+	// iterate over devices and regions
+	device_iterator deviter(m_enumerator.config().root_device());
+	for (device_t *device = deviter.first(); device != NULL; device = deviter.next())
 	{
 		// determine the search path for this source and iterate through the regions
-		m_searchpath = source->searchpath();
-
-		// also determine if this is the driver's specific ROMs or not
-		bool source_is_gamedrv = (dynamic_cast<const driver_device *>(source) != NULL);
+		m_searchpath = device->searchpath();
 
 		// now iterate over regions and ROMs within
-		for (const rom_entry *region = rom_first_region(*source); region != NULL; region = rom_next_region(region))
+		for (const rom_entry *region = rom_first_region(*device); region != NULL; region = rom_next_region(region))
 		{
 // temporary hack: add the driver path & region name
-astring combinedpath(source->searchpath(), ";", driverpath);
-if(ROMREGION_ISLOADBYNAME(region))
-{
-	combinedpath=combinedpath.cat(";");
-	combinedpath=combinedpath.cat(ROMREGION_GETTAG(region));
-}
+astring combinedpath(device->searchpath(), ";", driverpath);
+if (device->shortname())
+	combinedpath.cat(";").cat(device->shortname());
 m_searchpath = combinedpath;
 
 			for (const rom_entry *rom = rom_first_file(region); rom; rom = rom_next_file(rom))
 			{
+				const char *name = ROM_GETNAME(rom);
 				hash_collection hashes(ROM_GETHASHDATA(rom));
-				bool shared = also_used_by_parent(hashes) >= 0;
+				device_t *shared_device = find_shared_device(*device, name, hashes, ROM_GETLENGTH(rom));
 
-				// if a dump exists, then at least one entry is required
-				if (!hashes.flag(hash_collection::FLAG_NO_DUMP))
+				// count the number of files with hashes
+				if (!hashes.flag(hash_collection::FLAG_NO_DUMP) && !ROM_ISOPTIONAL(rom))
 				{
 					required++;
-					if (shared)
-					{
-						sharedRequired++;
-					}
+					if (shared_device != NULL)
+						shared_required++;
 				}
 
 				// audit a file
@@ -127,29 +92,160 @@ m_searchpath = combinedpath;
 				else if (ROMREGION_ISDISKDATA(region))
 					record = audit_one_disk(rom);
 
-				// skip if no record
-				if (record == NULL)
-					continue;
-
-				// if we got a record back,
-				if (record->status() != audit_record::STATUS_NOT_FOUND && source_is_gamedrv)
+				if (record != NULL)
 				{
-					found++;
-					if (shared)
+					// count the number of files that are found.
+					if (record->status() == audit_record::STATUS_GOOD || (record->status() == audit_record::STATUS_FOUND_INVALID && find_shared_device(*device, name, record->actual_hashes(), record->actual_length()) == NULL))
 					{
-						sharedFound++;
+						found++;
+						if (shared_device != NULL)
+							shared_found++;
 					}
+
+					record->set_shared_device(shared_device);
 				}
 			}
 		}
 	}
 
-	// if we found nothing unique to this set & the set needs roms that aren't in the parent or the parent isn't found either, then we don't have the set at all
-	if (found == sharedFound && required > 0 && (required != sharedRequired || sharedFound == 0))
+	// if we only find files that are in the parent & either the set has no unique files or the parent is not found, then assume we don't have the set at all
+	if (found == shared_found && required > 0 && (required != shared_required || shared_found == 0))
+	{
 		m_record_list.reset();
+		return NOTFOUND;
+	}
 
 	// return a summary
-	return summarize();
+	return summarize(m_enumerator.driver().name);
+}
+
+
+//-------------------------------------------------
+//  audit_device - audit the device
+//-------------------------------------------------
+
+media_auditor::summary media_auditor::audit_device(device_t *device, const char *validation)
+{
+	// start fresh
+	m_record_list.reset();
+
+	// store validation for later
+	m_validation = validation;
+	m_searchpath = device->shortname();
+
+	int found = 0;
+	int required = 0;
+
+	// now iterate over regions and ROMs within
+	for (const rom_entry *region = rom_first_region(*device); region != NULL; region = rom_next_region(region))
+	{
+		for (const rom_entry *rom = rom_first_file(region); rom; rom = rom_next_file(rom))
+		{
+			hash_collection hashes(ROM_GETHASHDATA(rom));
+
+			// count the number of files with hashes
+			if (!hashes.flag(hash_collection::FLAG_NO_DUMP) && !ROM_ISOPTIONAL(rom))
+			{
+				required++;
+			}
+
+			// audit a file
+			audit_record *record = NULL;
+			if (ROMREGION_ISROMDATA(region))
+				record = audit_one_rom(rom);
+
+			// audit a disk
+			else if (ROMREGION_ISDISKDATA(region))
+				record = audit_one_disk(rom);
+
+			// count the number of files that are found.
+			if (record != NULL && (record->status() == audit_record::STATUS_GOOD || record->status() == audit_record::STATUS_FOUND_INVALID))
+			{
+				found++;
+			}
+		}
+	}
+
+	if (found == 0 && required > 0)
+	{
+		m_record_list.reset();
+		return NOTFOUND;
+	}
+
+	// return a summary
+	return summarize(device->shortname());
+}
+
+
+//-------------------------------------------------
+//  audit_software
+//-------------------------------------------------
+media_auditor::summary media_auditor::audit_software(const char *list_name, software_info *swinfo, const char *validation)
+{
+	// start fresh
+	m_record_list.reset();
+
+	// store validation for later
+	m_validation = validation;
+
+	astring combinedpath(swinfo->shortname, ";", list_name, PATH_SEPARATOR, swinfo->shortname);
+	astring locationtag(list_name, "%", swinfo->shortname, "%");
+	if ( swinfo->parentname )
+	{
+		locationtag.cat(swinfo->parentname);
+		combinedpath.cat(";").cat(swinfo->parentname).cat(";").cat(list_name).cat(PATH_SEPARATOR).cat(swinfo->parentname);
+	}
+	m_searchpath = combinedpath;
+
+	int found = 0;
+	int required = 0;
+
+	// now iterate over software parts
+	for ( software_part *part = software_find_part( swinfo, NULL, NULL ); part != NULL; part = software_part_next( part ) )
+	{
+		// now iterate over regions
+		for ( const rom_entry *region = part->romdata; region; region = rom_next_region( region ) )
+		{
+			// now iterate over rom definitions
+			for (const rom_entry *rom = rom_first_file(region); rom; rom = rom_next_file(rom))
+			{
+				hash_collection hashes(ROM_GETHASHDATA(rom));
+
+				// count the number of files with hashes
+				if (!hashes.flag(hash_collection::FLAG_NO_DUMP) && !ROM_ISOPTIONAL(rom))
+				{
+					required++;
+				}
+
+				// audit a file
+				audit_record *record = NULL;
+				if (ROMREGION_ISROMDATA(region))
+				{
+					record = audit_one_rom(rom);
+				}
+				// audit a disk
+				else if (ROMREGION_ISDISKDATA(region))
+				{
+					record = audit_one_disk(rom, (const char *)locationtag);
+				}
+
+				// count the number of files that are found.
+				if (record != NULL && (record->status() == audit_record::STATUS_GOOD || record->status() == audit_record::STATUS_FOUND_INVALID))
+				{
+					found++;
+				}
+			}
+		}
+	}
+
+	if (found == 0 && required > 0)
+	{
+		m_record_list.reset();
+		return NOTFOUND;
+	}
+
+	// return a summary
+	return summarize(list_name);
 }
 
 
@@ -163,48 +259,59 @@ media_auditor::summary media_auditor::audit_samples()
 	// start fresh
 	m_record_list.reset();
 
+	int required = 0;
+	int found = 0;
+
 	// iterate over sample entries
-	for (const device_t *device = m_enumerator.config().first_device(); device != NULL; device = device->next())
-		if (device->type() == SAMPLES)
+	samples_device_iterator iter(m_enumerator.config().root_device());
+	for (samples_device *device = iter.first(); device != NULL; device = iter.next())
+	{
+		// by default we just search using the driver name
+		astring searchpath(m_enumerator.driver().name);
+
+		// add the alternate path if present
+		samples_iterator iter(*device);
+		if (iter.altbasename() != NULL)
+			searchpath.cat(";").cat(iter.altbasename());
+
+		// iterate over samples in this entry
+		for (const char *samplename = iter.first(); samplename != NULL; samplename = iter.next())
 		{
-			const samples_interface *intf = reinterpret_cast<const samples_interface *>(device->static_config());
-			if (intf->samplenames != NULL)
+			required++;
+
+			// create a new record
+			audit_record &record = m_record_list.append(*global_alloc(audit_record(samplename, audit_record::MEDIA_SAMPLE)));
+
+			// look for the files
+			emu_file file(m_enumerator.options().sample_path(), OPEN_FLAG_READ | OPEN_FLAG_NO_PRELOAD);
+			path_iterator path(searchpath);
+			astring curpath;
+			while (path.next(curpath, samplename))
 			{
-				// by default we just search using the driver name
-				astring searchpath(m_enumerator.driver().name);
+				// attempt to access the file (.flac) or (.wav)
+				file_error filerr = file.open(curpath, ".flac");
+				if (filerr != FILERR_NONE)
+					filerr = file.open(curpath, ".wav");
 
-				// iterate over samples in this entry
-				for (int sampnum = 0; intf->samplenames[sampnum] != NULL; sampnum++)
+				if (filerr == FILERR_NONE)
 				{
-					// starred entries indicate an additional searchpath
-					if (intf->samplenames[sampnum][0] == '*')
-					{
-						searchpath.cat(";").cat(&intf->samplenames[sampnum][1]);
-						continue;
-					}
-
-					// create a new record
-					audit_record &record = m_record_list.append(*global_alloc(audit_record(intf->samplenames[sampnum], audit_record::MEDIA_SAMPLE)));
-
-					// look for the files
-					emu_file file(m_enumerator.options().sample_path(), OPEN_FLAG_READ | OPEN_FLAG_NO_PRELOAD);
-					path_iterator path(searchpath);
-					astring curpath;
-					while (path.next(curpath, intf->samplenames[sampnum]))
-					{
-						// attempt to access the file
-						file_error filerr = file.open(curpath);
-						if (filerr == FILERR_NONE)
-							record.set_status(audit_record::STATUS_GOOD, audit_record::SUBSTATUS_GOOD);
-						else
-							record.set_status(audit_record::STATUS_NOT_FOUND, audit_record::SUBSTATUS_NOT_FOUND);
-					}
+					record.set_status(audit_record::STATUS_GOOD, audit_record::SUBSTATUS_GOOD);
+					found++;
 				}
+				else
+					record.set_status(audit_record::STATUS_NOT_FOUND, audit_record::SUBSTATUS_NOT_FOUND);
 			}
 		}
+	}
+
+	if (found == 0 && required > 0)
+	{
+		m_record_list.reset();
+		return NOTFOUND;
+	}
 
 	// return a summary
-	return summarize();
+	return summarize(m_enumerator.driver().name);
 }
 
 
@@ -213,11 +320,12 @@ media_auditor::summary media_auditor::audit_samples()
 //  string format
 //-------------------------------------------------
 
-media_auditor::summary media_auditor::summarize(astring *string)
+media_auditor::summary media_auditor::summarize(const char *name, astring *string)
 {
-	// no count AND no records means not found
 	if (m_record_list.count() == 0)
-		return NOTFOUND;
+	{
+		return NONE_NEEDED;
+	}
 
 	// loop over records
 	summary overall_status = CORRECT;
@@ -232,7 +340,7 @@ media_auditor::summary media_auditor::summarize(astring *string)
 		// output the game name, file name, and length (if applicable)
 		if (string != NULL)
 		{
-			string->catprintf("%-12s: %s", m_enumerator.driver().name, record->name());
+			string->catprintf("%-12s: %s", name, record->name());
 			if (record->expected_length() > 0)
 				string->catprintf(" (%d bytes)", record->expected_length());
 			string->catprintf(" - ");
@@ -266,7 +374,14 @@ media_auditor::summary media_auditor::summarize(astring *string)
 				break;
 
 			case audit_record::SUBSTATUS_NOT_FOUND:
-				if (string != NULL) string->catprintf("NOT FOUND\n");
+				if (string != NULL)
+				{
+					device_t *shared_device = record->shared_device();
+					if (shared_device == NULL)
+						string->catprintf("NOT FOUND\n");
+					else
+						string->catprintf("NOT FOUND (%s)\n", shared_device->shortname());
+				}
 				break;
 
 			case audit_record::SUBSTATUS_NOT_FOUND_NODUMP:
@@ -277,14 +392,6 @@ media_auditor::summary media_auditor::summarize(astring *string)
 			case audit_record::SUBSTATUS_NOT_FOUND_OPTIONAL:
 				if (string != NULL) string->catprintf("NOT FOUND BUT OPTIONAL\n");
 				best_new_status = BEST_AVAILABLE;
-				break;
-
-			case audit_record::SUBSTATUS_NOT_FOUND_PARENT:
-				if (string != NULL) string->catprintf("NOT FOUND (shared with parent)\n");
-				break;
-
-			case audit_record::SUBSTATUS_NOT_FOUND_BIOS:
-				if (string != NULL) string->catprintf("NOT FOUND (BIOS)\n");
 				break;
 
 			default:
@@ -342,35 +449,26 @@ audit_record *media_auditor::audit_one_rom(const rom_entry *rom)
 //  audit_one_disk - validate a single disk entry
 //-------------------------------------------------
 
-audit_record *media_auditor::audit_one_disk(const rom_entry *rom)
+audit_record *media_auditor::audit_one_disk(const rom_entry *rom, const char *locationtag)
 {
 	// allocate and append a new record
 	audit_record &record = m_record_list.append(*global_alloc(audit_record(*rom, audit_record::MEDIA_DISK)));
 
 	// open the disk
-	emu_file *source_file;
-	chd_file *source;
-	chd_error err = open_disk_image(m_enumerator.options(), &m_enumerator.driver(), rom, &source_file, &source, NULL);
+	chd_file source;
+	chd_error err = chd_error(open_disk_image(m_enumerator.options(), &m_enumerator.driver(), rom, source, locationtag));
 
 	// if we succeeded, get the hashes
 	if (err == CHDERR_NONE)
 	{
-		static const UINT8 nullhash[20] = { 0 };
-		chd_header header = *chd_get_header(source);
 		hash_collection hashes;
 
-		// if there's an MD5 or SHA1 hash, add them to the output hash
-		if (memcmp(nullhash, header.md5, sizeof(header.md5)) != 0)
-			hashes.add_from_buffer(hash_collection::HASH_MD5, header.md5, sizeof(header.md5));
-		if (memcmp(nullhash, header.sha1, sizeof(header.sha1)) != 0)
-			hashes.add_from_buffer(hash_collection::HASH_SHA1, header.sha1, sizeof(header.sha1));
+		// if there's a SHA1 hash, add them to the output hash
+		if (source.sha1() != sha1_t::null)
+			hashes.add_sha1(source.sha1());
 
 		// update the actual values
 		record.set_actual(hashes);
-
-		// close the file and release the source
-		chd_close(source);
-		global_free(source_file);
 	}
 
 	// compute the final status
@@ -389,8 +487,6 @@ void media_auditor::compute_status(audit_record &record, const rom_entry *rom, b
 	// if not found, provide more details
 	if (!found)
 	{
-		int parent;
-
 		// no good dump
 		if (record.expected_hashes().flag(hash_collection::FLAG_NO_DUMP))
 			record.set_status(audit_record::STATUS_NOT_FOUND, audit_record::SUBSTATUS_NOT_FOUND_NODUMP);
@@ -398,15 +494,6 @@ void media_auditor::compute_status(audit_record &record, const rom_entry *rom, b
 		// optional ROM
 		else if (ROM_ISOPTIONAL(rom))
 			record.set_status(audit_record::STATUS_NOT_FOUND, audit_record::SUBSTATUS_NOT_FOUND_OPTIONAL);
-
-		// not found and used by parent
-		else if ((parent = also_used_by_parent(record.expected_hashes())) != -1)
-		{
-			if (m_enumerator.driver(parent).flags & GAME_IS_BIOS_ROOT)
-				record.set_status(audit_record::STATUS_NOT_FOUND, audit_record::SUBSTATUS_NOT_FOUND_BIOS);
-			else
-				record.set_status(audit_record::STATUS_NOT_FOUND, audit_record::SUBSTATUS_NOT_FOUND_PARENT);
-		}
 
 		// just plain old not found
 		else
@@ -440,28 +527,46 @@ void media_auditor::compute_status(audit_record &record, const rom_entry *rom, b
 
 
 //-------------------------------------------------
-//  also_used_by_parent - return the index in the
-//  enumerator of the parent who also owns a media
-//  entry with the same hashes
+//  find_shared_device - return the source that
+//  shares a media entry with the same hashes
 //-------------------------------------------------
 
-int media_auditor::also_used_by_parent(const hash_collection &romhashes)
+device_t *media_auditor::find_shared_device(device_t &device, const char *name, const hash_collection &romhashes, UINT64 romlength)
 {
-	// iterate up the parent chain
-	for (int drvindex = m_enumerator.find(m_enumerator.driver().parent); drvindex != -1; drvindex = m_enumerator.find(m_enumerator.driver(drvindex).parent))
+	bool dumped = !romhashes.flag(hash_collection::FLAG_NO_DUMP);
 
-		// see if the parent has the same ROM or not
-		for (const rom_source *source = rom_first_source(m_enumerator.config(drvindex)); source != NULL; source = rom_next_source(*source))
-			for (const rom_entry *region = rom_first_region(*source); region; region = rom_next_region(region))
-				for (const rom_entry *rom = rom_first_file(region); rom; rom = rom_next_file(rom))
+	// special case for non-root devices
+	device_t *highest_device = NULL;
+	if (device.owner() != NULL)
+	{
+		for (const rom_entry *region = rom_first_region(device); region != NULL; region = rom_next_region(region))
+			for (const rom_entry *rom = rom_first_file(region); rom != NULL; rom = rom_next_file(rom))
+				if (ROM_GETLENGTH(rom) == romlength)
 				{
 					hash_collection hashes(ROM_GETHASHDATA(rom));
-					if (!hashes.flag(hash_collection::FLAG_NO_DUMP) && hashes == romhashes)
-						return drvindex;
+					if ((dumped && hashes == romhashes) || (!dumped && ROM_GETNAME(rom) == name))
+						highest_device = &device;
 				}
+	}
+	else
+	{
+		// iterate up the parent chain
+		for (int drvindex = m_enumerator.find(m_enumerator.driver().parent); drvindex != -1; drvindex = m_enumerator.find(m_enumerator.driver(drvindex).parent))
+		{
+			device_iterator deviter(m_enumerator.config(drvindex).root_device());
+			for (device_t *scandevice = deviter.first(); scandevice != NULL; scandevice = deviter.next())
+				for (const rom_entry *region = rom_first_region(*scandevice); region; region = rom_next_region(region))
+					for (const rom_entry *rom = rom_first_file(region); rom; rom = rom_next_file(rom))
+						if (ROM_GETLENGTH(rom) == romlength)
+						{
+							hash_collection hashes(ROM_GETHASHDATA(rom));
+							if ((dumped && hashes == romhashes) || (!dumped && ROM_GETNAME(rom) == name))
+								highest_device = scandevice;
+						}
+		}
+	}
 
-	// nope, return -1
-	return -1;
+	return highest_device;
 }
 
 
@@ -471,23 +576,25 @@ int media_auditor::also_used_by_parent(const hash_collection &romhashes)
 
 audit_record::audit_record(const rom_entry &media, media_type type)
 	: m_next(NULL),
-	  m_type(type),
-	  m_status(STATUS_ERROR),
-	  m_substatus(SUBSTATUS_ERROR),
-	  m_name(ROM_GETNAME(&media)),
-	  m_explength(rom_file_size(&media)),
-	  m_length(0)
+		m_type(type),
+		m_status(STATUS_ERROR),
+		m_substatus(SUBSTATUS_ERROR),
+		m_name(ROM_GETNAME(&media)),
+		m_explength(rom_file_size(&media)),
+		m_length(0),
+		m_shared_device(NULL)
 {
 	m_exphashes.from_internal_string(ROM_GETHASHDATA(&media));
 }
 
 audit_record::audit_record(const char *name, media_type type)
 	: m_next(NULL),
-	  m_type(type),
-	  m_status(STATUS_ERROR),
-	  m_substatus(SUBSTATUS_ERROR),
-	  m_name(name),
-	  m_explength(0),
-	  m_length(0)
+		m_type(type),
+		m_status(STATUS_ERROR),
+		m_substatus(SUBSTATUS_ERROR),
+		m_name(name),
+		m_explength(0),
+		m_length(0),
+		m_shared_device(NULL)
 {
 }

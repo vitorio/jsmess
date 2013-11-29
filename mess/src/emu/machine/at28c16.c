@@ -20,7 +20,7 @@
 //  GLOBAL VARIABLES
 //**************************************************************************
 
-static ADDRESS_MAP_START( at28c16_map8, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( at28c16_map8, AS_PROGRAM, 8, at28c16_device )
 	AM_RANGE(0x0000, 0x081f) AM_RAM
 ADDRESS_MAP_END
 
@@ -38,12 +38,12 @@ const device_type AT28C16 = &device_creator<at28c16_device>;
 //-------------------------------------------------
 
 at28c16_device::at28c16_device( const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock )
-	: device_t(mconfig, AT28C16, "AT28C16", tag, owner, clock),
-	  device_memory_interface(mconfig, *this),
-	  device_nvram_interface(mconfig, *this),
-	  m_a9_12v( 0 ),
-	  m_oe_12v( 0 ),
-	  m_last_write( -1 )
+	: device_t(mconfig, AT28C16, "AT28C16", tag, owner, clock, "at28c16", __FILE__),
+		device_memory_interface(mconfig, *this),
+		device_nvram_interface(mconfig, *this),
+		m_a9_12v( 0 ),
+		m_oe_12v( 0 ),
+		m_last_write( -1 )
 {
 }
 
@@ -65,9 +65,8 @@ void at28c16_device::device_config_complete()
 //  on this device
 //-------------------------------------------------
 
-bool at28c16_device::device_validity_check( emu_options &options, const game_driver &driver ) const
+void at28c16_device::device_validity_check(validity_checker &valid) const
 {
-	return false;
 }
 
 
@@ -88,7 +87,7 @@ const address_space_config *at28c16_device::memory_space_config( address_spacenu
 
 void at28c16_device::device_start()
 {
-	m_write_timer = machine().scheduler().timer_alloc( FUNC(write_finished), this );
+	m_write_timer = timer_alloc(0);
 
 	save_item( NAME(m_a9_12v) );
 	save_item( NAME(m_oe_12v) );
@@ -123,12 +122,12 @@ void at28c16_device::nvram_default()
 	{
 		if( m_region->bytes() != AT28C16_DATA_BYTES )
 		{
-			fatalerror( "at28c16 region '%s' wrong size (expected size = 0x%X)", tag(), AT28C16_DATA_BYTES );
+			fatalerror( "at28c16 region '%s' wrong size (expected size = 0x%X)\n", tag(), AT28C16_DATA_BYTES );
 		}
 
 		if( m_region->width() != 1 )
 		{
-			fatalerror( "at28c16 region '%s' needs to be an 8-bit region", tag() );
+			fatalerror( "at28c16 region '%s' needs to be an 8-bit region\n", tag() );
 		}
 
 		for( offs_t offs = 0; offs < AT28C16_DATA_BYTES; offs++ )
@@ -183,12 +182,7 @@ void at28c16_device::nvram_write( emu_file &file )
 //  READ/WRITE HANDLERS
 //**************************************************************************
 
-WRITE8_DEVICE_HANDLER( at28c16_w )
-{
-	downcast<at28c16_device *>( device )->write( offset, data );
-}
-
-void at28c16_device::write( offs_t offset, UINT8 data )
+WRITE8_MEMBER( at28c16_device::write )
 {
 	if( m_last_write >= 0 )
 	{
@@ -226,12 +220,7 @@ void at28c16_device::write( offs_t offset, UINT8 data )
 }
 
 
-READ8_DEVICE_HANDLER( at28c16_r )
-{
-	return downcast<at28c16_device *>( device )->read( offset );
-}
-
-UINT8 at28c16_device::read( offs_t offset )
+READ8_MEMBER( at28c16_device::read )
 {
 	if( m_last_write >= 0 )
 	{
@@ -253,12 +242,7 @@ UINT8 at28c16_device::read( offs_t offset )
 }
 
 
-WRITE_LINE_DEVICE_HANDLER( at28c16_a9_12v )
-{
-	downcast<at28c16_device *>( device )->set_a9_12v( state );
-}
-
-void at28c16_device::set_a9_12v( int state )
+WRITE_LINE_MEMBER( at28c16_device::set_a9_12v )
 {
 	state &= 1;
 	if( m_a9_12v != state )
@@ -269,12 +253,7 @@ void at28c16_device::set_a9_12v( int state )
 }
 
 
-WRITE_LINE_DEVICE_HANDLER( at28c16_oe_12v )
-{
-	downcast<at28c16_device *>( device )->set_oe_12v( state );
-}
-
-void at28c16_device::set_oe_12v( int state )
+WRITE_LINE_MEMBER( at28c16_device::set_oe_12v )
 {
 	state &= 1;
 	if( m_oe_12v != state )
@@ -285,11 +264,12 @@ void at28c16_device::set_oe_12v( int state )
 }
 
 
-//**************************************************************************
-//  INTERNAL HELPERS
-//**************************************************************************
-
-TIMER_CALLBACK( at28c16_device::write_finished )
+void at28c16_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	reinterpret_cast<at28c16_device *>(ptr)->m_last_write = -1;
+	switch( id )
+	{
+	case 0:
+		m_last_write = -1;
+		break;
+	}
 }

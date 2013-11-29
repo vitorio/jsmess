@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /***************************************************************************
 
     cop440ds.c
@@ -33,7 +35,7 @@ CPU_DISASSEMBLE( cop444 )
 				address = (UINT16)((pc & 0x3C0) | (opcode & 0x3F));
 				sprintf(buffer, "JP %x", address);
 			}
-			else					//JSRP
+			else                    //JSRP
 			{
 				address = (UINT16)(0x80 | (opcode & 0x3F));
 				sprintf(buffer, "JSRP %x", address);

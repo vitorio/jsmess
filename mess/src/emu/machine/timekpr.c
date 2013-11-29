@@ -117,15 +117,14 @@ static int counter_from_ram( UINT8 *data, int offset )
 //  timekeeper_device_config - constructor
 //-------------------------------------------------
 
-timekeeper_device::timekeeper_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, type, name, tag, owner, clock),
-	  device_nvram_interface(mconfig, *this)
+timekeeper_device::timekeeper_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source)
+	: device_t(mconfig, type, name, tag, owner, clock, shortname, source),
+		device_nvram_interface(mconfig, *this)
 {
-
 }
 
 m48t02_device::m48t02_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: timekeeper_device(mconfig, M48T02, "M48T02", tag, owner, clock)
+	: timekeeper_device(mconfig, M48T02, "M48T02", tag, owner, clock, "m48t02", __FILE__)
 {
 	m_offset_control = 0x7f8;
 	m_offset_seconds = 0x7f9;
@@ -141,7 +140,7 @@ m48t02_device::m48t02_device(const machine_config &mconfig, const char *tag, dev
 }
 
 m48t35_device::m48t35_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: timekeeper_device(mconfig, M48T35, "M48T35", tag, owner, clock)
+	: timekeeper_device(mconfig, M48T35, "M48T35", tag, owner, clock, "m48t35", __FILE__)
 {
 	m_offset_control = 0x7ff8;
 	m_offset_seconds = 0x7ff9;
@@ -157,7 +156,7 @@ m48t35_device::m48t35_device(const machine_config &mconfig, const char *tag, dev
 }
 
 m48t37_device::m48t37_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: timekeeper_device(mconfig, M48T37, "M48T37", tag, owner, clock)
+	: timekeeper_device(mconfig, M48T37, "M48T37", tag, owner, clock, "m48t37", __FILE__)
 {
 	m_offset_control = 0x7ff8;
 	m_offset_seconds = 0x7ff9;
@@ -173,7 +172,7 @@ m48t37_device::m48t37_device(const machine_config &mconfig, const char *tag, dev
 }
 
 m48t58_device::m48t58_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: timekeeper_device(mconfig, M48T58, "M48T58", tag, owner, clock)
+	: timekeeper_device(mconfig, M48T58, "M48T58", tag, owner, clock, "m48t58", __FILE__)
 {
 	m_offset_control = 0x1ff8;
 	m_offset_seconds = 0x1ff9;
@@ -189,7 +188,7 @@ m48t58_device::m48t58_device(const machine_config &mconfig, const char *tag, dev
 }
 
 mk48t08_device::mk48t08_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: timekeeper_device(mconfig, MK48T08, "MK48T08", tag, owner, clock)
+	: timekeeper_device(mconfig, MK48T08, "MK48T08", tag, owner, clock, "m48t08", __FILE__)
 {
 	m_offset_control = 0x1ff8;
 	m_offset_seconds = 0x1ff9;
@@ -353,7 +352,7 @@ void timekeeper_device::device_timer(emu_timer &timer, device_timer_id id, int p
 	}
 }
 
-void timekeeper_device::write(UINT16 offset, UINT8 data)
+WRITE8_MEMBER( timekeeper_device::write )
 {
 	if( offset == m_offset_control )
 	{
@@ -376,7 +375,7 @@ void timekeeper_device::write(UINT16 offset, UINT8 data)
 	m_data[ offset ] = data;
 }
 
-UINT8 timekeeper_device::read(UINT16 offset)
+READ8_MEMBER( timekeeper_device::read )
 {
 	UINT8 result = m_data[ offset ];
 	if( offset == m_offset_date && type() == M48T58 )
@@ -434,13 +433,3 @@ void timekeeper_device::nvram_write(emu_file &file)
 {
 	file.write( m_data, m_size );
 }
-
-
-
-/***************************************************************************
-    TRAMPOLINES
-***************************************************************************/
-
-WRITE8_DEVICE_HANDLER( timekeeper_w ) { downcast<timekeeper_device *>(device)->write(offset, data); }
-READ8_DEVICE_HANDLER( timekeeper_r ) { return downcast<timekeeper_device*>(device)->read(offset); }
-

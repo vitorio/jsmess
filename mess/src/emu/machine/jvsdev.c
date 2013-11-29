@@ -7,7 +7,8 @@ void jvs_device::static_set_jvs_host_tag(device_t &device, const char *jvs_host_
 	jvsdev.jvs_host_tag = jvs_host_tag;
 }
 
-jvs_device::jvs_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock) : device_t(mconfig, type, name, tag, owner, clock)
+jvs_device::jvs_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source)
+	: device_t(mconfig, type, name, tag, owner, clock, shortname, source)
 {
 	jvs_host_tag = 0;
 	next_device = 0;
@@ -249,6 +250,5 @@ void jvs_device::handle_output(const char *tag, UINT8 id, UINT8 val)
 	case 2: jvs_outputs ^=  m;  break;
 	}
 
-	input_port_write_safe(machine(), tag, jvs_outputs, m);
+	machine().root_device().ioport(tag)->write_safe(jvs_outputs, m);
 }
-

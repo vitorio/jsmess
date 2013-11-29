@@ -7,6 +7,7 @@
 #ifndef PDP1_H_
 #define PDP1_H_
 
+#include "video/crt.h"
 
 /* defines for each bit and mask in input port "CSW" */
 enum
@@ -14,16 +15,16 @@ enum
 	/* bit numbers */
 	pdp1_control_bit = 0,
 
-	pdp1_extend_bit		= 1,
+	pdp1_extend_bit     = 1,
 	pdp1_start_nobrk_bit= 2,
-	pdp1_start_brk_bit	= 3,
-	pdp1_stop_bit		= 4,
-	pdp1_continue_bit	= 5,
-	pdp1_examine_bit	= 6,
-	pdp1_deposit_bit	= 7,
-	pdp1_read_in_bit	= 8,
-	pdp1_reader_bit		= 9,
-	pdp1_tape_feed_bit	= 10,
+	pdp1_start_brk_bit  = 3,
+	pdp1_stop_bit       = 4,
+	pdp1_continue_bit   = 5,
+	pdp1_examine_bit    = 6,
+	pdp1_deposit_bit    = 7,
+	pdp1_read_in_bit    = 8,
+	pdp1_reader_bit     = 9,
+	pdp1_tape_feed_bit  = 10,
 	pdp1_single_step_bit= 11,
 	pdp1_single_inst_bit= 12,
 
@@ -58,34 +59,34 @@ enum
 /* defines for each field in input port pdp1_config */
 enum
 {
-	pdp1_config_extend_bit			= 0,
-	pdp1_config_extend_mask			= 0x3,	/* 2 bits */
-	pdp1_config_hw_mul_div_bit		= 2,
-	pdp1_config_hw_mul_div_mask		= 0x1,
+	pdp1_config_extend_bit          = 0,
+	pdp1_config_extend_mask         = 0x3,  /* 2 bits */
+	pdp1_config_hw_mul_div_bit      = 2,
+	pdp1_config_hw_mul_div_mask     = 0x1,
 	/*pdp1_config_hw_obsolete_bit   = 3,
-    pdp1_config_hw_obsolete_mask    = 0x1,*/
-	pdp1_config_type_20_sbs_bit		= 4,
-	pdp1_config_type_20_sbs_mask	= 0x1,
-	pdp1_config_lightpen_bit		= 5,
-	pdp1_config_lightpen_mask		= 0x1
+	pdp1_config_hw_obsolete_mask    = 0x1,*/
+	pdp1_config_type_20_sbs_bit     = 4,
+	pdp1_config_type_20_sbs_mask    = 0x1,
+	pdp1_config_lightpen_bit        = 5,
+	pdp1_config_lightpen_mask       = 0x1
 };
 
 /* defines for each field in input port pdp1_lightpen_state */
 enum
 {
-	pdp1_lightpen_down_bit			= 0,
-	pdp1_lightpen_smaller_bit		= 1,
-	pdp1_lightpen_larger_bit		= 2,
+	pdp1_lightpen_down_bit          = 0,
+	pdp1_lightpen_smaller_bit       = 1,
+	pdp1_lightpen_larger_bit        = 2,
 
-	pdp1_lightpen_down				= (1 << pdp1_lightpen_down_bit),
-	pdp1_lightpen_smaller			= (1 << pdp1_lightpen_smaller_bit),
-	pdp1_lightpen_larger			= (1 << pdp1_lightpen_larger_bit)
+	pdp1_lightpen_down              = (1 << pdp1_lightpen_down_bit),
+	pdp1_lightpen_smaller           = (1 << pdp1_lightpen_smaller_bit),
+	pdp1_lightpen_larger            = (1 << pdp1_lightpen_larger_bit)
 };
 
 /* defines for our font */
 enum
 {
-	pdp1_charnum = /*104*/128,	/* ASCII set + 8 special characters */
+	pdp1_charnum = /*104*/128,  /* ASCII set + 8 special characters */
 									/* for whatever reason, 104 breaks some characters */
 
 	pdp1_fontdata_size = 8 * pdp1_charnum
@@ -125,7 +126,7 @@ enum
 };
 
 enum
-{	/* refresh rate in Hz: can be changed at will */
+{   /* refresh rate in Hz: can be changed at will */
 	refresh_rate = 60
 };
 
@@ -164,75 +165,76 @@ enum
 };
 
 /* tape reader registers */
-typedef struct tape_reader_t
+struct tape_reader_t
 {
-	device_image_interface *fd;	/* file descriptor of tape image */
+	device_image_interface *fd; /* file descriptor of tape image */
 
-	int motor_on;	/* 1-bit reader motor on */
+	int motor_on;   /* 1-bit reader motor on */
 
-	int rb;			/* 18-bit reader buffer */
-	int rcl;		/* 1-bit reader clutch */
-	int rc;			/* 2-bit reader counter */
-	int rby;		/* 1-bit reader binary mode flip-flop */
-	int rcp;		/* 1-bit reader "need a completion pulse" flip-flop */
+	int rb;         /* 18-bit reader buffer */
+	int rcl;        /* 1-bit reader clutch */
+	int rc;         /* 2-bit reader counter */
+	int rby;        /* 1-bit reader binary mode flip-flop */
+	int rcp;        /* 1-bit reader "need a completion pulse" flip-flop */
 
-	emu_timer *timer;	/* timer to simulate reader timing */
-} tape_reader_t;
+	emu_timer *timer;   /* timer to simulate reader timing */
+};
 
 
 
 /* tape puncher registers */
-typedef struct tape_puncher_t
+struct tape_puncher_t
 {
-	device_image_interface *fd;	/* file descriptor of tape image */
+	device_image_interface *fd; /* file descriptor of tape image */
 
-	emu_timer *timer;	/* timer to generate completion pulses */
-} tape_puncher_t;
+	emu_timer *timer;   /* timer to generate completion pulses */
+};
 
 
 
 /* typewriter registers */
-typedef struct typewriter_t
+struct typewriter_t
 {
-	device_image_interface *fd;	/* file descriptor of output image */
+	device_image_interface *fd; /* file descriptor of output image */
 
-	int tb;			/* typewriter buffer */
+	int tb;         /* typewriter buffer */
 
 	emu_timer *tyo_timer;/* timer to generate completion pulses */
-} typewriter_t;
+};
 
 /* MIT parallel drum (mostly similar to type 23) */
-typedef struct parallel_drum_t
+struct parallel_drum_t
 {
-	device_image_interface *fd;	/* file descriptor of drum image */
+	device_image_interface *fd; /* file descriptor of drum image */
 
-	int il;			/* initial location (12-bit) */
-	int wc;			/* word counter (12-bit) */
-	int wcl;		/* word core location counter (16-bit) */
-	int rfb;		/* read field buffer (5-bit) */
-	int wfb;		/* write field buffer (5-bit) */
+	int il;         /* initial location (12-bit) */
+	int wc;         /* word counter (12-bit) */
+	int wcl;        /* word core location counter (16-bit) */
+	int rfb;        /* read field buffer (5-bit) */
+	int wfb;        /* write field buffer (5-bit) */
 
 	int dba;
 
-	emu_timer *rotation_timer;	/* timer called each time dc is 0 */
-	emu_timer *il_timer;		/* timer called each time dc is il */
-} parallel_drum_t;
+	emu_timer *rotation_timer;  /* timer called each time dc is 0 */
+	emu_timer *il_timer;        /* timer called each time dc is il */
+};
 
 
-typedef struct lightpen_t
+struct lightpen_t
 {
 	char active;
 	char down;
 	short x, y;
 	short radius;
-} lightpen_t;
+};
 
 
 class pdp1_state : public driver_device
 {
 public:
 	pdp1_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this, "maincpu") { }
 
 	pdp1_reset_param_t m_reset_param;
 	int m_io_status;
@@ -248,26 +250,52 @@ public:
 	int m_old_tw_keys;
 	int m_old_ta_keys;
 	int m_typewriter_color;
-	bitmap_t *m_panel_bitmap;
-	bitmap_t *m_typewriter_bitmap;
+	bitmap_ind16 m_panel_bitmap;
+	bitmap_ind16 m_typewriter_bitmap;
 	lightpen_t m_lightpen_state;
 	lightpen_t m_previous_lightpen_state;
 	int m_pos;
 	int m_case_shift;
-	device_t *m_crt;
+	crt_device *m_crt;
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void video_start();
+	virtual void palette_init();
+	UINT32 screen_update_pdp1(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void screen_eof_pdp1(screen_device &screen, bool state);
+	INTERRUPT_GEN_MEMBER(pdp1_interrupt);
+	TIMER_CALLBACK_MEMBER(reader_callback);
+	TIMER_CALLBACK_MEMBER(puncher_callback);
+	TIMER_CALLBACK_MEMBER(tyo_callback);
+	TIMER_CALLBACK_MEMBER(dpy_callback);
+	TIMER_CALLBACK_MEMBER(il_timer_callback);
+	void pdp1_machine_stop();
+	required_device<cpu_device> m_maincpu;
+	inline void pdp1_plot_pixel(bitmap_ind16 &bitmap, int x, int y, UINT32 color);
+	void pdp1_plot(int x, int y);
+	void pdp1_draw_led(bitmap_ind16 &bitmap, int x, int y, int state);
+	void pdp1_draw_multipleled(bitmap_ind16 &bitmap, int x, int y, int value, int nb_bits);
+	void pdp1_draw_switch(bitmap_ind16 &bitmap, int x, int y, int state);
+	void pdp1_draw_multipleswitch(bitmap_ind16 &bitmap, int x, int y, int value, int nb_bits);
+	void pdp1_draw_char(bitmap_ind16 &bitmap, char character, int x, int y, int color);
+	void pdp1_draw_string(bitmap_ind16 &bitmap, const char *buf, int x, int y, int color);
+	void pdp1_draw_panel_backdrop(bitmap_ind16 &bitmap);
+	void pdp1_draw_panel(bitmap_ind16 &bitmap);
+	void pdp1_typewriter_linefeed();
+	void pdp1_typewriter_drawchar(int character);
+	void pdp1_update_lightpen_state(const lightpen_t *new_state);
+	void pdp1_draw_circle(bitmap_ind16 &bitmap, int x, int y, int radius, int color_);
+	void pdp1_erase_lightpen(bitmap_ind16 &bitmap);
+	void pdp1_draw_lightpen(bitmap_ind16 &bitmap);
+	int tape_read(UINT8 *reply);
+	void begin_tape_read(int binary, int nac);
+	void tape_write(UINT8 data);
+	void typewriter_out(UINT8 data);
+	void parallel_drum_set_il(int il);
+	void parallel_drum_init();
+	UINT32 drum_read(int field, int position);
+	void drum_write(int field, int position, UINT32 data);
+	void pdp1_keyboard();
+	void pdp1_lightpen();
 };
-
-
-
-/*----------- defined in video/pdp1.c -----------*/
-
-VIDEO_START( pdp1 );
-SCREEN_EOF( pdp1 );
-SCREEN_UPDATE( pdp1 );
-
-void pdp1_plot(running_machine &machine, int x, int y);
-void pdp1_typewriter_drawchar(running_machine &machine, int character);
-void pdp1_update_lightpen_state(running_machine &machine, const lightpen_t *new_state);
-
-
 #endif /* PDP1_H_ */

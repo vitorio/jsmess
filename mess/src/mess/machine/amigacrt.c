@@ -19,17 +19,17 @@ TODO:
 enum
 {
 	/* supported cartridges */
-	ACTION_REPLAY				=	0,
+	ACTION_REPLAY               =   0,
 	ACTION_REPLAY_MKII,
 	ACTION_REPLAY_MKIII
 };
 
-typedef struct
+struct amigacrt_t
 {
 	int cart_type;
 	int ar1_spurious;
 	UINT16 ar23_mode;
-} amigacrt_t;
+};
 static amigacrt_t amigacrt;
 
 /***************************************************************************
@@ -40,7 +40,7 @@ static amigacrt_t amigacrt;
 
 static int check_kickstart_12_13( running_machine &machine, const char *cart_name )
 {
-	UINT16 * ksmem = (UINT16 *)machine.region( "user1" )->base();
+	UINT16 * ksmem = (UINT16 *)(*machine.root_device().memregion( "user1" ));
 
 	if ( ksmem[2] == 0x00FC )
 		return 1;
@@ -87,14 +87,14 @@ static IRQ_CALLBACK(amiga_ar1_irqack)
 static TIMER_CALLBACK( amiga_ar1_delayed_nmi )
 {
 	(void)param;
-	cputag_set_input_line(machine, "maincpu", 7, PULSE_LINE);
+	machine.device("maincpu")->execute().set_input_line(7, PULSE_LINE);
 }
 
 static void amiga_ar1_nmi( running_machine &machine )
 {
 	amiga_state *state = machine.driver_data<amiga_state>();
 	/* get the cart's built-in ram */
-	UINT16 *ar_ram = (UINT16 *)machine.device("maincpu")->memory().space(AS_PROGRAM)->get_write_ptr(0x9fc000);
+	UINT16 *ar_ram = (UINT16 *)(state->m_maincpu_program_space->get_write_ptr(0x9fc000));
 
 	if ( ar_ram != NULL )
 	{
@@ -112,19 +112,19 @@ static void amiga_ar1_nmi( running_machine &machine )
 
 static WRITE16_HANDLER( amiga_ar1_chipmem_w )
 {
-	amiga_state *state = space->machine().driver_data<amiga_state>();
-	int pc = cpu_get_pc(&space->device());
+	amiga_state *state = space.machine().driver_data<amiga_state>();
+	int pc = space.device().safe_pc();
 
 	/* see if we're inside the AR1 rom */
 	if ( ((pc >> 16) & 0xff ) != 0xf0 )
 	{
 		/* if we're not, see if either the Spurious IRQ vector
-           or the NMI vector are being overwritten */
+		   or the NMI vector are being overwritten */
 		if ( offset == (0x60/2) || offset == (0x7c/2) )
 		{
 			/* trigger an NMI or spurious irq */
 			amigacrt.ar1_spurious = (offset == 0x60/2) ? 0 : 1;
-			space->machine().scheduler().timer_set(space->machine().device<cpu_device>("maincpu")->cycles_to_attotime(28), FUNC(amiga_ar1_delayed_nmi));
+			space.machine().scheduler().timer_set(space.machine().device<cpu_device>("maincpu")->cycles_to_attotime(28), FUNC(amiga_ar1_delayed_nmi));
 		}
 	}
 
@@ -133,11 +133,14 @@ static WRITE16_HANDLER( amiga_ar1_chipmem_w )
 
 static void amiga_ar1_check_overlay( running_machine &machine )
 {
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x000000, 0x00007f, FUNC(amiga_ar1_chipmem_w));
+	amiga_state *state = machine.driver_data<amiga_state>();
+
+	state->m_maincpu_program_space->install_legacy_write_handler(0x000000, 0x00007f, FUNC(amiga_ar1_chipmem_w));
 }
 
 static void amiga_ar1_init( running_machine &machine )
 {
+	amiga_state *state = machine.driver_data<amiga_state>();
 	void *ar_ram;
 
 	/* check kickstart version */
@@ -152,20 +155,20 @@ static void amiga_ar1_init( running_machine &machine )
 	memset(ar_ram, 0, 0x4000);
 
 	/* Install ROM */
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0xf00000, 0xf7ffff, "bank2");
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0xf00000, 0xf7ffff);
+	state->m_maincpu_program_space->install_read_bank(0xf00000, 0xf7ffff, "bank2");
+	state->m_maincpu_program_space->unmap_write(0xf00000, 0xf7ffff);
 
 	/* Install RAM */
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_readwrite_bank(0x9fc000, 0x9fffff, "bank3");
+	state->m_maincpu_program_space->install_readwrite_bank(0x9fc000, 0x9fffff, "bank3");
 
 	/* Configure Banks */
-	memory_set_bankptr(machine, "bank2", machine.region("user2")->base());
-	memory_set_bankptr(machine, "bank3", ar_ram);
+	state->membank("bank2")->set_base(machine.root_device().memregion("user2")->base());
+	state->membank("bank3")->set_base(ar_ram);
 
 	amigacrt.ar1_spurious = 0;
 
 	/* Install IRQ ACK callback */
-	device_set_irq_callback(machine.device("maincpu"), amiga_ar1_irqack);
+	machine.device("maincpu")->execute().set_irq_acknowledge_callback(amiga_ar1_irqack);
 }
 
 /***************************************************************************
@@ -189,27 +192,27 @@ static void amiga_ar1_init( running_machine &machine )
 
 static void amiga_ar23_freeze( running_machine &machine );
 
-static READ16_HANDLER( amiga_ar23_cia_r )
+READ16_MEMBER( amiga_state::amiga_ar23_cia_r )
 {
-	int pc = cpu_get_pc(&space->device());
+	int pc = space.device().safe_pc();
 
 	if ( ACCESSING_BITS_0_7 && offset == 2048 && pc >= 0x40 && pc < 0x120 )
 	{
-		amiga_ar23_freeze(space->machine());
+		amiga_ar23_freeze(space.machine());
 	}
 
 	return amiga_cia_r( space, offset, mem_mask );
 }
 
-static WRITE16_HANDLER( amiga_ar23_mode_w )
+WRITE16_MEMBER( amiga_state::amiga_ar23_mode_w )
 {
 	if ( data & 2 )
 	{
-		space->install_legacy_read_handler(0xbfd000, 0xbfefff, FUNC(amiga_ar23_cia_r));
+		space.install_read_handler(0xbfd000, 0xbfefff, read16_delegate(FUNC(amiga_state::amiga_ar23_cia_r), this));
 	}
 	else
 	{
-		space->install_legacy_read_handler(0xbfd000, 0xbfefff, FUNC(amiga_cia_r));
+		space.install_read_handler(0xbfd000, 0xbfefff, read16_delegate(FUNC(amiga_state::amiga_cia_r), this));
 	}
 
 	amigacrt.ar23_mode = (data&0x3);
@@ -218,21 +221,21 @@ static WRITE16_HANDLER( amiga_ar23_mode_w )
 
 }
 
-static READ16_HANDLER( amiga_ar23_mode_r )
+READ16_MEMBER( amiga_state::amiga_ar23_mode_r )
 {
-	amiga_state *state = space->machine().driver_data<amiga_state>();
-	UINT16 *mem = (UINT16 *)space->machine().region( "user2" )->base();
+	amiga_state *state = space.machine().driver_data<amiga_state>();
+	UINT16 *mem = (UINT16 *)(*state->memregion( "user2" ));
 
 	if ( ACCESSING_BITS_0_7 )
 	{
 		if ( offset < 2 )
 			return (mem[offset] | (amigacrt.ar23_mode&3));
 
-		if ( offset == 0x03 ) /* disable cart oberlay on chip mem */
+		if ( offset == 0x03 ) /* disable cart overlay on chip mem */
 		{
-			UINT32 mirror_mask = state->m_chip_ram_size;
+			UINT32 mirror_mask = state->m_chip_ram.bytes();
 
-			memory_set_bank(space->machine(), "bank1", 0);
+			state->membank("bank1")->set_entry(0);
 
 			while( (mirror_mask<<1) < 0x100000 )
 			{
@@ -240,7 +243,7 @@ static READ16_HANDLER( amiga_ar23_mode_r )
 			}
 
 			/* overlay disabled, map RAM on 0x000000 */
-			space->install_write_bank(0x000000, state->m_chip_ram_size - 1, 0, mirror_mask, "bank1");
+			space.install_write_bank(0x000000, state->m_chip_ram.bytes() - 1, 0, mirror_mask, "bank1");
 		}
 	}
 
@@ -249,11 +252,11 @@ static READ16_HANDLER( amiga_ar23_mode_r )
 
 static WRITE16_HANDLER( amiga_ar23_chipmem_w )
 {
-	amiga_state *state = space->machine().driver_data<amiga_state>();
+	amiga_state *state = space.machine().driver_data<amiga_state>();
 	if ( offset == (0x08/2) )
 	{
 		if ( amigacrt.ar23_mode & 1 )
-			amiga_ar23_freeze(space->machine());
+			amiga_ar23_freeze(space.machine());
 	}
 
 	(*state->m_chip_ram_w)(state,  offset * 2, data );
@@ -262,30 +265,30 @@ static WRITE16_HANDLER( amiga_ar23_chipmem_w )
 static void amiga_ar23_freeze( running_machine &machine )
 {
 	amiga_state *state = machine.driver_data<amiga_state>();
-	int pc = cpu_get_pc(machine.device("maincpu"));
+	int pc = machine.device("maincpu")->safe_pc();
 
 	/* only freeze if we're not inside the cart's ROM */
 	if ( ((pc >> 16) & 0xfe ) != 0x40 )
 	{
 		/* get the cart's built-in ram */
-		UINT16 *ar_ram = (UINT16 *)machine.device("maincpu")->memory().space(AS_PROGRAM)->get_write_ptr(0x440000);
+		UINT16 *ar_ram = (UINT16 *)state->m_maincpu_program_space->get_write_ptr(0x440000);
 
 		if ( ar_ram != NULL )
 		{
-			int		i;
+			int     i;
 
 			for( i = 0; i < 0x100; i++ )
 				ar_ram[0x7800+i] = CUSTOM_REG(i);
 		}
 
 		/* overlay the cart rom's in chipram */
-		memory_set_bank(machine, "bank1", 2);
+		state->membank("bank1")->set_entry(2);
 
 		/* writes go to chipram */
-		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x000000, state->m_chip_ram_size - 1, FUNC(amiga_ar23_chipmem_w));
+		state->m_maincpu_program_space->install_legacy_write_handler(0x000000, state->m_chip_ram.bytes() - 1, FUNC(amiga_ar23_chipmem_w));
 
 		/* trigger NMI irq */
-		cputag_set_input_line(machine, "maincpu", 7, PULSE_LINE);
+		machine.device("maincpu")->execute().set_input_line(7, PULSE_LINE);
 	}
 }
 
@@ -298,7 +301,7 @@ static void amiga_ar23_nmi( running_machine &machine )
 #if 0
 static WRITE16_HANDLER( amiga_ar23_custom_w )
 {
-	int pc = cpu_get_pc(&space->device());
+	int pc = space.device().safe_pc();
 
 	/* see if we're inside the AR2 rom */
 	if ( ((pc >> 16) & 0xfe ) != 0x40 )
@@ -319,7 +322,7 @@ static READ16_HANDLER( amiga_ar23_custom_r )
 {
 	UINT16 data = amiga_custom_r( offset, mem_mask );
 
-	int pc = cpu_get_pc(&space->device());
+	int pc = space.device().safe_pc();
 
 	/* see if we're inside the AR2 rom */
 	if ( ((pc >> 16) & 0xfe ) != 0x40 )
@@ -339,11 +342,12 @@ static READ16_HANDLER( amiga_ar23_custom_r )
 
 static void amiga_ar23_check_overlay( running_machine &machine )
 {
+	amiga_state *state = machine.driver_data<amiga_state>();
 	amigacrt.ar23_mode = 3;
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x000000, 0x00000f, FUNC(amiga_ar23_chipmem_w));
+	state->m_maincpu_program_space->install_legacy_write_handler(0x000000, 0x00000f, FUNC(amiga_ar23_chipmem_w));
 }
 
-static void amiga_ar23_init( running_machine &machine, int ar3 )
+void amiga_state::amiga_ar23_init( running_machine &machine, int ar3 )
 {
 	amiga_state *state = machine.driver_data<amiga_state>();
 	UINT32 mirror = 0x20000, size = 0x1ffff;
@@ -366,28 +370,28 @@ static void amiga_ar23_init( running_machine &machine, int ar3 )
 	}
 
 	/* Install ROM */
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x400000, 0x400000+size, 0, mirror, "bank2");
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0x400000, 0x400000+size, 0, mirror);
+	state->m_maincpu_program_space->install_read_bank(0x400000, 0x400000+size, 0, mirror, "bank2");
+	state->m_maincpu_program_space->unmap_write(0x400000, 0x400000+size, 0, mirror);
 
 	/* Install RAM */
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x440000, 0x44ffff, "bank3");
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_write_bank(0x440000, 0x44ffff, "bank3");
+	state->m_maincpu_program_space->install_read_bank(0x440000, 0x44ffff, "bank3");
+	state->m_maincpu_program_space->install_write_bank(0x440000, 0x44ffff, "bank3");
 
 	/* Install Custom chip monitor */
-//  machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xdff000, 0xdff1ff, FUNC(amiga_ar23_custom_r));
-//  machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xdff000, 0xdff1ff, FUNC(amiga_ar23_custom_w));
+//  state->m_maincpu_program_space->install_legacy_read_handler(0xdff000, 0xdff1ff, FUNC(amiga_ar23_custom_r));
+//  state->m_maincpu_program_space->install_legacy_write_handler(0xdff000, 0xdff1ff, FUNC(amiga_ar23_custom_w));
 
 	/* Install status/mode handlers */
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x400000, 0x400007, 0, mirror, FUNC(amiga_ar23_mode_r));
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x400000, 0x400003, 0, mirror, FUNC(amiga_ar23_mode_w));
+	state->m_maincpu_program_space->install_read_handler( 0x400000, 0x400007, 0, mirror, read16_delegate( FUNC(amiga_state::amiga_ar23_mode_r), this));
+	state->m_maincpu_program_space->install_write_handler(0x400000, 0x400003, 0, mirror, write16_delegate(FUNC(amiga_state::amiga_ar23_mode_w), this));
 
 	/* Configure Banks */
-	memory_set_bankptr(machine, "bank2", machine.region("user2")->base());
-	memory_set_bankptr(machine, "bank3", ar_ram);
+	state->membank("bank2")->set_base(machine.root_device().memregion("user2")->base());
+	state->membank("bank3")->set_base(ar_ram);
 
-	memory_configure_bank(machine, "bank1", 0, 2, state->m_chip_ram, 0);
-	memory_configure_bank(machine, "bank1", 1, 2, machine.region("user1")->base(), 0);
-	memory_configure_bank(machine, "bank1", 2, 2, machine.region("user2")->base(), 0);
+	state->membank("bank1")->configure_entries(0, 2, state->m_chip_ram, 0);
+	state->membank("bank1")->configure_entries(1, 2, machine.root_device().memregion("user1")->base(), 0);
+	state->membank("bank1")->configure_entries(2, 2, machine.root_device().memregion("user2")->base(), 0);
 
 	amigacrt.ar23_mode = 3;
 }
@@ -401,7 +405,8 @@ static void amiga_ar23_init( running_machine &machine, int ar3 )
 void amiga_cart_init( running_machine &machine )
 {
 	/* see what is there */
-	UINT16 *mem = (UINT16 *)machine.region( "user2" )->base();
+	UINT16 *mem = (UINT16 *)(*machine.root_device().memregion( "user2" ));
+	amiga_state *state = machine.driver_data<amiga_state>();
 
 	amigacrt.cart_type = -1;
 
@@ -415,12 +420,12 @@ void amiga_cart_init( running_machine &machine )
 		else if ( mem[0x0C] == 0x4D6B )
 		{
 			amigacrt.cart_type = ACTION_REPLAY_MKII;
-			amiga_ar23_init(machine, 0);
+			state->amiga_ar23_init(machine, 0);
 		}
 		else if ( mem[0x0C] == 0x4D4B )
 		{
 			amigacrt.cart_type = ACTION_REPLAY_MKIII;
-			amiga_ar23_init(machine, 1);
+			state->amiga_ar23_init(machine, 1);
 		}
 	}
 }

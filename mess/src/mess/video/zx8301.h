@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     Sinclair ZX8301 emulation
@@ -35,8 +37,6 @@
 #ifndef __ZX8301__
 #define __ZX8301__
 
-#include "emu.h"
-
 
 
 ///*************************************************************************
@@ -70,63 +70,63 @@ struct zx8301_interface
 	const char *cpu_tag;
 	const char *screen_tag;
 
-	devcb_write_line	out_vsync_cb;
+	devcb_write_line    out_vsync_cb;
 };
 
 
 // ======================> zx8301_device
 
-class zx8301_device :	public device_t,
+class zx8301_device :   public device_t,
 						public device_memory_interface,
+						public device_video_interface,
 						public zx8301_interface
 {
 public:
-    // construction/destruction
-    zx8301_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	// construction/destruction
+	zx8301_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
 	DECLARE_WRITE8_MEMBER( control_w );
-    DECLARE_READ8_MEMBER( data_r );
-    DECLARE_WRITE8_MEMBER( data_w );
+	DECLARE_READ8_MEMBER( data_r );
+	DECLARE_WRITE8_MEMBER( data_w );
 
-	void update_screen(bitmap_t *bitmap, const rectangle *cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect);
 
 protected:
-    // device-level overrides
-    virtual void device_start();
+	// device-level overrides
+	virtual void device_start();
 	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 	virtual void device_config_complete();
 
 	// device_config_memory_interface overrides
 	virtual const address_space_config *memory_space_config(address_spacenum spacenum = AS_0) const;
 
-    // address space configurations
-	const address_space_config		m_space_config;
+	// address space configurations
+	const address_space_config      m_space_config;
 
 	inline UINT8 readbyte(offs_t address);
 	inline void writebyte(offs_t address, UINT8 data);
 
-	void draw_line_mode4(bitmap_t *bitmap, int y, UINT16 da);
-	void draw_line_mode8(bitmap_t *bitmap, int y, UINT16 da);
+	void draw_line_mode4(bitmap_rgb32 &bitmap, int y, UINT16 da);
+	void draw_line_mode8(bitmap_rgb32 &bitmap, int y, UINT16 da);
 
 private:
 	static const device_timer_id TIMER_VSYNC = 0;
 	static const device_timer_id TIMER_FLASH = 1;
 
-	devcb_resolved_write_line	m_out_vsync_func;
+	devcb_resolved_write_line   m_out_vsync_func;
 
 	cpu_device *m_cpu;
-	screen_device *m_screen;
-	address_space *m_data;
+	//address_space *m_data;
 
-	int m_dispoff;					// display off
-	int m_mode8;					// mode8 active
-	int m_base;						// video ram base address
-	int m_flash;					// flash
-	int m_vsync;					// vertical sync
-	int m_vda;						// valid data address
+	int m_dispoff;                  // display off
+	int m_mode8;                    // mode8 active
+	int m_base;                     // video ram base address
+	int m_flash;                    // flash
+	int m_vsync;                    // vertical sync
+	int m_vda;                      // valid data address
 
-	emu_timer *m_vsync_timer;		// vertical sync timer
-	emu_timer *m_flash_timer;		// flash timer
+	emu_timer *m_vsync_timer;       // vertical sync timer
+	emu_timer *m_flash_timer;       // flash timer
 };
 
 

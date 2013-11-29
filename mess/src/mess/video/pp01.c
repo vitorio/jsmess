@@ -7,33 +7,30 @@
 ****************************************************************************/
 
 
-#include "emu.h"
 #include "includes/pp01.h"
-#include "machine/ram.h"
 
-VIDEO_START( pp01 )
+void pp01_state::video_start()
 {
 }
 
-SCREEN_UPDATE( pp01 )
+UINT32 pp01_state::screen_update_pp01(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	pp01_state *state = screen->machine().driver_data<pp01_state>();
 	UINT8 code_r,code_g,code_b;
 	UINT8 col;
 	int y, x, b;
-	UINT8 *ram = ram_get_ptr(screen->machine().device(RAM_TAG));
+	UINT8 *ram = m_ram->pointer();
 
 	for (y = 0; y < 256; y++)
 	{
 		for (x = 0; x < 32; x++)
 		{
-			code_r = ram[0x6000 + ((y+state->m_video_scroll)&0xff)*32 + x];
-			code_g = ram[0xa000 + ((y+state->m_video_scroll)&0xff)*32 + x];
-			code_b = ram[0xe000 + ((y+state->m_video_scroll)&0xff)*32 + x];
+			code_r = ram[0x6000 + ((y+m_video_scroll)&0xff)*32 + x];
+			code_g = ram[0xa000 + ((y+m_video_scroll)&0xff)*32 + x];
+			code_b = ram[0xe000 + ((y+m_video_scroll)&0xff)*32 + x];
 			for (b = 0; b < 8; b++)
 			{
 				col = (((code_r >> b) & 0x01) ? 4 : 0) + (((code_g >> b) & 0x01) ? 2 : 0) + (((code_b >> b) & 0x01) ? 1 : 0);
-				*BITMAP_ADDR16(bitmap, y,  x*8+(7-b)) =  col;
+				bitmap.pix16(y, x*8+(7-b)) =  col;
 			}
 		}
 	}
@@ -51,7 +48,7 @@ static const rgb_t pp01_palette[8] = {
 	MAKE_RGB(0x80, 0x80, 0x80), // 7
 };
 
-PALETTE_INIT( pp01 )
+void pp01_state::palette_init()
 {
-	palette_set_colors(machine, 0, pp01_palette, ARRAY_LENGTH(pp01_palette));
+	palette_set_colors(machine(), 0, pp01_palette, ARRAY_LENGTH(pp01_palette));
 }

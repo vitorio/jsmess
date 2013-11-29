@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     National Semiconductor NMC9306 256-Bit Serial EEPROM emulation
@@ -50,8 +52,8 @@ class nmc9306_device :  public device_t,
 						public device_nvram_interface
 {
 public:
-    // construction/destruction
-    nmc9306_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	// construction/destruction
+	nmc9306_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
 	DECLARE_WRITE_LINE_MEMBER( cs_w );
 	DECLARE_WRITE_LINE_MEMBER( sk_w );
@@ -59,8 +61,8 @@ public:
 	DECLARE_READ_LINE_MEMBER( do_r );
 
 protected:
-    // device-level overrides
-    virtual void device_start();
+	// device-level overrides
+	virtual void device_start();
 
 	// device_nvram_interface overrides
 	virtual void nvram_default();

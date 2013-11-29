@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
         Intel iSBC series
@@ -9,14 +11,12 @@ Notes:
 isbc86 commands: BYTE WORD REAL EREAL ROMTEST. ROMTEST works, the others hang.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i86/i86.h"
 #include "cpu/i86/i286.h"
 #include "machine/terminal.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
 
 class isbc_state : public driver_device
 {
@@ -28,7 +28,7 @@ public:
 	{ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_terminal;
+	required_device<generic_terminal_device> m_terminal;
 	DECLARE_READ16_MEMBER(isbc_terminal_status_r);
 	DECLARE_READ16_MEMBER(isbc_terminal_r);
 	DECLARE_WRITE8_MEMBER(kbd_put);
@@ -68,7 +68,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START(isbc86_io, AS_IO, 16, isbc_state)
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x00d8, 0x00d9) AM_READ(isbc_terminal_r) AM_DEVWRITE8_LEGACY(TERMINAL_TAG, terminal_write, 0xff)
+	AM_RANGE(0x00d8, 0x00d9) AM_READ(isbc_terminal_r) AM_DEVWRITE8(TERMINAL_TAG, generic_terminal_device, write, 0xff)
 	AM_RANGE(0x00da, 0x00db) AM_READ(isbc_terminal_status_r)
 ADDRESS_MAP_END
 
@@ -76,6 +76,7 @@ static ADDRESS_MAP_START(isbc286_mem, AS_PROGRAM, 16, isbc_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x00000, 0xdffff) AM_RAM
 	AM_RANGE(0xe0000, 0xfffff) AM_ROM AM_REGION("user1",0)
+	AM_RANGE(0xfe0000, 0xffffff) AM_ROM AM_REGION("user1",0)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START(isbc286_io, AS_IO, 16, isbc_state)
@@ -86,6 +87,7 @@ static ADDRESS_MAP_START(isbc2861_mem, AS_PROGRAM, 16, isbc_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x00000, 0xeffff) AM_RAM
 	AM_RANGE(0xf0000, 0xfffff) AM_ROM AM_REGION("user1",0)
+	AM_RANGE(0xff0000, 0xffffff) AM_ROM AM_REGION("user1",0)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START(isbc2861_io, AS_IO, 16, isbc_state)
@@ -97,7 +99,7 @@ static INPUT_PORTS_START( isbc )
 INPUT_PORTS_END
 
 
-MACHINE_RESET_MEMBER(isbc_state)
+void isbc_state::machine_reset()
 {
 	m_term_data = 0;
 }
@@ -119,7 +121,6 @@ static MACHINE_CONFIG_START( isbc86, isbc_state )
 	MCFG_CPU_IO_MAP(isbc86_io)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 MACHINE_CONFIG_END
 
@@ -130,21 +131,16 @@ static MACHINE_CONFIG_START( rpc86, isbc_state )
 	MCFG_CPU_IO_MAP(rpc86_io)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 MACHINE_CONFIG_END
-
-static const unsigned i286_address_mask = 0x00ffffff;
 
 static MACHINE_CONFIG_START( isbc286, isbc_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", I80286, XTAL_9_8304MHz)
 	MCFG_CPU_PROGRAM_MAP(isbc286_mem)
 	MCFG_CPU_IO_MAP(isbc286_io)
-	MCFG_CPU_CONFIG(i286_address_mask)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 MACHINE_CONFIG_END
 
@@ -153,10 +149,8 @@ static MACHINE_CONFIG_START( isbc2861, isbc_state )
 	MCFG_CPU_ADD("maincpu", I80286, XTAL_9_8304MHz)
 	MCFG_CPU_PROGRAM_MAP(isbc2861_mem)
 	MCFG_CPU_IO_MAP(isbc2861_io)
-	MCFG_CPU_CONFIG(i286_address_mask)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 MACHINE_CONFIG_END
 
@@ -196,8 +190,7 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT COMPANY   FULLNAME       FLAGS */
-COMP( 19??, rpc86,    0,       0,    rpc86,      isbc,    0,   "Intel",   "RPC 86",GAME_NOT_WORKING | GAME_NO_SOUND)
-COMP( 19??, isbc86,   0,       0,    isbc86,     isbc,    0,   "Intel",   "iSBC 86/12A",GAME_NOT_WORKING | GAME_NO_SOUND)
-COMP( 19??, isbc286,  0,       0,    isbc286,    isbc,    0,   "Intel",   "iSBC 286",GAME_NOT_WORKING | GAME_NO_SOUND)
-COMP( 19??, isbc2861, 0,       0,    isbc2861,   isbc,    0,   "Intel",   "iSBC 286-10",GAME_NOT_WORKING | GAME_NO_SOUND)
-
+COMP( 19??, rpc86,    0,       0,    rpc86,      isbc, driver_device,    0,   "Intel",   "RPC 86",GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 19??, isbc86,   0,       0,    isbc86,     isbc, driver_device,    0,   "Intel",   "iSBC 86/12A",GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 19??, isbc286,  0,       0,    isbc286,    isbc, driver_device,    0,   "Intel",   "iSBC 286",GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 19??, isbc2861, 0,       0,    isbc2861,   isbc, driver_device,    0,   "Intel",   "iSBC 286-10",GAME_NOT_WORKING | GAME_NO_SOUND)

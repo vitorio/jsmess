@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     SMC CRT9021 Video Attributes Controller (VAC) emulation
@@ -63,24 +65,23 @@
 
 struct crt9021_interface
 {
-	const char *screen_tag;		/* screen we are acting on */
+	devcb_read8             in_data_cb;
+	devcb_read8             in_attr_cb;
 
-	devcb_read8				in_data_cb;
-	devcb_read8				in_attr_cb;
-
-	devcb_read_line			in_atten_cb;
+	devcb_read_line         in_atten_cb;
 };
 
 
 
 // ======================> crt9021_device
 
-class crt9021_device :	public device_t,
-                        public crt9021_interface
+class crt9021_device :  public device_t,
+						public device_video_interface,
+						public crt9021_interface
 {
 public:
-    // construction/destruction
-    crt9021_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	// construction/destruction
+	crt9021_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
 	DECLARE_WRITE_LINE_MEMBER( slg_w );
 	DECLARE_WRITE_LINE_MEMBER( sld_w );
@@ -88,21 +89,19 @@ public:
 	DECLARE_WRITE_LINE_MEMBER( retbl_w );
 	DECLARE_WRITE_LINE_MEMBER( vsync_w );
 
-	void update_screen(bitmap_t *bitmap, const rectangle *cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect);
 
 protected:
-    // device-level overrides
+	// device-level overrides
 	virtual void device_config_complete();
-    virtual void device_start();
+	virtual void device_start();
 	virtual void device_clock_changed();
 	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 
 private:
-	devcb_resolved_read8			m_in_data_func;
-	devcb_resolved_read8			m_in_attr_func;
-	devcb_resolved_read_line		m_in_atten_func;
-
-	screen_device *m_screen;
+	devcb_resolved_read8            m_in_data_func;
+	devcb_resolved_read8            m_in_attr_func;
+	devcb_resolved_read_line        m_in_atten_func;
 
 	int m_slg;
 	int m_sld;

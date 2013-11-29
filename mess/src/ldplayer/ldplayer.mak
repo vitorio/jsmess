@@ -9,6 +9,9 @@
 #
 ###########################################################################
 
+# add some additional include libraries for the mame files
+INCPATH += \
+	-I$(SRC)/mame \
 
 LDPSRC = $(SRC)/ldplayer
 LDPOBJ = $(OBJ)/ldplayer
@@ -38,6 +41,17 @@ SOUNDS += WAVE
 
 
 #-------------------------------------------------
+# specify available video cores
+#-------------------------------------------------
+
+#-------------------------------------------------
+# specify available machine cores
+#-------------------------------------------------
+
+MACHINES += LDV1000
+MACHINES += LDPR8210
+
+#-------------------------------------------------
 # this is the list of driver libraries that
 # comprise MAME plus mamedriv.o which contains
 # the list of drivers
@@ -52,4 +66,4 @@ DRVLIBS = \
 # layout dependencies
 #-------------------------------------------------
 
-$(LDPOBJ)/ldplayer.o:	$(LAYOUT)/pr8210.lh \
+$(LDPOBJ)/ldplayer.o:   $(LAYOUT)/pr8210.lh \

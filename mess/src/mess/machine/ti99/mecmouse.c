@@ -1,6 +1,8 @@
-/*
+// license:MAME|LGPL-2.1+
+// copyright-holders:Michael Zapf
+/****************************************************************************
+
     TI-99 Mechatronic mouse with adapter
-    Michael Zapf, October 2010
 
     The Mechatronic mouse is connected to the joystick port and occupies
     both joystick select lines and the switch lines. From these five
@@ -42,109 +44,116 @@
     Michael Zapf, 2008-01-22
 
     2010-10-22 Rewriten as device
-*/
+    February 2012: Rewritten as class
 
-#include "emu.h"
+*****************************************************************************/
+
 #include "mecmouse.h"
 
-typedef struct _ti99_mecmouse_state
+#define POLL_TIMER 1
+
+mecmouse_device::mecmouse_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: joyport_attached_device(mconfig, MECMOUSE, "Mechatronics Mouse", tag, owner, clock, "mecmouse", __FILE__)
 {
-	int select;
-	int read_y;
-	int x;
-	int y;
-	int x_buf;
-	int y_buf;
-	int last_mx;
-	int last_my;
-
-} ti99_mecmouse_state;
-
-INLINE ti99_mecmouse_state *get_safe_token(device_t *device)
-{
-	assert(device != NULL);
-	assert(device->type() == MECMOUSE);
-
-	return (ti99_mecmouse_state *)downcast<legacy_device_base *>(device)->token();
 }
 
-void mecmouse_select(device_t *device, int selnow, int stick1, int stick2)
-{
-	ti99_mecmouse_state *mouse = get_safe_token(device);
 
-	if (selnow == stick2) {
-		if (mouse->select == stick1) {
-			if (!mouse->read_y)
+UINT8 mecmouse_device::read_dev()
+{
+	int answer;
+	int buttons = ioport("MOUSE0")->read() & 3;
+
+	answer = (m_read_y_axis? m_y_buf : m_x_buf) << 1;
+
+	if ((buttons & 1)==0)
+		/* action button */
+		answer |= 0x01;
+	if ((buttons & 2)==0)
+		/* home button */
+		answer |= 0x10;
+
+	// answer: |0|0|0|B2|V|V|V|B1|
+
+	return answer;
+}
+
+/*
+    Used to select lines. data = 0x01 (Joy1), 0x02 (Joy2)
+*/
+void mecmouse_device::write_dev(UINT8 data)
+{
+	if (data == 0x02) {
+		if (m_last_select == 0x01) {
+			if (!m_read_y_axis)
 			{
 				/* Sample x motion. */
-				if (mouse->x < -4)
-					mouse->x_buf = -4;
-				else if (mouse->x > 3)
-					mouse->x_buf = 3;
+				if (m_x < -4)
+					m_x_buf = -4;
+				else if (m_x > 3)
+					m_x_buf = 3;
 				else
-					mouse->x_buf = mouse->x;
-				mouse->x -= mouse->x_buf;
-				mouse->x_buf = (mouse->x_buf-1) & 7;
+					m_x_buf = m_x;
+				m_x -= m_x_buf;
+				m_x_buf = (m_x_buf-1) & 7;
 			}
 			else
 			{
 				/* Sample y motion. */
-				if (mouse->y < -4)
-					mouse->y_buf = -4;
-				else if (mouse->y > 3)
-					mouse->y_buf = 3;
+				if (m_y < -4)
+					m_y_buf = -4;
+				else if (m_y > 3)
+					m_y_buf = 3;
 				else
-					mouse->y_buf = mouse->y;
-				mouse->y -= mouse->y_buf;
-				mouse->y_buf = (mouse->y_buf-1) & 7;
+					m_y_buf = m_y;
+				m_y -= m_y_buf;
+				m_y_buf = (m_y_buf-1) & 7;
 			}
 		}
-		mouse->select = selnow;
+		m_last_select = data;
 	}
-	else if (selnow == stick1)
+	else if (data == 0x01)
 	{
-		if (mouse->select == stick2)
+		if (m_last_select == 0x02)
 		{
 			/* Swap the axes. */
-			mouse->read_y = !mouse->read_y;
+			m_read_y_axis = !m_read_y_axis;
 		}
-		mouse->select = selnow;
+		m_last_select = data;
 	}
 	else
 	{
-		/* Reset the axis toggle when the mouse is deselected */
-		mouse->read_y = 0;
+		// Reset the axis toggle when the mouse is deselected
+		m_read_y_axis = false;
 	}
 }
 
-void mecmouse_poll(device_t *device)
+void mecmouse_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	ti99_mecmouse_state *mouse = get_safe_token(device);
-
+	// Poll the movement
 	int new_mx, new_my;
 	int delta_x, delta_y;
 
-	new_mx = input_port_read(device->machine(), "MOUSEX");
-	new_my = input_port_read(device->machine(), "MOUSEY");
+	new_mx = ioport("MOUSEX")->read();
+	new_my = ioport("MOUSEY")->read();
 
-	/* compute x delta */
-	delta_x = new_mx - mouse->last_mx;
+	// compute x delta
+	delta_x = new_mx - m_last_mx;
 
-	/* check for wrap */
+	// check for wrap
 	if (delta_x > 0x80)
 		delta_x = -0x100+delta_x;
 	if  (delta_x < -0x80)
 		delta_x = 0x100+delta_x;
 
-	/* Prevent unplausible values at startup. */
+	// Prevent unplausible values at startup.
 	if (delta_x > 100 || delta_x<-100) delta_x = 0;
 
-	mouse->last_mx = new_mx;
+	m_last_mx = new_mx;
 
-	/* compute y delta */
-	delta_y = new_my - mouse->last_my;
+	// compute y delta
+	delta_y = new_my - m_last_my;
 
-	/* check for wrap */
+	// check for wrap
 	if (delta_y > 0x80)
 		delta_y = -0x100+delta_y;
 	if  (delta_y < -0x80)
@@ -152,79 +161,46 @@ void mecmouse_poll(device_t *device)
 
 	if (delta_y > 100 || delta_y<-100) delta_y = 0;
 
-	mouse->last_my = new_my;
+	m_last_my = new_my;
 
-	/* update state */
-	mouse->x += delta_x;
-	mouse->y += delta_y;
+	// update state
+	m_x += delta_x;
+	m_y += delta_y;
 }
 
-int mecmouse_get_values(device_t *device)
+void mecmouse_device::device_start(void)
 {
-	ti99_mecmouse_state *mouse = get_safe_token(device);
-	int answer;
-	int buttons = input_port_read(device->machine(), "MOUSE0") & 3;
-	answer = (mouse->read_y ? mouse->y_buf : mouse->x_buf) << 4;
-
-	if ((buttons & 1)==0)
-		/* action button */
-		answer |= 0x08;
-	if ((buttons & 2)==0)
-		/* home button */
-		answer |= 0x80;
-	return answer;
+	m_poll_timer = timer_alloc(POLL_TIMER);
+	m_poll_timer->adjust(attotime::from_hz(m_joyport->clock()), 0, attotime::from_hz(m_joyport->clock()));
 }
 
-/*
-    Variation for TI-99/8
-*/
-int mecmouse_get_values8(device_t *device, int mode)
+void mecmouse_device::device_reset(void)
 {
-	ti99_mecmouse_state *mouse = get_safe_token(device);
-	int answer;
-	int buttons = input_port_read(device->machine(), "MOUSE0") & 3;
-
-	if (mode == 0)
-	{
-		answer = ((mouse->read_y ? mouse->y_buf : mouse->x_buf) << 7) & 0x80;
-		if ((buttons & 1)==0)
-			/* action button */
-			answer |= 0x40;
-	}
-	else
-	{
-		answer = ((mouse->read_y ? mouse->y_buf : mouse->x_buf) << 1) & 0x03;
-		if ((buttons & 2)==0)
-			/* home button */
-			answer |= 0x04;
-	}
-	return answer;
+	m_poll_timer->enable(true);
+	m_last_select = 0;
+	m_read_y_axis = false;
+	m_x = 0;
+	m_y = 0;
+	m_last_mx = 0;
+	m_last_my = 0;
 }
 
-/**************************************************************************/
+INPUT_PORTS_START( mecmouse )
+	/* 3 ports for mouse */
+	PORT_START("MOUSEX") /* Mouse - X AXIS */
+		PORT_BIT( 0xff, 0x00, IPT_TRACKBALL_X) PORT_SENSITIVITY(100) PORT_KEYDELTA(0) PORT_PLAYER(1)
 
-static DEVICE_START( ti99_mecmouse )
+	PORT_START("MOUSEY") /* Mouse - Y AXIS */
+		PORT_BIT( 0xff, 0x00, IPT_TRACKBALL_Y) PORT_SENSITIVITY(100) PORT_KEYDELTA(0) PORT_PLAYER(1)
+
+	PORT_START("MOUSE0") /* Mouse - buttons */
+		PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_BUTTON1) PORT_NAME("Mouse Button 1") PORT_PLAYER(1)
+		PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_BUTTON2) PORT_NAME("Mouse Button 2") PORT_PLAYER(1)
+INPUT_PORTS_END
+
+ioport_constructor mecmouse_device::device_input_ports() const
 {
+	return INPUT_PORTS_NAME( mecmouse );
 }
 
-static DEVICE_RESET( ti99_mecmouse )
-{
-	ti99_mecmouse_state *mouse = get_safe_token(device);
-	mouse->select = 0;
-	mouse->read_y = 0;
-	mouse->x = 0;
-	mouse->y = 0;
-	mouse->last_mx = 0;
-	mouse->last_my = 0;
-}
-
-static const char DEVTEMPLATE_SOURCE[] = __FILE__;
-
-#define DEVTEMPLATE_ID(p,s)             p##ti99_mecmouse##s
-#define DEVTEMPLATE_FEATURES            DT_HAS_START | DT_HAS_RESET
-#define DEVTEMPLATE_NAME                "Mechatronics mouse"
-#define DEVTEMPLATE_FAMILY              "Human-computer interface"
-#include "devtempl.h"
-
-DEFINE_LEGACY_DEVICE( MECMOUSE, ti99_mecmouse );
-
+const device_type MECMOUSE = &device_creator<mecmouse_device>;

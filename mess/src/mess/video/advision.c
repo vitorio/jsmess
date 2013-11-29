@@ -31,14 +31,14 @@ void advision_state::video_start()
 
 ***************************************************************************/
 
-PALETTE_INIT( advision )
+void advision_state::palette_init()
 {
 	int i;
 
 	for( i = 0; i < 8; i++ )
 	{
 		/* 8 shades of RED */
-		palette_set_color_rgb(machine, i, i * 0x22, 0x00, 0x00);
+		palette_set_color_rgb(machine(), i, i * 0x22, 0x00, 0x00);
 	}
 }
 
@@ -87,7 +87,7 @@ void advision_state::vh_update(int x)
 
 ***************************************************************************/
 
-bool advision_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
+UINT32 advision_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	int x, y;
 
@@ -104,9 +104,9 @@ bool advision_state::screen_update(screen_device &screen, bitmap_t &bitmap, cons
 		for( y = 0; y < 128; y+=2 )
 		{
 			if( *led > 0 )
-				*BITMAP_ADDR16(&bitmap, 30 + y, 85 + x) = --(*led);
+				bitmap.pix16(30 + y, 85 + x) = --(*led);
 			else
-				*BITMAP_ADDR16(&bitmap, 30 + y, 85 + x) = 0;
+				bitmap.pix16(30 + y, 85 + x) = 0;
 
 			led += 256;
 		}

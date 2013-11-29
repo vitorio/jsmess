@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
         Intel iPB and iPC
@@ -36,13 +38,11 @@
         - iPC - Find missing rom F800-FFFF
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i8085/i8085.h"
 #include "machine/terminal.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
 
 
 class ipc_state : public driver_device
@@ -55,7 +55,7 @@ public:
 	{ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_terminal;
+	required_device<generic_terminal_device> m_terminal;
 	DECLARE_READ8_MEMBER( ipc_f4_r );
 	DECLARE_READ8_MEMBER( ipc_f5_r );
 	DECLARE_WRITE8_MEMBER( kbd_put );
@@ -74,10 +74,7 @@ READ8_MEMBER( ipc_state::ipc_f4_r )
 // bit 0 high = ok to send to terminal; bit 1 high = key is pressed
 READ8_MEMBER( ipc_state::ipc_f5_r )
 {
-	if (m_term_data)
-		return 3;
-	else
-		return 1;
+	return (m_term_data) ? 3 : 1;
 }
 
 
@@ -90,7 +87,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( ipc_io, AS_IO, 8, ipc_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0xf4, 0xf4) AM_READ(ipc_f4_r) AM_DEVWRITE_LEGACY(TERMINAL_TAG, terminal_write)
+	AM_RANGE(0xf4, 0xf4) AM_READ(ipc_f4_r) AM_DEVWRITE(TERMINAL_TAG, generic_terminal_device, write)
 	AM_RANGE(0xf5, 0xf5) AM_READ(ipc_f5_r)
 ADDRESS_MAP_END
 
@@ -99,9 +96,9 @@ static INPUT_PORTS_START( ipc )
 INPUT_PORTS_END
 
 
-MACHINE_RESET_MEMBER(ipc_state)
+void ipc_state::machine_reset()
 {
-	cpu_set_reg(machine().device("maincpu"), I8085_PC, 0xE800);
+	m_maincpu->set_state_int(I8085_PC, 0xE800);
 }
 
 WRITE8_MEMBER( ipc_state::kbd_put )
@@ -121,7 +118,6 @@ static MACHINE_CONFIG_START( ipc, ipc_state )
 	MCFG_CPU_IO_MAP(ipc_io)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
 MACHINE_CONFIG_END
 
@@ -143,5 +139,5 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 19??, ipb,      0,      0,      ipc,      ipc,     0,     "Intel",   "iPB", GAME_NOT_WORKING | GAME_NO_SOUND)
-COMP( 19??, ipc,      ipb,    0,      ipc,      ipc,     0,     "Intel",   "iPC", GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 19??, ipb,      0,      0,      ipc,      ipc, driver_device,     0,     "Intel",   "iPB", GAME_NO_SOUND)
+COMP( 19??, ipc,      ipb,    0,      ipc,      ipc, driver_device,     0,     "Intel",   "iPC", GAME_NOT_WORKING | GAME_NO_SOUND)

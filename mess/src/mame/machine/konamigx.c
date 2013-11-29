@@ -5,7 +5,6 @@
  */
 
 #include "emu.h"
-#include "video/konamiic.h"
 #include "includes/konamigx.h"
 
 /***************************************************************************/
@@ -14,17 +13,44 @@
 /*                                                                         */
 /***************************************************************************/
 
+/*
+
+
+K055550
+-------
+
+Protection chip which performs a memset() operation.
+
+Used in Violent Storm and Ultimate Battler to clear VRAM between scenes, among
+other things.  May also perform other functions since Violent Storm still isn't
+happy...
+
+Has word-wide registers as follows:
+
+0: Count of units to transfer.  The write here triggers the transfer.
+1-6: Unknown
+7: Destination address, MSW
+8: Destination address, LSW
+9: Unknown
+10: Size of transfer units, MSW
+11: Size of transfer units, LSW
+12: Unknown
+13: Value to fill destination region with
+14-15: Unknown
+
+*/
+
 // K055550/K053990 protection chips, perform simple memset() and other game logic operations
 static UINT16 prot_data[0x20];
 
-static WRITE32_HANDLER(fantjour_dma_w);
 
-READ16_HANDLER( K055550_word_r )
+
+READ16_MEMBER(konamigx_state::K055550_word_r)
 {
 	return(prot_data[offset]);
 }
 
-WRITE16_HANDLER( K055550_word_w )
+WRITE16_MEMBER(konamigx_state::K055550_word_w)
 {
 	UINT32 adr, bsize, count, i, lim;
 	int src, tgt, srcend, tgtend, skip, cx1, sx1, wx1, cy1, sy1, wy1, cz1, sz1, wz1, c2, s2, w2;
@@ -45,7 +71,7 @@ WRITE16_HANDLER( K055550_word_w )
 
 				lim = adr+bsize*count;
 				for(i=adr; i<lim; i+=2)
-					space->write_word(i, prot_data[0x1a/2]);
+					space.write_word(i, prot_data[0x1a/2]);
 			break;
 
 			// WARNING: The following cases are speculation based with questionable accuracy!(AAT)
@@ -76,41 +102,41 @@ WRITE16_HANDLER( K055550_word_w )
 				// let's hope GCC will inline the mem24bew calls
 				for (src=adr; src<srcend; src+=bsize)
 				{
-					cx1 = (short)space->read_word(src);
-					sx1 = (short)space->read_word(src + 2);
-					wx1 = (short)space->read_word(src + 4);
+					cx1 = (short)space.read_word(src);
+					sx1 = (short)space.read_word(src + 2);
+					wx1 = (short)space.read_word(src + 4);
 
-					cy1 = (short)space->read_word(src + 6);
-					sy1 = (short)space->read_word(src + 8);
-					wy1 = (short)space->read_word(src +10);
+					cy1 = (short)space.read_word(src + 6);
+					sy1 = (short)space.read_word(src + 8);
+					wy1 = (short)space.read_word(src +10);
 
-					cz1 = (short)space->read_word(src +12);
-					sz1 = (short)space->read_word(src +14);
-					wz1 = (short)space->read_word(src +16);
+					cz1 = (short)space.read_word(src +12);
+					sz1 = (short)space.read_word(src +14);
+					wz1 = (short)space.read_word(src +16);
 
 					count = i = src + skip;
 					tgt = src + bsize;
 
-					for (; count<tgt; count++) space->write_byte(count, 0);
+					for (; count<tgt; count++) space.write_byte(count, 0);
 
 					for (; tgt<tgtend; i++, tgt+=bsize)
 					{
-						c2 = (short)space->read_word(tgt);
-						s2 = (short)space->read_word(tgt + 2);
-						w2 = (short)space->read_word(tgt + 4);
+						c2 = (short)space.read_word(tgt);
+						s2 = (short)space.read_word(tgt + 2);
+						w2 = (short)space.read_word(tgt + 4);
 						if (abs((cx1+sx1)-(c2+s2))>=wx1+w2) continue; // X rejection
 
-						c2 = (short)space->read_word(tgt + 6);
-						s2 = (short)space->read_word(tgt + 8);
-						w2 = (short)space->read_word(tgt +10);
+						c2 = (short)space.read_word(tgt + 6);
+						s2 = (short)space.read_word(tgt + 8);
+						w2 = (short)space.read_word(tgt +10);
 						if (abs((cy1+sy1)-(c2+s2))>=wy1+w2) continue; // Y rejection
 
-						c2 = (short)space->read_word(tgt +12);
-						s2 = (short)space->read_word(tgt +14);
-						w2 = (short)space->read_word(tgt +16);
+						c2 = (short)space.read_word(tgt +12);
+						s2 = (short)space.read_word(tgt +14);
+						w2 = (short)space.read_word(tgt +16);
 						if (abs((cz1+sz1)-(c2+s2))>=wz1+w2) continue; // Z rejection
 
-						space->write_byte(i, 0x80); // collision confirmed
+						space.write_byte(i, 0x80); // collision confirmed
 					}
 				}
 			break;
@@ -137,19 +163,19 @@ WRITE16_HANDLER( K055550_word_w )
 				else
 					if (dy < 0) i = 0x80;
 				else
-					i = space->machine().rand() & 0xff; // vector direction indeterminate
+					i = machine().rand() & 0xff; // vector direction indeterminate
 
 				prot_data[0x10] = i;
 			break;
 
 			default:
-//              logerror("%06x: unknown K055550 command %02x\n", cpu_get_pc(&space->device()), data);
+//              logerror("%06x: unknown K055550 command %02x\n", space.device().safe_pc(), data);
 			break;
 		}
 	}
 }
 
-WRITE16_HANDLER( K053990_martchmp_word_w )
+WRITE16_MEMBER(konamigx_state::K053990_martchmp_word_w)
 {
 	int src_addr, src_count, src_skip;
 	int dst_addr, /*dst_count,*/ dst_skip;
@@ -184,13 +210,13 @@ WRITE16_HANDLER( K053990_martchmp_word_w )
 				if (element_size == 1)
 				for (i=src_count; i; i--)
 				{
-					space->write_byte(dst_addr, space->read_byte(src_addr));
+					space.write_byte(dst_addr, space.read_byte(src_addr));
 					src_addr += src_skip;
 					dst_addr += dst_skip;
 				}
 				else for (i=src_count; i; i--)
 				{
-					space->write_word(dst_addr, space->read_word(src_addr));
+					space.write_word(dst_addr, space.read_word(src_addr));
 					src_addr += src_skip;
 					dst_addr += dst_skip;
 				}
@@ -215,15 +241,15 @@ WRITE16_HANDLER( K053990_martchmp_word_w )
 
 				for (i=mod_count; i; i--)
 				{
-					mod_val  = space->read_word(mod_addr);
+					mod_val  = space.read_word(mod_addr);
 					mod_addr += mod_skip;
 
-					mod_data = space->read_word(src_addr);
+					mod_data = space.read_word(src_addr);
 					src_addr += src_skip;
 
 					mod_data += mod_val;
 
-					space->write_word(dst_addr, mod_data);
+					space.write_word(dst_addr, mod_data);
 					dst_addr += dst_skip;
 				}
 			break;
@@ -234,8 +260,11 @@ WRITE16_HANDLER( K053990_martchmp_word_w )
 	}
 }
 
-void konamigx_esc_alert(UINT32 *srcbase, int srcoffs, int count, int mode) // (WARNING: assumed big endianess)
+void konamigx_state::konamigx_esc_alert(UINT32 *srcbase, int srcoffs, int count, int mode) // (WARNING: assumed big endianess)
 {
+	UINT16* k053247_ram;
+	m_k055673->k053247_get_ram(&k053247_ram);
+
 
 // hand-filled but should be close
 static const UINT8 ztable[7][8] =
@@ -270,7 +299,7 @@ static const UINT8 ptable[7][8] =
 	if (mode == 0)
 	{
 		src = srcbase + srcoffs;
-		dst = K053247_ram;
+		dst = k053247_ram;
 		data1 = count<<2;
 		data2 = count<<3;
 		src += data1; dst += data2; i = -data1; j = -data2;
@@ -290,56 +319,55 @@ static const UINT8 ptable[7][8] =
 	}
 	else
 	{
-
 #define EXTRACT_ODD         \
 if((data1=obj[0])&0x8000)   \
 {                           \
-  i      = data1 & 7;       \
-  data1 &= 0xff00;          \
-  dst[0] = data1 | zcode[i];\
-  data1  = obj[1];          \
-  dst[1] = data1>>16;       \
-  vpos   = data1 & 0xffff;  \
-  data1  = obj[2];          \
-  vpos  += voffs;           \
-  dst[4] = data1;           \
-  vpos  &= vmask;           \
-  hpos   = data1>>16;       \
-  data1  = obj[3];          \
-  hpos  += hoffs;           \
-  dst[2] = vpos;            \
-  dst[3] = hpos;            \
-  dst[5] = data1>>16;       \
-  i      = pcode[i];        \
-  dst[6] = data1| i<<4;     \
-  dst += 8;                 \
-  if (!(--j)) return;       \
+	i      = data1 & 7;       \
+	data1 &= 0xff00;          \
+	dst[0] = data1 | zcode[i];\
+	data1  = obj[1];          \
+	dst[1] = data1>>16;       \
+	vpos   = data1 & 0xffff;  \
+	data1  = obj[2];          \
+	vpos  += voffs;           \
+	dst[4] = data1;           \
+	vpos  &= vmask;           \
+	hpos   = data1>>16;       \
+	data1  = obj[3];          \
+	hpos  += hoffs;           \
+	dst[2] = vpos;            \
+	dst[3] = hpos;            \
+	dst[5] = data1>>16;       \
+	i      = pcode[i];        \
+	dst[6] = data1| i<<4;     \
+	dst += 8;                 \
+	if (!(--j)) return;       \
 }
 
 #define EXTRACT_EVEN         \
 if((data1=obj[0])&0x80000000)\
 {                            \
-  dst[1] = data1;            \
-  data1>>= 16;               \
-  i      = data1 & 7;        \
-  data1 &= 0xff00;           \
-  dst[0] = data1 | zcode[i]; \
-  data1  = obj[1];           \
-  hpos   = data1 & 0xffff;   \
-  vpos   = data1>>16;        \
-  hpos  += hoffs;            \
-  vpos  += voffs;            \
-  data1  = obj[2];           \
-  vpos  &= vmask;            \
-  dst[3] = hpos;             \
-  dst[2] = vpos;             \
-  dst[5] = data1;            \
-  dst[4] = data1>>16;        \
-  data1  = obj[3]>>16;       \
-  i      = pcode[i];         \
-  dst[6] = data1 | i<<4;     \
-  dst += 8;                  \
-  if (!(--j)) return;        \
+	dst[1] = data1;            \
+	data1>>= 16;               \
+	i      = data1 & 7;        \
+	data1 &= 0xff00;           \
+	dst[0] = data1 | zcode[i]; \
+	data1  = obj[1];           \
+	hpos   = data1 & 0xffff;   \
+	vpos   = data1>>16;        \
+	hpos  += hoffs;            \
+	vpos  += voffs;            \
+	data1  = obj[2];           \
+	vpos  &= vmask;            \
+	dst[3] = hpos;             \
+	dst[2] = vpos;             \
+	dst[5] = data1;            \
+	dst[4] = data1>>16;        \
+	data1  = obj[3]>>16;       \
+	i      = pcode[i];         \
+	dst[6] = data1 | i<<4;     \
+	dst += 8;                  \
+	if (!(--j)) return;        \
 }
 
 		// These suspecious looking flags might tell the ESC chip what zcode/priority combos to use.
@@ -356,7 +384,7 @@ if((data1=obj[0])&0x80000000)\
 				case 0x11010010: i = 5; vmask = 0x1ff; break;
 				case 0x01111018: i = 4; break;
 				case 0x10010011: i = 3;
-					if ((srcbase[0x1c75]&0xff)==32) K055555_write_reg(K55_BLEND_ENABLES,36); // (TEMPORARY)
+					if ((srcbase[0x1c75]&0xff)==32) m_k055555->K055555_write_reg(K55_BLEND_ENABLES,36); // (TEMPORARY)
 				break;
 				case 0x11010811: i = 2; break;
 				case 0x10000010: i = 1; break;
@@ -372,7 +400,7 @@ if((data1=obj[0])&0x80000000)\
 		zcode = ztable[i];
 		pcode = ptable[i];
 
-		dst = K053247_ram;
+		dst = k053247_ram;
 		j = 256;
 
 		// decode Vic-Viper
@@ -441,12 +469,13 @@ static UINT32 fantjour_dma[8];
 
 void fantjour_dma_install(running_machine &machine)
 {
-	state_save_register_global_array(machine, fantjour_dma);
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xdb0000, 0xdb001f, FUNC(fantjour_dma_w));
+	konamigx_state *state = machine.driver_data<konamigx_state>();
+	machine.save().save_item(NAME(fantjour_dma));
+	state->m_maincpu->space(AS_PROGRAM).install_write_handler(0xdb0000, 0xdb001f, write32_delegate(FUNC(konamigx_state::fantjour_dma_w),state));
 	memset(fantjour_dma, 0, sizeof(fantjour_dma));
 }
 
-static WRITE32_HANDLER(fantjour_dma_w)
+WRITE32_MEMBER(konamigx_state::fantjour_dma_w)
 {
 	COMBINE_DATA(fantjour_dma + offset);
 	if(!offset && ACCESSING_BITS_24_31) {
@@ -468,14 +497,14 @@ static WRITE32_HANDLER(fantjour_dma_w)
 		if(mode == 0x93)
 			for(i1=0; i1 <= sz2; i1++)
 				for(i2=0; i2 < db; i2+=4) {
-					space->write_dword(da, space->read_dword(sa) ^ x);
+					space.write_dword(da, space.read_dword(sa) ^ x);
 					da += 4;
 					sa += 4;
 				}
 		else if(mode == 0x8f)
 			for(i1=0; i1 <= sz2; i1++)
 				for(i2=0; i2 < db; i2+=4) {
-					space->write_dword(da, x);
+					space.write_dword(da, x);
 					da += 4;
 				}
 	}

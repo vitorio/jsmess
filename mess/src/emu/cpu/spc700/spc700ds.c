@@ -20,11 +20,11 @@ author (Karl Stenerud) at karl@higashiyama-unet.ocn.ne.jp.
 
 
 
-typedef struct
+struct opcode_struct
 {
 	unsigned char name;
 	unsigned char args[2];
-} opcode_struct;
+};
 
 enum
 {
@@ -80,7 +80,7 @@ static const opcode_struct g_opcodes[256] =
 /* 0C */ {ASL    , {ABS , IMP }},
 /* 0D */ {PUSH   , {PSW , IMP }},
 /* 0E */ {TSET1  , {ABS , IMP }},
-/* 0F */ {BRK    , {IMM , IMP }},
+/* 0F */ {BRK    , {IMP , IMP }},
 /* 10 */ {BPL    , {REL , IMP }},
 /* 11 */ {TCALL  , {N1  , IMP }},
 /* 12 */ {CLR1   , {DP0 , IMP }},
@@ -123,7 +123,7 @@ static const opcode_struct g_opcodes[256] =
 /* 37 */ {AND    , {A   , DIY }},
 /* 38 */ {AND    , {DP  , IMM }},
 /* 39 */ {AND    , {XI  , YI  }},
-/* 3A */ {INCW   , {DI  , IMP }},
+/* 3A */ {INCW   , {DP  , IMP }},
 /* 3B */ {ROL    , {DPX , IMP }},
 /* 3C */ {ROL    , {A   , IMP }},
 /* 3D */ {INC    , {X   , IMP }},
@@ -185,9 +185,9 @@ static const opcode_struct g_opcodes[256] =
 /* 75 */ {CMP    , {A   , ABX }},
 /* 76 */ {CMP    , {A   , ABY }},
 /* 77 */ {CMP    , {A   , DIY }},
-/* 78 */ {CMP    , {IMM , DP  }},
+/* 78 */ {CMP    , {DP  , IMM }},
 /* 79 */ {CMP    , {XI  , YI  }},
-/* 7A */ {ADDW   , {DI  , IMP }},
+/* 7A */ {ADDW   , {DP  , IMP }},
 /* 7B */ {ROR    , {DPX , IMP }},
 /* 7C */ {ROR    , {A   , IMP }},
 /* 7D */ {MOV    , {A   , X   }},
@@ -208,7 +208,7 @@ static const opcode_struct g_opcodes[256] =
 /* 8C */ {DEC    , {ABS , IMP }},
 /* 8D */ {MOV    , {Y   , IMM }},
 /* 8E */ {POP    , {PSW , IMP }},
-/* 8F */ {MOV    , {IMM , DP  }},
+/* 8F */ {MOV    , {DP  , IMM }},
 /* 90 */ {BCC    , {REL , IMP }},
 /* 91 */ {TCALL  , {N9  , IMP }},
 /* 92 */ {CLR1   , {DP4 , IMP }},
@@ -360,7 +360,14 @@ CPU_DISASSEMBLE( spc700 )
 	else if (opcode->name == RET || opcode->name == RETI)
 		flags = DASMFLAG_STEP_OUT;
 
-	for(i=0;i<2;i++)
+	if (opcode->args[0] == DP && (opcode->args[1] == DP || opcode->args[1] == IMM))
+	{
+		int src = read_8_immediate();
+		int dst = read_8_immediate();
+		sprintf(ptr, "$%02x,%s$%02x", dst, (opcode->args[1] == IMM ? "#" : ""), src);
+		ptr += strlen(ptr);
+	}
+	else for(i=0;i<2;i++)
 	{
 		if(i == 1 && opcode->args[0] != IMP && opcode->args[1] != IMP)
 		{

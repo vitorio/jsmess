@@ -17,11 +17,11 @@
 		</rect>
 	</element>
 
-	<view name="SDK86">
+	<view name="Default Layout">
 
 		<!-- Background -->
 		<backdrop element="background">
-			<bounds left="0" top="0" right="406" bottom="69" />
+			<bounds left="0" top="0" right="362" bottom="69" />
 		</backdrop>
 
 		<!-- LEDs -->
@@ -50,6 +50,12 @@
 			<bounds left="318" top="10" right="352" bottom="59" />
 		</bezel>
 
+	</view>
+
+	<view name="Terminal">
+		<screen index="0">
+			<bounds left="0" top="0" right="4" bottom="3" />
+		</screen>
 	</view>
 
 </mamelayout>

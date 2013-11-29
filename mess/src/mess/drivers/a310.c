@@ -1,3 +1,5 @@
+// license:?
+// copyright-holders:Angelo Salese, R. Belmont, Juergen Bunchmueller
 /******************************************************************************
  *
  *  Acorn Archimedes 310
@@ -62,72 +64,86 @@
 #include "sound/dac.h"
 #include "includes/archimds.h"
 #include "machine/i2cmem.h"
+//#include "machine/aakart.h"
 #include "machine/ram.h"
 
 
-class a310_state : public driver_device
+class a310_state : public archimedes_state
 {
 public:
 	a310_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: archimedes_state(mconfig, type, tag)
+		, m_physram(*this, "physicalram")
+		, m_ram(*this, RAM_TAG)
+	{ }
 
+	required_shared_ptr<UINT32> m_physram;
+
+	DECLARE_READ32_MEMBER(a310_psy_wram_r);
+	DECLARE_WRITE32_MEMBER(a310_psy_wram_w);
+	DECLARE_WRITE_LINE_MEMBER(a310_wd177x_intrq_w);
+	DECLARE_WRITE_LINE_MEMBER(a310_wd177x_drq_w);
+	DECLARE_DRIVER_INIT(a310);
+	virtual void machine_start();
+	virtual void machine_reset();
+
+protected:
+	required_device<ram_device> m_ram;
 };
 
 
-static WRITE_LINE_DEVICE_HANDLER( a310_wd177x_intrq_w )
+WRITE_LINE_MEMBER(a310_state::a310_wd177x_intrq_w)
 {
 	if (state)
-		archimedes_request_fiq(device->machine(), ARCHIMEDES_FIQ_FLOPPY);
+		archimedes_request_fiq(ARCHIMEDES_FIQ_FLOPPY);
 	else
-		archimedes_clear_fiq(device->machine(), ARCHIMEDES_FIQ_FLOPPY);
+		archimedes_clear_fiq(ARCHIMEDES_FIQ_FLOPPY);
 }
 
-static WRITE_LINE_DEVICE_HANDLER( a310_wd177x_drq_w )
+WRITE_LINE_MEMBER(a310_state::a310_wd177x_drq_w)
 {
 	if (state)
-		archimedes_request_fiq(device->machine(), ARCHIMEDES_FIQ_FLOPPY_DRQ);
+		archimedes_request_fiq(ARCHIMEDES_FIQ_FLOPPY_DRQ);
 	else
-		archimedes_clear_fiq(device->machine(), ARCHIMEDES_FIQ_FLOPPY_DRQ);
+		archimedes_clear_fiq(ARCHIMEDES_FIQ_FLOPPY_DRQ);
 }
 
-static READ32_HANDLER( a310_psy_wram_r )
+READ32_MEMBER(a310_state::a310_psy_wram_r)
 {
-	return archimedes_memc_physmem[offset];
+	return m_physram[offset];
 }
 
-static WRITE32_HANDLER( a310_psy_wram_w )
+WRITE32_MEMBER(a310_state::a310_psy_wram_w)
 {
-	COMBINE_DATA(&archimedes_memc_physmem[offset]);
+	COMBINE_DATA(&m_physram[offset]);
 }
 
 
-static DRIVER_INIT(a310)
+DRIVER_INIT_MEMBER(a310_state,a310)
 {
-	UINT32 ram_size = ram_get_size(machine.device(RAM_TAG));
+	UINT32 ram_size = m_ram->size();
 
-	archimedes_memc_physmem = auto_alloc_array(machine, UINT32, 0x01000000);
+	m_maincpu->space(AS_PROGRAM).install_readwrite_handler( 0x02000000, 0x02000000+(ram_size-1), read32_delegate(FUNC(a310_state::a310_psy_wram_r), this), write32_delegate(FUNC(a310_state::a310_psy_wram_w), this));
 
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler( 0x02000000, 0x02000000+(ram_size-1), FUNC(a310_psy_wram_r), FUNC(a310_psy_wram_w) );
-
-	archimedes_driver_init(machine);
+	archimedes_driver_init();
 }
 
-static MACHINE_START( a310 )
+void a310_state::machine_start()
 {
-	archimedes_init(machine);
+	archimedes_init();
 
 	// reset the DAC to centerline
-	//dac_signed_data_w(machine.device("dac"), 0x80);
+	//m_dac->write_signed8(0x80);
 }
 
-static MACHINE_RESET( a310 )
+void a310_state::machine_reset()
 {
-	archimedes_reset(machine);
+	archimedes_reset();
 }
 
-static ADDRESS_MAP_START( a310_mem, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( a310_mem, AS_PROGRAM, 32, a310_state )
 	AM_RANGE(0x00000000, 0x01ffffff) AM_READWRITE(archimedes_memc_logical_r, archimedes_memc_logical_w)
-//  AM_RANGE(0x02000000, 0x02ffffff) AM_RAM AM_BASE(&archimedes_memc_physmem) /* physical RAM - 16 MB for now, should be 512k for the A310 */
+	AM_RANGE(0x02000000, 0x02ffffff) AM_RAM AM_SHARE("physicalram") /* physical RAM - 16 MB for now, should be 512k for the A310 */
 	AM_RANGE(0x03000000, 0x033fffff) AM_READWRITE(archimedes_ioc_r, archimedes_ioc_w)
 	AM_RANGE(0x03400000, 0x035fffff) AM_READWRITE(archimedes_vidc_r, archimedes_vidc_w)
 	AM_RANGE(0x03600000, 0x037fffff) AM_READWRITE(archimedes_memc_r, archimedes_memc_w)
@@ -232,8 +248,8 @@ static INPUT_PORTS_START( a310 )
 	PORT_START("via1a") /* VIA #1 PORT A */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START) PORT_PLAYER(2)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1					 )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON2					 )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1                   )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON2                   )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT) PORT_4WAY
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_UP) PORT_4WAY
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT) PORT_4WAY
@@ -249,8 +265,8 @@ INPUT_PORTS_END
 static const wd17xx_interface a310_wd17xx_interface =
 {
 	DEVCB_NULL,
-	DEVCB_LINE(a310_wd177x_intrq_w),
-	DEVCB_LINE(a310_wd177x_drq_w),
+	DEVCB_DRIVER_LINE_MEMBER(a310_state, a310_wd177x_intrq_w),
+	DEVCB_DRIVER_LINE_MEMBER(a310_state, a310_wd177x_drq_w),
 	{FLOPPY_0, FLOPPY_1, FLOPPY_2, FLOPPY_3}
 };
 
@@ -259,28 +275,45 @@ static const i2cmem_interface i2cmem_interface =
 	I2CMEM_SLAVE_ADDRESS, 0, 0x100
 };
 
+WRITE_LINE_MEMBER( archimedes_state::a310_kart_tx_w )
+{
+	if(state)
+		archimedes_request_irq_b(ARCHIMEDES_IRQB_KBD_RECV_FULL);
+	else
+		archimedes_clear_irq_b(ARCHIMEDES_IRQB_KBD_RECV_FULL);
+}
+
+WRITE_LINE_MEMBER( archimedes_state::a310_kart_rx_w )
+{
+	if(state)
+		archimedes_request_irq_b(ARCHIMEDES_IRQB_KBD_XMIT_EMPTY);
+	else
+		archimedes_clear_irq_b(ARCHIMEDES_IRQB_KBD_XMIT_EMPTY);
+}
+
+static AAKART_INTERFACE( kart_interface )
+{
+	DEVCB_DRIVER_LINE_MEMBER(archimedes_state, a310_kart_tx_w),
+	DEVCB_DRIVER_LINE_MEMBER(archimedes_state, a310_kart_rx_w)
+};
+
 static MACHINE_CONFIG_START( a310, a310_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", ARM, 8000000)        /* 8 MHz */
 	MCFG_CPU_PROGRAM_MAP(a310_mem)
 
-	MCFG_MACHINE_START( a310 )
-	MCFG_MACHINE_RESET( a310 )
-
+	MCFG_AAKART_ADD("kart", 8000000/128, kart_interface) // TODO: frequency
 	MCFG_I2CMEM_ADD("i2cmem",i2cmem_interface)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(1280, 1024) //TODO: default screen size
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 1280 - 1, 0*16, 1024 - 1)
-	MCFG_SCREEN_UPDATE(archimds_vidc)
+	MCFG_SCREEN_UPDATE_DRIVER(archimedes_state, screen_update)
 
 	MCFG_PALETTE_LENGTH(32768)
-
-	MCFG_VIDEO_START(archimds_vidc)
 
 	MCFG_RAM_ADD(RAM_TAG)
 	MCFG_RAM_DEFAULT_SIZE("2M")
@@ -288,7 +321,7 @@ static MACHINE_CONFIG_START( a310, a310_state )
 
 	MCFG_WD1772_ADD("wd1772", a310_wd17xx_interface )
 
-	//MCFG_FLOPPY_4_DRIVES_ADD(a310_floppy_interface)
+	//MCFG_LEGACY_FLOPPY_4_DRIVES_ADD(a310_floppy_interface)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 	MCFG_SOUND_ADD("dac0", DAC, 0)
@@ -333,5 +366,26 @@ ROM_START(a310)
 	ROM_REGION( 0x100, "i2cmem", ROMREGION_ERASE00 )
 ROM_END
 
+ROM_START( a3010 )
+	ROM_REGION( 0x800000, "maincpu", ROMREGION_ERASEFF )
+	ROM_LOAD32_WORD( "0296,061-01.ic4" , 0x000000, 0x100000, CRC(b77fe215) SHA1(57b19ea4b97a9b6a240aa61211c2c134cb295aa0))
+	ROM_LOAD32_WORD( "0296,062-01.ic15", 0x000002, 0x100000, CRC(d42e196e) SHA1(64243d39d1bca38b10761f66a8042c883bde87a4))
+	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x100, "i2cmem", ROMREGION_ERASE00 )
+
+	ROM_REGION( 0x10000, "battery", ROMREGION_ERASE00 )
+	ROM_LOAD( "0296,063-2.ic40", 0x00000, 0x10000, CRC(9ca3a6be) SHA1(75905b031f49960605d55c3e7350d309559ed440))
+ROM_END
+
+ROM_START( a3020 )
+	ROM_REGION( 0x800000, "maincpu", ROMREGION_ERASEFF )
+	ROM_LOAD32_WORD( "riscos_3.11_1.bin", 0x000000, 0x100000, CRC(552fc3aa) SHA1(b2f1911e53d7377f2e69e1a870139745d3df494b))
+	ROM_LOAD32_WORD( "riscos_3.11_2.bin", 0x000002, 0x100000, CRC(308d5a4a) SHA1(b309e1dd85670a06d77ec504dbbec6c42336329f))
+	ROM_REGION( 0x200000, "vram", ROMREGION_ERASE00 )
+	ROM_REGION( 0x100, "i2cmem", ROMREGION_ERASE00 )
+ROM_END
+
 /*    YEAR  NAME  PARENT  COMPAT  MACHINE  INPUT  INIT   COMPANY  FULLNAME */
-COMP( 1988, a310, 0,      0,      a310,    a310,  a310,   "Acorn", "Archimedes 310", GAME_NOT_WORKING)
+COMP( 1988, a310, 0,      0,      a310,    a310, a310_state,  a310,   "Acorn", "Archimedes 310", GAME_NOT_WORKING)
+COMP( 1988, a3010, a310,  0,      a310,    a310, a310_state,  a310,   "Acorn", "Archimedes 3010", GAME_NOT_WORKING)
+COMP( 1988, a3020, a310,  0,      a310,    a310, a310_state,  a310,   "Acorn", "Archimedes 3020", GAME_NOT_WORKING)

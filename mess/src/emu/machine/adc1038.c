@@ -10,168 +10,129 @@
 #include "emu.h"
 #include "adc1038.h"
 
-/***************************************************************************
-    TYPE DEFINITIONS
-***************************************************************************/
 
-typedef struct _adc1038_state adc1038_state;
-struct _adc1038_state
+const device_type ADC1038 = &device_creator<adc1038_device>;
+
+adc1038_device::adc1038_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, ADC1038, "A/D Converters 1038", tag, owner, clock, "adc1038", __FILE__)
 {
-	int cycle;
-	int clk;
-	int adr;
-	int data_in;
-	int data_out;
-	int adc_data;
-	int sars;
-	adc1038_input_read_func input_callback_r;
-
-	int gticlub_hack;
-};
-
-/*****************************************************************************
-    INLINE FUNCTIONS
-*****************************************************************************/
-
-INLINE adc1038_state *adc1038_get_safe_token( device_t *device )
-{
-	assert(device != NULL);
-	assert(device->type() == ADC1038);
-
-	return (adc1038_state *)downcast<legacy_device_base *>(device)->token();
 }
 
-INLINE const adc1038_interface *adc1038_get_interface( device_t *device )
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void adc1038_device::device_config_complete()
 {
-	assert(device != NULL);
-	assert((device->type() == ADC1038));
-	return (const adc1038_interface *) device->static_config();
+	// inherit a copy of the static data
+	const adc1038_interface *intf = reinterpret_cast<const adc1038_interface *>(static_config());
+	if (intf != NULL)
+		*static_cast<adc1038_interface *>(this) = *intf;
+
+	// or initialize to defaults if none provided
+	else
+	{
+		input_callback_r = NULL;
+	}
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void adc1038_device::device_start()
+{
+	m_input_callback_r_func = input_callback_r;
+
+	save_item(NAME(m_cycle));
+	save_item(NAME(m_clk));
+	save_item(NAME(m_adr));
+	save_item(NAME(m_data_in));
+	save_item(NAME(m_data_out));
+	save_item(NAME(m_adc_data));
+	save_item(NAME(m_sars));
+}
+
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void adc1038_device::device_reset()
+{
+	m_cycle = 0;
+	m_clk = 0;
+	m_adr = 0;
+	m_data_in = 0;
+	m_data_out = 0;
+	m_adc_data = 0;
+	m_sars = 1;
 }
 
 /*****************************************************************************
     DEVICE HANDLERS
 *****************************************************************************/
 
-READ_LINE_DEVICE_HANDLER( adc1038_do_read )
+READ_LINE_MEMBER( adc1038_device::do_read )
 {
-	adc1038_state *adc1038 = adc1038_get_safe_token(device);
+	m_data_out = (m_adc_data & 0x200) ? 1 : 0;
+	m_adc_data <<= 1;
 
 	//printf("ADC DO\n");
-	return adc1038->data_out;
+	return m_data_out;
 }
 
-WRITE_LINE_DEVICE_HANDLER( adc1038_di_write )
+WRITE_LINE_MEMBER( adc1038_device::di_write )
 {
-	adc1038_state *adc1038 = adc1038_get_safe_token(device);
-
-	adc1038->data_in = state;
+	m_data_in = state;
 }
 
-WRITE_LINE_DEVICE_HANDLER( adc1038_clk_write )
+WRITE_LINE_MEMBER( adc1038_device::clk_write )
 {
-	adc1038_state *adc1038 = adc1038_get_safe_token(device);
-
 	// GTI Club doesn't sync on SARS
-	if (adc1038->gticlub_hack)
+	if (m_gticlub_hack)
 	{
-		if (adc1038->clk == 0 && state == 0)
+		if (m_clk == 0 && state == 0)
 		{
-			adc1038->cycle = 0;
+			m_cycle = 0;
 
-			/* notice that adc1038->adr is always < 7! */
-			adc1038->adc_data = adc1038->input_callback_r(device, adc1038->adr);
+			/* notice that m_adr is always < 7! */
+			m_adc_data = m_input_callback_r_func(this, m_adr);
 		}
 	}
 
 	if (state == 1)
 	{
-		//printf("ADC CLK, DI = %d, cycle = %d\n", adc1038->data_in, adc1038->cycle);
+		//printf("ADC CLK, DI = %d, cycle = %d\n", m_data_in, m_cycle);
 
-		if (adc1038->cycle == 0)			// A2
+		if (m_cycle == 0)            // A2
 		{
-			adc1038->adr = 0;
-			adc1038->adr |= (adc1038->data_in << 2);
+			m_adr = 0;
+			m_adr |= (m_data_in << 2);
 		}
-		else if (adc1038->cycle == 1)	// A1
+		else if (m_cycle == 1)   // A1
 		{
-			adc1038->adr |= (adc1038->data_in << 1);
+			m_adr |= (m_data_in << 1);
 		}
-		else if (adc1038->cycle == 2)	// A0
+		else if (m_cycle == 2)   // A0
 		{
-			adc1038->adr |= (adc1038->data_in << 0);
+			m_adr |= (m_data_in << 0);
 		}
 
-		adc1038->data_out = (adc1038->adc_data & 0x200) ? 1 : 0;
-		adc1038->adc_data <<= 1;
-
-		adc1038->cycle++;
+		m_cycle++;
 	}
 
-	adc1038->clk = state;
+	m_clk = state;
 }
 
-READ_LINE_DEVICE_HANDLER( adc1038_sars_read )
+READ_LINE_MEMBER( adc1038_device::sars_read )
 {
-	adc1038_state *adc1038 = adc1038_get_safe_token(device);
+	m_cycle = 0;
 
-	adc1038->cycle = 0;
+	/* notice that m_adr is always < 7! */
+	m_adc_data = m_input_callback_r_func(this, m_adr);
 
-	/* notice that adc1038->adr is always < 7! */
-	adc1038->adc_data = adc1038->input_callback_r(device, adc1038->adr);
-
-	adc1038->data_out = (adc1038->adc_data & 0x200) ? 1 : 0;
-	adc1038->adc_data <<= 1;
-
-	adc1038->sars ^= 1;
-	return adc1038->sars;
+	m_sars ^= 1;
+	return m_sars;
 }
-
-
-/*****************************************************************************
-    DEVICE INTERFACE
-*****************************************************************************/
-
-static DEVICE_START( adc1038 )
-{
-	adc1038_state *adc1038 = adc1038_get_safe_token(device);
-	const adc1038_interface *intf = adc1038_get_interface(device);
-
-	adc1038->gticlub_hack = intf->gticlub_hack;
-	adc1038->input_callback_r = intf->input_callback_r;
-
-	device->save_item(NAME(adc1038->cycle));
-	device->save_item(NAME(adc1038->clk));
-	device->save_item(NAME(adc1038->adr));
-	device->save_item(NAME(adc1038->data_in));
-	device->save_item(NAME(adc1038->data_out));
-	device->save_item(NAME(adc1038->adc_data));
-	device->save_item(NAME(adc1038->sars));
-}
-
-static DEVICE_RESET( adc1038 )
-{
-	adc1038_state *adc1038 = adc1038_get_safe_token(device);
-
-	adc1038->cycle = 0;
-	adc1038->clk = 0;
-	adc1038->adr = 0;
-	adc1038->data_in = 0;
-	adc1038->data_out = 0;
-	adc1038->adc_data = 0;
-	adc1038->sars = 1;
-}
-
-/*-------------------------------------------------
-    device definition
--------------------------------------------------*/
-
-static const char DEVTEMPLATE_SOURCE[] = __FILE__;
-
-#define DEVTEMPLATE_ID( p, s )	p##adc1038##s
-#define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_RESET
-#define DEVTEMPLATE_NAME		"A/D Converters 1038"
-#define DEVTEMPLATE_FAMILY		"National Semiconductor A/D Converters 1038"
-#include "devtempl.h"
-
-
-DEFINE_LEGACY_DEVICE(ADC1038, adc1038);

@@ -1,10 +1,14 @@
 #include "video/segaic24.h"
+#include "sound/dac.h"
 
 class segas24_state : public driver_device
 {
 public:
 	segas24_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu"),
+		m_subcpu(*this, "subcpu"),
+		m_dac(*this, "dac")  { }
 
 
 	static const UINT8  mahmajn_mlt[8];
@@ -44,6 +48,9 @@ public:
 	attotime irq_synctime, irq_vsynctime;
 	timer_device *irq_timer;
 	timer_device *irq_timer_clear;
+	//timer_device *irq_frc;
+	timer_device *frc_cnt_timer;
+	UINT8 frc_mode;
 
 	UINT16 *shared_ram;
 	UINT8 (segas24_state::*io_r)(UINT8 port);
@@ -54,6 +61,7 @@ public:
 	segas24_sprite *vsprite;
 	segas24_mixer *vmixer;
 
+	DECLARE_WRITE_LINE_MEMBER(irq_ym);
 	DECLARE_READ16_MEMBER(  sys16_paletteram_r );
 	DECLARE_WRITE16_MEMBER( sys16_paletteram_w );
 	DECLARE_READ16_MEMBER(  irq_r );
@@ -64,6 +72,10 @@ public:
 	DECLARE_WRITE16_MEMBER( fdc_ctrl_w );
 	DECLARE_READ16_MEMBER(  curbank_r );
 	DECLARE_WRITE16_MEMBER( curbank_w );
+	DECLARE_READ8_MEMBER(  frc_mode_r );
+	DECLARE_WRITE8_MEMBER( frc_mode_w );
+	DECLARE_READ8_MEMBER(  frc_r );
+	DECLARE_WRITE8_MEMBER( frc_w );
 	DECLARE_READ16_MEMBER(  mlatch_r );
 	DECLARE_WRITE16_MEMBER( mlatch_w );
 	DECLARE_READ16_MEMBER(  hotrod3_ctrl_r );
@@ -87,14 +99,30 @@ public:
 	void irq_timer_sync();
 	void irq_timer_start(int old_tmode);
 	void reset_control_w(UINT8 data);
+	DECLARE_DRIVER_INIT(crkdown);
+	DECLARE_DRIVER_INIT(quizmeku);
+	DECLARE_DRIVER_INIT(qrouka);
+	DECLARE_DRIVER_INIT(roughrac);
+	DECLARE_DRIVER_INIT(qgh);
+	DECLARE_DRIVER_INIT(gground);
+	DECLARE_DRIVER_INIT(mahmajn2);
+	DECLARE_DRIVER_INIT(sspiritj);
+	DECLARE_DRIVER_INIT(mahmajn);
+	DECLARE_DRIVER_INIT(hotrod);
+	DECLARE_DRIVER_INIT(sspirits);
+	DECLARE_DRIVER_INIT(dcclub);
+	DECLARE_DRIVER_INIT(bnzabros);
+	DECLARE_DRIVER_INIT(dcclubfd);
+	DECLARE_DRIVER_INIT(qsww);
+	DECLARE_DRIVER_INIT(sgmast);
+	virtual void machine_start();
+	virtual void machine_reset();
+	UINT32 screen_update_system24(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	TIMER_DEVICE_CALLBACK_MEMBER(irq_timer_cb);
+	TIMER_DEVICE_CALLBACK_MEMBER(irq_timer_clear_cb);
+	TIMER_DEVICE_CALLBACK_MEMBER(irq_frc_cb);
+	TIMER_DEVICE_CALLBACK_MEMBER(irq_vbl);
+	required_device<cpu_device> m_maincpu;
+	required_device<cpu_device> m_subcpu;
+	required_device<dac_device> m_dac;
 };
-
-/*----------- defined in machine/s24fd.c -----------*/
-
-extern void s24_fd1094_machine_init(running_machine &machine);
-extern void s24_fd1094_driver_init(running_machine &machine);
-
-
-/*----------- defined in video/segas24.c -----------*/
-
-SCREEN_UPDATE(system24);

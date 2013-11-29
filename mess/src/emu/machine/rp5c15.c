@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     Ricoh RP5C15 Real Time Clock emulation
@@ -72,10 +74,6 @@ static const int REGISTER_WRITE_MASK[2][16] =
 };
 
 
-// days per month
-static const int DAYS_PER_MONTH[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-
-
 // modes
 enum
 {
@@ -85,23 +83,23 @@ enum
 
 
 // mode register
-#define MODE_MASK			0x01
-#define MODE_ALARM_EN		0x04
-#define MODE_TIMER_EN		0x08
+#define MODE_MASK           0x01
+#define MODE_ALARM_EN       0x04
+#define MODE_TIMER_EN       0x08
 
 
 // test register
-#define TEST_0				0x01
-#define TEST_1				0x02
-#define TEST_2				0x04
-#define TEST_3				0x08
+#define TEST_0              0x01
+#define TEST_1              0x02
+#define TEST_2              0x04
+#define TEST_3              0x08
 
 
 // reset register
-#define RESET_ALARM			0x01
-#define RESET_TIMER			0x02
-#define RESET_16_HZ			0x04
-#define RESET_1_HZ			0x08
+#define RESET_ALARM         0x01
+#define RESET_TIMER         0x02
+#define RESET_16_HZ         0x04
+#define RESET_1_HZ          0x08
 
 
 
@@ -160,111 +158,6 @@ inline void rp5c15_device::write_counter(int counter, int value)
 
 
 //-------------------------------------------------
-//  advance_seconds -
-//-------------------------------------------------
-
-inline void rp5c15_device::advance_seconds()
-{
-	int seconds = read_counter(REGISTER_1_SECOND);
-
-	seconds++;
-
-	if (seconds > 59)
-	{
-		seconds = 0;
-
-		advance_minutes();
-	}
-
-	write_counter(REGISTER_1_SECOND, seconds);
-}
-
-
-//-------------------------------------------------
-//  advance_minutes -
-//-------------------------------------------------
-
-inline void rp5c15_device::advance_minutes()
-{
-	int minutes = read_counter(REGISTER_1_MINUTE);
-	int hours = read_counter(REGISTER_1_HOUR);
-	int days = read_counter(REGISTER_1_DAY);
-	int month = read_counter(REGISTER_1_MONTH);
-	int year = read_counter(REGISTER_1_YEAR);
-	int day_of_week = m_reg[MODE00][REGISTER_DAY_OF_THE_WEEK];
-
-	minutes++;
-
-	if (minutes > 59)
-	{
-		minutes = 0;
-		hours++;
-	}
-
-	if (hours > 23)
-	{
-		hours = 0;
-		days++;
-		day_of_week++;
-	}
-
-	if (day_of_week > 6)
-	{
-		day_of_week++;
-	}
-
-	if (days > DAYS_PER_MONTH[month - 1])
-	{
-		days = 1;
-		month++;
-	}
-
-	if (month > 12)
-	{
-		month = 1;
-		year++;
-		m_reg[MODE01][REGISTER_LEAP_YEAR]++;
-		m_reg[MODE01][REGISTER_LEAP_YEAR] &= 0x03;
-	}
-
-	if (year > 99)
-	{
-		year = 0;
-	}
-
-	write_counter(REGISTER_1_MINUTE, minutes);
-	write_counter(REGISTER_1_HOUR, hours);
-	write_counter(REGISTER_1_DAY, days);
-	write_counter(REGISTER_1_MONTH, month);
-	write_counter(REGISTER_1_YEAR, year);
-	m_reg[MODE00][REGISTER_DAY_OF_THE_WEEK] = day_of_week;
-
-	check_alarm();
-	set_alarm_line();
-}
-
-
-//-------------------------------------------------
-//  adjust_seconds -
-//-------------------------------------------------
-
-inline void rp5c15_device::adjust_seconds()
-{
-	int seconds = read_counter(REGISTER_1_SECOND);
-
-	if (seconds < 30)
-	{
-		write_counter(REGISTER_1_SECOND, 0);
-	}
-	else
-	{
-		write_counter(REGISTER_1_SECOND, 0);
-		advance_minutes();
-	}
-}
-
-
-//-------------------------------------------------
 //  check_alarm -
 //-------------------------------------------------
 
@@ -293,13 +186,13 @@ inline void rp5c15_device::check_alarm()
 //-------------------------------------------------
 
 rp5c15_device::rp5c15_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, RP5C15, "RP5C15", tag, owner, clock),
-	  device_rtc_interface(mconfig, *this),
-	  m_alarm(1),
-	  m_alarm_on(1),
-	  m_1hz(1),
-	  m_16hz(1),
-	  m_clkout(1)
+	: device_t(mconfig, RP5C15, "RP5C15", tag, owner, clock, "rp5c15", __FILE__),
+		device_rtc_interface(mconfig, *this),
+		m_alarm(1),
+		m_alarm_on(1),
+		m_1hz(1),
+		m_16hz(1),
+		m_clkout(1)
 {
 }
 
@@ -345,6 +238,16 @@ void rp5c15_device::device_start()
 
 	m_clkout_timer = timer_alloc(TIMER_CLKOUT);
 
+	memset(m_reg, 0, sizeof(m_reg));
+	memset(m_ram, 0, sizeof(m_ram));
+	m_mode = 0;
+	m_reset = 0;
+	m_alarm = 0;
+	m_alarm_on = 0;
+	m_1hz = 0;
+	m_16hz = 0;
+	m_clkout = 0;
+
 	// state saving
 	save_item(NAME(m_reg[MODE00]));
 	save_item(NAME(m_reg[MODE01]));
@@ -355,6 +258,16 @@ void rp5c15_device::device_start()
 	save_item(NAME(m_1hz));
 	save_item(NAME(m_16hz));
 	save_item(NAME(m_clkout));
+}
+
+
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void rp5c15_device::device_reset()
+{
+	set_current_time(machine());
 }
 
 
@@ -390,12 +303,12 @@ void rp5c15_device::device_timer(emu_timer &timer, device_timer_id id, int param
 
 
 //-------------------------------------------------
-//  rtc_set_time - called to initialize the RTC to
-//  a known state
+//  rtc_clock_updated -
 //-------------------------------------------------
 
-void rp5c15_device::rtc_set_time(int year, int month, int day, int day_of_week, int hour, int minute, int second)
+void rp5c15_device::rtc_clock_updated(int year, int month, int day, int day_of_week, int hour, int minute, int second)
 {
+	m_reg[MODE01][REGISTER_LEAP_YEAR] = year % 4;
 	write_counter(REGISTER_1_YEAR, year);
 	write_counter(REGISTER_1_MONTH, month);
 	write_counter(REGISTER_1_DAY, day);
@@ -403,6 +316,9 @@ void rp5c15_device::rtc_set_time(int year, int month, int day, int day_of_week, 
 	write_counter(REGISTER_1_HOUR, hour);
 	write_counter(REGISTER_1_MINUTE, minute);
 	write_counter(REGISTER_1_SECOND, second);
+
+	check_alarm();
+	set_alarm_line();
 }
 
 
@@ -489,6 +405,9 @@ WRITE8_MEMBER( rp5c15_device::write )
 		{
 		case MODE00:
 			m_reg[mode][offset & 0x0f] = data & REGISTER_WRITE_MASK[mode][offset & 0x0f];
+
+			set_time(false, read_counter(REGISTER_1_YEAR), read_counter(REGISTER_1_MONTH), read_counter(REGISTER_1_DAY), m_reg[MODE00][REGISTER_DAY_OF_THE_WEEK],
+				read_counter(REGISTER_1_HOUR), read_counter(REGISTER_1_MINUTE), read_counter(REGISTER_1_SECOND));
 			break;
 
 		case MODE01:

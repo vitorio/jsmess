@@ -9,8 +9,13 @@ class stopthie_state : public driver_device
 {
 public:
 	stopthie_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu") { }
 
+	DECLARE_READ8_MEMBER(stopthie_read_k);
+	DECLARE_WRITE16_MEMBER(stopthie_write_o);
+	DECLARE_WRITE16_MEMBER(stopthie_write_r);
+	required_device<cpu_device> m_maincpu;
 };
 
 
@@ -21,7 +26,7 @@ static INPUT_PORTS_START( stopthie )
 INPUT_PORTS_END
 
 
-static READ8_DEVICE_HANDLER( stopthie_read_k )
+READ8_MEMBER(stopthie_state::stopthie_read_k)
 {
 	UINT8 data = 0xFF;
 
@@ -32,39 +37,36 @@ static READ8_DEVICE_HANDLER( stopthie_read_k )
 }
 
 
-static WRITE16_DEVICE_HANDLER( stopthie_write_o )
+WRITE16_MEMBER(stopthie_state::stopthie_write_o)
 {
 	if (LOG)
 		logerror( "stopthie_write_o: write %02x\n", data );
 }
 
 
-static WRITE16_DEVICE_HANDLER( stopthie_write_r )
+WRITE16_MEMBER(stopthie_state::stopthie_write_r)
 {
 	if (LOG)
 		logerror( "stopthie_write_r: write %04x\n", data );
 }
 
 
-static const tms0980_config stopthie_tms0980_config =
+static const UINT16 stopthie_output_pla[0x20] =
 {
-	{
-		/* O output PLA configuration currently unknown */
-		{ 0x01, 0x01 }, { 0x02, 0x02 }, { 0x03, 0x03 }, { 0x04, 0x04 },
-		{ 0x05, 0x05 }, { 0x06, 0x06 }, { 0x07, 0x07 }, { 0x08, 0x08 },
-		{ 0x09, 0x09 }, { 0x0a, 0x0a }, { 0x0b, 0x0b }, { 0x0c, 0x0c },
-		{ 0x0d, 0x0d }, { 0x0e, 0x0e }, { 0x0f, 0x0f }, { 0x10, 0x10 },
-		{ 0x11, 0x11 }, { 0x12, 0x12 }, { 0x13, 0x13 }, { 0x14, 0x14 }
-	},
-	stopthie_read_k,
-	stopthie_write_o,
-	stopthie_write_r
+	/* O output PLA configuration currently unknown */
+	0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00,
+	0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00,
+	0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00,
+	0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0xFF00,
 };
 
 
 static MACHINE_CONFIG_START( stopthie, stopthie_state )
-	MCFG_CPU_ADD( "maincpu", TMS0980, 5000000 )	/* Clock is wrong */
-	MCFG_CPU_CONFIG( stopthie_tms0980_config )
+	MCFG_CPU_ADD( "maincpu", TMS0980, 5000000 ) /* Clock is wrong */
+	MCFG_TMS1XXX_OUTPUT_PLA( stopthie_output_pla )
+	MCFG_TMS1XXX_READ_K( READ8( stopthie_state, stopthie_read_k ) )
+	MCFG_TMS1XXX_WRITE_O( WRITE16( stopthie_state, stopthie_write_o ) )
+	MCFG_TMS1XXX_WRITE_R( WRITE16( stopthie_state, stopthie_write_r ) )
 
 	MCFG_DEFAULT_LAYOUT(layout_stopthie)
 MACHINE_CONFIG_END
@@ -82,5 +84,4 @@ ROM_END
 ***************************************************************************/
 
 /*    YEAR  NAME        PARENT  COMPAT  MACHINE     INPUT   INIT    COMPANY            FULLNAME      FLAGS */
-CONS( 1979, stopthie,   0,      0,      stopthie,   stopthie,  0,      "Parker Brothers", "Stop Thief", GAME_NOT_WORKING | GAME_NO_SOUND)
-
+CONS( 1979, stopthie,   0,      0,      stopthie,   stopthie, driver_device,  0,      "Parker Brothers", "Stop Thief", GAME_NOT_WORKING | GAME_NO_SOUND)

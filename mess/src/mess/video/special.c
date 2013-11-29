@@ -7,54 +7,47 @@
 ****************************************************************************/
 
 
-#include "emu.h"
 #include "includes/special.h"
-#include "machine/ram.h"
 
 
-
-VIDEO_START( special )
+VIDEO_START_MEMBER(special_state,special)
 {
+	palette_set_color(machine(),0,RGB_BLACK); /* black */
+	palette_set_color(machine(),1,RGB_WHITE); /* white */
 }
 
-SCREEN_UPDATE( special )
+UINT32 special_state::screen_update_special(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	special_state *state = screen->machine().driver_data<special_state>();
-  UINT8 code;
+	UINT8 code;
 	int y, x, b;
 
 	for (x = 0; x < 48; x++)
 	{
 		for (y = 0; y < 256; y++)
 		{
-			code = state->m_specialist_video_ram[y + x*256];
+			code = m_p_videoram[y + x*256];
 			for (b = 7; b >= 0; b--)
-			{
-				*BITMAP_ADDR16(bitmap, y, x*8+(7-b)) =  (code >> b) & 0x01;
-			}
+				bitmap.pix16(y, x*8+(7-b)) =  (code >> b) & 0x01;
 		}
 	}
 	return 0;
 }
-VIDEO_START( specialp )
+VIDEO_START_MEMBER(special_state,specialp)
 {
 }
 
-SCREEN_UPDATE( specialp )
+UINT32 special_state::screen_update_specialp(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	special_state *state = screen->machine().driver_data<special_state>();
-  UINT8 code;
+	UINT8 code;
 	int y, x, b;
 
 	for (x = 0; x < 64; x++)
 	{
 		for (y = 0; y < 256; y++)
 		{
-			code = state->m_specialist_video_ram[y + x*256];
+			code = m_p_videoram[y + x*256];
 			for (b = 7; b >= 0; b--)
-			{
-				*BITMAP_ADDR16(bitmap, y, x*8+(7-b)) =  (code >> b) & 0x01;
-			}
+				bitmap.pix16(y, x*8+(7-b)) =  (code >> b) & 0x01;
 		}
 	}
 	return 0;
@@ -77,39 +70,33 @@ const rgb_t specimx_palette[16] = {
 	MAKE_RGB(0xff, 0x55, 0x55), // C
 	MAKE_RGB(0xff, 0x55, 0xff), // D
 	MAKE_RGB(0xff, 0xff, 0x55), // E
-	MAKE_RGB(0xff, 0xff, 0xff)	// F
+	MAKE_RGB(0xff, 0xff, 0xff)  // F
 };
 
-PALETTE_INIT( specimx )
+PALETTE_INIT_MEMBER(special_state,specimx)
 {
-	palette_set_colors(machine, 0, specimx_palette, ARRAY_LENGTH(specimx_palette));
+	palette_set_colors(machine(), 0, specimx_palette, ARRAY_LENGTH(specimx_palette));
 }
 
 
-VIDEO_START( specimx )
+VIDEO_START_MEMBER(special_state,specimx)
 {
-	special_state *state = machine.driver_data<special_state>();
-	state->m_specimx_colorram = auto_alloc_array(machine, UINT8, 0x3000);
-	memset(state->m_specimx_colorram,0x70,0x3000);
+	m_specimx_colorram = auto_alloc_array(machine(), UINT8, 0x3000);
 }
 
-SCREEN_UPDATE( specimx )
+UINT32 special_state::screen_update_specimx(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	special_state *state = screen->machine().driver_data<special_state>();
-	UINT8 code,color;
+	UINT8 code, color;
 	int y, x, b;
 
 	for (x = 0; x < 48; x++)
 	{
 		for (y = 0; y < 256; y++)
 		{
-			code = ram_get_ptr(screen->machine().device(RAM_TAG))[0x9000 + y + x*256];
-			color = state->m_specimx_colorram[y + x*256];
+			code = m_ram->pointer()[0x9000 + y + x*256];
+			color = m_specimx_colorram[y + x*256];
 			for (b = 7; b >= 0; b--)
-			{
-
-				*BITMAP_ADDR16(bitmap, y, x*8+(7-b)) =  ((code >> b) & 0x01)==0 ? color & 0x0f : (color >> 4)& 0x0f ;
-			}
+				bitmap.pix16(y, x*8+(7-b)) =  ((code >> b) & 0x01)==0 ? color & 0x0f : (color >> 4)& 0x0f ;
 		}
 	}
 	return 0;
@@ -126,28 +113,24 @@ static const rgb_t erik_palette[8] = {
 	MAKE_RGB(0xff, 0xff, 0xff)  // 7
 };
 
-PALETTE_INIT( erik )
+PALETTE_INIT_MEMBER(special_state,erik)
 {
-	palette_set_colors(machine, 0, erik_palette, ARRAY_LENGTH(erik_palette));
+	palette_set_colors(machine(), 0, erik_palette, ARRAY_LENGTH(erik_palette));
 }
 
 
-VIDEO_START( erik )
+VIDEO_START_MEMBER(special_state,erik)
 {
 }
 
-SCREEN_UPDATE( erik )
+UINT32 special_state::screen_update_erik(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	special_state *state = screen->machine().driver_data<special_state>();
-  UINT8 code1;
-  UINT8 code2;
-  UINT8 color1,color2;
+	UINT8 code1, code2, color1, color2;
 	int y, x, b;
-	UINT8 *erik_video_ram_p1;
-	UINT8 *erik_video_ram_p2;
+	UINT8 *erik_video_ram_p1, *erik_video_ram_p2;
 
-	erik_video_ram_p1 =  ram_get_ptr(screen->machine().device(RAM_TAG)) + 0x9000;
-	erik_video_ram_p2 =  ram_get_ptr(screen->machine().device(RAM_TAG)) + 0xd000;
+	erik_video_ram_p1 = m_ram->pointer() + 0x9000;
+	erik_video_ram_p2 = m_ram->pointer() + 0xd000;
 
 	for (x = 0; x < 48; x++)
 	{
@@ -158,13 +141,11 @@ SCREEN_UPDATE( erik )
 
 			for (b = 7; b >= 0; b--)
 			{
-				color1 = ((code1 >> b) & 0x01)==0 ? state->m_erik_background : state->m_erik_color_1;
-				color2 = ((code2 >> b) & 0x01)==0 ? state->m_erik_background : state->m_erik_color_2;
-				*BITMAP_ADDR16(bitmap, y, x*8+(7-b)) =  color1 | color2;
+				color1 = ((code1 >> b) & 0x01)==0 ? m_erik_background : m_erik_color_1;
+				color2 = ((code2 >> b) & 0x01)==0 ? m_erik_background : m_erik_color_2;
+				bitmap.pix16(y, x*8+(7-b)) =  color1 | color2;
 			}
 		}
 	}
 	return 0;
 }
-
-

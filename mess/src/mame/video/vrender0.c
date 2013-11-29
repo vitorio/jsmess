@@ -1,6 +1,7 @@
 #include "emu.h"
 #include "vrender0.h"
 
+
 /***********************************
         VRENDER ZERO
         VIDEO EMULATION By ElSemi
@@ -14,16 +15,90 @@
     color.
 
 ************************************/
-/*************
-Missing:
 
 
-**************/
+/*****************************************************************************
+ DEVICE INTERFACE
+ *****************************************************************************/
 
-typedef struct
+const device_type VIDEO_VRENDER0 = &device_creator<vr0video_device>;
+
+vr0video_device::vr0video_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, VIDEO_VRENDER0, "VRender0 Video", tag, owner, clock, "vr0video", __FILE__)
+{
+}
+
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void vr0video_device::device_config_complete()
+{
+	// inherit a copy of the static data
+	const vr0video_interface *intf = reinterpret_cast<const vr0video_interface *>(static_config());
+	if (intf != NULL)
+		*static_cast<vr0video_interface *>(this) = *intf;
+
+	// or initialize to defaults if none provided
+	else
+	{
+		m_cpu_tag = "";
+	}
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void vr0video_device::device_start()
+{
+	m_cpu = machine().device(m_cpu_tag);
+
+	save_item(NAME(m_InternalPalette));
+	save_item(NAME(m_LastPalUpdate));
+
+	save_item(NAME(m_RenderState.Tx));
+	save_item(NAME(m_RenderState.Ty));
+	save_item(NAME(m_RenderState.Txdx));
+	save_item(NAME(m_RenderState.Tydx));
+	save_item(NAME(m_RenderState.Txdy));
+	save_item(NAME(m_RenderState.Tydy));
+	save_item(NAME(m_RenderState.SrcAlphaColor));
+	save_item(NAME(m_RenderState.SrcBlend));
+	save_item(NAME(m_RenderState.DstAlphaColor));
+	save_item(NAME(m_RenderState.DstBlend));
+	save_item(NAME(m_RenderState.ShadeColor));
+	save_item(NAME(m_RenderState.TransColor));
+	save_item(NAME(m_RenderState.TileOffset));
+	save_item(NAME(m_RenderState.FontOffset));
+	save_item(NAME(m_RenderState.PalOffset));
+	save_item(NAME(m_RenderState.PaletteBank));
+	save_item(NAME(m_RenderState.TextureMode));
+	save_item(NAME(m_RenderState.PixelFormat));
+	save_item(NAME(m_RenderState.Width));
+	save_item(NAME(m_RenderState.Height));
+}
+
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void vr0video_device::device_reset()
+{
+	memset(m_InternalPalette, 0, sizeof(m_InternalPalette));
+	m_LastPalUpdate = 0xffffffff;
+}
+
+/*****************************************************************************
+ IMPLEMENTATION
+ *****************************************************************************/
+
+struct QuadInfo
 {
 	UINT16 *Dest;
-	UINT32 Pitch;	//in UINT16s
+	UINT32 Pitch;   //in UINT16s
 	UINT32 w,h;
 	UINT32 Tx;
 	UINT32 Ty;
@@ -48,73 +123,14 @@ typedef struct
 	UINT32 SrcColor;
 	UINT8 DstAlpha;
 	UINT32 DstColor;
-} _Quad;
-
-typedef struct
-{
-	UINT32 Tx;
-	UINT32 Ty;
-	UINT32 Txdx;
-	UINT32 Tydx;
-	UINT32 Txdy;
-	UINT32 Tydy;
-	UINT32 SrcAlphaColor;
-	UINT32 SrcBlend;
-	UINT32 DstAlphaColor;
-	UINT32 DstBlend;
-	UINT32 ShadeColor;
-	UINT32 TransColor;
-	UINT32 TileOffset;
-	UINT32 FontOffset;
-	UINT32 PalOffset;
-	UINT32 PaletteBank;
-	UINT32 TextureMode;
-	UINT32 PixelFormat;
-	UINT32 Width;
-	UINT32 Height;
-} _RenderState;
-
-typedef struct _vr0video_state  vr0video_state;
-struct _vr0video_state
-{
-	device_t *cpu;
-
-	UINT16 InternalPalette[256];
-	UINT32 LastPalUpdate;
-
-	_RenderState RenderState;
 };
-
-
-/*****************************************************************************
- INLINE FUNCTIONS
- *****************************************************************************/
-
-INLINE vr0video_state *get_safe_token( device_t *device )
-{
-	assert(device != NULL);
-	assert(device->type() == VIDEO_VRENDER0);
-
-	return (vr0video_state *)downcast<legacy_device_base *>(device)->token();
-}
-
-INLINE const vr0video_interface *get_interface( device_t *device )
-{
-	assert(device != NULL);
-	assert(device->type() == VIDEO_VRENDER0);
-	return (const vr0video_interface *) device->static_config();
-}
-
-/*****************************************************************************
- IMPLEMENTATION
- *****************************************************************************/
 
 /*
 Pick a rare enough color to disable transparency (that way I save a cmp per loop to check
 if I must draw transparent or not. The palette build will take this color in account so
 no color in the palette will have this value
 */
-#define NOTRANSCOLOR	0xecda
+#define NOTRANSCOLOR    0xecda
 
 #define RGB32(r,g,b) ((r << 16) | (g << 8) | (b << 0))
 #define RGB16(r,g,b) ((r & 0xf8) << 8) | ((g & 0xfc) << 3) | ((b & 0xf8) >> 3)
@@ -124,9 +140,9 @@ INLINE UINT16 RGB32TO16(UINT32 rgb)
 	return (((rgb >> (16 + 3)) & 0x1f) << 11) | (((rgb >> (8 + 2)) & 0x3f) << 5) | (((rgb >> (3)) & 0x1f) << 0);
 }
 
-#define EXTRACTR8(Src)	(((Src >> 11) << 3) & 0xff)
-#define EXTRACTG8(Src)	(((Src >>  5) << 2) & 0xff)
-#define EXTRACTB8(Src)	(((Src >>  0) << 3) & 0xff)
+#define EXTRACTR8(Src)  (((Src >> 11) << 3) & 0xff)
+#define EXTRACTG8(Src)  (((Src >>  5) << 2) & 0xff)
+#define EXTRACTB8(Src)  (((Src >>  0) << 3) & 0xff)
 
 INLINE UINT16 Shade(UINT16 Src, UINT32 Shade)
 {
@@ -136,7 +152,7 @@ INLINE UINT16 Shade(UINT16 Src, UINT32 Shade)
 	return RGB16(scr, scg, scb);
 }
 
-static UINT16 Alpha(_Quad *Quad, UINT16 Src, UINT16 Dst)
+static UINT16 Alpha(QuadInfo *Quad, UINT16 Src, UINT16 Dst)
 {
 	UINT32 scr = (EXTRACTR8(Src) * ((Quad->Shade >> 16) & 0xff)) >> 8;
 	UINT32 scg = (EXTRACTG8(Src) * ((Quad->Shade >>  8) & 0xff)) >> 8;
@@ -239,7 +255,7 @@ static UINT16 Alpha(_Quad *Quad, UINT16 Src, UINT16 Dst)
 }
 
 #define TILENAME(bpp, t, a) \
-static void DrawQuad##bpp##t##a(_Quad *Quad)
+static void DrawQuad##bpp##t##a(QuadInfo *Quad)
 
 //TRUST ON THE COMPILER OPTIMIZATIONS
 #define TILETEMPL(bpp, t, a) \
@@ -323,8 +339,7 @@ Clamped:\
 		y_tx += Quad->Txdy;\
 		y_ty += Quad->Tydy;\
 	}\
-}\
-
+}
 TILETEMPL(16,0,0) TILETEMPL(16,0,1) TILETEMPL(16,0,2)
 TILETEMPL(16,1,0) TILETEMPL(16,1,1) TILETEMPL(16,1,2)
 
@@ -339,7 +354,7 @@ TILETEMPL(4,1,0) TILETEMPL(4,1,1) TILETEMPL(4,1,2)
 DrawQuad##bpp##t##a
 
 
-static void DrawQuadFill(_Quad *Quad)
+static void DrawQuadFill(QuadInfo *Quad)
 {
 	UINT32 x, y;
 	UINT16 *line = Quad->Dest;
@@ -359,7 +374,7 @@ static void DrawQuadFill(_Quad *Quad)
 	}
 }
 
-typedef void (*_DrawTemplate)(_Quad *);
+typedef void (*_DrawTemplate)(QuadInfo *);
 
 static const _DrawTemplate DrawImage[]=
 {
@@ -397,13 +412,12 @@ static const _DrawTemplate DrawTile[]=
 	TILENAME(16,1,2),
 };
 
-#define Packet(i) space->read_word(PacketPtr + 2 * i)
+#define Packet(i) space.read_word(PacketPtr + 2 * i)
 
 //Returns TRUE if the operation was a flip (sync or async)
-int vrender0_ProcessPacket(device_t *device, UINT32 PacketPtr, UINT16 *Dest, UINT8 *TEXTURE)
+int vr0video_device::vrender0_ProcessPacket(UINT32 PacketPtr, UINT16 *Dest, UINT8 *TEXTURE)
 {
-	vr0video_state *vr0 = get_safe_token(device);
-	address_space *space = vr0->cpu->memory().space(AS_PROGRAM);
+	address_space &space = m_cpu->memory().space(AS_PROGRAM);
 	UINT32 Dx = Packet(1) & 0x3ff;
 	UINT32 Dy = Packet(2) & 0x1ff;
 	UINT32 Endx = Packet(3) & 0x3ff;
@@ -411,83 +425,83 @@ int vrender0_ProcessPacket(device_t *device, UINT32 PacketPtr, UINT16 *Dest, UIN
 	UINT32 Mode = 0;
 	UINT16 Packet0 = Packet(0);
 
-	if (Packet0 & 0x81)	//Sync or ASync flip
+	if (Packet0 & 0x81) //Sync or ASync flip
 	{
-		vr0->LastPalUpdate = 0xffffffff;	//Force update palette next frame
+		m_LastPalUpdate = 0xffffffff;    //Force update palette next frame
 		return 1;
 	}
 
 	if (Packet0 & 0x200)
 	{
-		vr0->RenderState.Tx = Packet(5) | ((Packet(6) & 0x1f) << 16);
-		vr0->RenderState.Ty = Packet(7) | ((Packet(8) & 0x1f) << 16);
+		m_RenderState.Tx = Packet(5) | ((Packet(6) & 0x1f) << 16);
+		m_RenderState.Ty = Packet(7) | ((Packet(8) & 0x1f) << 16);
 	}
 	else
 	{
-		vr0->RenderState.Tx = 0;
-		vr0->RenderState.Ty = 0;
+		m_RenderState.Tx = 0;
+		m_RenderState.Ty = 0;
 	}
 	if (Packet0 & 0x400)
 	{
-		vr0->RenderState.Txdx = Packet(9)  | ((Packet(10) & 0x1f) << 16);
-		vr0->RenderState.Tydx = Packet(11) | ((Packet(12) & 0x1f) << 16);
-		vr0->RenderState.Txdy = Packet(13) | ((Packet(14) & 0x1f) << 16);
-		vr0->RenderState.Tydy = Packet(15) | ((Packet(16) & 0x1f) << 16);
+		m_RenderState.Txdx = Packet(9)  | ((Packet(10) & 0x1f) << 16);
+		m_RenderState.Tydx = Packet(11) | ((Packet(12) & 0x1f) << 16);
+		m_RenderState.Txdy = Packet(13) | ((Packet(14) & 0x1f) << 16);
+		m_RenderState.Tydy = Packet(15) | ((Packet(16) & 0x1f) << 16);
 	}
 	else
 	{
-		vr0->RenderState.Txdx = 1 << 9;
-		vr0->RenderState.Tydx = 0;
-		vr0->RenderState.Txdy = 0;
-		vr0->RenderState.Tydy = 1 << 9;
+		m_RenderState.Txdx = 1 << 9;
+		m_RenderState.Tydx = 0;
+		m_RenderState.Txdy = 0;
+		m_RenderState.Tydy = 1 << 9;
 	}
 	if (Packet0 & 0x800)
 	{
-		vr0->RenderState.SrcAlphaColor = Packet(17) | ((Packet(18) & 0xff) << 16);
-		vr0->RenderState.SrcBlend = (Packet(18) >> 8) & 0x3f;
-		vr0->RenderState.DstAlphaColor = Packet(19) | ((Packet(20) & 0xff) << 16);
-		vr0->RenderState.DstBlend = (Packet(20) >> 8) & 0x3f;
+		m_RenderState.SrcAlphaColor = Packet(17) | ((Packet(18) & 0xff) << 16);
+		m_RenderState.SrcBlend = (Packet(18) >> 8) & 0x3f;
+		m_RenderState.DstAlphaColor = Packet(19) | ((Packet(20) & 0xff) << 16);
+		m_RenderState.DstBlend = (Packet(20) >> 8) & 0x3f;
 	}
 	if (Packet0 & 0x1000)
-		vr0->RenderState.ShadeColor = Packet(21) | ((Packet(22) & 0xff) << 16);
+		m_RenderState.ShadeColor = Packet(21) | ((Packet(22) & 0xff) << 16);
 	if (Packet0 & 0x2000)
-		vr0->RenderState.TransColor = Packet(23) | ((Packet(24) & 0xff) << 16);
+		m_RenderState.TransColor = Packet(23) | ((Packet(24) & 0xff) << 16);
 	if (Packet0 & 0x4000)
 	{
-		vr0->RenderState.TileOffset = Packet(25);
-		vr0->RenderState.FontOffset = Packet(26);
-		vr0->RenderState.PalOffset = Packet(27) >> 3;
-		vr0->RenderState.PaletteBank = (Packet(28) >> 8) & 0xf;
-		vr0->RenderState.TextureMode = Packet(28) & 0x1000;
-		vr0->RenderState.PixelFormat = (Packet(28) >> 6) & 3;
-		vr0->RenderState.Width  = 8 << ((Packet(28) >> 0) & 0x7);
-		vr0->RenderState.Height = 8 << ((Packet(28) >> 3) & 0x7);
+		m_RenderState.TileOffset = Packet(25);
+		m_RenderState.FontOffset = Packet(26);
+		m_RenderState.PalOffset = Packet(27) >> 3;
+		m_RenderState.PaletteBank = (Packet(28) >> 8) & 0xf;
+		m_RenderState.TextureMode = Packet(28) & 0x1000;
+		m_RenderState.PixelFormat = (Packet(28) >> 6) & 3;
+		m_RenderState.Width  = 8 << ((Packet(28) >> 0) & 0x7);
+		m_RenderState.Height = 8 << ((Packet(28) >> 3) & 0x7);
 	}
 
-	if (Packet0 & 0x40 && vr0->RenderState.PalOffset != vr0->LastPalUpdate)
+	if (Packet0 & 0x40 && m_RenderState.PalOffset != m_LastPalUpdate)
 	{
-		UINT32 *Pal = (UINT32*) (TEXTURE + 1024 * vr0->RenderState.PalOffset);
-		UINT16 Trans = RGB32TO16(vr0->RenderState.TransColor);
+		UINT32 *Pal = (UINT32*) (TEXTURE + 1024 * m_RenderState.PalOffset);
+		UINT16 Trans = RGB32TO16(m_RenderState.TransColor);
 		int i;
 		for (i = 0; i < 256; ++i)
 		{
 			UINT32 p = Pal[i];
 			UINT16 v = RGB32TO16(p);
-			if ((v == Trans && p != vr0->RenderState.TransColor) || v == NOTRANSCOLOR)	//Error due to conversion. caused transparent
+			if ((v == Trans && p != m_RenderState.TransColor) || v == NOTRANSCOLOR)  //Error due to conversion. caused transparent
 			{
 				if ((v & 0x1f) != 0x1f)
-					v++;									//Make the color a bit different (blueish) so it's not
+					v++;                                    //Make the color a bit different (blueish) so it's not
 				else
 					v--;
 			}
-			vr0->InternalPalette[i] = v;						//made transparent by mistake
+			m_InternalPalette[i] = v;                        //made transparent by mistake
 		}
-		vr0->LastPalUpdate = vr0->RenderState.PalOffset;
+		m_LastPalUpdate = m_RenderState.PalOffset;
 	}
 
 	if (Packet0 & 0x100)
 	{
-		_Quad Quad;
+		QuadInfo Quad;
 
 		Quad.Pitch = 512;
 
@@ -495,10 +509,10 @@ int vrender0_ProcessPacket(device_t *device, UINT32 PacketPtr, UINT16 *Dest, UIN
 
 		if (Packet0 & 2)
 		{
-			Quad.SrcAlpha = vr0->RenderState.SrcBlend;
-			Quad.DstAlpha = vr0->RenderState.DstBlend;
-			Quad.SrcColor = vr0->RenderState.SrcAlphaColor;
-			Quad.DstColor = vr0->RenderState.DstAlphaColor;
+			Quad.SrcAlpha = m_RenderState.SrcBlend;
+			Quad.DstAlpha = m_RenderState.DstBlend;
+			Quad.SrcColor = m_RenderState.SrcAlphaColor;
+			Quad.DstColor = m_RenderState.DstAlphaColor;
 			Mode = 1;
 		}
 		else
@@ -510,104 +524,49 @@ int vrender0_ProcessPacket(device_t *device, UINT32 PacketPtr, UINT16 *Dest, UIN
 		Quad.Dest = (UINT16*) Dest;
 		Quad.Dest = Quad.Dest + Dx + (Dy * Quad.Pitch);
 
-		Quad.Tx = vr0->RenderState.Tx;
-		Quad.Ty = vr0->RenderState.Ty;
-		Quad.Txdx = vr0->RenderState.Txdx;
-		Quad.Tydx = vr0->RenderState.Tydx;
-		Quad.Txdy = vr0->RenderState.Txdy;
-		Quad.Tydy = vr0->RenderState.Tydy;
+		Quad.Tx = m_RenderState.Tx;
+		Quad.Ty = m_RenderState.Ty;
+		Quad.Txdx = m_RenderState.Txdx;
+		Quad.Tydx = m_RenderState.Tydx;
+		Quad.Txdy = m_RenderState.Txdy;
+		Quad.Tydy = m_RenderState.Tydy;
 		if (Packet0 & 0x10)
 		{
-			Quad.Shade = vr0->RenderState.ShadeColor;
-			if (!Mode)		//Alpha includes Shade
+			Quad.Shade = m_RenderState.ShadeColor;
+			if (!Mode)      //Alpha includes Shade
 				Mode = 2;
 			/*
-            //simulate shade with alphablend (SLOW!!!)
-            if (!Quad.SrcAlpha && (Packet0 & 0x8))
-            {
-                Quad.SrcAlpha = 0x21; //1
-                Quad.DstAlpha = 0x01; //0
-            }*/
+			//simulate shade with alphablend (SLOW!!!)
+			if (!Quad.SrcAlpha && (Packet0 & 0x8))
+			{
+			    Quad.SrcAlpha = 0x21; //1
+			    Quad.DstAlpha = 0x01; //0
+			}*/
 		}
 		else
 			Quad.Shade = RGB32(255,255,255);
-		Quad.TransColor = vr0->RenderState.TransColor;
-		Quad.TWidth = vr0->RenderState.Width;
-		Quad.THeight = vr0->RenderState.Height;
+		Quad.TransColor = m_RenderState.TransColor;
+		Quad.TWidth = m_RenderState.Width;
+		Quad.THeight = m_RenderState.Height;
 		Quad.Trans = Packet0 & 4;
 		//Quad.Trans = 0;
 		Quad.Clamp = Packet0 & 0x20;
 
-		if (Packet0 & 0x8)	//Texture Enable
+		if (Packet0 & 0x8)  //Texture Enable
 		{
-			Quad.u.Imageb = TEXTURE + 128 * vr0->RenderState.FontOffset;
-			Quad.Tile = (UINT16*) (TEXTURE + 128 * vr0->RenderState.TileOffset);
-			if (!vr0->RenderState.PixelFormat)
-				Quad.Pal = vr0->InternalPalette + (vr0->RenderState.PaletteBank * 16);
+			Quad.u.Imageb = TEXTURE + 128 * m_RenderState.FontOffset;
+			Quad.Tile = (UINT16*) (TEXTURE + 128 * m_RenderState.TileOffset);
+			if (!m_RenderState.PixelFormat)
+				Quad.Pal = m_InternalPalette + (m_RenderState.PaletteBank * 16);
 			else
-				Quad.Pal = vr0->InternalPalette;
-			if (vr0->RenderState.TextureMode)	//Tiled
-				DrawTile[vr0->RenderState.PixelFormat + 4 * Mode](&Quad);
+				Quad.Pal = m_InternalPalette;
+			if (m_RenderState.TextureMode)   //Tiled
+				DrawTile[m_RenderState.PixelFormat + 4 * Mode](&Quad);
 			else
-				DrawImage[vr0->RenderState.PixelFormat + 4 * Mode](&Quad);
+				DrawImage[m_RenderState.PixelFormat + 4 * Mode](&Quad);
 		}
 		else
 			DrawQuadFill(&Quad);
 	}
 	return 0;
 }
-
-/*****************************************************************************
- DEVICE INTERFACE
- *****************************************************************************/
-
-static DEVICE_START( vr0video )
-{
-	vr0video_state *vr0 = get_safe_token(device);
-	const vr0video_interface *intf = get_interface(device);
-
-	vr0->cpu = device->machine().device(intf->cpu);
-
-	device->save_item(NAME(vr0->InternalPalette));
-	device->save_item(NAME(vr0->LastPalUpdate));
-
-	device->save_item(NAME(vr0->RenderState.Tx));
-	device->save_item(NAME(vr0->RenderState.Ty));
-	device->save_item(NAME(vr0->RenderState.Txdx));
-	device->save_item(NAME(vr0->RenderState.Tydx));
-	device->save_item(NAME(vr0->RenderState.Txdy));
-	device->save_item(NAME(vr0->RenderState.Tydy));
-	device->save_item(NAME(vr0->RenderState.SrcAlphaColor));
-	device->save_item(NAME(vr0->RenderState.SrcBlend));
-	device->save_item(NAME(vr0->RenderState.DstAlphaColor));
-	device->save_item(NAME(vr0->RenderState.DstBlend));
-	device->save_item(NAME(vr0->RenderState.ShadeColor));
-	device->save_item(NAME(vr0->RenderState.TransColor));
-	device->save_item(NAME(vr0->RenderState.TileOffset));
-	device->save_item(NAME(vr0->RenderState.FontOffset));
-	device->save_item(NAME(vr0->RenderState.PalOffset));
-	device->save_item(NAME(vr0->RenderState.PaletteBank));
-	device->save_item(NAME(vr0->RenderState.TextureMode));
-	device->save_item(NAME(vr0->RenderState.PixelFormat));
-	device->save_item(NAME(vr0->RenderState.Width));
-	device->save_item(NAME(vr0->RenderState.Height));
-}
-
-static DEVICE_RESET( vr0video )
-{
-	vr0video_state *vr0 = get_safe_token(device);
-
-	memset(vr0->InternalPalette, 0, sizeof(vr0->InternalPalette));
-	vr0->LastPalUpdate = 0xffffffff;
-}
-
-static const char DEVTEMPLATE_SOURCE[] = __FILE__;
-
-#define DEVTEMPLATE_ID( p, s )	p##vr0video##s
-#define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_RESET
-#define DEVTEMPLATE_NAME		"VRender0"
-#define DEVTEMPLATE_FAMILY		"???"
-#include "devtempl.h"
-
-
-DEFINE_LEGACY_DEVICE(VIDEO_VRENDER0, vr0video);

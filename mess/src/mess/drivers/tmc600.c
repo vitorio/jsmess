@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /*
 
 Telmac TMC-600
@@ -93,13 +95,13 @@ WRITE8_MEMBER( tmc600_state::keyboard_latch_w )
 static ADDRESS_MAP_START( tmc600_map, AS_PROGRAM, 8, tmc600_state )
 	AM_RANGE(0x0000, 0x4fff) AM_ROM
 	AM_RANGE(0x6000, 0xbfff) AM_RAM
-	AM_RANGE(0xf400, 0xf7ff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, char_ram_r, char_ram_w)
-	AM_RANGE(0xf800, 0xffff) AM_DEVREADWRITE(CDP1869_TAG, cdp1869_device, page_ram_r, page_ram_w)
+	AM_RANGE(0xf400, 0xf7ff) AM_DEVICE(CDP1869_TAG, cdp1869_device, char_map)
+	AM_RANGE(0xf800, 0xffff) AM_DEVICE(CDP1869_TAG, cdp1869_device, page_map)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( tmc600_io_map, AS_IO, 8, tmc600_state )
 	AM_RANGE(0x03, 0x03) AM_WRITE(keyboard_latch_w)
-	AM_RANGE(0x04, 0x04) AM_DEVWRITE_LEGACY(CENTRONICS_TAG, centronics_data_w)
+	AM_RANGE(0x04, 0x04) AM_DEVWRITE(CENTRONICS_TAG, centronics_device, write)
 	AM_RANGE(0x05, 0x05) AM_WRITE(vismac_data_w)
 //  AM_RANGE(0x06, 0x06) AM_WRITE(floppy_w)
 	AM_RANGE(0x07, 0x07) AM_WRITE(vismac_register_w)
@@ -108,7 +110,7 @@ ADDRESS_MAP_END
 /* Input Ports */
 
 static INPUT_PORTS_START( tmc600 )
-	PORT_START("IN0")
+	PORT_START("Y0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_0) PORT_CODE(KEYCODE_0_PAD) PORT_CHAR('0')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_1) PORT_CODE(KEYCODE_1_PAD) PORT_CHAR('1') PORT_CHAR('!')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_2) PORT_CODE(KEYCODE_2_PAD) PORT_CHAR('2') PORT_CHAR('\"')
@@ -118,7 +120,7 @@ static INPUT_PORTS_START( tmc600 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_6) PORT_CODE(KEYCODE_6_PAD) PORT_CHAR('6') PORT_CHAR('&')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_7) PORT_CODE(KEYCODE_7_PAD) PORT_CHAR('7') PORT_CHAR('/')
 
-	PORT_START("IN1")
+	PORT_START("Y1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_8) PORT_CODE(KEYCODE_8_PAD) PORT_CHAR('8') PORT_CHAR('(')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_9) PORT_CODE(KEYCODE_9_PAD) PORT_CHAR('9') PORT_CHAR(')')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_BACKSLASH) PORT_CHAR(':') PORT_CHAR('*')
@@ -128,7 +130,7 @@ static INPUT_PORTS_START( tmc600 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_STOP) PORT_CHAR('.') PORT_CHAR('>')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_SLASH) PORT_CHAR('/') PORT_CHAR('?')
 
-	PORT_START("IN2")
+	PORT_START("Y2")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_TILDE) PORT_CHAR('@') PORT_CHAR('\\')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_A) PORT_CHAR('A')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_B) PORT_CHAR('B')
@@ -138,7 +140,7 @@ static INPUT_PORTS_START( tmc600 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_F) PORT_CHAR('F')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_G) PORT_CHAR('G')
 
-	PORT_START("IN3")
+	PORT_START("Y3")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_H) PORT_CHAR('H')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_I) PORT_CHAR('I')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_J) PORT_CHAR('J')
@@ -148,7 +150,7 @@ static INPUT_PORTS_START( tmc600 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_N) PORT_CHAR('N')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_O) PORT_CHAR('O')
 
-	PORT_START("IN4")
+	PORT_START("Y4")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_P) PORT_CHAR('P')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Q) PORT_CHAR('Q')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_R) PORT_CHAR('R')
@@ -158,7 +160,7 @@ static INPUT_PORTS_START( tmc600 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_V) PORT_CHAR('V')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_W) PORT_CHAR('W')
 
-	PORT_START("IN5")
+	PORT_START("Y5")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_X) PORT_CHAR('X')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Y) PORT_CHAR('Y')
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_Z) PORT_CHAR('Z')
@@ -168,7 +170,7 @@ static INPUT_PORTS_START( tmc600 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_CODE(KEYCODE_EQUALS) PORT_CHAR('^') PORT_CHAR('~')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("BREAK") PORT_CODE(KEYCODE_END) PORT_CHAR(UCHAR_MAMEKEY(END))
 
-	PORT_START("IN6")
+	PORT_START("Y6")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("SPACE") PORT_CODE(KEYCODE_SPACE) PORT_CHAR(' ')
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("DEL") PORT_CODE(KEYCODE_BACKSPACE) PORT_CHAR(8)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("ESC") PORT_CODE(KEYCODE_ESC) PORT_CHAR(UCHAR_MAMEKEY(ESC))
@@ -178,7 +180,7 @@ static INPUT_PORTS_START( tmc600 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("E1") PORT_CODE(KEYCODE_LALT) PORT_CHAR(UCHAR_MAMEKEY(LALT))
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("SHIFT") PORT_CODE(KEYCODE_LSHIFT) PORT_CODE(KEYCODE_RSHIFT) PORT_CHAR(UCHAR_SHIFT_1)
 
-	PORT_START("IN7")
+	PORT_START("Y7")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("SHIFT LOCK") PORT_CODE(KEYCODE_CAPSLOCK) PORT_CHAR(UCHAR_MAMEKEY(CAPSLOCK))
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("(unknown)") PORT_CODE(KEYCODE_F1) PORT_CHAR(UCHAR_MAMEKEY(F1))
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("LINE FEED") PORT_CODE(KEYCODE_HOME) PORT_CHAR(UCHAR_MAMEKEY(HOME)) PORT_CHAR(10)
@@ -196,18 +198,17 @@ INPUT_PORTS_END
 
 READ_LINE_MEMBER( tmc600_state::clear_r )
 {
-	return BIT(input_port_read(machine(), "RUN"), 0);
+	return BIT(m_run->read(), 0);
 }
 
 READ_LINE_MEMBER( tmc600_state::ef2_r )
 {
-	return (m_cassette)->input() < 0;
+	return m_cassette->input() < 0;
 }
 
 READ_LINE_MEMBER( tmc600_state::ef3_r )
 {
-	static const char *const keynames[] = { "IN0", "IN1", "IN2", "IN3", "IN4", "IN5", "IN6", "IN7" };
-	UINT8 data = ~input_port_read(machine(), keynames[m_keylatch / 8]);
+	UINT8 data = ~m_key_row[m_keylatch / 8]->read();
 
 	return BIT(data, m_keylatch % 8);
 }
@@ -237,22 +238,32 @@ static COSMAC_INTERFACE( cosmac_intf )
 
 void tmc600_state::machine_start()
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
+	address_space &program = m_maincpu->space(AS_PROGRAM);
 
 	/* configure RAM */
-	switch (ram_get_size(m_ram))
+	switch (m_ram->size())
 	{
 	case 8*1024:
-		program->unmap_readwrite(0x8000, 0xbfff);
+		program.unmap_readwrite(0x8000, 0xbfff);
 		break;
 
 	case 16*1024:
-		program->unmap_readwrite(0xa000, 0xbfff);
+		program.unmap_readwrite(0xa000, 0xbfff);
 		break;
 	}
 
+	// find keyboard rows
+	m_key_row[0] = m_y0;
+	m_key_row[1] = m_y1;
+	m_key_row[2] = m_y2;
+	m_key_row[3] = m_y3;
+	m_key_row[4] = m_y4;
+	m_key_row[5] = m_y5;
+	m_key_row[6] = m_y6;
+	m_key_row[7] = m_y7;
+
 	/* register for state saving */
-	state_save_register_global(machine(), m_keylatch);
+	save_item(NAME(m_keylatch));
 }
 
 /* Machine Drivers */
@@ -266,22 +277,9 @@ static const cassette_interface tmc600_cassette_interface =
 	NULL
 };
 
-static const floppy_interface tmc600_floppy_interface =
-{
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	FLOPPY_STANDARD_5_25_DSDD,
-	FLOPPY_OPTIONS_NAME(default),
-	NULL,
-	NULL
-};
-
 static MACHINE_CONFIG_START( tmc600, tmc600_state )
 	// basic system hardware
-	MCFG_CPU_ADD(CDP1802_TAG, COSMAC, 3579545)	// ???
+	MCFG_CPU_ADD(CDP1802_TAG, CDP1802, 3579545)  // ???
 	MCFG_CPU_PROGRAM_MAP(tmc600_map)
 	MCFG_CPU_IO_MAP(tmc600_io_map)
 	MCFG_CPU_CONFIG(cosmac_intf)
@@ -290,9 +288,8 @@ static MACHINE_CONFIG_START( tmc600, tmc600_state )
 	MCFG_FRAGMENT_ADD(tmc600_video)
 
 	/* devices */
-	MCFG_CENTRONICS_ADD(CENTRONICS_TAG, standard_centronics)
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, tmc600_cassette_interface)
-	MCFG_FLOPPY_2_DRIVES_ADD(tmc600_floppy_interface)
+	MCFG_CENTRONICS_PRINTER_ADD(CENTRONICS_TAG, standard_centronics)
+	MCFG_CASSETTE_ADD("cassette", tmc600_cassette_interface)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -304,29 +301,29 @@ MACHINE_CONFIG_END
 
 ROM_START( tmc600s1 )
 	ROM_REGION( 0x5000, CDP1802_TAG, 0 )
-	ROM_LOAD( "sb20",		0x0000, 0x1000, NO_DUMP )
-	ROM_LOAD( "sb21",		0x1000, 0x1000, NO_DUMP )
-	ROM_LOAD( "sb22",		0x2000, 0x1000, NO_DUMP )
-	ROM_LOAD( "sb23",		0x3000, 0x1000, NO_DUMP )
-	ROM_LOAD( "190482_2",	0x4000, 0x1000, NO_DUMP )
+	ROM_LOAD( "sb20",       0x0000, 0x1000, NO_DUMP )
+	ROM_LOAD( "sb21",       0x1000, 0x1000, NO_DUMP )
+	ROM_LOAD( "sb22",       0x2000, 0x1000, NO_DUMP )
+	ROM_LOAD( "sb23",       0x3000, 0x1000, NO_DUMP )
+	ROM_LOAD( "190482_2",   0x4000, 0x1000, NO_DUMP )
 
 	ROM_REGION( 0x1000, "chargen", 0 )
-	ROM_LOAD( "chargen",	0x0000, 0x1000, NO_DUMP )
+	ROM_LOAD( "chargen",    0x0000, 0x1000, NO_DUMP )
 ROM_END
 
 ROM_START( tmc600s2 )
 	ROM_REGION( 0x5000, CDP1802_TAG, 0 )
-	ROM_LOAD( "sb30",		0x0000, 0x1000, CRC(95d1292a) SHA1(1fa52d59d3005f8ac74a32c2164fdb22947c2748) )
-	ROM_LOAD( "sb31",		0x1000, 0x1000, CRC(2c8f3d17) SHA1(f14e8adbcddeaeaa29b1e7f3dfa741f4e230f599) )
-	ROM_LOAD( "sb32",		0x2000, 0x1000, CRC(dd58a128) SHA1(be9bdb0fc5e0cc3dcc7f2fb7ccab69bf5b043803) )
-	ROM_LOAD( "sb33",		0x3000, 0x1000, CRC(b7d241fa) SHA1(6f3eadf86c4e3aaf93d123e302a18dc4d9db964b) )
-	ROM_LOAD( "151182",		0x4000, 0x1000, CRC(c1a8d9d8) SHA1(4552e1f06d0e338ba7b0f1c3a20b8a51c27dafde) )
+	ROM_LOAD( "sb30",       0x0000, 0x1000, CRC(95d1292a) SHA1(1fa52d59d3005f8ac74a32c2164fdb22947c2748) )
+	ROM_LOAD( "sb31",       0x1000, 0x1000, CRC(2c8f3d17) SHA1(f14e8adbcddeaeaa29b1e7f3dfa741f4e230f599) )
+	ROM_LOAD( "sb32",       0x2000, 0x1000, CRC(dd58a128) SHA1(be9bdb0fc5e0cc3dcc7f2fb7ccab69bf5b043803) )
+	ROM_LOAD( "sb33",       0x3000, 0x1000, CRC(b7d241fa) SHA1(6f3eadf86c4e3aaf93d123e302a18dc4d9db964b) )
+	ROM_LOAD( "151182",     0x4000, 0x1000, CRC(c1a8d9d8) SHA1(4552e1f06d0e338ba7b0f1c3a20b8a51c27dafde) )
 
 	ROM_REGION( 0x1000, "chargen", 0 )
-	ROM_LOAD( "chargen",	0x0000, 0x1000, CRC(93f92cbf) SHA1(371156fb38fa5319c6fde537ccf14eed94e7adfb) )
+	ROM_LOAD( "chargen",    0x0000, 0x1000, CRC(93f92cbf) SHA1(371156fb38fa5319c6fde537ccf14eed94e7adfb) )
 ROM_END
 
 /* System Drivers */
 //    YEAR  NAME      PARENT    COMPAT   MACHINE   INPUT     INIT    COMPANY        FULLNAME
-//COMP( 1982, tmc600s1, 0,  0,       tmc600,   tmc600,   0,        "Telercas Oy", "Telmac TMC-600 (Sarja I)",  GAME_NOT_WORKING )
-COMP( 1982, tmc600s2, 0,	0,	     tmc600,   tmc600,   0, 	   "Telercas Oy", "Telmac TMC-600 (Sarja II)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+//COMP( 1982, tmc600s1, 0,  0,       tmc600,   tmc600, driver_device,   0,        "Telercas Oy", "Telmac TMC-600 (Sarja I)",  GAME_NOT_WORKING )
+COMP( 1982, tmc600s2, 0,    0,       tmc600,   tmc600, driver_device,   0,     "Telercas Oy", "Telmac TMC-600 (Sarja II)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

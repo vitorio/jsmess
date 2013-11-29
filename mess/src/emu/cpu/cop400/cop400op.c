@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /***************************************************************************
 
     cop400op.c
@@ -36,7 +38,7 @@ INSTRUCTION( asc )
 	if (A > 0xF)
 	{
 		C = 1;
-		cpustate->skip = 1;
+		m_skip = 1;
 		A &= 0xF;
 	}
 	else
@@ -87,7 +89,7 @@ INSTRUCTION( aisc )
 
 	if (A > 0x0f)
 	{
-		cpustate->skip = 1;
+		m_skip = 1;
 		A &= 0xF;
 	}
 }
@@ -239,7 +241,7 @@ INSTRUCTION( casc )
 	if (A > 0xF)
 	{
 		C = 1;
-		cpustate->skip = 1;
+		m_skip = 1;
 		A &= 0xF;
 	}
 	else
@@ -330,7 +332,7 @@ INSTRUCTION( jp )
 	{
 		// JSRP
 		UINT8 a = opcode & 0x3f;
-		PUSH(cpustate, PC);
+		PUSH(PC);
 		PC = 0x80 | a;
 	}
 }
@@ -354,7 +356,7 @@ INSTRUCTION( jsr )
 {
 	UINT16 a = ((opcode & 0x07) << 8) | ROM(PC);
 
-	PUSH(cpustate, PC + 1);
+	PUSH(PC + 1);
 	PC = a;
 }
 
@@ -373,7 +375,7 @@ INSTRUCTION( jsr )
 
 INSTRUCTION( ret )
 {
-	POP(cpustate);
+	POP();
 }
 
 /*
@@ -393,8 +395,8 @@ INSTRUCTION( ret )
 
 INSTRUCTION( cop420_ret )
 {
-	POP(cpustate);
-	cpustate->skip = cpustate->last_skip;
+	POP();
+	m_skip = m_last_skip;
 }
 
 /*
@@ -414,8 +416,8 @@ INSTRUCTION( cop420_ret )
 
 INSTRUCTION( retsk )
 {
-	POP(cpustate);
-	cpustate->skip = 1;
+	POP();
+	m_skip = 1;
 }
 
 /*
@@ -433,7 +435,7 @@ INSTRUCTION( retsk )
 
 INSTRUCTION( halt )
 {
-	cpustate->halt = 1;
+	m_halt = 1;
 }
 
 /*
@@ -449,8 +451,8 @@ INSTRUCTION( halt )
 
 INSTRUCTION( it )
 {
-	cpustate->halt = 1;
-	cpustate->idle = 1;
+	m_halt = 1;
+	m_idle = 1;
 }
 
 /***************************************************************************
@@ -475,42 +477,42 @@ INSTRUCTION( camq )
 {
 	/*
 
-        Excerpt from the COP410L data sheet:
+	    Excerpt from the COP410L data sheet:
 
-        False states may be generated on L0-L7 during the execution of the CAMQ instruction.
-        The L-ports should not be used as clocks for edge sensitive devices such as flip-flops,
-        counters, shift registers, etc. the following short program that illustrates this situation.
+	    False states may be generated on L0-L7 during the execution of the CAMQ instruction.
+	    The L-ports should not be used as clocks for edge sensitive devices such as flip-flops,
+	    counters, shift registers, etc. the following short program that illustrates this situation.
 
-        START:
-            CLRA        ;ENABLE THE Q
-            LEI 4       ;REGISTER TO L LINES
-            LBI TEST
-            STII 3
-            AISC 12
-        LOOP:
-            LBI TEST    ;LOAD Q WITH X'C3
-            CAMQ
-            JP LOOP
+	    START:
+	        CLRA        ;ENABLE THE Q
+	        LEI 4       ;REGISTER TO L LINES
+	        LBI TEST
+	        STII 3
+	        AISC 12
+	    LOOP:
+	        LBI TEST    ;LOAD Q WITH X'C3
+	        CAMQ
+	        JP LOOP
 
-        In this program the internal Q register is enabled onto the L lines and a steady bit
-        pattern of logic highs is output on L0, L1, L6, L7, and logic lows on L2-L5 via the
-        two-byte CAMQ instruction. Timing constraints on the device are such that the Q
-        register may be temporarily loaded with the second byte of the CAMQ opcode (3C) prior
-        to receiving the valid data pattern. If this occurs, the opcode will ripple onto the L
-        lines and cause negative-going glitches on L0, L1, L6, L7, and positive glitches on
-        L2-L5. Glitch durations are under 2 ms, although the exact value may vary due to data
-        patterns, processing parameters, and L line loading. These false states are peculiar
-        only to the CAMQ instruction and the L lines.
+	    In this program the internal Q register is enabled onto the L lines and a steady bit
+	    pattern of logic highs is output on L0, L1, L6, L7, and logic lows on L2-L5 via the
+	    two-byte CAMQ instruction. Timing constraints on the device are such that the Q
+	    register may be temporarily loaded with the second byte of the CAMQ opcode (3C) prior
+	    to receiving the valid data pattern. If this occurs, the opcode will ripple onto the L
+	    lines and cause negative-going glitches on L0, L1, L6, L7, and positive glitches on
+	    L2-L5. Glitch durations are under 2 ms, although the exact value may vary due to data
+	    patterns, processing parameters, and L line loading. These false states are peculiar
+	    only to the CAMQ instruction and the L lines.
 
-    */
+	*/
 
 	UINT8 data = (A << 4) | RAM_R(B);
 
-	WRITE_Q(cpustate, data);
+	WRITE_Q(data);
 
 #ifdef CAMQ_BUG
-	WRITE_Q(cpustate, 0x3c);
-	WRITE_Q(cpustate, data);
+	WRITE_Q(0x3c);
+	WRITE_Q(data);
 #endif
 }
 
@@ -553,10 +555,10 @@ INSTRUCTION( ld )
 
 INSTRUCTION( lqid )
 {
-	PUSH(cpustate, PC);
+	PUSH(PC);
 	PC = (PC & 0x700) | (A << 4) | RAM_R(B);
-	WRITE_Q(cpustate, ROM(PC));
-	POP(cpustate);
+	WRITE_Q(ROM(PC));
+	POP();
 }
 
 /*
@@ -733,7 +735,7 @@ INSTRUCTION( xds )
 
 	B = B ^ r;
 
-	if (Bd == 0x0f) cpustate->skip = 1;
+	if (Bd == 0x0f) m_skip = 1;
 }
 
 /*
@@ -768,7 +770,7 @@ INSTRUCTION( xis )
 
 	B = B ^ r;
 
-	if (Bd == 0x00) cpustate->skip = 1;
+	if (Bd == 0x00) m_skip = 1;
 }
 
 /*
@@ -920,7 +922,7 @@ INSTRUCTION( lbi )
 		B = (opcode & 0x70) | (((opcode & 0x0f) + 1) & 0x0f);
 	}
 
-	cpustate->skip_lbi = 1;
+	m_skip_lbi = 1;
 }
 
 /*
@@ -1014,7 +1016,7 @@ INSTRUCTION( cop444_xabr )
 
 INSTRUCTION( skc )
 {
-	if (C == 1) cpustate->skip = 1;
+	if (C == 1) m_skip = 1;
 }
 
 /*
@@ -1032,7 +1034,7 @@ INSTRUCTION( skc )
 
 INSTRUCTION( ske )
 {
-	if (A == RAM_R(B)) cpustate->skip = 1;
+	if (A == RAM_R(B)) m_skip = 1;
 }
 
 /*
@@ -1050,7 +1052,7 @@ INSTRUCTION( ske )
 
 INSTRUCTION( skgz )
 {
-	if (IN_G() == 0) cpustate->skip = 1;
+	if (IN_G() == 0) m_skip = 1;
 }
 
 /*
@@ -1073,15 +1075,15 @@ INSTRUCTION( skgz )
 
 */
 
-INLINE void skgbz(cop400_state *cpustate, int bit)
+void cop400_cpu_device::skgbz(int bit)
 {
-	if (!BIT(IN_G(), bit)) cpustate->skip = 1;
+	if (!BIT(IN_G(), bit)) m_skip = 1;
 }
 
-INSTRUCTION( skgbz0 ) { skgbz(cpustate, 0); }
-INSTRUCTION( skgbz1 ) { skgbz(cpustate, 1); }
-INSTRUCTION( skgbz2 ) { skgbz(cpustate, 2); }
-INSTRUCTION( skgbz3 ) { skgbz(cpustate, 3); }
+INSTRUCTION( skgbz0 ) { skgbz(0); }
+INSTRUCTION( skgbz1 ) { skgbz(1); }
+INSTRUCTION( skgbz2 ) { skgbz(2); }
+INSTRUCTION( skgbz3 ) { skgbz(3); }
 
 /*
 
@@ -1103,15 +1105,15 @@ INSTRUCTION( skgbz3 ) { skgbz(cpustate, 3); }
 
 */
 
-INLINE void skmbz(cop400_state *cpustate, int bit)
+void cop400_cpu_device::skmbz(int bit)
 {
-	if (!BIT(RAM_R(B), bit)) cpustate->skip = 1;
+	if (!BIT(RAM_R(B), bit)) m_skip = 1;
 }
 
-INSTRUCTION( skmbz0 ) { skmbz(cpustate, 0); }
-INSTRUCTION( skmbz1 ) { skmbz(cpustate, 1); }
-INSTRUCTION( skmbz2 ) { skmbz(cpustate, 2); }
-INSTRUCTION( skmbz3 ) { skmbz(cpustate, 3); }
+INSTRUCTION( skmbz0 ) { skmbz(0); }
+INSTRUCTION( skmbz1 ) { skmbz(1); }
+INSTRUCTION( skmbz2 ) { skmbz(2); }
+INSTRUCTION( skmbz3 ) { skmbz(3); }
 
 /*
 
@@ -1128,10 +1130,10 @@ INSTRUCTION( skmbz3 ) { skmbz(cpustate, 3); }
 
 INSTRUCTION( skt )
 {
-	if (cpustate->skt_latch)
+	if (m_skt_latch)
 	{
-		cpustate->skt_latch = 0;
-		cpustate->skip = 1;
+		m_skt_latch = 0;
+		m_skip = 1;
 	}
 }
 
@@ -1212,7 +1214,7 @@ INSTRUCTION( obd )
 
 INSTRUCTION( omg )
 {
-	WRITE_G(cpustate, RAM_R(B));
+	WRITE_G(RAM_R(B));
 }
 
 /*
@@ -1314,5 +1316,5 @@ INSTRUCTION( ogi )
 {
 	UINT8 y = opcode & 0x0f;
 
-	WRITE_G(cpustate, y);
+	WRITE_G(y);
 }

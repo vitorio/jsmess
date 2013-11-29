@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:smf
 /*
  * PlayStation Root Counter emulator
  *
@@ -6,7 +8,6 @@
  */
 
 #include "rcnt.h"
-#include "includes/psx.h"
 
 #define VERBOSE_LEVEL ( 0 )
 
@@ -25,8 +26,11 @@ INLINE void ATTR_PRINTF(3,4) verboselog( running_machine& machine, int n_level, 
 
 const device_type PSX_RCNT = &device_creator<psxrcnt_device>;
 
-psxrcnt_device::psxrcnt_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, PSX_RCNT, "PSX RCNT", tag, owner, clock)
+psxrcnt_device::psxrcnt_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock) :
+	device_t(mconfig, PSX_RCNT, "PSX RCNT", tag, owner, clock, "psxrcnt", __FILE__),
+	m_irq0_handler(*this),
+	m_irq1_handler(*this),
+	m_irq2_handler(*this)
 {
 }
 
@@ -47,13 +51,21 @@ void psxrcnt_device::device_start()
 {
 	int n;
 
+	m_irq0_handler.resolve_safe();
+	m_irq1_handler.resolve_safe();
+	m_irq2_handler.resolve_safe();
+
 	for( n = 0; n < 3; n++ )
 	{
-		root_counter[ n ].timer = machine().scheduler().timer_alloc( timer_expired_delegate( FUNC( psxrcnt_device::root_finished ), this ) );
+		root_counter[ n ].timer = timer_alloc(n);
 		state_save_register_item( machine(), "psxroot", NULL, n, root_counter[ n ].n_count );
 		state_save_register_item( machine(), "psxroot", NULL, n, root_counter[ n ].n_mode );
 		state_save_register_item( machine(), "psxroot", NULL, n, root_counter[ n ].n_target );
 		state_save_register_item( machine(), "psxroot", NULL, n, root_counter[ n ].n_start );
+		root_counter[ n ].n_count = 0;
+		root_counter[ n ].n_mode = 0;
+		root_counter[ n ].n_target = 0;
+		root_counter[ n ].n_start = 0;
 	}
 }
 
@@ -213,9 +225,9 @@ void psxrcnt_device::root_timer_adjust( int n_counter )
 	}
 }
 
-void psxrcnt_device::root_finished( void *ptr, int param )
+void psxrcnt_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	int n_counter = param;
+	int n_counter = id;
 	psx_root *root = &root_counter[ n_counter ];
 
 	verboselog( machine(), 2, "root_finished( %d ) %04x\n", n_counter, root_current( n_counter ) );
@@ -232,6 +244,17 @@ void psxrcnt_device::root_finished( void *ptr, int param )
 	if( ( root->n_mode & PSX_RC_IRQOVERFLOW ) != 0 ||
 		( root->n_mode & PSX_RC_IRQTARGET ) != 0 )
 	{
-		psx_irq_set( machine(), PSX_IRQ_ROOTCOUNTER0 << n_counter );
+		switch( n_counter )
+		{
+		case 0:
+			m_irq0_handler(1);
+			break;
+		case 1:
+			m_irq1_handler(1);
+			break;
+		case 2:
+			m_irq2_handler(1);
+			break;
+		}
 	}
 }

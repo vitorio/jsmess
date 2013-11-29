@@ -49,8 +49,8 @@
 
 ************************************************************************/
 
-#define MAIN_CLOCK	XTAL_16MHz
-#define SND_CLOCK	XTAL_14_31818MHz
+#define MAIN_CLOCK  XTAL_16MHz
+#define SND_CLOCK   XTAL_14_31818MHz
 
 #include "emu.h"
 #include "cpu/h83002/h8.h"
@@ -61,11 +61,17 @@ class itgambl2_state : public driver_device
 {
 public:
 	itgambl2_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this, "maincpu") { }
 
 	int m_test_x;
 	int m_test_y;
 	int m_start_offs;
+	virtual void machine_reset();
+	virtual void video_start();
+	virtual void palette_init();
+	UINT32 screen_update_itgambl2(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
 };
 
 
@@ -73,61 +79,59 @@ public:
 *     Video Hardware     *
 *************************/
 
-static VIDEO_START( itgambl2 )
+void itgambl2_state::video_start()
 {
-	itgambl2_state *state = machine.driver_data<itgambl2_state>();
-	state->m_test_x = 256;
-	state->m_test_y = 256;
-	state->m_start_offs = 0;
+	m_test_x = 256;
+	m_test_y = 256;
+	m_start_offs = 0;
 }
 
 /* (dirty) debug code for looking 8bpps blitter-based gfxs */
-static SCREEN_UPDATE( itgambl2 )
+UINT32 itgambl2_state::screen_update_itgambl2(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-	itgambl2_state *state = screen->machine().driver_data<itgambl2_state>();
 	int x,y,count;
-	const UINT8 *blit_ram = screen->machine().region("gfx1")->base();
+	const UINT8 *blit_ram = memregion("gfx1")->base();
 
-	if(screen->machine().input().code_pressed(KEYCODE_Z))
-		state->m_test_x++;
+	if(machine().input().code_pressed(KEYCODE_Z))
+		m_test_x++;
 
-	if(screen->machine().input().code_pressed(KEYCODE_X))
-		state->m_test_x--;
+	if(machine().input().code_pressed(KEYCODE_X))
+		m_test_x--;
 
-	if(screen->machine().input().code_pressed(KEYCODE_A))
-		state->m_test_y++;
+	if(machine().input().code_pressed(KEYCODE_A))
+		m_test_y++;
 
-	if(screen->machine().input().code_pressed(KEYCODE_S))
-		state->m_test_y--;
+	if(machine().input().code_pressed(KEYCODE_S))
+		m_test_y--;
 
-	if(screen->machine().input().code_pressed(KEYCODE_Q))
-		state->m_start_offs+=0x200;
+	if(machine().input().code_pressed(KEYCODE_Q))
+		m_start_offs+=0x200;
 
-	if(screen->machine().input().code_pressed(KEYCODE_W))
-		state->m_start_offs-=0x200;
+	if(machine().input().code_pressed(KEYCODE_W))
+		m_start_offs-=0x200;
 
-	if(screen->machine().input().code_pressed(KEYCODE_E))
-		state->m_start_offs++;
+	if(machine().input().code_pressed(KEYCODE_E))
+		m_start_offs++;
 
-	if(screen->machine().input().code_pressed(KEYCODE_R))
-		state->m_start_offs--;
+	if(machine().input().code_pressed(KEYCODE_R))
+		m_start_offs--;
 
-	popmessage("%d %d %04x",state->m_test_x,state->m_test_y,state->m_start_offs);
+	popmessage("%d %d %04x",m_test_x,m_test_y,m_start_offs);
 
-	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine()));
+	bitmap.fill(get_black_pen(machine()), cliprect);
 
-	count = (state->m_start_offs);
+	count = (m_start_offs);
 
-	for(y=0;y<state->m_test_y;y++)
+	for(y=0;y<m_test_y;y++)
 	{
-		for(x=0;x<state->m_test_x;x++)
+		for(x=0;x<m_test_x;x++)
 		{
 			UINT32 color;
 
 			color = (blit_ram[count] & 0xff)>>0;
 
-			if((x)<screen->visible_area().max_x && ((y)+0)<screen->visible_area().max_y)
-				*BITMAP_ADDR32(bitmap, y, x) = screen->machine().pens[color];
+			if(cliprect.contains(x, y))
+				bitmap.pix32(y, x) = machine().pens[color];
 
 			count++;
 		}
@@ -141,7 +145,7 @@ static SCREEN_UPDATE( itgambl2 )
 * Memory map information *
 *************************/
 
-static ADDRESS_MAP_START( itgambl2_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( itgambl2_map, AS_PROGRAM, 16, itgambl2_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xffffff)
 	AM_RANGE(0x000000, 0xffffff) AM_ROM
 ADDRESS_MAP_END
@@ -152,55 +156,55 @@ ADDRESS_MAP_END
 *************************/
 
 static INPUT_PORTS_START( itgambl2 )
-    PORT_START("IN0")
-    PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-    PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )
-    PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_START("IN0")
+	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 INPUT_PORTS_END
 
 
@@ -227,7 +231,7 @@ static const gfx_layout gfxlayout_8x8x8 =
 ******************************/
 
 static GFXDECODE_START( itgambl2 )
-    GFXDECODE_ENTRY( "gfx1", 0, gfxlayout_8x8x8,   0, 16  )
+	GFXDECODE_ENTRY( "gfx1", 0, gfxlayout_8x8x8,   0, 16  )
 GFXDECODE_END
 
 
@@ -235,14 +239,14 @@ GFXDECODE_END
 *      Machine Reset      *
 **************************/
 
-static MACHINE_RESET( itgambl2 )
+void itgambl2_state::machine_reset()
 {
 	/* stop the CPU, we have no code for it anyway */
-	cputag_set_input_line(machine, "maincpu", INPUT_LINE_HALT, ASSERT_LINE);
+	m_maincpu->set_input_line(INPUT_LINE_HALT, ASSERT_LINE);
 }
 
 /* default 444 palette for debug purpose*/
-static PALETTE_INIT( itgambl2 )
+void itgambl2_state::palette_init()
 {
 	int x,r,g,b;
 
@@ -251,7 +255,7 @@ static PALETTE_INIT( itgambl2 )
 		r = (x & 0xf)*0x10;
 		g = ((x & 0x3c)>>2)*0x10;
 		b = ((x & 0xf0)>>4)*0x10;
-		palette_set_color(machine,x,MAKE_RGB(r,g,b));
+		palette_set_color(machine(),x,MAKE_RGB(r,g,b));
 	}
 }
 
@@ -261,27 +265,23 @@ static PALETTE_INIT( itgambl2 )
 
 static MACHINE_CONFIG_START( itgambl2, itgambl2_state )
 
-    /* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", H83044, MAIN_CLOCK)	/* wrong CPU, but we have not a H8/3337 core ATM */
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", H83044, MAIN_CLOCK) /* wrong CPU, but we have not a H8/3337 core ATM */
 	MCFG_CPU_PROGRAM_MAP(itgambl2_map)
 
-    /* video hardware */
+	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
-	MCFG_SCREEN_UPDATE( itgambl2 )
+	MCFG_SCREEN_UPDATE_DRIVER(itgambl2_state, screen_update_itgambl2)
 
-	MCFG_MACHINE_RESET( itgambl2 )
-	MCFG_PALETTE_INIT( itgambl2 )
 
 	MCFG_GFXDECODE(itgambl2)
 	MCFG_PALETTE_LENGTH(0x200)
-	MCFG_VIDEO_START( itgambl2 )
 
-    /* sound hardware */
+	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 	MCFG_SOUND_ADD("upd", UPD7759, UPD7759_STANDARD_CLOCK)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
@@ -920,25 +920,53 @@ ROM_START( europass )
 	ROM_LOAD( "xninesnd.bin", 0x00000, 0x20000, CRC(9dab99a6) SHA1(ce34056dd964be32359acd2e53a6101cb4d9ddff) )
 ROM_END
 
+ROM_START( thedrink )
+	ROM_REGION( 0x1000000, "maincpu", 0 ) /* all the program code is in here */
+	ROM_LOAD( "thedrink_hd64f3337cp16.mcu", 0x00000, 0x4000, NO_DUMP )
+
+	ROM_REGION( 0x200000, "gfx1", 0 )
+	ROM_LOAD( "the-drink-ep1.bin", 0x000000, 0x80000, CRC(9d0f61ad) SHA1(8e45afdd7e31a830b62b3dc85e21e9bc024262ff) )
+	ROM_LOAD( "the-drink-ep2.bin", 0x080000, 0x80000, CRC(b21f349a) SHA1(c46b95af869a648a17e0dd8f0eb82d5e347289ab) )
+	ROM_LOAD( "the-drink-ep3.bin", 0x100000, 0x80000, CRC(bb1af614) SHA1(77496efc361b6fd2b4bac0304032ea44e47d1819) )
+	ROM_LOAD( "the-drink-ep4.bin", 0x180000, 0x80000, CRC(f02a6387) SHA1(59d2a20d4fa9c78ef49c9afe82939c0a882012cc) )
+
+	ROM_REGION( 0x20000, "upd", 0 ) /* NEC D7759GC samples */
+	ROM_LOAD( "the-drink-msg0.bin", 0x00000, 0x20000, CRC(5eefd405) SHA1(7b1d91181f5078c55cfa623d7e8fc5b4ebfff110) )
+ROM_END
+
+ROM_START( unkh8gam )
+	ROM_REGION( 0x1000000, "maincpu", 0 ) /* all the program code is in here */
+	ROM_LOAD( "unkh8gam.mcu", 0x00000, 0x4000, NO_DUMP )
+
+	ROM_REGION( 0x180000, "gfx1", 0 )
+	ROM_LOAD( "24.bin", 0x000000, 0x80000, CRC(240eb4bf) SHA1(f79a735ed290f84a44411127af3e16a514b62b6b) )
+	ROM_LOAD( "25.bin", 0x080000, 0x80000, CRC(c273c0ce) SHA1(8774cb101fccf1d97d66816df56dec8fa4e24ee6) )
+	ROM_LOAD( "26.bin", 0x100000, 0x80000, CRC(0293b9bb) SHA1(00794fab4d9deb2ca5ce352ac7ed7aedb59bec7b) )
+
+	ROM_REGION( 0x20000, "upd", 0 ) /* NEC D7759GC samples */
+	ROM_LOAD( "30.bin", 0x00000, 0x20000, CRC(72e56518) SHA1(7afdd6434beeea22673228c2417e4dee253a42b5) )
+ROM_END
+
 
 /*************************
 *      Game Drivers      *
 *************************/
 
-/*    YEAR  NAME      PARENT  MACHINE   INPUT     INIT ROT    COMPANY    FULLNAME                          FLAGS  */
-GAME( 1999, ntcash,   0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "NtCash",                                GAME_NOT_WORKING )
-GAME( 1999, wizard,   0,      itgambl2, itgambl2, 0,   ROT0, "A.A.",      "Wizard (Ver 1.0)",                      GAME_NOT_WORKING )
-GAME( 200?, trstar2k, 0,      itgambl2, itgambl2, 0,   ROT0, "A.M.",      "Triple Star 2000",                      GAME_NOT_WORKING )
-GAME( 2001, laser2k1, 0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Laser 2001 (Ver 1.2)",                  GAME_NOT_WORKING )
-GAME( 2001, mdrink,   0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Magic Drink (Ver 1.2)",                 GAME_NOT_WORKING )
-GAME( 2001, te0144,   0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Puzzle Bobble (Italian Gambling Game)", GAME_NOT_WORKING )
-GAME( 200?, cmagica,  0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Carta Magica (Ver 1.8)",                GAME_NOT_WORKING )
-GAME( 200?, millsun,  0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Millennium Sun",                        GAME_NOT_WORKING )
-GAME( 200?, sspac2k1, 0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Super Space 2001",                      GAME_NOT_WORKING )
-GAME( 200?, elvis,    0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Elvis?",                                GAME_NOT_WORKING )
-GAME( 200?, sstar,    0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Super Star",                            GAME_NOT_WORKING )
-GAME( 2001, pirati,   0,      itgambl2, itgambl2, 0,   ROT0, "Cin", 	  "Pirati",                                GAME_NOT_WORKING )
-GAME( 200?, mnumitg,  0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Magic Number (Italian Gambling Game, Ver 1.5)", GAME_NOT_WORKING )
-GAME( 200?, mclass,   0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Magic Class (Ver 2.2)",                 GAME_NOT_WORKING )
-GAME( 200?, europass, 0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Euro Pass (Ver 1.1)",                   GAME_NOT_WORKING )
-
+/*    YEAR  NAME      PARENT  MACHINE   INPUT     STATE          INIT ROT    COMPANY      FULLNAME                                FLAGS  */
+GAME( 1999, ntcash,   0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "NtCash",                                GAME_IS_SKELETON )
+GAME( 1999, wizard,   0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "A.A.",      "Wizard (Ver 1.0)",                      GAME_IS_SKELETON )
+GAME( 200?, trstar2k, 0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "A.M.",      "Triple Star 2000",                      GAME_IS_SKELETON )
+GAME( 2001, laser2k1, 0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "Laser 2001 (Ver 1.2)",                  GAME_IS_SKELETON )
+GAME( 2001, mdrink,   0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "Magic Drink (Ver 1.2)",                 GAME_IS_SKELETON )
+GAME( 2001, te0144,   0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "Puzzle Bobble (Italian Gambling Game)", GAME_IS_SKELETON )
+GAME( 200?, cmagica,  0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "Carta Magica (Ver 1.8)",                GAME_IS_SKELETON )
+GAME( 200?, millsun,  0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "Millennium Sun",                        GAME_IS_SKELETON )
+GAME( 200?, sspac2k1, 0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "Super Space 2001",                      GAME_IS_SKELETON )
+GAME( 200?, elvis,    0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "Elvis?",                                GAME_IS_SKELETON )
+GAME( 200?, sstar,    0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "Super Star",                            GAME_IS_SKELETON )
+GAME( 2001, pirati,   0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "Cin",       "Pirati",                                GAME_IS_SKELETON )
+GAME( 200?, mnumitg,  0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "Magic Number (Italian Gambling Game, Ver 1.5)", GAME_IS_SKELETON )
+GAME( 200?, mclass,   0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "Magic Class (Ver 2.2)",                 GAME_IS_SKELETON )
+GAME( 200?, europass, 0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "Euro Pass (Ver 1.1)",                   GAME_IS_SKELETON )
+GAME( 200?, thedrink, 0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "The Drink",                             GAME_IS_SKELETON )
+GAME( 200?, unkh8gam, 0,      itgambl2, itgambl2, driver_device, 0,   ROT0, "<unknown>", "Unknown H8 Italian Gambling game",      GAME_IS_SKELETON )

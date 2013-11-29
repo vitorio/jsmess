@@ -51,15 +51,14 @@
 # uncomment next line to enable a build using Microsoft tools
 # MSVC_BUILD = 1
 
+# uncomment next line to enable code analysis using Microsoft tools
+# MSVC_ANALYSIS = 1
+
 # uncomment next line to use cygwin compiler
 # CYGWIN_BUILD = 1
 
-# set this to the minimum Direct3D version to support (8 or 9)
-# DIRECT3D = 9
-
 # set this to the minimum DirectInput version to support (7 or 8)
 # DIRECTINPUT = 8
-
 
 
 ###########################################################################
@@ -75,6 +74,9 @@ WINSRC = $(SRC)/osd/$(OSD)
 WINOBJ = $(OBJ)/osd/$(OSD)
 
 OBJDIRS += $(WINOBJ)
+ifdef USE_QTDEBUG
+OBJDIRS += $(WINOBJ)/../sdl
+endif
 
 
 
@@ -96,7 +98,7 @@ RCFLAGS = -O coff -I $(WINSRC) -I $(WINOBJ)
 
 ifdef CYGWIN_BUILD
 CCOMFLAGS += -mno-cygwin
-LDFLAGS	+= -mno-cygwin
+LDFLAGS += -mno-cygwin
 endif
 
 
@@ -127,11 +129,11 @@ else
 CCOMFLAGS += /MT
 endif
 
-# turn on link-time codegen if the MAXOPT flag is also set
-ifdef MAXOPT
-CCOMFLAGS += /GL
-LDFLAGS += /LTCG
+# use link-time optimizations when enabled
+ifneq ($(OPTIMIZE),0)
+ifdef LTO
 AR += /LTCG
+endif
 endif
 
 # disable warnings and link against bufferoverflowu for 64-bit targets
@@ -142,7 +144,16 @@ endif
 
 # enable basic run-time checks in non-optimized build
 ifeq ($(OPTIMIZE),0)
+ifndef FASTDEBUG
 CCOMFLAGS += /RTC1
+else
+# disable the stack check since it has quite a speed impact
+CCOMFLAGS += /RTCu
+endif
+endif
+
+ifdef MSVC_ANALYSIS
+CCOMFLAGS += /analyze /wd6011 /wd6328 /wd6204 /wd6244 /wd6385 /wd6308 /wd6246 /wd6031 /wd6326 /analyze:stacksize384112
 endif
 
 # enable exception handling for C++
@@ -160,14 +171,25 @@ CPPONLYFLAGS += /wd4800
 # disable better packing warning
 CPPONLYFLAGS += /wd4371
 
+# disable side effects warning in STL headers
+CPPONLYFLAGS += /wd4548
+
 # disable macro redefinition warning
 CCOMFLAGS += /wd4005
+
+# disable behavior change: 'member1' called instead of 'member2' warning
+CCOMFLAGS += /wd4350
+
+# only show deprecation warnings when enabled
+ifndef DEPRECATED
+CCOMFLAGS += /wd4996
+endif
 
 # explicitly set the entry point for UNICODE builds
 LDFLAGS += /ENTRY:wmainCRTStartup
 
 # add some VC++-specific defines
-DEFS += -D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE -DXML_STATIC -Dsnprintf=_snprintf
+DEFS += -D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE -DXML_STATIC -Dsnprintf=_snprintf -DWIN32
 
 OSDCLEAN = msvcclean
 
@@ -239,16 +261,19 @@ endif
 # add our prefix files to the mix
 CCOMFLAGS += -include $(WINSRC)/winprefix.h
 
-# for 32-bit apps, add unicows for Unicode support on Win9x
-ifneq ($(PTR64),1)
-LIBS += -lunicows
-endif
-
 # ensure we statically link the gcc runtime lib
 LDFLAGS += -static-libgcc
-
+# TODO: needs to use $(CC)
+TEST_GCC := $(shell gcc --version)
+ifeq ($(findstring 4.4.,$(TEST_GCC)),)
+	#if we use new tools
+	LDFLAGS += -static-libstdc++
+endif
+ifeq ($(findstring 4.7.,$(TEST_GCC)),4.7.)
+	CCOMFLAGS += -Wno-narrowing -Wno-attributes
+endif
 # add the windows libraries
-LIBS += -luser32 -lgdi32 -ldsound -ldxguid -lwinmm -ladvapi32 -lcomctl32 -lshlwapi -ldinput8
+LIBS += -luser32 -lgdi32 -ldsound -ldxguid -lwinmm -ladvapi32 -lcomctl32 -lshlwapi -lwsock32
 
 ifeq ($(DIRECTINPUT),8)
 LIBS += -ldinput8
@@ -265,8 +290,8 @@ LIBS += -lcomdlg32
 #-------------------------------------------------
 
 OSDCOREOBJS = \
-	$(WINOBJ)/main.o	\
-	$(WINOBJ)/strconv.o	\
+	$(WINOBJ)/main.o    \
+	$(WINOBJ)/strconv.o \
 	$(WINOBJ)/windir.o \
 	$(WINOBJ)/winfile.o \
 	$(WINOBJ)/winmisc.o \
@@ -275,8 +300,10 @@ OSDCOREOBJS = \
 	$(WINOBJ)/winutf8.o \
 	$(WINOBJ)/winutil.o \
 	$(WINOBJ)/winclip.o \
-	$(WINOBJ)/winwork.o
-
+	$(WINOBJ)/winsocket.o \
+	$(WINOBJ)/winwork.o \
+	$(WINOBJ)/winptty.o \
+	$(WINOBJ)/winmidi.o
 
 
 #-------------------------------------------------
@@ -298,24 +325,62 @@ OSDOBJS = \
 	$(WINOBJ)/winmenu.o \
 	$(WINOBJ)/winmain.o
 
-ifeq ($(DIRECT3D),9)
-CCOMFLAGS += -DDIRECT3D_VERSION=0x0900
-else
-OSDOBJS += $(WINOBJ)/d3d8intf.o
+
+ifdef USE_NETWORK
+OSDOBJS += \
+	$(WINOBJ)/netdev.o \
+	$(WINOBJ)/netdev_pcap.o
 endif
 
-# extra dependencies
-$(WINOBJ)/drawdd.o :	$(SRC)/emu/rendersw.c
-$(WINOBJ)/drawgdi.o :	$(SRC)/emu/rendersw.c
+CCOMFLAGS += -DDIRECT3D_VERSION=0x0900
 
+# extra dependencies
+$(WINOBJ)/drawdd.o :    $(SRC)/emu/rendersw.c
+$(WINOBJ)/drawgdi.o :   $(SRC)/emu/rendersw.c
+$(WINOBJ)/winmidi.o:    $(SRC)/osd/portmedia/pmmidi.c
+
+ifndef USE_QTDEBUG
 # add debug-specific files
 OSDOBJS += \
 	$(WINOBJ)/debugwin.o
+endif
 
 # add a stub resource file
 RESFILE = $(WINOBJ)/mame.res
 
+#-------------------------------------------------
+# QT Debug library
+#-------------------------------------------------
+ifdef USE_QTDEBUG
+QT_INSTALL_HEADERS := $(shell qmake -query QT_INSTALL_HEADERS)
+QT_LIBS := -L$(shell qmake -query QT_INSTALL_LIBS)
+LIBS += $(QT_LIBS) -lqtmain -lQtGui4 -lQtCore4
+INCPATH += -I$(QT_INSTALL_HEADERS)/QtCore -I$(QT_INSTALL_HEADERS)/QtGui -I$(QT_INSTALL_HEADERS)
+SDLOBJ := $(WINOBJ)/../sdl
+SDLSRC := $(WINSRC)/../sdl
+CFLAGS += -DUSE_QTDEBUG
 
+MOC = @moc
+$(SDLOBJ)/%.moc.c: $(SDLSRC)/%.h
+	$(MOC) $(INCPATH) $(DEFS) $< -o $@
+
+OSDOBJS += \
+	$(SDLOBJ)/debugqt.o \
+	$(SDLOBJ)/debugqtview.o \
+	$(SDLOBJ)/debugqtwindow.o \
+	$(SDLOBJ)/debugqtlogwindow.o \
+	$(SDLOBJ)/debugqtdasmwindow.o \
+	$(SDLOBJ)/debugqtmainwindow.o \
+	$(SDLOBJ)/debugqtmemorywindow.o \
+	$(SDLOBJ)/debugqtbreakpointswindow.o \
+	$(SDLOBJ)/debugqtview.moc.o \
+	$(SDLOBJ)/debugqtwindow.moc.o \
+	$(SDLOBJ)/debugqtlogwindow.moc.o \
+	$(SDLOBJ)/debugqtdasmwindow.moc.o \
+	$(SDLOBJ)/debugqtmainwindow.moc.o \
+	$(SDLOBJ)/debugqtmemorywindow.moc.o \
+	$(SDLOBJ)/debugqtbreakpointswindow.moc.o
+endif
 
 #-------------------------------------------------
 # rules for building the libaries
@@ -361,4 +426,4 @@ $(RESFILE): $(WINSRC)/mame.rc $(WINOBJ)/mamevers.rc
 
 $(WINOBJ)/mamevers.rc: $(BUILDOUT)/verinfo$(BUILD_EXE) $(SRC)/version.c
 	@echo Emitting $@...
-	@"$(BUILDOUT)/verinfo$(BUILD_EXE)" -b windows $(SRC)/version.c > $@
+	@"$(BUILDOUT)/verinfo$(BUILD_EXE)" -b mame $(SRC)/version.c > $@

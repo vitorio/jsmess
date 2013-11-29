@@ -1,88 +1,106 @@
+// license:?
+// copyright-holders:Angelo Salese, Roberto Fresca,David Haywood
 /*******************************************************************************************
 
-Millenium Nuovo 4000 / Nuovo Millenium 4000 (c) 2000 Sure Milano
+  Millennium Nuovo 4000 / Nuovo Millennium 4000
+  (c) 2000 Sure Milano
 
-driver by David Haywood and Angelo Salese
-
-
-Notes:
-
-- At first start-up,an Italian msg pops up: "(translated) pcb has been hacked from external
-  agent,it's advised to add an anti-spark device". Press F2 to enter Service Mode,then press
-  Hold 5 to exit Service Mode.
-
-- This game is supposed to have 3 kind of graphics: billiard/pool balls, numbers and cans.
-  If you go to the settings mode (F2), and then in "Impostazioni del Gioco" you disable all
-  3 graphics (Simboli Biliardo, Simboli Numeri, and Simboli Barattoli --> "Non Abilitato"),
-  The game will start using normal poker cards. A "illegal easter egg"... ;-)
-
-- HW name (stamped on the pcb) is "CHP4";
+  Driver by David Haywood and Angelo Salese.
+  Additional work by Roberto Fresca.
 
 
-TODO:
+  Notes:
 
-- Add Touch Screen support;
-- H/V-blank bits emulation;
-- Protection PIC is unused?
+  - At first start-up,an Italian msg pops up: "(translated) pcb has been hacked from external
+    agent,it's advised to add an anti-spark device". Press F2 to enter Service Mode,then press
+    Hold 5 to exit Service Mode.
+
+  - This game is supposed to have 3 kind of graphics: billiard/pool balls, numbers and cans.
+    If you go to the settings mode (F2), and then in "Impostazioni del Gioco" you disable all
+    3 graphics (Simboli Biliardo, Simboli Numeri, and Simboli Barattoli --> "Non Abilitato"),
+    The game will start using normal poker cards. A "illegal easter egg"... ;-)
+
+  - HW name (stamped on the pcb) is "CHP4";
 
 
-============================================================================================
+  TODO:
 
-Manufacturer: Sure
-Revision number: CHP4 1.5
+  - Add Touch Screen support;
+  - H/V-blank bits emulation;
+  - Protection PIC is unused?
 
-CPU
-1x PIC16C65B (u60)(read protected)
-1x MC68HC000FN12 (u61)
-1x U6295 (u53)(equivalent to M6295)
-1x resonator 1000j (close to 6295)
-1x oscillator 12.000MHz
-1x oscillator 14.31818MHz
-
-ROMs
-1x 27C020 (1)
-7x V29C51001T (2,3,4,5,6,27,28)
-1x PALCE22V10H (u74)(read protected)
-2x A40MX04-PL840010 (u2,u3)(read protected)
-
-RAM:
-4x CY62256L-70PC - 32K x 8 Static RAM.
-2x CY7C199-15PC  - 32K x 8 Static RAM
-
-Note
-1x 28x2 edge connector
-1x RS232 9pins connector
-1x trimmer (volume)
-1x 2positon jumper
-1x pushbutton (reset)
 
 ============================================================================================
 
-CHAMPION 4000 V 1.4
-(CMP4 1.3 on PCB)
-12.000000MHz
-14.31818MHz
-1000J
-MC68HC000FN12
-PIC16C74B
-PALCE22V10H
-U6295
+  Manufacturer: Sure
+  Revision number: CHP4 1.5
+
+  CPU
+  1x PIC16C65B (u60)(read protected)
+  1x MC68HC000FN12 (u61)
+  1x U6295 (u53)(equivalent to M6295)
+  1x resonator 1000j (close to 6295)
+  1x oscillator 12.000MHz
+  1x oscillator 14.31818MHz
+
+  ROMs
+  1x 27C020 (1)
+  7x V29C51001T (2,3,4,5,6,27,28)
+  1x PALCE22V10H (u74)(read protected)
+  2x A40MX04-PL840010 (u2,u3)(read protected)
+
+  RAM:
+  4x CY62256L-70PC - 32K x 8 Static RAM.
+  2x CY7C199-15PC  - 32K x 8 Static RAM
+
+  Note
+  1x 28x2 edge connector
+  1x RS232 9pins connector
+  1x trimmer (volume)
+  1x 2positon jumper
+  1x pushbutton (reset)
 
 ============================================================================================
 
-Changes (2008-12-10, Roberto Fresca):
+  CHAMPION 4000 V 1.4
+  (CMP4 1.3 on PCB)
+  12.000000MHz
+  14.31818MHz
+  1000J
+  MC68HC000FN12
+  PIC16C74B
+  PALCE22V10H
+  U6295
 
-- Completed normal Inputs/Outputs.
-- Added button-lamps calculation.
-- Created button-lamps layout.
-- Documented the PCB RAM.
-- Fixed NVRAM size based on PCB picture (2x CY62256L-70PC near the battery).
-- Added notes about the method to make appear the real poker cards.
-- Fixed the OKI 6295 frequency (1000 kHz resonator near). Now the game has more decent sounds.
-- Corrected CPU clock to 12 MHz. (main Xtal).
+============================================================================================
+
+  Changes (2008-12-10, Roberto Fresca):
+
+  - Completed normal Inputs/Outputs.
+  - Added button-lamps calculation.
+  - Created button-lamps layout.
+  - Documented the PCB RAM.
+  - Fixed NVRAM size based on PCB picture (2x CY62256L-70PC near the battery).
+  - Added notes about the method to make appear the real poker cards.
+  - Fixed the OKI 6295 frequency (1000 kHz resonator near). Now the game has more decent sounds.
+  - Corrected CPU clock to 12 MHz. (main Xtal).
+
+  Changes (2013-05-24, Roberto Fresca):
+
+  - Added Top XXI (Version 1.2).
+  - Added crystals and cpu clock through #define.
+  - Added default NVRAM.
+  - Button-lamps support.
+  - Added technical notes.
 
 
 *******************************************************************************************/
+
+#define MAIN_CLOCK    XTAL_12MHz
+#define SEC_CLOCK     XTAL_14_31818MHz
+
+#define CPU_CLOCK     MAIN_CLOCK
+
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
@@ -95,149 +113,156 @@ class mil4000_state : public driver_device
 {
 public:
 	mil4000_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_sc0_vram(*this, "sc0_vram"),
+		m_sc1_vram(*this, "sc1_vram"),
+		m_sc2_vram(*this, "sc2_vram"),
+		m_sc3_vram(*this, "sc3_vram"),
+		m_maincpu(*this, "maincpu") { }
 
-	UINT16 *m_sc0_vram;
-	UINT16 *m_sc1_vram;
-	UINT16 *m_sc2_vram;
-	UINT16 *m_sc3_vram;
+	required_shared_ptr<UINT16> m_sc0_vram;
+	required_shared_ptr<UINT16> m_sc1_vram;
+	required_shared_ptr<UINT16> m_sc2_vram;
+	required_shared_ptr<UINT16> m_sc3_vram;
 	tilemap_t *m_sc0_tilemap;
 	tilemap_t *m_sc1_tilemap;
 	tilemap_t *m_sc2_tilemap;
 	tilemap_t *m_sc3_tilemap;
 	UINT16 m_vblank;
 	UINT16 m_hblank;
+	DECLARE_READ16_MEMBER(hvretrace_r);
+	DECLARE_WRITE16_MEMBER(sc0_vram_w);
+	DECLARE_WRITE16_MEMBER(sc1_vram_w);
+	DECLARE_WRITE16_MEMBER(sc2_vram_w);
+	DECLARE_WRITE16_MEMBER(sc3_vram_w);
+	DECLARE_WRITE16_MEMBER(output_w);
+	TILE_GET_INFO_MEMBER(get_sc0_tile_info);
+	TILE_GET_INFO_MEMBER(get_sc1_tile_info);
+	TILE_GET_INFO_MEMBER(get_sc2_tile_info);
+	TILE_GET_INFO_MEMBER(get_sc3_tile_info);
+	virtual void video_start();
+	UINT32 screen_update_mil4000(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
 };
 
 
-static TILE_GET_INFO( get_sc0_tile_info )
+TILE_GET_INFO_MEMBER(mil4000_state::get_sc0_tile_info)
 {
-	mil4000_state *state = machine.driver_data<mil4000_state>();
-	UINT32 data = (state->m_sc0_vram[tile_index*2]<<16) | state->m_sc0_vram[tile_index*2+1];
+	UINT32 data = (m_sc0_vram[tile_index*2]<<16) | m_sc0_vram[tile_index*2+1];
 	int tile = data >> 14;
-	int color = (state->m_sc0_vram[tile_index*2+1] & 0x1f)+0;
+	int color = (m_sc0_vram[tile_index*2+1] & 0x1f)+0;
 
-	SET_TILE_INFO(
+	SET_TILE_INFO_MEMBER(
 			0,
 			tile,
 			color,
 			0);
 }
 
-static TILE_GET_INFO( get_sc1_tile_info )
+TILE_GET_INFO_MEMBER(mil4000_state::get_sc1_tile_info)
 {
-	mil4000_state *state = machine.driver_data<mil4000_state>();
-	UINT32 data = (state->m_sc1_vram[tile_index*2]<<16) | state->m_sc1_vram[tile_index*2+1];
+	UINT32 data = (m_sc1_vram[tile_index*2]<<16) | m_sc1_vram[tile_index*2+1];
 	int tile = data >> 14;
-	int color = (state->m_sc1_vram[tile_index*2+1] & 0x1f)+0x10;
+	int color = (m_sc1_vram[tile_index*2+1] & 0x1f)+0x10;
 
-	SET_TILE_INFO(
+	SET_TILE_INFO_MEMBER(
 			0,
 			tile,
 			color,
 			0);
 }
 
-static TILE_GET_INFO( get_sc2_tile_info )
+TILE_GET_INFO_MEMBER(mil4000_state::get_sc2_tile_info)
 {
-	mil4000_state *state = machine.driver_data<mil4000_state>();
-	UINT32 data = (state->m_sc2_vram[tile_index*2]<<16) | state->m_sc2_vram[tile_index*2+1];
+	UINT32 data = (m_sc2_vram[tile_index*2]<<16) | m_sc2_vram[tile_index*2+1];
 	int tile = data >> 14;
-	int color = (state->m_sc2_vram[tile_index*2+1] & 0x1f)+0x20;
+	int color = (m_sc2_vram[tile_index*2+1] & 0x1f)+0x20;
 
-	SET_TILE_INFO(
+	SET_TILE_INFO_MEMBER(
 			0,
 			tile,
 			color,
 			0);
 }
 
-static TILE_GET_INFO( get_sc3_tile_info )
+TILE_GET_INFO_MEMBER(mil4000_state::get_sc3_tile_info)
 {
-	mil4000_state *state = machine.driver_data<mil4000_state>();
-	UINT32 data = (state->m_sc3_vram[tile_index*2]<<16) | state->m_sc3_vram[tile_index*2+1];
+	UINT32 data = (m_sc3_vram[tile_index*2]<<16) | m_sc3_vram[tile_index*2+1];
 	int tile = data >> 14;
-	int color = (state->m_sc3_vram[tile_index*2+1] & 0x1f)+0x30;
+	int color = (m_sc3_vram[tile_index*2+1] & 0x1f)+0x30;
 
-	SET_TILE_INFO(
+	SET_TILE_INFO_MEMBER(
 			0,
 			tile,
 			color,
 			0);
 }
 
-static VIDEO_START(mil4000)
+void mil4000_state::video_start()
 {
-	mil4000_state *state = machine.driver_data<mil4000_state>();
-	state->m_sc0_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,64,64);
-	state->m_sc1_tilemap = tilemap_create(machine, get_sc1_tile_info,tilemap_scan_rows,8,8,64,64);
-	state->m_sc2_tilemap = tilemap_create(machine, get_sc2_tile_info,tilemap_scan_rows,8,8,64,64);
-	state->m_sc3_tilemap = tilemap_create(machine, get_sc3_tile_info,tilemap_scan_rows,8,8,64,64);
+	m_sc0_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(mil4000_state::get_sc0_tile_info),this),TILEMAP_SCAN_ROWS,8,8,64,64);
+	m_sc1_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(mil4000_state::get_sc1_tile_info),this),TILEMAP_SCAN_ROWS,8,8,64,64);
+	m_sc2_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(mil4000_state::get_sc2_tile_info),this),TILEMAP_SCAN_ROWS,8,8,64,64);
+	m_sc3_tilemap = &machine().tilemap().create(tilemap_get_info_delegate(FUNC(mil4000_state::get_sc3_tile_info),this),TILEMAP_SCAN_ROWS,8,8,64,64);
 
-	tilemap_set_transparent_pen(state->m_sc1_tilemap,0);
-	tilemap_set_transparent_pen(state->m_sc2_tilemap,0);
-	tilemap_set_transparent_pen(state->m_sc3_tilemap,0);
+	m_sc1_tilemap->set_transparent_pen(0);
+	m_sc2_tilemap->set_transparent_pen(0);
+	m_sc3_tilemap->set_transparent_pen(0);
 }
 
-static SCREEN_UPDATE(mil4000)
+UINT32 mil4000_state::screen_update_mil4000(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	mil4000_state *state = screen->machine().driver_data<mil4000_state>();
-	tilemap_draw(bitmap,cliprect,state->m_sc0_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,state->m_sc1_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,state->m_sc2_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,state->m_sc3_tilemap,0,0);
+	m_sc0_tilemap->draw(screen, bitmap, cliprect, 0,0);
+	m_sc1_tilemap->draw(screen, bitmap, cliprect, 0,0);
+	m_sc2_tilemap->draw(screen, bitmap, cliprect, 0,0);
+	m_sc3_tilemap->draw(screen, bitmap, cliprect, 0,0);
 	return 0;
 }
 
 /*TODO*/
-static READ16_HANDLER( hvretrace_r )
+READ16_MEMBER(mil4000_state::hvretrace_r)
 {
-	mil4000_state *state = space->machine().driver_data<mil4000_state>();
 	UINT16 res;
 
 	res = 0;
 
-	state->m_vblank^=1;
-	state->m_hblank^=1;
+	m_vblank^=1;
+	m_hblank^=1;
 
 	/*V-Blank*/
-	if (state->m_vblank)
+	if (m_vblank)
 		res|= 0x80;
 
 	/*H-Blank*/
-	if (state->m_hblank)
+	if (m_hblank)
 		res|= 0x40;
 
 	return res;
 }
 
 
-static WRITE16_HANDLER( sc0_vram_w )
+WRITE16_MEMBER(mil4000_state::sc0_vram_w)
 {
-	mil4000_state *state = space->machine().driver_data<mil4000_state>();
-	state->m_sc0_vram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_sc0_tilemap,offset/2);
+	m_sc0_vram[offset] = data;
+	m_sc0_tilemap->mark_tile_dirty(offset/2);
 }
 
-static WRITE16_HANDLER( sc1_vram_w )
+WRITE16_MEMBER(mil4000_state::sc1_vram_w)
 {
-	mil4000_state *state = space->machine().driver_data<mil4000_state>();
-	state->m_sc1_vram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_sc1_tilemap,offset/2);
+	m_sc1_vram[offset] = data;
+	m_sc1_tilemap->mark_tile_dirty(offset/2);
 }
 
-static WRITE16_HANDLER( sc2_vram_w )
+WRITE16_MEMBER(mil4000_state::sc2_vram_w)
 {
-	mil4000_state *state = space->machine().driver_data<mil4000_state>();
-	state->m_sc2_vram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_sc2_tilemap,offset/2);
+	m_sc2_vram[offset] = data;
+	m_sc2_tilemap->mark_tile_dirty(offset/2);
 }
 
-static WRITE16_HANDLER( sc3_vram_w )
+WRITE16_MEMBER(mil4000_state::sc3_vram_w)
 {
-	mil4000_state *state = space->machine().driver_data<mil4000_state>();
-	state->m_sc3_vram[offset] = data;
-	tilemap_mark_tile_dirty(state->m_sc3_tilemap,offset/2);
+	m_sc3_vram[offset] = data;
+	m_sc3_tilemap->mark_tile_dirty(offset/2);
 }
 
 /*end of video stuff*/
@@ -252,30 +277,30 @@ static WRITE16_HANDLER( sc3_vram_w )
     ---- ---- ---- --x- Hold 2
     ---- ---- ---- ---x Hold 1
 */
-static WRITE16_HANDLER( output_w )
+WRITE16_MEMBER(mil4000_state::output_w)
 {
 	int i;
 
 	for(i=0;i<3;i++)
-		coin_counter_w(space->machine(), i, data & 0x2000);
+		coin_counter_w(machine(), i, data & 0x2000);
 
-	output_set_lamp_value(0, (data) & 1);		/* HOLD1 */
-	output_set_lamp_value(1, (data >> 1) & 1);	/* HOLD2 */
-	output_set_lamp_value(2, (data >> 2) & 1);	/* HOLD3 */
-	output_set_lamp_value(3, (data >> 3) & 1);	/* HOLD4 */
-	output_set_lamp_value(4, (data >> 4) & 1);	/* HOLD5 */
-	output_set_lamp_value(5, (data >> 5) & 1);	/* START */
-	output_set_lamp_value(6, (data >> 6) & 1);	/* PREMIO */
+	output_set_lamp_value(0, (data) & 1);       /* HOLD1 */
+	output_set_lamp_value(1, (data >> 1) & 1);  /* HOLD2 */
+	output_set_lamp_value(2, (data >> 2) & 1);  /* HOLD3 */
+	output_set_lamp_value(3, (data >> 3) & 1);  /* HOLD4 */
+	output_set_lamp_value(4, (data >> 4) & 1);  /* HOLD5 */
+	output_set_lamp_value(5, (data >> 5) & 1);  /* START */
+	output_set_lamp_value(6, (data >> 6) & 1);  /* PREMIO */
 
 //  popmessage("%04x\n",data);
 }
 
-static ADDRESS_MAP_START( mil4000_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( mil4000_map, AS_PROGRAM, 16, mil4000_state )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x500000, 0x503fff) AM_RAM_WRITE(sc0_vram_w) AM_BASE_MEMBER(mil4000_state, m_sc0_vram)	// CY62256L-70, U77
-	AM_RANGE(0x504000, 0x507fff) AM_RAM_WRITE(sc1_vram_w) AM_BASE_MEMBER(mil4000_state, m_sc1_vram)	// CY62256L-70, U77
-	AM_RANGE(0x508000, 0x50bfff) AM_RAM_WRITE(sc2_vram_w) AM_BASE_MEMBER(mil4000_state, m_sc2_vram)	// CY62256L-70, U78
-	AM_RANGE(0x50c000, 0x50ffff) AM_RAM_WRITE(sc3_vram_w) AM_BASE_MEMBER(mil4000_state, m_sc3_vram)	// CY62256L-70, U78
+	AM_RANGE(0x500000, 0x503fff) AM_RAM_WRITE(sc0_vram_w) AM_SHARE("sc0_vram")  // CY62256L-70, U77
+	AM_RANGE(0x504000, 0x507fff) AM_RAM_WRITE(sc1_vram_w) AM_SHARE("sc1_vram")  // CY62256L-70, U77
+	AM_RANGE(0x508000, 0x50bfff) AM_RAM_WRITE(sc2_vram_w) AM_SHARE("sc2_vram")  // CY62256L-70, U78
+	AM_RANGE(0x50c000, 0x50ffff) AM_RAM_WRITE(sc3_vram_w) AM_SHARE("sc3_vram")  // CY62256L-70, U78
 
 	AM_RANGE(0x708000, 0x708001) AM_READ_PORT("IN0")
 	AM_RANGE(0x708002, 0x708003) AM_READ_PORT("IN1")
@@ -283,9 +308,9 @@ static ADDRESS_MAP_START( mil4000_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x708006, 0x708007) AM_READ_PORT("IN2")
 	AM_RANGE(0x708008, 0x708009) AM_WRITE(output_w)
 	AM_RANGE(0x708010, 0x708011) AM_NOP //touch screen
-	AM_RANGE(0x70801e, 0x70801f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x70801e, 0x70801f) AM_DEVREADWRITE8("oki", okim6295_device, read, write, 0x00ff)
 
-	AM_RANGE(0x780000, 0x780fff) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x780000, 0x780fff) AM_RAM_WRITE(paletteram_RRRRRGGGGGBBBBBx_word_w) AM_SHARE("paletteram")
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM AM_SHARE("nvram") // 2x CY62256L-70 (U7 & U8).
 
 ADDRESS_MAP_END
@@ -317,7 +342,7 @@ static INPUT_PORTS_START( mil4000 )
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_SERVICE_NO_TOGGLE( 0x0040, IP_ACTIVE_LOW )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Premio") PORT_CODE(KEYCODE_T)	//premio / prize (ticket?)
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Premio") PORT_CODE(KEYCODE_T)   //premio / prize (ticket?)
 	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -364,33 +389,29 @@ GFXDECODE_END
 
 
 static MACHINE_CONFIG_START( mil4000, mil4000_state )
-	MCFG_CPU_ADD("maincpu", M68000, 12000000 )	// ?
+	MCFG_CPU_ADD("maincpu", M68000, CPU_CLOCK)
 	MCFG_CPU_PROGRAM_MAP(mil4000_map)
 	// irq 2/4/5 point to the same place, others invalid
-	MCFG_CPU_VBLANK_INT("screen", irq5_line_hold)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", mil4000_state,  irq5_line_hold)
 
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320, 240)
 	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 0, 240-1)
-	MCFG_SCREEN_UPDATE(mil4000)
+	MCFG_SCREEN_UPDATE_DRIVER(mil4000_state, screen_update_mil4000)
 
 	MCFG_PALETTE_LENGTH(0x800)
-	MCFG_PALETTE_INIT(all_black)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, all_black)
 
 	MCFG_GFXDECODE(mil4000)
-	MCFG_VIDEO_START(mil4000)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 	MCFG_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH) // frequency from 1000 kHz resonator. pin 7 high not verified.
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
-
-
 
 
 ROM_START( mil4000 )
@@ -437,8 +458,8 @@ ROM_END
 
 ROM_START( mil4000b )
 	ROM_REGION( 0x100000, "maincpu", 0 ) // 68000 code
-	ROM_LOAD16_BYTE( "27.u75", 0x000001, 0x20000, CRC(a5ca8a1e) SHA1(c42244e27031175c37e83995f548d960708eabab) )
-	ROM_LOAD16_BYTE( "28.u76", 0x000000, 0x20000, CRC(5bf4e681) SHA1(818d0ec1b2cc544334b0349ae15fd53ff32ef8c1) )
+	ROM_LOAD16_BYTE( "27(__mil4000b).u75", 0x000001, 0x20000, CRC(a5ca8a1e) SHA1(c42244e27031175c37e83995f548d960708eabab) )
+	ROM_LOAD16_BYTE( "28(__mil4000b).u76", 0x000000, 0x20000, CRC(5bf4e681) SHA1(818d0ec1b2cc544334b0349ae15fd53ff32ef8c1) )
 
 	ROM_REGION( 0xa0000, "gfx1", 0 ) // 5bpp?
 	ROM_LOAD( "2.u36",   0x000000, 0x20000, CRC(bb4fcfde) SHA1(7e19722ce42b9ec86faac32a526429b0e56639b5) )
@@ -473,7 +494,60 @@ ROM_START( mil4000c )
 	ROM_LOAD( "pic16c74b_ch4000.u60", 0x000, 0x4d4c, NO_DUMP )
 ROM_END
 
-GAMEL( 2000, mil4000,    0,        mil4000,    mil4000,    0, ROT0,  "Sure Milano", "Millennium Nuovo 4000 (Version 2.0)", 0, layout_mil4000 )
-GAMEL( 2000, mil4000a,   mil4000,  mil4000,    mil4000,    0, ROT0,  "Sure Milano", "Millennium Nuovo 4000 (Version 1.8)", 0, layout_mil4000 )
-GAMEL( 2000, mil4000b,   mil4000,  mil4000,    mil4000,    0, ROT0,  "Sure Milano", "Millennium Nuovo 4000 (Version 1.5)", 0, layout_mil4000 )
-GAMEL( 2000, mil4000c,   mil4000,  mil4000,    mil4000,    0, ROT0,  "Sure Milano", "Millennium Nuovo 4000 (Version 1.6)", 0, layout_mil4000 )
+/*
+
+  TOP XXI
+  -------
+
+  CPU: 1x MC68HC000FN-12 (U81)
+       1x PIC16C65B-20   (U60)
+
+  Sound: 1x U6295 (U53)
+
+  RAM:  2x 6116.
+        2x 6264 (prg RAM)
+        2x 62256 (near battery)
+
+  FPGA: 2x ACTEL A40MX04 - PL84 (U2, U3)
+  PLDs: 1x PALCE22V10H-25 (U74) (protected)
+
+  Battery: 1x 3.6 V.
+
+  Clocks: 1x Xtal @ 12 MHz.
+          1x Xtal @ 14.31818 MHz.
+
+  Both FPGAs have stickers with the game title pacman logo.
+
+*/
+ROM_START( top21 )
+	ROM_REGION( 0x100000, "maincpu", 0 )    // 68000 code
+	ROM_LOAD16_BYTE( "odd_1-2.u75",  0x000001, 0x80000, CRC(ce4f2a74) SHA1(f9a9043da924ddba16f49d6856dbcfd8f066c824) )
+	ROM_LOAD16_BYTE( "even_1-2.u76", 0x000000, 0x80000, CRC(8d645456) SHA1(06c59816f259168f15503b276fc28c947e17cc60) )
+	ROM_COPY( "maincpu",            0x080000, 0x00000, 0x80000 )    // copying the second halves to the right offset
+
+	ROM_REGION( 0xa0000, "gfx1", 0 )
+	ROM_LOAD( "36.u36",     0x000000, 0x20000, CRC(071883f7) SHA1(16b5c251975394bb94c0d32277912ea99280c21c) )
+	ROM_LOAD( "35.u35",     0x020000, 0x20000, CRC(cdc8cc44) SHA1(ce703e7f050465b1bc07800eb84eb7f127ebbddb) )   // double size. 2nd half empty
+	ROM_IGNORE(                       0x20000)
+	ROM_LOAD( "34.u34",     0x040000, 0x20000, CRC(bdbe7360) SHA1(3038f66d57a43afea9d6c05908bfb50167a881c2) )
+	ROM_LOAD( "33.u33",     0x060000, 0x20000, CRC(670584b0) SHA1(23772404b5e5066828c59d9baa03b732a80db676) )
+	ROM_LOAD( "32.u32",     0x080000, 0x20000, CRC(c5bc3950) SHA1(aebaae91ade0c221ba14186fde78206996cdec30) )
+
+	ROM_REGION( 0x80000, "oki", 0 ) // 6295 samples (first half empty)
+	ROM_LOAD( "audio.u64",  0x00000, 0x80000, CRC(4f70a9bc) SHA1(83f0664eadf923ed45e3e18bfcefafb85163c4a0) )
+	ROM_COPY( "oki",        0x40000, 0x00000, 0x40000 ) // copying the second half to the right offset
+
+	ROM_REGION( 0x4000, "mcu", 0 )  // MCU code
+	ROM_LOAD( "pic16c65b_top21.u60", 0x0000, 0x4000, NO_DUMP )
+
+	ROM_REGION( 0x10000, "nvram", 0 )   // default NVRAM (2x 62256)
+	ROM_LOAD( "top21_nvram.bin", 0x00000, 0x10000, CRC(638726ce) SHA1(c55c77df5fbddfb19acf50f1b4467c63c818d5e7) )
+ROM_END
+
+
+/*     YEAR  NAME      PARENT    MACHINE   INPUT    STATE          INIT      ROT     COMPANY              FULLNAME                              FLAGS  LAYOUT  */
+GAMEL( 2000, mil4000,  0,        mil4000,  mil4000, driver_device, 0,        ROT0,  "Sure Milano",       "Millennium Nuovo 4000 (Version 2.0)", 0,     layout_mil4000 )
+GAMEL( 2000, mil4000a, mil4000,  mil4000,  mil4000, driver_device, 0,        ROT0,  "Sure Milano",       "Millennium Nuovo 4000 (Version 1.8)", 0,     layout_mil4000 )
+GAMEL( 2000, mil4000b, mil4000,  mil4000,  mil4000, driver_device, 0,        ROT0,  "Sure Milano",       "Millennium Nuovo 4000 (Version 1.5)", 0,     layout_mil4000 )
+GAMEL( 2000, mil4000c, mil4000,  mil4000,  mil4000, driver_device, 0,        ROT0,  "Sure Milano",       "Millennium Nuovo 4000 (Version 1.6)", 0,     layout_mil4000 )
+GAMEL( 200?, top21,    0,        mil4000,  mil4000, driver_device, 0,        ROT0,  "Assogiochi Assago", "Top XXI (Version 1.2)",               0,     layout_mil4000 )

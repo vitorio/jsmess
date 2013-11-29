@@ -21,11 +21,11 @@
 
 /* ----------------------------------------------------------------------- */
 
-#define EOLN_CR		"\x0d"
-#define EOLN_LF		"\x0a"
-#define EOLN_CRLF	"\x0d\x0a"
+#define EOLN_CR     "\x0d"
+#define EOLN_LF     "\x0a"
+#define EOLN_CRLF   "\x0d\x0a"
 
-#define FILENAME_BOOTBLOCK	((const char *) 1)
+#define FILENAME_BOOTBLOCK  ((const char *) 1)
 
 enum
 {
@@ -50,8 +50,7 @@ enum
  * ---------------------------------------------------------------------------
  */
 
-typedef struct _imgtool_module_features imgtool_module_features;
-struct _imgtool_module_features
+struct imgtool_module_features
 {
 	unsigned int supports_create : 1;
 	unsigned int supports_open : 1;
@@ -60,8 +59,7 @@ struct _imgtool_module_features
 	unsigned int is_read_only : 1;
 };
 
-typedef struct _imgtool_partition_features imgtool_partition_features;
-struct _imgtool_partition_features
+struct imgtool_partition_features
 {
 	unsigned int supports_reading : 1;
 	unsigned int supports_writing : 1;

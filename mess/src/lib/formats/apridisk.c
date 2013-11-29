@@ -11,17 +11,17 @@
     CONSTANTS
 ***************************************************************************/
 
-#define APR_HEADER_SIZE		128
+#define APR_HEADER_SIZE     128
 
 /* sector types */
-#define APR_DELETED		0xe31d0000
-#define APR_MAGIC		0xe31d0001
-#define APR_COMMENT		0xe31d0002
-#define APR_CREATOR		0xe31d0003
+#define APR_DELETED     0xe31d0000
+#define APR_MAGIC       0xe31d0001
+#define APR_COMMENT     0xe31d0002
+#define APR_CREATOR     0xe31d0003
 
 /* compression type */
-#define APR_UNCOMPRESSED	0x9e90
-#define APR_COMPRESSED		0x3e5a
+#define APR_UNCOMPRESSED    0x9e90
+#define APR_COMPRESSED      0x3e5a
 
 static const char *apr_magic = "ACT Apricot disk image\x1a\x04";
 
@@ -63,7 +63,7 @@ struct apr_tag
  *    15: sector
  */
 
-static floperr_t apr_read_sector(floppy_image *floppy, int head, int track, int sector, void *buffer, size_t buflen)
+static floperr_t apr_read_sector(floppy_image_legacy *floppy, int head, int track, int sector, void *buffer, size_t buflen)
 {
 	struct apr_tag *tag = (apr_tag *)floppy_tag(floppy);
 //  printf("apr_read_sector %d %d %d\n", head, track, sector);
@@ -71,7 +71,7 @@ static floperr_t apr_read_sector(floppy_image *floppy, int head, int track, int 
 	return FLOPPY_ERROR_SUCCESS;
 }
 
-static floperr_t apr_read_indexed_sector(floppy_image *floppy, int head, int track, int sector, void *buffer, size_t buflen)
+static floperr_t apr_read_indexed_sector(floppy_image_legacy *floppy, int head, int track, int sector, void *buffer, size_t buflen)
 {
 	struct apr_tag *tag = (apr_tag *)floppy_tag(floppy);
 //  printf("apr_read_indexed_sector %d %d %d\n", head, track, sector);
@@ -80,25 +80,25 @@ static floperr_t apr_read_indexed_sector(floppy_image *floppy, int head, int tra
 }
 
 /* sector length is always 512 byte */
-static floperr_t apr_get_sector_length(floppy_image *floppy, int head, int track, int sector, UINT32 *sector_length)
+static floperr_t apr_get_sector_length(floppy_image_legacy *floppy, int head, int track, int sector, UINT32 *sector_length)
 {
 	*sector_length = 512;
 	return FLOPPY_ERROR_SUCCESS;
 }
 
-static int apr_get_heads_per_disk(floppy_image *floppy)
+static int apr_get_heads_per_disk(floppy_image_legacy *floppy)
 {
 	struct apr_tag *tag = (apr_tag *)floppy_tag(floppy);
 	return tag->heads;
 }
 
-static int apr_get_tracks_per_disk(floppy_image *floppy)
+static int apr_get_tracks_per_disk(floppy_image_legacy *floppy)
 {
 	struct apr_tag *tag = (apr_tag *)floppy_tag(floppy);
 	return tag->tracks;
 }
 
-static floperr_t apr_get_indexed_sector_info(floppy_image *floppy, int head, int track, int sector_index, int *cylinder, int *side, int *sector, UINT32 *sector_length, unsigned long *flags)
+static floperr_t apr_get_indexed_sector_info(floppy_image_legacy *floppy, int head, int track, int sector_index, int *cylinder, int *side, int *sector, UINT32 *sector_length, unsigned long *flags)
 {
 	struct apr_tag *tag = (apr_tag *)floppy_tag(floppy);
 
@@ -125,7 +125,7 @@ FLOPPY_IDENTIFY( apridisk_identify )
 	floppy_image_read(floppy, &header, 0, sizeof(header));
 
 	/* look for the magic string */
-	if (memcmp(header, apr_magic, sizeof(apr_magic)) == 0)
+	if (memcmp(header, apr_magic, sizeof(*apr_magic)) == 0)
 		*vote = 100;
 	else
 		*vote = 0;

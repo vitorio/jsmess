@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     OKI MSM5832 Real Time Clock/Calendar emulation
@@ -53,10 +55,6 @@ enum
 };
 
 
-// days per month
-static const int DAYS_PER_MONTH[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-
-
 
 //**************************************************************************
 //  INLINE HELPERS
@@ -83,86 +81,6 @@ inline void msm5832_device::write_counter(int counter, int value)
 }
 
 
-//-------------------------------------------------
-//  advance_seconds -
-//-------------------------------------------------
-
-inline void msm5832_device::advance_seconds()
-{
-	int seconds = read_counter(REGISTER_S1);
-
-	seconds++;
-
-	if (seconds > 59)
-	{
-		seconds = 0;
-
-		advance_minutes();
-	}
-
-	write_counter(REGISTER_S1, seconds);
-}
-
-
-//-------------------------------------------------
-//  advance_minutes -
-//-------------------------------------------------
-
-inline void msm5832_device::advance_minutes()
-{
-	int minutes = read_counter(REGISTER_MI1);
-	int hours = read_counter(REGISTER_H1);
-	int days = read_counter(REGISTER_D1);
-	int month = read_counter(REGISTER_MO1);
-	int year = read_counter(REGISTER_Y1);
-	int day_of_week = m_reg[REGISTER_W];
-
-	minutes++;
-
-	if (minutes > 59)
-	{
-		minutes = 0;
-		hours++;
-	}
-
-	if (hours > 23)
-	{
-		hours = 0;
-		days++;
-		day_of_week++;
-	}
-
-	if (day_of_week > 6)
-	{
-		day_of_week++;
-	}
-
-	if (days > DAYS_PER_MONTH[month - 1])
-	{
-		days = 1;
-		month++;
-	}
-
-	if (month > 12)
-	{
-		month = 1;
-		year++;
-	}
-
-	if (year > 99)
-	{
-		year = 0;
-	}
-
-	write_counter(REGISTER_MI1, minutes);
-	write_counter(REGISTER_H1, hours);
-	write_counter(REGISTER_D1, days);
-	write_counter(REGISTER_MO1, month);
-	write_counter(REGISTER_Y1, year);
-	m_reg[REGISTER_W] = day_of_week;
-}
-
-
 
 //**************************************************************************
 //  LIVE DEVICE
@@ -173,13 +91,13 @@ inline void msm5832_device::advance_minutes()
 //-------------------------------------------------
 
 msm5832_device::msm5832_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, MSM5832, "MSM5832", tag, owner, clock),
-	  device_rtc_interface(mconfig, *this),
-	  m_hold(0),
-	  m_address(0),
-	  m_read(0),
-	  m_write(0),
-	  m_cs(0)
+	: device_t(mconfig, MSM5832, "MSM5832", tag, owner, clock, "msm5832", __FILE__),
+		device_rtc_interface(mconfig, *this),
+		m_hold(0),
+		m_address(0),
+		m_read(0),
+		m_write(0),
+		m_cs(0)
 {
 	for (int i = 0; i < 13; i++)
 		m_reg[i] = 0;
@@ -207,6 +125,16 @@ void msm5832_device::device_start()
 
 
 //-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void msm5832_device::device_reset()
+{
+	set_current_time(machine());
+}
+
+
+//-------------------------------------------------
 //  device_timer - handler timer events
 //-------------------------------------------------
 
@@ -225,11 +153,10 @@ void msm5832_device::device_timer(emu_timer &timer, device_timer_id id, int para
 
 
 //-------------------------------------------------
-//  rtc_set_time - called to initialize the RTC to
-//  a known state
+//  rtc_clock_updated -
 //-------------------------------------------------
 
-void msm5832_device::rtc_set_time(int year, int month, int day, int day_of_week, int hour, int minute, int second)
+void msm5832_device::rtc_clock_updated(int year, int month, int day, int day_of_week, int hour, int minute, int second)
 {
 	write_counter(REGISTER_Y1, year);
 	write_counter(REGISTER_MO1, month);
@@ -255,6 +182,10 @@ READ8_MEMBER( msm5832_device::data_r )
 		{
 			// TODO reference output
 		}
+		else if(m_address == 0x0d || m_address == 0x0e)  // Otrona Attache CP/M BIOS checks these unused registers to detect it
+		{
+			data = 0x0f;
+		}
 		else
 		{
 			data = m_reg[m_address];
@@ -278,6 +209,9 @@ WRITE8_MEMBER( msm5832_device::data_w )
 	if (m_cs && m_write)
 	{
 		m_reg[m_address] = data & 0x0f;
+
+		set_time(false, read_counter(REGISTER_Y1), read_counter(REGISTER_MO1), read_counter(REGISTER_D1), m_reg[REGISTER_W],
+			read_counter(REGISTER_H1), read_counter(REGISTER_MI1), read_counter(REGISTER_S1));
 	}
 }
 
@@ -304,17 +238,7 @@ WRITE_LINE_MEMBER( msm5832_device::adj_w )
 
 	if (state)
 	{
-		int seconds = read_counter(REGISTER_S1);
-
-		if (seconds < 30)
-		{
-			write_counter(REGISTER_S1, 0);
-		}
-		else
-		{
-			write_counter(REGISTER_S1, 0);
-			advance_minutes();
-		}
+		adjust_seconds();
 	}
 }
 

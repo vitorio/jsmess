@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
         Schleicher MES
@@ -5,29 +7,25 @@
         30/08/2010 Skeleton driver
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define VIDEO_START_MEMBER(name) void name::video_start()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
 class mes_state : public driver_device
 {
 public:
 	mes_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-	m_maincpu(*this, "maincpu")
-	{ }
+	m_maincpu(*this, "maincpu"),
+	m_p_videoram(*this, "p_videoram"){ }
 
 	required_device<cpu_device> m_maincpu;
 	const UINT8 *m_p_chargen;
-	const UINT8 *m_p_videoram;
+	required_shared_ptr<const UINT8> m_p_videoram;
 	virtual void machine_reset();
 	virtual void video_start();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 };
 
 
@@ -36,7 +34,7 @@ static ADDRESS_MAP_START(mes_mem, AS_PROGRAM, 8, mes_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x1000, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(m_p_videoram)
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_SHARE("p_videoram")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mes_io, AS_IO, 8, mes_state)
@@ -47,18 +45,18 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( mes )
 INPUT_PORTS_END
 
-MACHINE_RESET_MEMBER(mes_state)
+void mes_state::machine_reset()
 {
 }
 
-VIDEO_START_MEMBER( mes_state )
+void mes_state::video_start()
 {
-	m_p_chargen = machine().region("chargen")->base();
+	m_p_chargen = memregion("chargen")->base();
 }
 
 /* This system appears to have 2 screens. Not implemented.
     Also the screen dimensions are a guess. */
-SCREEN_UPDATE_MEMBER( mes_state )
+UINT32 mes_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	//static UINT8 framecnt=0;
 	UINT8 y,ra,chr,gfx;
@@ -70,7 +68,7 @@ SCREEN_UPDATE_MEMBER( mes_state )
 	{
 		for (ra = 0; ra < 10; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(&bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			xx = ma;
 			for (x = ma; x < ma + 80; x++)
@@ -87,20 +85,17 @@ SCREEN_UPDATE_MEMBER( mes_state )
 					if (chr & 0x80)  // ignore attribute bytes
 						x--;
 					else
-					{
 						gfx = m_p_chargen[(chr<<4) | ra ];
-
-						/* Display a scanline of a character */
-						*p++ = BIT(gfx, 7);
-						*p++ = BIT(gfx, 6);
-						*p++ = BIT(gfx, 5);
-						*p++ = BIT(gfx, 4);
-						*p++ = BIT(gfx, 3);
-						*p++ = BIT(gfx, 2);
-						*p++ = BIT(gfx, 1);
-						*p++ = BIT(gfx, 0);
-					}
 				}
+				/* Display a scanline of a character */
+				*p++ = BIT(gfx, 7);
+				*p++ = BIT(gfx, 6);
+				*p++ = BIT(gfx, 5);
+				*p++ = BIT(gfx, 4);
+				*p++ = BIT(gfx, 3);
+				*p++ = BIT(gfx, 2);
+				*p++ = BIT(gfx, 1);
+				*p++ = BIT(gfx, 0);
 			}
 		}
 		ma+=80;
@@ -118,11 +113,11 @@ static MACHINE_CONFIG_START( mes, mes_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(mes_state, screen_update)
 	MCFG_SCREEN_SIZE(640, 250)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 249)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 MACHINE_CONFIG_END
 
 
@@ -141,5 +136,5 @@ ROM_END
 
 /* Driver */
 
-/*   YEAR  NAME    PARENT  COMPAT   MACHINE  INPUT  INIT        COMPANY   FULLNAME       FLAGS */
-COMP( 198?, mes,  0,       0,	mes,	mes,	 0, 	  "Schleicher",   "MES", GAME_NOT_WORKING | GAME_NO_SOUND)
+/*   YEAR   NAME    PARENT  COMPAT   MACHINE  INPUT  INIT        COMPANY     FULLNAME       FLAGS */
+COMP( 198?, mes,    0,      0,       mes,     mes, driver_device,   0,       "Schleicher",   "MES", GAME_NOT_WORKING | GAME_NO_SOUND)

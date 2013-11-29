@@ -103,7 +103,7 @@ xx/xx/2001  KS -    TS-2068 sound fixed.
                 70908 cycles for each frame.
             Remaped some Spectrum+ keys.
                 Presing F3 to reset was seting 0xf7 on keyboard
-                input port. Problem occured for snapshots of
+                input port. Problem occurred for snapshots of
                 some programms where it was readed as pressing
                 key 4 (which is exit in Tapecopy by R. Dannhoefer
                 for example).
@@ -155,6 +155,37 @@ http://www.z88forever.org.uk/zxplus3e/
 #include "machine/beta.h"
 #include "machine/ram.h"
 
+class scorpion_state : public spectrum_state
+{
+public:
+	scorpion_state(const machine_config &mconfig, device_type type, const char *tag)
+		: spectrum_state(mconfig, type, tag)
+		, m_bank1(*this, "bank1")
+		, m_bank2(*this, "bank2")
+		, m_bank3(*this, "bank3")
+		, m_bank4(*this, "bank4")
+		, m_beta(*this, BETA_DISK_TAG)
+	{ }
+
+	DECLARE_DIRECT_UPDATE_MEMBER(scorpion_direct);
+	DECLARE_WRITE8_MEMBER(scorpion_0000_w);
+	DECLARE_WRITE8_MEMBER(scorpion_port_7ffd_w);
+	DECLARE_WRITE8_MEMBER(scorpion_port_1ffd_w);
+	DECLARE_MACHINE_START(scorpion);
+	DECLARE_MACHINE_RESET(scorpion);
+	TIMER_DEVICE_CALLBACK_MEMBER(nmi_check_callback);
+protected:
+	required_memory_bank m_bank1;
+	required_memory_bank m_bank2;
+	required_memory_bank m_bank3;
+	required_memory_bank m_bank4;
+	required_device<device_t> m_beta;
+private:
+	UINT8 *m_p_ram;
+	void scorpion_update_memory();
+
+};
+
 /****************************************************************************************************/
 /* Zs Scorpion 256 */
 
@@ -183,166 +214,145 @@ D6-D7 - not used. ( yet ? )
 
 /* rom 0=zx128, 1=zx48, 2 = service monitor, 3=tr-dos */
 
-static void scorpion_update_memory(running_machine &machine)
+void scorpion_state::scorpion_update_memory()
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	UINT8 *messram = ram_get_ptr(machine.device(RAM_TAG));
+	UINT8 *messram = m_ram->pointer();
 
-	state->m_screen_location = messram + ((state->m_port_7ffd_data & 8) ? (7<<14) : (5<<14));
+	m_screen_location = messram + ((m_port_7ffd_data & 8) ? (7<<14) : (5<<14));
 
-	memory_set_bankptr(machine, "bank4", messram + (((state->m_port_7ffd_data & 0x07) | ((state->m_port_1ffd_data & 0x10)>>1)) * 0x4000));
+	m_bank4->set_base(messram + (((m_port_7ffd_data & 0x07) | ((m_port_1ffd_data & 0x10)>>1)) * 0x4000));
 
-	if ((state->m_port_1ffd_data & 0x01)==0x01)
+	if ((m_port_1ffd_data & 0x01)==0x01)
 	{
-		state->m_ram_0000 = messram+(8<<14);
-		memory_set_bankptr(machine, "bank1", messram+(8<<14));
+		m_ram_0000 = messram+(8<<14);
+		m_bank1->set_base(messram+(8<<14));
 		logerror("RAM\n");
 	}
 	else
 	{
-		if ((state->m_port_1ffd_data & 0x02)==0x02)
-		{
-			state->m_ROMSelection = 2;
-		}
+		if ((m_port_1ffd_data & 0x02)==0x02)
+			m_ROMSelection = 2;
 		else
-		{
-			state->m_ROMSelection = ((state->m_port_7ffd_data>>4) & 0x01) ? 1 : 0;
-		}
-		memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base() + 0x010000 + (state->m_ROMSelection<<14));
+			m_ROMSelection = BIT(m_port_7ffd_data, 4);
+
+		m_bank1->set_base(&m_p_ram[0x10000 + (m_ROMSelection<<14)]);
 	}
-
-
 }
 
-static WRITE8_HANDLER( scorpion_0000_w )
+WRITE8_MEMBER(scorpion_state::scorpion_0000_w)
 {
-	spectrum_state *state = space->machine().driver_data<spectrum_state>();
-
-	if ( ! state->m_ram_0000 )
+	if ( ! m_ram_0000 )
 		return;
 
-	if ((state->m_port_1ffd_data & 0x01)==0x01)
+	if ((m_port_1ffd_data & 0x01)==0x01)
 	{
-		if ( ! state->m_ram_disabled_by_beta )
-			state->m_ram_0000[offset] = data;
+		if ( ! m_ram_disabled_by_beta )
+			m_ram_0000[offset] = data;
 	}
 }
 
 
-DIRECT_UPDATE_HANDLER( scorpion_direct )
+DIRECT_UPDATE_MEMBER(scorpion_state::scorpion_direct)
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	device_t *beta = machine.device(BETA_DISK_TAG);
-	UINT16 pc = cpu_get_reg(machine.device("maincpu"), STATE_GENPCBASE);
+	UINT16 pc = m_maincpu->device_t::safe_pcbase(); // works, but...
 
-	state->m_ram_disabled_by_beta = 0;
-	if (betadisk_is_active(beta))
+	m_ram_disabled_by_beta = 0;
+	if (betadisk_is_active(m_beta) && (pc >= 0x4000))
 	{
-		if (pc >= 0x4000)
-		{
-			state->m_ROMSelection = ((state->m_port_7ffd_data>>4) & 0x01) ? 1 : 0;
-			betadisk_disable(beta);
-			state->m_ram_disabled_by_beta = 1;
-			memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base() + 0x010000 + (state->m_ROMSelection<<14));
-		}
+		m_ROMSelection = BIT(m_port_7ffd_data, 4);
+		betadisk_disable(m_beta);
+		m_ram_disabled_by_beta = 1;
+		m_bank1->set_base(&m_p_ram[0x10000 + (m_ROMSelection<<14)]);
 	}
-	else if (((pc & 0xff00) == 0x3d00) && (state->m_ROMSelection==1))
+	else
+	if (((pc & 0xff00) == 0x3d00) && (m_ROMSelection==1))
 	{
-		state->m_ROMSelection = 3;
-		betadisk_enable(beta);
+		m_ROMSelection = 3;
+		betadisk_enable(m_beta);
 	}
-	if((address>=0x0000) && (address<=0x3fff))
+
+	if(address<=0x3fff)
 	{
-		state->m_ram_disabled_by_beta = 1;
-		direct.explicit_configure(0x0000, 0x3fff, 0x3fff, machine.region("maincpu")->base() + 0x010000 + (state->m_ROMSelection<<14));
-		memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base() + 0x010000 + (state->m_ROMSelection<<14));
+		m_ram_disabled_by_beta = 1;
+		direct.explicit_configure(0x0000, 0x3fff, 0x3fff, &m_p_ram[0x10000 + (m_ROMSelection<<14)]);
+		m_bank1->set_base(&m_p_ram[0x10000 + (m_ROMSelection<<14)]);
 		return ~0;
 	}
+
 	return address;
 }
 
-static TIMER_DEVICE_CALLBACK(nmi_check_callback)
+TIMER_DEVICE_CALLBACK_MEMBER(scorpion_state::nmi_check_callback)
 {
-	spectrum_state *state = timer.machine().driver_data<spectrum_state>();
-
-	if ((input_port_read(timer.machine(), "NMI") & 1)==1)
+	if ((m_io_nmi->read() & 1)==1)
 	{
-		state->m_port_1ffd_data |= 0x02;
-		scorpion_update_memory(timer.machine());
-		cputag_set_input_line(timer.machine(), "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+		m_port_1ffd_data |= 0x02;
+		scorpion_update_memory();
+		m_maincpu->set_input_line(INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
-static WRITE8_HANDLER(scorpion_port_7ffd_w)
+WRITE8_MEMBER(scorpion_state::scorpion_port_7ffd_w)
 {
-	spectrum_state *state = space->machine().driver_data<spectrum_state>();
-
 	/* disable paging */
-	if (state->m_port_7ffd_data & 0x20)
+	if (m_port_7ffd_data & 0x20)
 		return;
 
 	/* store new state */
-	state->m_port_7ffd_data = data;
+	m_port_7ffd_data = data;
 
 	/* update memory */
-	scorpion_update_memory(space->machine());
+	scorpion_update_memory();
 }
 
-static WRITE8_HANDLER(scorpion_port_1ffd_w)
+WRITE8_MEMBER(scorpion_state::scorpion_port_1ffd_w)
 {
-	spectrum_state *state = space->machine().driver_data<spectrum_state>();
-
-	/* if paging not disabled */
-	if ((state->m_port_7ffd_data & 0x20)==0)
-	{
-		state->m_port_1ffd_data = data;
-		scorpion_update_memory(space->machine());
-	}
+	m_port_1ffd_data = data;
+	scorpion_update_memory();
 }
 
-static ADDRESS_MAP_START (scorpion_io, AS_IO, 8)
+static ADDRESS_MAP_START (scorpion_io, AS_IO, 8, scorpion_state )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x001f, 0x001f) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_status_r,betadisk_command_w) AM_MIRROR(0xff00)
-	AM_RANGE(0x003f, 0x003f) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_track_r,betadisk_track_w) AM_MIRROR(0xff00)
-	AM_RANGE(0x005f, 0x005f) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_sector_r,betadisk_sector_w) AM_MIRROR(0xff00)
-	AM_RANGE(0x007f, 0x007f) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_data_r,betadisk_data_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x001f, 0x001f) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_status_r,betadisk_command_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x003f, 0x003f) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_track_r,betadisk_track_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x005f, 0x005f) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_sector_r,betadisk_sector_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x007f, 0x007f) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_data_r,betadisk_data_w) AM_MIRROR(0xff00)
 	AM_RANGE(0x00fe, 0x00fe) AM_READWRITE(spectrum_port_fe_r,spectrum_port_fe_w) AM_MIRROR(0xff00) AM_MASK(0xffff)
-	AM_RANGE(0x00ff, 0x00ff) AM_DEVREADWRITE(BETA_DISK_TAG, betadisk_state_r, betadisk_param_w) AM_MIRROR(0xff00)
+	AM_RANGE(0x00ff, 0x00ff) AM_DEVREADWRITE_LEGACY(BETA_DISK_TAG, betadisk_state_r, betadisk_param_w) AM_MIRROR(0xff00)
 	AM_RANGE(0x4000, 0x4000) AM_WRITE(scorpion_port_7ffd_w)  AM_MIRROR(0x3ffd)
-	AM_RANGE(0x8000, 0x8000) AM_DEVWRITE("ay8912", ay8910_data_w) AM_MIRROR(0x3ffd)
-	AM_RANGE(0xc000, 0xc000) AM_DEVREADWRITE("ay8912", ay8910_r, ay8910_address_w) AM_MIRROR(0x3ffd)
+	AM_RANGE(0x8000, 0x8000) AM_DEVWRITE("ay8912", ay8910_device, data_w) AM_MIRROR(0x3ffd)
+	AM_RANGE(0xc000, 0xc000) AM_DEVREADWRITE("ay8912", ay8910_device, data_r, address_w) AM_MIRROR(0x3ffd)
 	AM_RANGE(0x1000, 0x1000) AM_WRITE(scorpion_port_1ffd_w) AM_MIRROR(0x0ffd)
 ADDRESS_MAP_END
 
 
-static MACHINE_RESET( scorpion )
+MACHINE_RESET_MEMBER(scorpion_state,scorpion)
 {
-	spectrum_state *state = machine.driver_data<spectrum_state>();
-	UINT8 *messram = ram_get_ptr(machine.device(RAM_TAG));
-	device_t *beta = machine.device(BETA_DISK_TAG);
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	UINT8 *messram = m_ram->pointer();
+	address_space &space = m_maincpu->space(AS_PROGRAM);
+	m_p_ram = memregion("maincpu")->base();
 
-	state->m_ram_0000 = NULL;
-	space->install_read_bank(0x0000, 0x3fff, "bank1");
-	space->install_legacy_write_handler(0x0000, 0x3fff, FUNC(scorpion_0000_w));
+	m_ram_0000 = NULL;
+	space.install_read_bank(0x0000, 0x3fff, "bank1");
+	space.install_write_handler(0x0000, 0x3fff, write8_delegate(FUNC(scorpion_state::scorpion_0000_w),this));
 
-	betadisk_disable(beta);
-	betadisk_clear_status(beta);
-	space->set_direct_update_handler(direct_update_delegate(FUNC(scorpion_direct), &machine));
+	betadisk_disable(m_beta);
+	betadisk_clear_status(m_beta);
+	space.set_direct_update_handler(direct_update_delegate(FUNC(scorpion_state::scorpion_direct), this));
 
 	memset(messram,0,256*1024);
 
 	/* Bank 5 is always in 0x4000 - 0x7fff */
-	memory_set_bankptr(machine, "bank2", messram + (5<<14));
+	m_bank2->set_base(messram + (5<<14));
 
 	/* Bank 2 is always in 0x8000 - 0xbfff */
-	memory_set_bankptr(machine, "bank3", messram + (2<<14));
+	m_bank3->set_base(messram + (2<<14));
 
-	state->m_port_7ffd_data = 0;
-	state->m_port_1ffd_data = 0;
-	scorpion_update_memory(machine);
+	m_port_7ffd_data = 0;
+	m_port_1ffd_data = 0;
+	scorpion_update_memory();
 }
-static MACHINE_START( scorpion )
+MACHINE_START_MEMBER(scorpion_state,scorpion)
 {
 }
 
@@ -350,41 +360,41 @@ static MACHINE_START( scorpion )
 /* F4 Character Displayer */
 static const gfx_layout spectrum_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	96,					/* 96 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	96,                 /* 96 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static const gfx_layout quorum_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	160,					/* 160 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	160,                    /* 160 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static const gfx_layout profi_8_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	224,					/* 224 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	224,                    /* 224 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( scorpion )
@@ -401,12 +411,12 @@ static GFXDECODE_START( quorum )
 	GFXDECODE_ENTRY( "maincpu", 0x1fb00, quorum_charlayout, 0, 8 )
 GFXDECODE_END
 
-static MACHINE_CONFIG_DERIVED( scorpion, spectrum_128 )
+static MACHINE_CONFIG_DERIVED_CLASS( scorpion, spectrum_128, scorpion_state )
 	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_IO_MAP(scorpion_io)
 
-	MCFG_MACHINE_START( scorpion )
-	MCFG_MACHINE_RESET( scorpion )
+	MCFG_MACHINE_START_OVERRIDE(scorpion_state, scorpion )
+	MCFG_MACHINE_RESET_OVERRIDE(scorpion_state, scorpion )
 	MCFG_GFXDECODE(scorpion)
 
 	MCFG_BETA_DISK_ADD(BETA_DISK_TAG)
@@ -415,7 +425,7 @@ static MACHINE_CONFIG_DERIVED( scorpion, spectrum_128 )
 	MCFG_RAM_MODIFY(RAM_TAG)
 	MCFG_RAM_DEFAULT_SIZE("256K")
 
-	MCFG_TIMER_ADD_PERIODIC("nmi_timer", nmi_check_callback, attotime::from_hz(50))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("nmi_timer", scorpion_state, nmi_check_callback, attotime::from_hz(50))
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( profi, scorpion )
@@ -508,9 +518,9 @@ ROM_START( kay1024 )
 	ROM_CART_LOAD("cart", 0x0000, 0x4000, ROM_NOCLEAR | ROM_NOMIRROR | ROM_OPTIONAL)
 ROM_END
 
-/*    YEAR  NAME      PARENT    COMPAT  MACHINE     INPUT       INIT    COMPANY     FULLNAME */
-COMP( 1994, scorpio,  spec128,	 0,	scorpion,	spec_plus,	0,		"Zonov and Co.",		"Scorpion ZS-256", GAME_NOT_WORKING )
-COMP( 1991, profi,    spec128,	 0,	profi,  	spec_plus,	0,		"Kondor and Kramis",		"Profi", GAME_NOT_WORKING )
-COMP( 1998, kay1024,  spec128,	 0,	scorpion,	spec_plus,	0,		"NEMO",		"Kay 1024", GAME_NOT_WORKING )
-COMP( 19??, quorum,   spec128,	 0,	quorum, 	spec_plus,	0,		"<unknown>",		"Quorum", GAME_NOT_WORKING )
-COMP( 19??, bestzx,   spec128,	 0,	scorpion,	spec_plus,	0,		"<unknown>",		"BestZX", GAME_NOT_WORKING )
+/*    YEAR  NAME      PARENT    COMPAT  MACHINE     INPUT   CLASS         INIT      COMPANY     FULLNAME */
+COMP( 1994, scorpio,  spec128,   0, scorpion,   spec_plus, driver_device,   0,      "Zonov and Co.",        "Scorpion ZS-256", GAME_NOT_WORKING )
+COMP( 1991, profi,    spec128,   0, profi,      spec_plus, driver_device,   0,      "Kondor and Kramis",        "Profi", GAME_NOT_WORKING )
+COMP( 1998, kay1024,  spec128,   0, scorpion,   spec_plus, driver_device,   0,      "NEMO",     "Kay 1024", GAME_NOT_WORKING )
+COMP( 19??, quorum,   spec128,   0, quorum,     spec_plus, driver_device,   0,      "<unknown>",        "Quorum", GAME_NOT_WORKING )
+COMP( 19??, bestzx,   spec128,   0, scorpion,   spec_plus, driver_device,   0,      "<unknown>",        "BestZX", GAME_NOT_WORKING )

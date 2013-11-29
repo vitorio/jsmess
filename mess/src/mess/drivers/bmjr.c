@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Angelo Salese
 /***************************************************************************
 
     Basic Master Jr (MB-6885) (c) 1982? Hitachi
@@ -23,142 +25,151 @@ class bmjr_state : public driver_device
 {
 public:
 	bmjr_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+	m_maincpu(*this, "maincpu"),
+	m_cass(*this, "cassette"),
+	m_beep(*this, "beeper")
+	,
+		m_p_wram(*this, "p_wram"){ }
 
-	UINT8 *m_wram;
-	UINT8 m_tape_switch;
+	required_device<cpu_device> m_maincpu;
+	required_device<cassette_image_device> m_cass;
+	required_device<beep_device> m_beep;
+	DECLARE_READ8_MEMBER(key_r);
+	DECLARE_WRITE8_MEMBER(key_w);
+	DECLARE_READ8_MEMBER(ff_r);
+	DECLARE_READ8_MEMBER(unk_r);
+	DECLARE_READ8_MEMBER(tape_r);
+	DECLARE_WRITE8_MEMBER(tape_w);
+	DECLARE_READ8_MEMBER(tape_stop_r);
+	DECLARE_READ8_MEMBER(tape_start_r);
+	DECLARE_WRITE8_MEMBER(xor_display_w);
+	bool m_tape_switch;
+	required_shared_ptr<UINT8> m_p_wram;
+	UINT8 *m_p_chargen;
 	UINT8 m_xor_display;
 	UINT8 m_key_mux;
-	cassette_image_device *m_cassette;
+	DECLARE_DRIVER_INIT(bmjr);
+	virtual void machine_start();
+	virtual void machine_reset();
+	virtual void video_start();
+	virtual void palette_init();
+	UINT32 screen_update_bmjr(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 };
 
 
 
-static VIDEO_START( bmjr )
+void bmjr_state::video_start()
 {
+	m_p_chargen = memregion("chargen")->base();
 }
 
-static SCREEN_UPDATE( bmjr )
+UINT32 bmjr_state::screen_update_bmjr(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	bmjr_state *state = screen->machine().driver_data<bmjr_state>();
-	int x,y,xi,yi,count;
-	UINT8 *gfx_rom = screen->machine().region("char")->base();
+	UINT8 y,ra,chr,gfx,fg=4;
+	UINT16 sy=0,ma=0x100,x;
+	UINT8 inv = (m_xor_display) ? 0xff : 0;
 
-	count = 0x0100;
-
-	for(y=0;y<24;y++)
+	for(y = 0; y < 24; y++ )
 	{
-		for(x=0;x<32;x++)
+		for (ra = 0; ra < 8; ra++)
 		{
-			int tile = state->m_wram[count];
-			int color = 4;
+			UINT16 *p = &bitmap.pix16(sy++);
 
-			for(yi=0;yi<8;yi++)
+			for (x = ma; x < ma + 32; x++)
 			{
-				for(xi=0;xi<8;xi++)
-				{
-					int pen;
+				chr = m_p_wram[x];
+				gfx = m_p_chargen[(chr<<3) | ra] ^ inv;
 
-					if(state->m_xor_display)
-						pen = (gfx_rom[tile*8+yi] >> (7-xi) & 1) ? 0 : color;
-					else
-						pen = (gfx_rom[tile*8+yi] >> (7-xi) & 1) ? color : 0;
-
-					*BITMAP_ADDR16(bitmap, y*8+yi, x*8+xi) = screen->machine().pens[pen];
-				}
+				/* Display a scanline of a character */
+				*p++ = BIT(gfx, 7) ? fg : 0;
+				*p++ = BIT(gfx, 6) ? fg : 0;
+				*p++ = BIT(gfx, 5) ? fg : 0;
+				*p++ = BIT(gfx, 4) ? fg : 0;
+				*p++ = BIT(gfx, 3) ? fg : 0;
+				*p++ = BIT(gfx, 2) ? fg : 0;
+				*p++ = BIT(gfx, 1) ? fg : 0;
+				*p++ = BIT(gfx, 0) ? fg : 0;
 			}
-
-			count++;
 		}
+		ma+=32;
 	}
 
-    return 0;
+	return 0;
 }
 
-
-static READ8_HANDLER( key_r )
+READ8_MEMBER( bmjr_state::key_r )
 {
-	bmjr_state *state = space->machine().driver_data<bmjr_state>();
-	static const char *const keynames[] = { "KEY0", "KEY1", "KEY2", "KEY3",
-	                                        "KEY4", "KEY5", "KEY6", "KEY7",
-	                                        "KEY8", "KEY9", "KEYA", "KEYB",
-	                                        "KEYC", "KEYD", "UNUSED", "UNUSED" };
-
-
-	return (input_port_read(space->machine(), keynames[state->m_key_mux]) & 0xf) | ((input_port_read(space->machine(), "KEYMOD") & 0xf) << 4);
+	char kbdrow[6];
+	sprintf(kbdrow,"KEY%X", m_key_mux);
+	return (ioport(kbdrow)->read() & 15) | (ioport("KEYMOD")->read() << 4);
 }
 
-static WRITE8_HANDLER( key_w )
+WRITE8_MEMBER( bmjr_state::key_w )
 {
-	bmjr_state *state = space->machine().driver_data<bmjr_state>();
-	state->m_key_mux = data & 0xf;
+	m_key_mux = data & 0xf;
 
 //  if(data & 0xf0)
 //      printf("%02x",data & 0xf0);
 }
 
 
-static READ8_HANDLER( ff_r )
+READ8_MEMBER( bmjr_state::ff_r )
 {
 	return 0xff;
 }
 
-static READ8_HANDLER( unk_r )
+READ8_MEMBER( bmjr_state::unk_r )
 {
 	return 0x30;
 }
 
-static READ8_HANDLER( tape_r )
+READ8_MEMBER( bmjr_state::tape_r )
 {
-	bmjr_state *state = space->machine().driver_data<bmjr_state>();
-	//state->m_cassette->change_state(CASSETTE_PLAY,CASSETTE_MASK_UISTATE);
+	//m_cass->change_state(CASSETTE_PLAY,CASSETTE_MASK_UISTATE);
 
-	return ((state->m_cassette->input()) > 0.03) ? 0xff : 0x00;
+	return ((m_cass->input()) > 0.03) ? 0xff : 0x00;
 }
 
-static WRITE8_HANDLER( tape_w )
+WRITE8_MEMBER( bmjr_state::tape_w )
 {
-	bmjr_state *state = space->machine().driver_data<bmjr_state>();
-	if(!state->m_tape_switch)
+	if(!m_tape_switch)
 	{
-		beep_set_state(space->machine().device(BEEPER_TAG),!(data & 0x80));
+		m_beep->set_state(!BIT(data, 7));
 	}
 	else
 	{
-		//state->m_cassette->change_state(CASSETTE_RECORD,CASSETTE_MASK_UISTATE);
-		state->m_cassette->output((data & 0x80) ? -1.0 : +1.0);
+		//m_cass->change_state(CASSETTE_RECORD,CASSETTE_MASK_UISTATE);
+		m_cass->output(BIT(data, 0) ? -1.0 : +1.0);
 	}
 }
 
-static READ8_HANDLER( tape_stop_r )
+READ8_MEMBER( bmjr_state::tape_stop_r )
 {
-	bmjr_state *state = space->machine().driver_data<bmjr_state>();
-	state->m_tape_switch = 0;
-	//state->m_cassette->change_state(CASSETTE_STOPPED,CASSETTE_MASK_UISTATE);
-	state->m_cassette->change_state(CASSETTE_MOTOR_DISABLED,CASSETTE_MASK_MOTOR);
+	m_tape_switch = 0;
+	//m_cass->change_state(CASSETTE_STOPPED,CASSETTE_MASK_UISTATE);
+	m_cass->change_state(CASSETTE_MOTOR_DISABLED,CASSETTE_MASK_MOTOR);
 	return 0x01;
 }
 
-static READ8_HANDLER( tape_start_r )
+READ8_MEMBER( bmjr_state::tape_start_r )
 {
-	bmjr_state *state = space->machine().driver_data<bmjr_state>();
-	state->m_tape_switch = 1;
-	state->m_cassette->change_state(CASSETTE_MOTOR_ENABLED,CASSETTE_MASK_MOTOR);
+	m_tape_switch = 1;
+	m_cass->change_state(CASSETTE_MOTOR_ENABLED,CASSETTE_MASK_MOTOR);
 	return 0x01;
 }
 
-static WRITE8_HANDLER( xor_display_w )
+WRITE8_MEMBER( bmjr_state::xor_display_w )
 {
-	bmjr_state *state = space->machine().driver_data<bmjr_state>();
-	state->m_xor_display = data;
+	m_xor_display = data;
 }
 
-static ADDRESS_MAP_START(bmjr_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(bmjr_mem, AS_PROGRAM, 8, bmjr_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	//0x0100, 0x03ff basic vram
 	//0x0900, 0x20ff vram, modes 0x40 / 0xc0
 	//0x2100, 0x38ff vram, modes 0x44 / 0xcc
-	AM_RANGE(0x0000, 0xafff) AM_RAM AM_BASE_MEMBER(bmjr_state, m_wram)
+	AM_RANGE(0x0000, 0xafff) AM_RAM AM_SHARE("p_wram")
 	AM_RANGE(0xb000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xe7ff) AM_ROM
 //  AM_RANGE(0xe890, 0xe890) W MP-1710 tile color
@@ -182,84 +193,84 @@ static INPUT_PORTS_START( bmjr )
 	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("Z") PORT_CODE(KEYCODE_Z) PORT_CHAR('Z')
 	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("A") PORT_CODE(KEYCODE_A) PORT_CHAR('A')
 	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("Q") PORT_CODE(KEYCODE_Q) PORT_CHAR('Q')
-	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("1") PORT_CODE(KEYCODE_1) PORT_CHAR('1')
+	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("1 !") PORT_CODE(KEYCODE_1) PORT_CHAR('1') PORT_CHAR('!')
 	PORT_BIT(0xf0,IP_ACTIVE_LOW,IPT_UNUSED )
 
 	PORT_START("KEY1")
 	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("X") PORT_CODE(KEYCODE_X) PORT_CHAR('X')
 	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("S") PORT_CODE(KEYCODE_S) PORT_CHAR('S')
 	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("W") PORT_CODE(KEYCODE_W) PORT_CHAR('W')
-	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("2") PORT_CODE(KEYCODE_2) PORT_CHAR('2')
+	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("2 \"") PORT_CODE(KEYCODE_2) PORT_CHAR('2') PORT_CHAR('\"')
 	PORT_BIT(0xf0,IP_ACTIVE_LOW,IPT_UNUSED )
 
 	PORT_START("KEY2")
 	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("C") PORT_CODE(KEYCODE_C) PORT_CHAR('C')
 	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("D") PORT_CODE(KEYCODE_D) PORT_CHAR('D')
 	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("E") PORT_CODE(KEYCODE_E) PORT_CHAR('E')
-	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("3") PORT_CODE(KEYCODE_3) PORT_CHAR('3')
+	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("3 #") PORT_CODE(KEYCODE_3) PORT_CHAR('3') PORT_CHAR('#')
 	PORT_BIT(0xf0,IP_ACTIVE_LOW,IPT_UNUSED )
 
 	PORT_START("KEY3")
 	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("V") PORT_CODE(KEYCODE_V) PORT_CHAR('V')
 	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("F") PORT_CODE(KEYCODE_F) PORT_CHAR('F')
 	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("R") PORT_CODE(KEYCODE_R) PORT_CHAR('R')
-	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("4") PORT_CODE(KEYCODE_4) PORT_CHAR('4')
+	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("4 $") PORT_CODE(KEYCODE_4) PORT_CHAR('4') PORT_CHAR('$')
 	PORT_BIT(0xf0,IP_ACTIVE_LOW,IPT_UNUSED )
 
 	PORT_START("KEY4")
 	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("B") PORT_CODE(KEYCODE_B) PORT_CHAR('B')
 	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("G") PORT_CODE(KEYCODE_G) PORT_CHAR('G')
 	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("T") PORT_CODE(KEYCODE_T) PORT_CHAR('T')
-	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("5") PORT_CODE(KEYCODE_5) PORT_CHAR('5')
+	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("5 %") PORT_CODE(KEYCODE_5) PORT_CHAR('5') PORT_CHAR('%')
 	PORT_BIT(0xf0,IP_ACTIVE_LOW,IPT_UNUSED )
 
 	PORT_START("KEY5")
 	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("N") PORT_CODE(KEYCODE_N) PORT_CHAR('N')
 	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("H") PORT_CODE(KEYCODE_H) PORT_CHAR('H')
 	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("Y") PORT_CODE(KEYCODE_Y) PORT_CHAR('Y')
-	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("6") PORT_CODE(KEYCODE_6) PORT_CHAR('6')
+	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("6 &") PORT_CODE(KEYCODE_6) PORT_CHAR('6') PORT_CHAR('&')
 	PORT_BIT(0xf0,IP_ACTIVE_LOW,IPT_UNUSED )
 
 	PORT_START("KEY6")
 	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("M") PORT_CODE(KEYCODE_M) PORT_CHAR('M')
 	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("J") PORT_CODE(KEYCODE_J) PORT_CHAR('J')
 	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("U") PORT_CODE(KEYCODE_U) PORT_CHAR('U')
-	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("7") PORT_CODE(KEYCODE_7) PORT_CHAR('7')
+	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("7 \'") PORT_CODE(KEYCODE_7) PORT_CHAR('7') PORT_CHAR('\'')
 	PORT_BIT(0xf0,IP_ACTIVE_LOW,IPT_UNUSED )
 
 	PORT_START("KEY7")
-	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME(",") PORT_CODE(KEYCODE_COMMA) PORT_CHAR(',')
+	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME(", <") PORT_CODE(KEYCODE_COMMA) PORT_CHAR(',') PORT_CHAR('<')
 	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("K") PORT_CODE(KEYCODE_K) PORT_CHAR('K')
 	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("I") PORT_CODE(KEYCODE_I) PORT_CHAR('I')
-	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("8") PORT_CODE(KEYCODE_8) PORT_CHAR('8')
+	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("8 (") PORT_CODE(KEYCODE_8) PORT_CHAR('8') PORT_CHAR('(')
 	PORT_BIT(0xf0,IP_ACTIVE_LOW,IPT_UNUSED )
 
 	PORT_START("KEY8")
-	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME(".") PORT_CODE(KEYCODE_STOP) PORT_CHAR('.')
+	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME(". >") PORT_CODE(KEYCODE_STOP) PORT_CHAR('.') PORT_CHAR('>')
 	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("L") PORT_CODE(KEYCODE_L) PORT_CHAR('L')
 	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("O") PORT_CODE(KEYCODE_O) PORT_CHAR('O')
-	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("9") PORT_CODE(KEYCODE_9) PORT_CHAR('9')
+	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("9 )") PORT_CODE(KEYCODE_9) PORT_CHAR('9') PORT_CHAR(')')
 	PORT_BIT(0xf0,IP_ACTIVE_LOW,IPT_UNUSED )
 
 	PORT_START("KEY9")
-	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("/") PORT_CODE(KEYCODE_MINUS) PORT_CHAR('/')
-	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME(";") PORT_CODE(KEYCODE_COLON) PORT_CHAR(';')
+	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("/ ?") PORT_CODE(KEYCODE_SLASH) PORT_CHAR('/') PORT_CHAR('?')
+	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("; +") PORT_CODE(KEYCODE_COLON) PORT_CHAR(';') PORT_CHAR('+')
 	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("P") PORT_CODE(KEYCODE_P) PORT_CHAR('P')
 	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("0") PORT_CODE(KEYCODE_0) PORT_CHAR('0')
 	PORT_BIT(0xf0,IP_ACTIVE_LOW,IPT_UNUSED )
 
 	PORT_START("KEYA")
 	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_UNUSED )
-	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME(":")
-	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("@ / Up") PORT_CODE(KEYCODE_8_PAD)
-	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("- / =") PORT_CODE(KEYCODE_0_PAD)
+	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME(": *") PORT_CODE(KEYCODE_QUOTE) PORT_CHAR(':') PORT_CHAR('*')
+	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("@ Up") PORT_CODE(KEYCODE_8_PAD) PORT_CHAR('@')
+	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("- =") PORT_CODE(KEYCODE_MINUS) PORT_CHAR('-') PORT_CHAR('=')
 	PORT_BIT(0xf0,IP_ACTIVE_LOW,IPT_UNUSED )
 
 	PORT_START("KEYB")
 	PORT_BIT(0x01,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("Space") PORT_CODE(KEYCODE_SPACE) PORT_CHAR(' ')
 	PORT_BIT(0x02,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("]") PORT_CODE(KEYCODE_CLOSEBRACE) PORT_CHAR(']')
-	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("[ / Down") PORT_CODE(KEYCODE_OPENBRACE) PORT_CODE(KEYCODE_2_PAD) PORT_CHAR('[')
-	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("^ / Right") PORT_CODE(KEYCODE_6_PAD) PORT_CHAR('^')
+	PORT_BIT(0x04,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("[ Down") PORT_CODE(KEYCODE_OPENBRACE) PORT_CODE(KEYCODE_2_PAD) PORT_CHAR('[')
+	PORT_BIT(0x08,IP_ACTIVE_LOW,IPT_KEYBOARD) PORT_NAME("^ Right") PORT_CODE(KEYCODE_6_PAD) PORT_CHAR('^')
 	PORT_BIT(0xf0,IP_ACTIVE_LOW,IPT_UNUSED )
 
 	PORT_START("KEYC")
@@ -284,7 +295,10 @@ static INPUT_PORTS_START( bmjr )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("UNUSED")
+	PORT_START("KEYE")
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("KEYF")
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("KEYMOD") /* Note: you should press Normal to return from a Kana state and vice-versa */
@@ -307,85 +321,73 @@ static const gfx_layout bmjr_charlayout =
 };
 
 static GFXDECODE_START( bmjr )
-	GFXDECODE_ENTRY( "char", 0x0000, bmjr_charlayout, 0, 8 )
+	GFXDECODE_ENTRY( "chargen", 0x0000, bmjr_charlayout, 0, 4 )
 GFXDECODE_END
 
-static PALETTE_INIT( bmjr )
+void bmjr_state::palette_init()
 {
 	int i;
 
 	for(i=0;i<8;i++)
-		palette_set_color_rgb(machine, i, pal1bit(i >> 1),pal1bit(i >> 2),pal1bit(i >> 0));
+		palette_set_color_rgb(machine(), i, pal1bit(i >> 1),pal1bit(i >> 2),pal1bit(i >> 0));
 }
 
 
-static MACHINE_START(bmjr)
+void bmjr_state::machine_start()
 {
-	beep_set_frequency(machine.device(BEEPER_TAG),1200); //guesswork
-	beep_set_state(machine.device(BEEPER_TAG),0);
+	m_beep->set_frequency(1200); //guesswork
+	m_beep->set_state(0);
 }
 
-static MACHINE_RESET(bmjr)
+void bmjr_state::machine_reset()
 {
-	bmjr_state *state = machine.driver_data<bmjr_state>();
-	state->m_tape_switch = 0;
-	state->m_cassette = machine.device<cassette_image_device>(CASSETTE_TAG);
-	state->m_cassette->change_state(CASSETTE_MOTOR_DISABLED,CASSETTE_MASK_MOTOR);
+	m_tape_switch = 0;
+	m_cass->change_state(CASSETTE_MOTOR_DISABLED,CASSETTE_MASK_MOTOR);
 }
 
 static MACHINE_CONFIG_START( bmjr, bmjr_state )
-    /* basic machine hardware */
-    MCFG_CPU_ADD("maincpu",M6800, XTAL_4MHz/4) //unknown clock / divider
-    MCFG_CPU_PROGRAM_MAP(bmjr_mem)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu",M6800, XTAL_4MHz/4) //unknown clock / divider
+	MCFG_CPU_PROGRAM_MAP(bmjr_mem)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", bmjr_state,  irq0_line_hold)
 
-	MCFG_MACHINE_START(bmjr)
-    MCFG_MACHINE_RESET(bmjr)
 
-    /* video hardware */
-    MCFG_SCREEN_ADD("screen", RASTER)
-    MCFG_SCREEN_REFRESH_RATE(50)
-    MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-    MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-    MCFG_SCREEN_SIZE(256, 192)
-    MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 192-1)
-    MCFG_SCREEN_UPDATE(bmjr)
+	/* video hardware */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(50)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
+	MCFG_SCREEN_SIZE(256, 192)
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 192-1)
+	MCFG_SCREEN_UPDATE_DRIVER(bmjr_state, screen_update_bmjr)
+	MCFG_PALETTE_LENGTH(8)
+	MCFG_GFXDECODE(bmjr)
 
-    MCFG_PALETTE_LENGTH(8)
-    MCFG_PALETTE_INIT(bmjr)
-
-    MCFG_GFXDECODE(bmjr)
-
-    MCFG_VIDEO_START(bmjr)
-
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, default_cassette_interface )
-
+	/* Audio */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD(BEEPER_TAG, BEEP, 0)
+	MCFG_SOUND_ADD("beeper", BEEP, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS,"mono",0.50)
-
-	MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+
+	/* Devices */
+	MCFG_CASSETTE_ADD( "cassette", default_cassette_interface )
 MACHINE_CONFIG_END
 
 /* ROM definition */
 ROM_START( bmjr )
-    ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
 	ROM_LOAD( "bas.rom", 0xb000, 0x3000, BAD_DUMP CRC(2318e04e) SHA1(cdb3535663090f5bcaba20b1dbf1f34724ef6a5f)) //12k ROMs doesn't exist ...
 	ROM_LOAD( "mon.rom", 0xf000, 0x1000, CRC(776cfa3a) SHA1(be747bc40fdca66b040e0f792b05fcd43a1565ce))
 	ROM_LOAD( "prt.rom", 0xe000, 0x0800, CRC(b9aea867) SHA1(b8dd5348790d76961b6bdef41cfea371fdbcd93d))
 
-	ROM_REGION( 0x800, "char", 0 )
+	ROM_REGION( 0x800, "chargen", 0 )
 	ROM_LOAD( "font.rom", 0x0000, 0x0800, BAD_DUMP CRC(258c6fd7) SHA1(d7c7dd57d6fc3b3d44f14c32182717a48e24587f)) //taken from a JP emulator
 ROM_END
 
 /* Driver */
-static DRIVER_INIT( bmjr )
+DRIVER_INIT_MEMBER(bmjr_state,bmjr)
 {
-
 }
 
-/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1982, bmjr,	0,       0, 	bmjr,		bmjr,	 bmjr,  	 "Hitachi",   "Basic Master Jr",	GAME_NOT_WORKING | GAME_NO_SOUND)
-
+/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY        FULLNAME       FLAGS */
+COMP( 1982, bmjr,   0,      0,       bmjr,      bmjr, bmjr_state,    bmjr,  "Hitachi", "Basic Master Jr", GAME_NOT_WORKING)

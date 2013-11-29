@@ -30,45 +30,46 @@
  *
  *************************************/
 
-#define CLOCK_DIVIDER	16
+#define CLOCK_DIVIDER   16
 
 
+const device_type AMIGA = &device_creator<amiga_sound_device>;
 
-/*************************************
- *
- *  Type definitions
- *
- *************************************/
-
-typedef struct _audio_channel audio_channel;
-struct _audio_channel
+amiga_sound_device::amiga_sound_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, AMIGA, "Amiga Paula", tag, owner, clock, "amiga_paula", __FILE__),
+		device_sound_interface(mconfig, *this),
+		m_stream(NULL)
 {
-	emu_timer *	irq_timer;
-	UINT32			curlocation;
-	UINT16			curlength;
-	UINT16			curticks;
-	UINT8			index;
-	UINT8			dmaenabled;
-	UINT8			manualmode;
-	INT8			latched;
-};
-
-
-typedef struct _amiga_audio amiga_audio;
-struct _amiga_audio
-{
-	audio_channel	channel[4];
-	sound_stream *	stream;
-};
-
-
-INLINE amiga_audio *get_safe_token( device_t *device )
-{
-        assert(device != NULL);
-        assert(device->type() == AMIGA);
-
-        return (amiga_audio *)downcast<legacy_device_base *>(device)->token();
 }
+
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void amiga_sound_device::device_config_complete()
+{
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void amiga_sound_device::device_start()
+{
+	int i;
+
+	for (i = 0; i < 4; i++)
+	{
+		m_channel[i].index = i;
+		m_channel[i].irq_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(amiga_sound_device::signal_irq), this));
+	}
+
+	/* create the stream */
+	m_stream = machine().sound().stream_alloc(*this, 0, 4, clock() / CLOCK_DIVIDER, this);
+}
+
 
 /*************************************
  *
@@ -76,9 +77,10 @@ INLINE amiga_audio *get_safe_token( device_t *device )
  *
  *************************************/
 
-static TIMER_CALLBACK( signal_irq )
+TIMER_CALLBACK_MEMBER( amiga_sound_device::signal_irq )
 {
-	amiga_custom_w(machine.device("maincpu")->memory().space(AS_PROGRAM), REG_INTREQ, 0x8000 | (0x80 << param), 0xffff);
+	amiga_state *state = machine().driver_data<amiga_state>();
+	state->amiga_custom_w(*state->m_maincpu_program_space, REG_INTREQ, 0x8000 | (0x80 << param), 0xffff);
 }
 
 
@@ -98,11 +100,9 @@ static void dma_reload(amiga_state *state, audio_channel *chan)
  *
  *************************************/
 
-void amiga_audio_data_w(device_t *device, int which, UINT16 data)
+void amiga_sound_device::data_w(int which, UINT16 data)
 {
-	amiga_audio *audio_state = get_safe_token(device);
-
-	audio_state->channel[which].manualmode = TRUE;
+	m_channel[which].manualmode = TRUE;
 }
 
 
@@ -113,28 +113,28 @@ void amiga_audio_data_w(device_t *device, int which, UINT16 data)
  *
  *************************************/
 
-void amiga_audio_update(device_t *device)
+void amiga_sound_device::update()
 {
-	amiga_audio *audio_state = get_safe_token(device);
-
-	audio_state->stream->update();
+	m_stream->update();
 }
 
 
+//-------------------------------------------------
+//  sound_stream_update - handle a stream update
+//-------------------------------------------------
 
-static STREAM_UPDATE( amiga_stream_update )
+void amiga_sound_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
 {
-	amiga_state *state = device->machine().driver_data<amiga_state>();
-	amiga_audio *audio = (amiga_audio *)param;
+	amiga_state *state = machine().driver_data<amiga_state>();
 	int channum, sampoffs = 0;
 
 	/* if all DMA off, disable all channels */
 	if (!(CUSTOM_REG(REG_DMACON) & 0x0200))
 	{
-		audio->channel[0].dmaenabled =
-		audio->channel[1].dmaenabled =
-		audio->channel[2].dmaenabled =
-		audio->channel[3].dmaenabled = FALSE;
+		m_channel[0].dmaenabled =
+		m_channel[1].dmaenabled =
+		m_channel[2].dmaenabled =
+		m_channel[3].dmaenabled = FALSE;
 
 		/* clear the sample data to 0 */
 		for (channum = 0; channum < 4; channum++)
@@ -147,7 +147,7 @@ static STREAM_UPDATE( amiga_stream_update )
 	/* update the DMA states on each channel and reload if fresh */
 	for (channum = 0; channum < 4; channum++)
 	{
-		audio_channel *chan = &audio->channel[channum];
+		audio_channel *chan = &m_channel[channum];
 		if (!chan->dmaenabled && ((CUSTOM_REG(REG_DMACON) >> channum) & 1))
 			dma_reload(state, chan);
 		chan->dmaenabled = (CUSTOM_REG(REG_DMACON) >> channum) & 1;
@@ -160,14 +160,14 @@ static STREAM_UPDATE( amiga_stream_update )
 		int ticks = samples;
 
 		/* determine the number of ticks we can do in this chunk */
-		if (ticks > audio->channel[0].curticks)
-			ticks = audio->channel[0].curticks;
-		if (ticks > audio->channel[1].curticks)
-			ticks = audio->channel[1].curticks;
-		if (ticks > audio->channel[2].curticks)
-			ticks = audio->channel[2].curticks;
-		if (ticks > audio->channel[3].curticks)
-			ticks = audio->channel[3].curticks;
+		if (ticks > m_channel[0].curticks)
+			ticks = m_channel[0].curticks;
+		if (ticks > m_channel[1].curticks)
+			ticks = m_channel[1].curticks;
+		if (ticks > m_channel[2].curticks)
+			ticks = m_channel[2].curticks;
+		if (ticks > m_channel[3].curticks)
+			ticks = m_channel[3].curticks;
 
 		/* loop over channels */
 		nextper = nextvol = -1;
@@ -175,7 +175,7 @@ static STREAM_UPDATE( amiga_stream_update )
 		{
 			int volume = (nextvol == -1) ? CUSTOM_REG(REG_AUD0VOL + channum * 8) : nextvol;
 			int period = (nextper == -1) ? CUSTOM_REG(REG_AUD0PER + channum * 8) : nextper;
-			audio_channel *chan = &audio->channel[channum];
+			audio_channel *chan = &m_channel[channum];
 			stream_sample_t sample;
 			int i;
 
@@ -242,7 +242,7 @@ static STREAM_UPDATE( amiga_stream_update )
 				/* if we're in manual mode, signal an interrupt once we latch the low byte */
 				if (!chan->dmaenabled && chan->manualmode && (chan->curlocation & 1))
 				{
-					signal_irq(device->machine(), NULL, channum);
+					signal_irq(NULL, channum);
 					chan->manualmode = FALSE;
 				}
 			}
@@ -253,46 +253,3 @@ static STREAM_UPDATE( amiga_stream_update )
 		samples -= ticks;
 	}
 }
-
-
-
-/*************************************
- *
- *  Sound system startup
- *
- *************************************/
-
-static DEVICE_START( amiga_sound )
-{
-	amiga_audio *audio_state = get_safe_token(device);
-	int i;
-
-	for (i = 0; i < 4; i++)
-	{
-		audio_state->channel[i].index = i;
-		audio_state->channel[i].irq_timer = device->machine().scheduler().timer_alloc(FUNC(signal_irq));
-	}
-
-	/* create the stream */
-	audio_state->stream = device->machine().sound().stream_alloc(*device, 0, 4, device->clock() / CLOCK_DIVIDER, audio_state, amiga_stream_update);
-}
-
-
-DEVICE_GET_INFO( amiga_sound )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(amiga_audio);					break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(amiga_sound);	break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "Amiga Paula");				break;
-		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);						break;
-	}
-}
-
-
-DEFINE_LEGACY_SOUND_DEVICE(AMIGA, amiga_sound);

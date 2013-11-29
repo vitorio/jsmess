@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     bsmt2000.h
 
     BSMT2000 device emulator.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -50,21 +21,16 @@
 //**************************************************************************
 
 #define MCFG_BSMT2000_ADD(_tag, _clock) \
-	MCFG_DEVICE_ADD(_tag, BSMT2000, _clock) \
-
+	MCFG_DEVICE_ADD(_tag, BSMT2000, _clock)
 #define MCFG_BSMT2000_REPLACE(_tag, _clock) \
-	MCFG_DEVICE_REPLACE(_tag, BSMT2000, _clock) \
-
+	MCFG_DEVICE_REPLACE(_tag, BSMT2000, _clock)
 #define MCFG_BSMT2000_READY_CALLBACK(_callback) \
-	bsmt2000_device::static_set_ready_callback(*device, _callback); \
-
+	bsmt2000_device::static_set_ready_callback(*device, _callback);
 
 
 //**************************************************************************
 //  TYPE DEFINITIONS
 //**************************************************************************
-
-class bsmt2000_device;
 
 
 // ======================> bsmt2000_device
@@ -89,8 +55,8 @@ public:
 
 protected:
 	// device-level overrides
-	const rom_entry *device_rom_region() const;
-	machine_config_constructor device_mconfig_additions() const;
+	virtual const rom_entry *device_rom_region() const;
+	virtual machine_config_constructor device_mconfig_additions() const;
 	virtual void device_start();
 	virtual void device_reset();
 	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
@@ -123,19 +89,19 @@ private:
 
 	// configuration state
 	const address_space_config  m_space_config;
-	ready_callback				m_ready_callback;
+	ready_callback              m_ready_callback;
 
 	// internal state
-	sound_stream *				m_stream;
-	direct_read_data *			m_direct;
-	tms32015_device *			m_cpu;
-	UINT16						m_register_select;
-	UINT16						m_write_data;
-	UINT16						m_rom_address;
-	UINT16						m_rom_bank;
-	INT16						m_left_data;
-	INT16						m_right_data;
-	bool						m_write_pending;
+	sound_stream *              m_stream;
+	direct_read_data *          m_direct;
+	tms32015_device *           m_cpu;
+	UINT16                      m_register_select;
+	UINT16                      m_write_data;
+	UINT16                      m_rom_address;
+	UINT16                      m_rom_bank;
+	INT16                       m_left_data;
+	INT16                       m_right_data;
+	bool                        m_write_pending;
 };
 
 

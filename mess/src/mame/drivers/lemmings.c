@@ -22,109 +22,107 @@
 #include "sound/okim6295.h"
 #include "includes/lemmings.h"
 
-static WRITE16_HANDLER( lemmings_control_w )
+WRITE16_MEMBER(lemmings_state::lemmings_control_w)
 {
-	lemmings_state *state = space->machine().driver_data<lemmings_state>();
-
 	/* Offset==0 Pixel layer X scroll */
 	if (offset == 4)
 		return; /* Watchdog or IRQ ack */
-	COMBINE_DATA(&state->m_control_data[offset]);
+	COMBINE_DATA(&m_control_data[offset]);
 }
 
-static READ16_HANDLER( lemmings_trackball_r )
+READ16_MEMBER(lemmings_state::lemmings_trackball_r)
 {
 	switch (offset)
 	{
-	case 0: return input_port_read(space->machine(), "AN0");
-	case 1: return input_port_read(space->machine(), "AN1");
-	case 4: return input_port_read(space->machine(), "AN2");
-	case 5: return input_port_read(space->machine(), "AN3");
+	case 0: return ioport("AN0")->read();
+	case 1: return ioport("AN1")->read();
+	case 4: return ioport("AN2")->read();
+	case 5: return ioport("AN3")->read();
 	}
 	return 0;
 }
 
-/* Same as Robocop 2 protection chip */
-static READ16_HANDLER( lemmings_prot_r )
+
+
+WRITE16_MEMBER(lemmings_state::lemmings_palette_24bit_w)
 {
-	switch (offset << 1)
-	{
-		case 0x41a:
-			return input_port_read(space->machine(), "BUTTONS");
-
-		case 0x320:
-			return input_port_read(space->machine(), "SYSTEM");
-
-		case 0x4e6:
-			return input_port_read(space->machine(), "DSW");
-	}
-
-	return 0;
-}
-
-static WRITE16_HANDLER( lemmings_palette_24bit_w )
-{
-	lemmings_state *state = space->machine().driver_data<lemmings_state>();
 	int r, g, b;
 
-	COMBINE_DATA(&state->m_paletteram[offset]);
+	COMBINE_DATA(&m_paletteram[offset]);
 	if (offset & 1)
 		offset--;
 
-	b = (state->m_paletteram[offset] >> 0) & 0xff;
-	g = (state->m_paletteram[offset + 1] >> 8) & 0xff;
-	r = (state->m_paletteram[offset + 1] >> 0) & 0xff;
+	b = (m_paletteram[offset] >> 0) & 0xff;
+	g = (m_paletteram[offset + 1] >> 8) & 0xff;
+	r = (m_paletteram[offset + 1] >> 0) & 0xff;
 
-	palette_set_color(space->machine(), offset / 2, MAKE_RGB(r, g, b));
+	palette_set_color(machine(), offset / 2, MAKE_RGB(r, g, b));
 }
 
-static WRITE16_HANDLER( lemmings_sound_w )
+WRITE16_MEMBER(lemmings_state::lemmings_sound_w)
 {
-	lemmings_state *state = space->machine().driver_data<lemmings_state>();
-	soundlatch_w(space, 0, data & 0xff);
-	device_set_input_line(state->m_audiocpu, 1, HOLD_LINE);
+	soundlatch_byte_w(space, 0, data & 0xff);
+	m_audiocpu->set_input_line(1, HOLD_LINE);
 }
 
-static WRITE8_HANDLER( lemmings_sound_ack_w )
+WRITE8_MEMBER(lemmings_state::lemmings_sound_ack_w)
 {
-	lemmings_state *state = space->machine().driver_data<lemmings_state>();
-	device_set_input_line(state->m_audiocpu, 1, CLEAR_LINE);
+	m_audiocpu->set_input_line(1, CLEAR_LINE);
 }
+
+READ16_MEMBER( lemmings_state::lem_protection_region_0_146_r )
+{
+	int real_address = 0 + (offset *2);
+	int deco146_addr = BITSWAP32(real_address, /* NC */31,30,29,28,27,26,25,24,23,22,21,20,19,18, 13,12,11,/**/      17,16,15,14,    10,9,8, 7,6,5,4, 3,2,1,0) & 0x7fff;
+	UINT8 cs = 0;
+	UINT16 data = m_deco146->read_data( deco146_addr, mem_mask, cs );
+	return data;
+}
+
+WRITE16_MEMBER( lemmings_state::lem_protection_region_0_146_w )
+{
+	int real_address = 0 + (offset *2);
+	int deco146_addr = BITSWAP32(real_address, /* NC */31,30,29,28,27,26,25,24,23,22,21,20,19,18, 13,12,11,/**/      17,16,15,14,    10,9,8, 7,6,5,4, 3,2,1,0) & 0x7fff;
+	UINT8 cs = 0;
+	m_deco146->write_data( space, deco146_addr, data, mem_mask, cs );
+}
+
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( lemmings_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( lemmings_map, AS_PROGRAM, 16, lemmings_state )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
-	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x140000, 0x1407ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
-	AM_RANGE(0x160000, 0x160fff) AM_RAM_WRITE(lemmings_palette_24bit_w) AM_BASE_MEMBER(lemmings_state, m_paletteram)
-	AM_RANGE(0x170000, 0x17000f) AM_RAM_WRITE(lemmings_control_w) AM_BASE_MEMBER(lemmings_state, m_control_data)
+	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_SHARE("spriteram")
+	AM_RANGE(0x140000, 0x1407ff) AM_RAM AM_SHARE("spriteram2")
+	AM_RANGE(0x160000, 0x160fff) AM_RAM_WRITE(lemmings_palette_24bit_w) AM_SHARE("paletteram")
+	AM_RANGE(0x170000, 0x17000f) AM_RAM_WRITE(lemmings_control_w) AM_SHARE("control_data")
 	AM_RANGE(0x190000, 0x19000f) AM_READ(lemmings_trackball_r)
-	AM_RANGE(0x1a0000, 0x1a07ff) AM_READ(lemmings_prot_r)
+//  AM_RANGE(0x1a0000, 0x1a07ff) AM_DEVREAD("ioprot", deco146_device,lemmings_prot_r)
+	AM_RANGE(0x1a0000, 0x1a3fff) AM_READWRITE(lem_protection_region_0_146_r,lem_protection_region_0_146_w)AM_SHARE("prot16ram") /* Protection device */
 	AM_RANGE(0x1a0064, 0x1a0065) AM_WRITE(lemmings_sound_w)
-	AM_RANGE(0x1c0000, 0x1c0001) AM_WRITE(buffer_spriteram16_w) /* 1 written once a frame */
-	AM_RANGE(0x1e0000, 0x1e0001) AM_WRITE(buffer_spriteram16_2_w) /* 1 written once a frame */
-	AM_RANGE(0x200000, 0x201fff) AM_RAM_WRITE(lemmings_vram_w) AM_BASE_MEMBER(lemmings_state, m_vram_data)
+	AM_RANGE(0x1c0000, 0x1c0001) AM_DEVWRITE("spriteram", buffered_spriteram16_device, write) /* 1 written once a frame */
+	AM_RANGE(0x1e0000, 0x1e0001) AM_DEVWRITE("spriteram2", buffered_spriteram16_device, write) /* 1 written once a frame */
+	AM_RANGE(0x200000, 0x201fff) AM_RAM_WRITE(lemmings_vram_w) AM_SHARE("vram_data")
 	AM_RANGE(0x202000, 0x202fff) AM_RAM
-	AM_RANGE(0x300000, 0x37ffff) AM_RAM_WRITE(lemmings_pixel_0_w) AM_BASE_MEMBER(lemmings_state, m_pixel_0_data)
-	AM_RANGE(0x380000, 0x39ffff) AM_RAM_WRITE(lemmings_pixel_1_w) AM_BASE_MEMBER(lemmings_state, m_pixel_1_data)
+	AM_RANGE(0x300000, 0x37ffff) AM_RAM_WRITE(lemmings_pixel_0_w) AM_SHARE("pixel_0_data")
+	AM_RANGE(0x380000, 0x39ffff) AM_RAM_WRITE(lemmings_pixel_1_w) AM_SHARE("pixel_1_data")
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8, lemmings_state )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x0800, 0x0801) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
-	AM_RANGE(0x1000, 0x1000) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
-	AM_RANGE(0x1800, 0x1800) AM_READWRITE(soundlatch_r,lemmings_sound_ack_w)
+	AM_RANGE(0x0800, 0x0801) AM_DEVREADWRITE("ymsnd", ym2151_device,read,write)
+	AM_RANGE(0x1000, 0x1000) AM_DEVREADWRITE("oki", okim6295_device, read, write)
+	AM_RANGE(0x1800, 0x1800) AM_READ(soundlatch_byte_r) AM_WRITE(lemmings_sound_ack_w)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
 static INPUT_PORTS_START( lemmings )
-	PORT_START("BUTTONS")
+	PORT_START("INPUTS")
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("P1 Select")
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("P1 Hurry")
@@ -146,12 +144,8 @@ static INPUT_PORTS_START( lemmings )
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_SERVICE_NO_TOGGLE(0x0004, IP_ACTIVE_LOW)
-	PORT_BIT( 0x0008, IP_ACTIVE_HIGH, IPT_VBLANK )
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x0008, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_VBLANK("screen")
+
 
 	PORT_START("DSW")
 	PORT_DIPNAME( 0x0003, 0x0003, "Credits for 1 Player" )
@@ -218,7 +212,7 @@ static const gfx_layout charlayout =
 	2048,
 	4,
 	{ 4, 5, 6, 7 },
-    { 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
+	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
 	{ 0*0, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64 },
 	8*64
 };
@@ -230,36 +224,22 @@ static const gfx_layout sprite_layout =
 	4,
 	{ 0x30000*8, 0x20000*8, 0x10000*8, 0x00000*8 },
 	{
-		7, 6, 5, 4, 3, 2, 1, 0, 16*8+7, 16*8+6, 16*8+5, 16*8+4, 16*8+3, 16*8+2, 16*8+1, 16*8+0
+		16*8+0, 16*8+1, 16*8+2, 16*8+3, 16*8+4, 16*8+5, 16*8+6, 16*8+7,0, 1, 2, 3, 4, 5, 6, 7
 	},
-	{ 15*8, 14*8, 13*8, 12*8, 11*8, 10*8, 9*8, 8*8, 7*8, 6*8, 5*8, 4*8, 3*8, 2*8, 1*8, 0*8 },
+	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8, 8*8, 9*8, 10*8, 11*8, 12*8, 13*8, 14*8, 15*8 },
 	32*8
 };
 
 static GFXDECODE_START( lemmings )
-	GFXDECODE_ENTRY( "gfx1", 0, sprite_layout,  32*16, 16 )	/* Sprites 16x16 */
-	GFXDECODE_ENTRY( "gfx2", 0, sprite_layout,  48*16, 16 )	/* Sprites 16x16 */
+	GFXDECODE_ENTRY( "gfx1", 0, sprite_layout,  0, 16 ) /* Sprites 16x16 */
+	GFXDECODE_ENTRY( "gfx2", 0, sprite_layout,  0, 16 ) /* Sprites 16x16 */
 	GFXDECODE_ENTRY( NULL,           0, charlayout,         0, 16 ) /* Dynamically modified */
 GFXDECODE_END
 
 /******************************************************************************/
 
-static void sound_irq( device_t *device, int state )
+void lemmings_state::machine_start()
 {
-	lemmings_state *lemmings = device->machine().driver_data<lemmings_state>();
-	device_set_input_line(lemmings->m_audiocpu, 0, state);
-}
-
-static const ym2151_interface ym2151_config =
-{
-	sound_irq
-};
-
-static MACHINE_START( lemmings )
-{
-	lemmings_state *state = machine.driver_data<lemmings_state>();
-
-	state->m_audiocpu = machine.device("audiocpu");
 }
 
 static MACHINE_CONFIG_START( lemmings, lemmings_state )
@@ -267,35 +247,42 @@ static MACHINE_CONFIG_START( lemmings, lemmings_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", M68000, 14000000)
 	MCFG_CPU_PROGRAM_MAP(lemmings_map)
-	MCFG_CPU_VBLANK_INT("screen", irq6_line_hold)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", lemmings_state,  irq6_line_hold)
 
 	MCFG_CPU_ADD("audiocpu", M6809,32220000/8)
 	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MCFG_MACHINE_START(lemmings)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MCFG_BUFFERED_SPRITERAM16_ADD("spriteram")
+	MCFG_BUFFERED_SPRITERAM16_ADD("spriteram2")
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529))
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(40*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE(lemmings)
-	MCFG_SCREEN_EOF(lemmings)
+	MCFG_SCREEN_UPDATE_DRIVER(lemmings_state, screen_update_lemmings)
+	MCFG_SCREEN_VBLANK_DRIVER(lemmings_state, screen_eof_lemmings)
 
 	MCFG_GFXDECODE(lemmings)
 	MCFG_PALETTE_LENGTH(1024)
 
-	MCFG_VIDEO_START(lemmings)
+
+	MCFG_DEVICE_ADD("spritegen", DECO_SPRITE, 0)
+	decospr_device::set_gfx_region(*device, 1);
+
+	MCFG_DEVICE_ADD("spritegen2", DECO_SPRITE, 0)
+	decospr_device::set_gfx_region(*device, 0);
+
+	MCFG_DECO146_ADD("ioprot")
+	MCFG_DECO146_SET_USE_MAGIC_ADDRESS_XOR
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 32220000/9)
-	MCFG_SOUND_CONFIG(ym2151_config)
+	MCFG_YM2151_ADD("ymsnd", 32220000/9)
+	MCFG_YM2151_IRQ_HANDLER(INPUTLINE("audiocpu", 0))
 	MCFG_SOUND_ROUTE(0, "lspeaker", 0.45)
 	MCFG_SOUND_ROUTE(1, "rspeaker", 0.45)
 
@@ -317,7 +304,7 @@ ROM_START( lemmings )
 	ROM_LOAD16_BYTE( "lemmings.8", 0xc0000, 0x20000, CRC(9166ce09) SHA1(7f0970cc07ebdbfc9a738342259d07d37b397161) )
 	ROM_LOAD16_BYTE( "lemmings.4", 0xc0001, 0x20000, CRC(aa845488) SHA1(d17ec80f43d2a0123e93fad83d4e1319eb18d7c7) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 )	/* Sound CPU */
+	ROM_REGION( 0x10000, "audiocpu", 0 )    /* Sound CPU */
 	ROM_LOAD( "lemmings.15",    0x00000, 0x10000, CRC(f0b24a35) SHA1(1aaeb1e6faee04d2e433161fd7aa965b58e3b8a7) )
 
 	ROM_REGION( 0x40000, "gfx1", 0 )
@@ -332,10 +319,10 @@ ROM_START( lemmings )
 	ROM_LOAD( "lemmings.14", 0x020000, 0x10000, CRC(c162788f) SHA1(e1f669efa59699cd1b7da71b112701ee79240c18) )
 	ROM_FILL(                0x030000, 0x10000, 0 ) /* 3bpp data but sprite chip expects 4 */
 
-	ROM_REGION( 0x40000, "oki", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x40000, "oki", 0 ) /* ADPCM samples */
 	ROM_LOAD( "lemmings.16",    0x00000, 0x20000, CRC(f747847c) SHA1(00880fa6dff979e5d15daea61938bd18c768c92f) )
 ROM_END
 
 /******************************************************************************/
 
-GAME( 1991, lemmings, 0, lemmings, lemmings, 0, ROT0, "Data East USA", "Lemmings (US prototype)", GAME_SUPPORTS_SAVE )
+GAME( 1991, lemmings, 0, lemmings, lemmings, driver_device, 0, ROT0, "Data East USA", "Lemmings (US prototype)", GAME_SUPPORTS_SAVE )

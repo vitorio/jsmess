@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /*********************************************************************
 
     dvstate.c
 
     State debugger view.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -53,9 +24,9 @@
 
 debug_view_state_source::debug_view_state_source(const char *name, device_t &device)
 	: debug_view_source(name, &device),
-	  m_device(device),
-	  m_stateintf(dynamic_cast<device_state_interface *>(&device)),
-	  m_execintf(dynamic_cast<device_execute_interface *>(&device))
+		m_device(device),
+		m_stateintf(dynamic_cast<device_state_interface *>(&device)),
+		m_execintf(dynamic_cast<device_execute_interface *>(&device))
 {
 }
 
@@ -71,9 +42,9 @@ debug_view_state_source::debug_view_state_source(const char *name, device_t &dev
 
 debug_view_state::debug_view_state(running_machine &machine, debug_view_osd_update_func osdupdate, void *osdprivate)
 	: debug_view(machine, DVT_STATE, osdupdate, osdprivate),
-	  m_divider(0),
-	  m_last_update(0),
-	  m_state_list(NULL)
+		m_divider(0),
+		m_last_update(0),
+		m_state_list(NULL)
 {
 	// fail if no available sources
 	enumerate_sources();
@@ -103,9 +74,9 @@ void debug_view_state::enumerate_sources()
 	m_source_list.reset();
 
 	// iterate over devices that have state interfaces
-	device_state_interface *state = NULL;
+	state_interface_iterator iter(machine().root_device());
 	astring name;
-	for (bool gotone = machine().devicelist().first(state); gotone; gotone = state->next(state))
+	for (device_state_interface *state = iter.first(); state != NULL; state = iter.next())
 	{
 		name.printf("%s '%s'", state->device().name(), state->device().tag());
 		m_source_list.append(*auto_alloc(machine(), debug_view_state_source(name, state->device())));
@@ -171,7 +142,12 @@ void debug_view_state::recompute()
 
 	// add all registers into it
 	for (const device_state_entry *entry = source.m_stateintf->state_first(); entry != NULL; entry = entry->next())
-		if (entry->visible())
+		if (entry->divider())
+		{
+			*tailptr = auto_alloc(machine(), state_item(REG_DIVIDER, "", 0));
+			tailptr = &(*tailptr)->m_next;
+		}
+		else if (entry->visible())
 		{
 			*tailptr = auto_alloc(machine(), state_item(entry->index(), entry->symbol(), source.m_stateintf->state_string_max_length(entry->index())));
 			tailptr = &(*tailptr)->m_next;
@@ -299,7 +275,7 @@ void debug_view_state::view_update()
 			{
 				if (m_last_update != total_cycles)
 					curitem->m_lastval = curitem->m_currval;
-				curitem->m_currval = source.m_stateintf->state(curitem->m_index);
+				curitem->m_currval = source.m_stateintf->state_int(curitem->m_index);
 				source.m_stateintf->state_string(curitem->m_index, valstr);
 			}
 
@@ -361,10 +337,10 @@ void debug_view_state::view_update()
 
 debug_view_state::state_item::state_item(int index, const char *name, UINT8 valuechars)
 	: m_next(NULL),
-	  m_lastval(0),
-	  m_currval(0),
-	  m_index(index),
-	  m_vallen(valuechars),
-	  m_symbol(name)
+		m_lastval(0),
+		m_currval(0),
+		m_index(index),
+		m_vallen(valuechars),
+		m_symbol(name)
 {
 }

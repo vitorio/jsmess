@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /*****************************************************************************
  *
  * video/abc806.c
@@ -8,7 +10,9 @@
 
     TODO:
 
-    - HRU II PROM reading
+    - flashing
+    - double height
+    - underline
 
 */
 
@@ -18,55 +22,50 @@
 
 // these are needed because the MC6845 emulation does
 // not position the active display area correctly
-#define HORIZONTAL_PORCH_HACK	109
-#define VERTICAL_PORCH_HACK		27
+#define HORIZONTAL_PORCH_HACK   109
+#define VERTICAL_PORCH_HACK     27
 
 
-
-//-------------------------------------------------
-//  PALETTE_INIT( abc806 )
-//-------------------------------------------------
-
-static PALETTE_INIT( abc806 )
+static const rgb_t PALETTE[] =
 {
-	palette_set_color_rgb(machine, 0, 0x00, 0x00, 0x00); // black
-	palette_set_color_rgb(machine, 1, 0xff, 0x00, 0x00); // red
-	palette_set_color_rgb(machine, 2, 0x00, 0xff, 0x00); // green
-	palette_set_color_rgb(machine, 3, 0xff, 0xff, 0x00); // yellow
-	palette_set_color_rgb(machine, 4, 0x00, 0x00, 0xff); // blue
-	palette_set_color_rgb(machine, 5, 0xff, 0x00, 0xff); // magenta
-	palette_set_color_rgb(machine, 6, 0x00, 0xff, 0xff); // cyan
-	palette_set_color_rgb(machine, 7, 0xff, 0xff, 0xff); // white
-}
+	RGB_BLACK, // black
+	MAKE_RGB(0xff, 0x00, 0x00), // red
+	MAKE_RGB(0x00, 0xff, 0x00), // green
+	MAKE_RGB(0xff, 0xff, 0x00), // yellow
+	MAKE_RGB(0x00, 0x00, 0xff), // blue
+	MAKE_RGB(0xff, 0x00, 0xff), // magenta
+	MAKE_RGB(0x00, 0xff, 0xff), // cyan
+	RGB_WHITE // white
+};
 
 
 //-------------------------------------------------
-//  abc806_hrs_w - high resolution memory banking
+//  hrs_w - high resolution memory banking
 //-------------------------------------------------
 
 WRITE8_MEMBER( abc806_state::hrs_w )
 {
 	/*
 
-        bit     signal  description
+	    bit     signal  description
 
-        0       VM14    visible screen memory area bit 0
-        1       VM15    visible screen memory area bit 1
-        2       VM16    visible screen memory area bit 2
-        3       VM17    visible screen memory area bit 3
-        4       F14     cpu accessible screen memory area bit 0
-        5       F15     cpu accessible screen memory area bit 1
-        6       F16     cpu accessible screen memory area bit 2
-        7       F17     cpu accessible screen memory area bit 3
+	    0       VM14    visible screen memory area bit 0
+	    1       VM15    visible screen memory area bit 1
+	    2       VM16    visible screen memory area bit 2
+	    3       VM17    visible screen memory area bit 3
+	    4       F14     cpu accessible screen memory area bit 0
+	    5       F15     cpu accessible screen memory area bit 1
+	    6       F16     cpu accessible screen memory area bit 2
+	    7       F17     cpu accessible screen memory area bit 3
 
-    */
+	*/
 
 	m_hrs = data;
 }
 
 
 //-------------------------------------------------
-//  abc806_hrc_w - high resolution color write
+//  hrc_w - high resolution color write
 //-------------------------------------------------
 
 WRITE8_MEMBER( abc806_state::hrc_w )
@@ -78,7 +77,7 @@ WRITE8_MEMBER( abc806_state::hrc_w )
 
 
 //-------------------------------------------------
-//  abc806_charram_r - character RAM read
+//  charram_r - character RAM read
 //-------------------------------------------------
 
 READ8_MEMBER( abc806_state::charram_r )
@@ -90,18 +89,19 @@ READ8_MEMBER( abc806_state::charram_r )
 
 
 //-------------------------------------------------
-//  abc806_charram_w - character RAM write
+//  charram_w - character RAM write
 //-------------------------------------------------
 
 WRITE8_MEMBER( abc806_state::charram_w )
 {
 	m_color_ram[offset] = m_attr_data;
+
 	m_char_ram[offset] = data;
 }
 
 
 //-------------------------------------------------
-//  abc806_ami_r - attribute memory read
+//  ami_r - attribute memory read
 //-------------------------------------------------
 
 READ8_MEMBER( abc806_state::ami_r )
@@ -111,7 +111,7 @@ READ8_MEMBER( abc806_state::ami_r )
 
 
 //-------------------------------------------------
-//  abc806_amo_w - attribute memory write
+//  amo_w - attribute memory write
 //-------------------------------------------------
 
 WRITE8_MEMBER( abc806_state::amo_w )
@@ -121,28 +121,30 @@ WRITE8_MEMBER( abc806_state::amo_w )
 
 
 //-------------------------------------------------
-//  abc806_cli_r - palette PROM read
+//  cli_r - palette PROM read
 //-------------------------------------------------
 
 READ8_MEMBER( abc806_state::cli_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       HRU II data bit 0
-        1       HRU II data bit 1
-        2       HRU II data bit 2
-        3       HRU II data bit 3
-        4
-        5
-        6
-        7       RTC data output
+	    0       HRU II data bit 0
+	    1       HRU II data bit 1
+	    2       HRU II data bit 2
+	    3       HRU II data bit 3
+	    4
+	    5
+	    6
+	    7       RTC data output
 
-    */
+	*/
 
 	UINT16 hru2_addr = (m_hru2_a8 << 8) | (offset >> 8);
-	UINT8 data = m_hru2_prom[hru2_addr] & 0x0f;
+	UINT8 data = m_hru2_prom->base()[hru2_addr] & 0x0f;
+
+	logerror("HRU II %03x : %01x\n", hru2_addr, data);
 
 	data |= m_rtc->dio_r() << 7;
 
@@ -151,32 +153,32 @@ READ8_MEMBER( abc806_state::cli_r )
 
 
 //-------------------------------------------------
-//  abc806_sti_r - protection device read
+//  sti_r - protection device read
 //-------------------------------------------------
 
 READ8_MEMBER( abc806_state::sti_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0
-        1
-        2
-        3
-        4
-        5
-        6
-        7       PROT DOUT
+	    0
+	    1
+	    2
+	    3
+	    4
+	    5
+	    6
+	    7       PROT DOUT
 
-    */
+	*/
 
 	return 0x7f;
 }
 
 
 //-------------------------------------------------
-//  abc806_sto_w -
+//  sto_w -
 //-------------------------------------------------
 
 WRITE8_MEMBER( abc806_state::sto_w )
@@ -221,7 +223,7 @@ WRITE8_MEMBER( abc806_state::sto_w )
 
 
 //-------------------------------------------------
-//  abc806_sso_w - sync offset write
+//  sso_w - sync offset write
 //-------------------------------------------------
 
 WRITE8_MEMBER( abc806_state::sso_w )
@@ -314,24 +316,24 @@ static MC6845_UPDATE_ROW( abc806_update_row )
 		else
 		{
 			rad_addr = (e6 << 8) | (e5 << 7) | (flash << 6) | (underline << 5) | (state->m_flshclk << 4) | ra;
-			rad_data = state->m_rad_prom[rad_addr] & 0x0f;
+			rad_data = state->m_rad_prom->base()[rad_addr] & 0x0f;
 
 			rad_data = ra; // HACK because the RAD prom is not dumped yet
 		}
 
 		UINT16 chargen_addr = (th << 12) | (data << 4) | rad_data;
-		UINT8 chargen_data = state->m_char_rom[chargen_addr & 0xfff] << 2;
+		UINT8 chargen_data = state->m_char_rom->base()[chargen_addr & 0xfff] << 2;
 		int x = HORIZONTAL_PORCH_HACK + (column + 4) * ABC800_CHAR_WIDTH;
 
 		for (int bit = 0; bit < ABC800_CHAR_WIDTH; bit++)
 		{
 			int color = BIT(chargen_data, 7) ? fg_color : bg_color;
 
-			*BITMAP_ADDR16(bitmap, y, x++) = color;
+			bitmap.pix32(y, x++) = PALETTE[color];
 
 			if (e5 || e6)
 			{
-				*BITMAP_ADDR16(bitmap, y, x++) = color;
+				bitmap.pix32(y, x++) = PALETTE[color];
 			}
 
 			chargen_data <<= 1;
@@ -387,7 +389,7 @@ WRITE_LINE_MEMBER( abc806_state::hs_w )
 		if (m_d_vsync != vsync)
 		{
 			// signal _DEW to DART
-			m_dart->ri_w(1, !vsync);
+			m_dart->rib_w(!vsync);
 		}
 
 		m_d_vsync = vsync;
@@ -409,9 +411,9 @@ WRITE_LINE_MEMBER( abc806_state::vs_w )
 //  mc6845_interface crtc_intf
 //-------------------------------------------------
 
-static const mc6845_interface crtc_intf =
+static MC6845_INTERFACE( crtc_intf )
 {
-	SCREEN_TAG,
+	false,
 	ABC800_CHAR_WIDTH,
 	NULL,
 	abc806_update_row,
@@ -428,11 +430,11 @@ static const mc6845_interface crtc_intf =
 //  hr_update - high resolution screen update
 //-------------------------------------------------
 
-void abc806_state::hr_update(bitmap_t *bitmap, const rectangle *cliprect)
+void abc806_state::hr_update(bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
 	UINT32 addr = (m_hrs & 0x0f) << 15;
 
-	for (int y = m_sync + VERTICAL_PORCH_HACK; y < MIN(cliprect->max_y + 1, m_sync + VERTICAL_PORCH_HACK + 240); y++)
+	for (int y = m_sync + VERTICAL_PORCH_HACK; y < MIN(cliprect.max_y + 1, m_sync + VERTICAL_PORCH_HACK + 240); y++)
 	{
 		for (int sx = 0; sx < 128; sx++)
 		{
@@ -443,9 +445,9 @@ void abc806_state::hr_update(bitmap_t *bitmap, const rectangle *cliprect)
 			{
 				int x = HORIZONTAL_PORCH_HACK + (ABC800_CHAR_WIDTH * 4) - 16 + (sx * 4) + pixel;
 
-				if (BIT(dot, 15) || *BITMAP_ADDR16(bitmap, y, x) == 0)
+				if (BIT(dot, 15) || (bitmap.pix32(y, x) == RGB_BLACK))
 				{
-					*BITMAP_ADDR16(bitmap, y, x) = (dot >> 12) & 0x07;
+					bitmap.pix32(y, x) = PALETTE[(dot >> 12) & 0x07];
 				}
 
 				dot <<= 4;
@@ -454,10 +456,6 @@ void abc806_state::hr_update(bitmap_t *bitmap, const rectangle *cliprect)
 	}
 }
 
-
-//-------------------------------------------------
-//  VIDEO_START( abc806 )
-//-------------------------------------------------
 
 void abc806_state::video_start()
 {
@@ -472,32 +470,27 @@ void abc806_state::video_start()
 	m_vsync = 1;
 	m_40 = 1;
 
-	// find memory regions
-	m_char_rom = machine().region(MC6845_TAG)->base();
-	m_rad_prom = machine().region("rad")->base();
-	m_hru2_prom = machine().region("hru2")->base();
-
 	// allocate memory
-	m_char_ram = auto_alloc_array(machine(), UINT8, ABC806_CHAR_RAM_SIZE);
+	m_char_ram.allocate(ABC806_CHAR_RAM_SIZE);
 	m_color_ram = auto_alloc_array(machine(), UINT8, ABC806_ATTR_RAM_SIZE);
 
 	// register for state saving
-	state_save_register_global_pointer(machine(), m_char_ram, ABC806_CHAR_RAM_SIZE);
-	state_save_register_global_pointer(machine(), m_color_ram, ABC806_ATTR_RAM_SIZE);
-	state_save_register_global_pointer(machine(), m_video_ram, ABC806_VIDEO_RAM_SIZE);
-	state_save_register_global(machine(), m_txoff);
-	state_save_register_global(machine(), m_40);
-	state_save_register_global(machine(), m_flshclk_ctr);
-	state_save_register_global(machine(), m_flshclk);
-	state_save_register_global(machine(), m_attr_data);
-	state_save_register_global(machine(), m_hrs);
-	state_save_register_global_array(machine(), m_hrc);
-	state_save_register_global(machine(), m_sync);
-	state_save_register_global(machine(), m_v50_addr);
-	state_save_register_global(machine(), m_hru2_a8);
-	state_save_register_global(machine(), m_vsync_shift);
-	state_save_register_global(machine(), m_vsync);
-	state_save_register_global(machine(), m_d_vsync);
+	save_pointer(NAME(m_char_ram.target()), ABC806_CHAR_RAM_SIZE);
+	save_pointer(NAME(m_color_ram), ABC806_ATTR_RAM_SIZE);
+	save_pointer(NAME(m_video_ram.target()), ABC806_VIDEO_RAM_SIZE);
+	save_item(NAME(m_txoff));
+	save_item(NAME(m_40));
+	save_item(NAME(m_flshclk_ctr));
+	save_item(NAME(m_flshclk));
+	save_item(NAME(m_attr_data));
+	save_item(NAME(m_hrs));
+	save_item(NAME(m_hrc));
+	save_item(NAME(m_sync));
+	save_item(NAME(m_v50_addr));
+	save_item(NAME(m_hru2_a8));
+	save_item(NAME(m_vsync_shift));
+	save_item(NAME(m_vsync));
+	save_item(NAME(m_d_vsync));
 }
 
 
@@ -505,22 +498,22 @@ void abc806_state::video_start()
 //  SCREEN_UPDATE( abc806 )
 //-------------------------------------------------
 
-bool abc806_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
+UINT32 abc806_state::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
 	// HACK expand visible area to workaround MC6845
 	screen.set_visible_area(0, 767, 0, 311);
 
 	// clear screen
-	bitmap_fill(&bitmap, &cliprect, 0);
+	bitmap.fill(get_black_pen(machine()), cliprect);
 
 	if (!m_txoff)
 	{
 		// draw text
-		m_crtc->update(&bitmap, &cliprect);
+		m_crtc->screen_update(screen, bitmap, cliprect);
 	}
 
 	// draw HR graphics
-	hr_update(&bitmap, &cliprect);
+	hr_update(bitmap, cliprect);
 
 	return 0;
 }
@@ -531,17 +524,13 @@ bool abc806_state::screen_update(screen_device &screen, bitmap_t &bitmap, const 
 //-------------------------------------------------
 
 MACHINE_CONFIG_FRAGMENT( abc806_video )
-	MCFG_MC6845_ADD(MC6845_TAG, MC6845, ABC800_CCLK, crtc_intf)
+	MCFG_MC6845_ADD(MC6845_TAG, MC6845, SCREEN_TAG, ABC800_CCLK, crtc_intf)
 
 	MCFG_SCREEN_ADD(SCREEN_TAG, RASTER)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(abc806_state, screen_update)
 
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
-	MCFG_SCREEN_SIZE(640, 400)
-	MCFG_SCREEN_VISIBLE_AREA(0,640-1, 0, 400-1)
-
-	MCFG_PALETTE_LENGTH(8)
-
-	MCFG_PALETTE_INIT(abc806)
+	MCFG_SCREEN_SIZE(768, 312)
+	MCFG_SCREEN_VISIBLE_AREA(0, 768-1, 0, 312-1)
 MACHINE_CONFIG_END

@@ -54,37 +54,37 @@ static ADDRESS_MAP_START( mpf1_io_map, AS_IO, 8, mpf1_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_MIRROR(0x3c) AM_DEVREADWRITE(I8255A_TAG, i8255_device, read, write)
-	AM_RANGE(0x40, 0x43) AM_MIRROR(0x3c) AM_DEVREADWRITE_LEGACY(Z80CTC_TAG, z80ctc_r, z80ctc_w)
-	AM_RANGE(0x80, 0x83) AM_MIRROR(0x3c) AM_DEVREADWRITE_LEGACY(Z80PIO_TAG, z80pio_cd_ba_r, z80pio_cd_ba_w)
+	AM_RANGE(0x40, 0x43) AM_MIRROR(0x3c) AM_DEVREADWRITE(Z80CTC_TAG, z80ctc_device, read, write)
+	AM_RANGE(0x80, 0x83) AM_MIRROR(0x3c) AM_DEVREADWRITE(Z80PIO_TAG, z80pio_device, read, write)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mpf1b_io_map, AS_IO, 8, mpf1_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_MIRROR(0x3c) AM_DEVREADWRITE(I8255A_TAG, i8255_device, read, write)
-	AM_RANGE(0x40, 0x43) AM_MIRROR(0x3c) AM_DEVREADWRITE_LEGACY(Z80CTC_TAG, z80ctc_r, z80ctc_w)
-	AM_RANGE(0x80, 0x83) AM_MIRROR(0x3c) AM_DEVREADWRITE_LEGACY(Z80PIO_TAG, z80pio_cd_ba_r, z80pio_cd_ba_w)
-	AM_RANGE(0xfe, 0xfe) AM_MIRROR(0x01) AM_DEVREADWRITE_LEGACY(TMS5220_TAG, tms5220_status_r, tms5220_data_w)
+	AM_RANGE(0x40, 0x43) AM_MIRROR(0x3c) AM_DEVREADWRITE(Z80CTC_TAG, z80ctc_device, read, write)
+	AM_RANGE(0x80, 0x83) AM_MIRROR(0x3c) AM_DEVREADWRITE(Z80PIO_TAG, z80pio_device, read, write)
+	AM_RANGE(0xfe, 0xfe) AM_MIRROR(0x01) AM_DEVREADWRITE(TMS5220_TAG, tms5220_device, status_r, data_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mpf1p_io_map, AS_IO, 8, mpf1_state )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_MIRROR(0x3c) AM_DEVREADWRITE(I8255A_TAG, i8255_device, read, write)
-	AM_RANGE(0x40, 0x43) AM_MIRROR(0x3c) AM_DEVREADWRITE_LEGACY(Z80CTC_TAG, z80ctc_r, z80ctc_w)
-	AM_RANGE(0x80, 0x83) AM_MIRROR(0x3c) AM_DEVREADWRITE_LEGACY(Z80PIO_TAG, z80pio_cd_ba_r, z80pio_cd_ba_w)
+	AM_RANGE(0x40, 0x43) AM_MIRROR(0x3c) AM_DEVREADWRITE(Z80CTC_TAG, z80ctc_device, read, write)
+	AM_RANGE(0x80, 0x83) AM_MIRROR(0x3c) AM_DEVREADWRITE(Z80PIO_TAG, z80pio_device, read, write)
 ADDRESS_MAP_END
 
 /* Input Ports */
 
-static INPUT_CHANGED( trigger_nmi )
+INPUT_CHANGED_MEMBER( mpf1_state::trigger_nmi )
 {
-	cputag_set_input_line(field.machine(), Z80_TAG, INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
+	m_maincpu->set_input_line(INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
-static INPUT_CHANGED( trigger_irq )
+INPUT_CHANGED_MEMBER( mpf1_state::trigger_irq )
 {
-	cputag_set_input_line(field.machine(), Z80_TAG, INPUT_LINE_IRQ0, newval ? CLEAR_LINE : ASSERT_LINE);
+	m_maincpu->set_input_line(INPUT_LINE_IRQ0, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static INPUT_PORTS_START( mpf1 )
@@ -140,8 +140,8 @@ static INPUT_PORTS_START( mpf1 )
 
 	PORT_START("SPECIAL")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("USER KEY") PORT_CODE(KEYCODE_U)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("MONI") PORT_CODE(KEYCODE_M) PORT_CHANGED(trigger_nmi, 0)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("INTR") PORT_CODE(KEYCODE_I) PORT_CHANGED(trigger_irq, 0)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("MONI") PORT_CODE(KEYCODE_M) PORT_CHANGED_MEMBER(DEVICE_SELF, mpf1_state, trigger_nmi, 0)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("INTR") PORT_CODE(KEYCODE_I) PORT_CHANGED_MEMBER(DEVICE_SELF, mpf1_state, trigger_irq, 0)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( mpf1b )
@@ -197,22 +197,20 @@ static INPUT_PORTS_START( mpf1b )
 
 	PORT_START("SPECIAL")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("SHIFT") PORT_CODE(KEYCODE_LSHIFT)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("MONI") PORT_CODE(KEYCODE_M) PORT_CHANGED(trigger_nmi, 0)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("INTR") PORT_CODE(KEYCODE_I) PORT_CHANGED(trigger_irq, 0)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("MONI") PORT_CODE(KEYCODE_M) PORT_CHANGED_MEMBER(DEVICE_SELF, mpf1_state, trigger_nmi, 0)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_KEYBOARD ) PORT_NAME("INTR") PORT_CODE(KEYCODE_I) PORT_CHANGED_MEMBER(DEVICE_SELF, mpf1_state, trigger_irq, 0)
 INPUT_PORTS_END
 
 /* Intel 8255A Interface */
 
-static TIMER_CALLBACK( led_refresh )
+TIMER_CALLBACK_MEMBER(mpf1_state::led_refresh)
 {
-	mpf1_state *state = machine.driver_data<mpf1_state>();
-
-	if (BIT(state->m_lednum, 5)) output_set_digit_value(0, param);
-	if (BIT(state->m_lednum, 4)) output_set_digit_value(1, param);
-	if (BIT(state->m_lednum, 3)) output_set_digit_value(2, param);
-	if (BIT(state->m_lednum, 2)) output_set_digit_value(3, param);
-	if (BIT(state->m_lednum, 1)) output_set_digit_value(4, param);
-	if (BIT(state->m_lednum, 0)) output_set_digit_value(5, param);
+	if (BIT(m_lednum, 5)) output_set_digit_value(0, param);
+	if (BIT(m_lednum, 4)) output_set_digit_value(1, param);
+	if (BIT(m_lednum, 3)) output_set_digit_value(2, param);
+	if (BIT(m_lednum, 2)) output_set_digit_value(3, param);
+	if (BIT(m_lednum, 1)) output_set_digit_value(4, param);
+	if (BIT(m_lednum, 0)) output_set_digit_value(5, param);
 }
 
 READ8_MEMBER( mpf1_state::ppi_pa_r )
@@ -220,15 +218,15 @@ READ8_MEMBER( mpf1_state::ppi_pa_r )
 	UINT8 data = 0x7f;
 
 	/* bit 0 to 5, keyboard rows 0 to 5 */
-	if (!BIT(m_lednum, 0)) data &= input_port_read(machine(), "PC0");
-	if (!BIT(m_lednum, 1)) data &= input_port_read(machine(), "PC1");
-	if (!BIT(m_lednum, 2)) data &= input_port_read(machine(), "PC2");
-	if (!BIT(m_lednum, 3)) data &= input_port_read(machine(), "PC3");
-	if (!BIT(m_lednum, 4)) data &= input_port_read(machine(), "PC4");
-	if (!BIT(m_lednum, 5)) data &= input_port_read(machine(), "PC5");
+	if (!BIT(m_lednum, 0)) data &= m_pc0->read();
+	if (!BIT(m_lednum, 1)) data &= m_pc1->read();
+	if (!BIT(m_lednum, 2)) data &= m_pc2->read();
+	if (!BIT(m_lednum, 3)) data &= m_pc3->read();
+	if (!BIT(m_lednum, 4)) data &= m_pc4->read();
+	if (!BIT(m_lednum, 5)) data &= m_pc5->read();
 
 	/* bit 6, user key */
-	data &= input_port_read(machine(), "SPECIAL") & 1 ? 0xff : 0xbf;
+	data &= m_special->read() & 1 ? 0xff : 0xbf;
 
 	/* bit 7, tape input */
 	data |= ((m_cassette)->input() > 0 ? 1 : 0) << 7;
@@ -262,7 +260,7 @@ WRITE8_MEMBER( mpf1_state::ppi_pc_w )
 
 	/* bit 7, tape output, tone and led */
 	set_led_status(machine(), 0, !BIT(data, 7));
-	speaker_level_w(m_speaker, BIT(data, 7));
+	m_speaker->level_w(BIT(data, 7));
 	m_cassette->output( BIT(data, 7));
 }
 
@@ -280,7 +278,6 @@ static I8255A_INTERFACE( ppi8255_intf )
 
 static Z80CTC_INTERFACE( mpf1_ctc_intf )
 {
-	0,
 	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0),
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -320,34 +317,19 @@ static const cassette_interface mpf1_cassette_interface =
 	NULL
 };
 
-/* TMS5220 Interface */
-
-static const tms5220_interface mpf1_tms5220_intf =
-{
-	DEVCB_NULL,					/* no IRQ callback */
-	DEVCB_NULL,					/* no Ready callback */
-#if 1
-	spchroms_read,				/* speech ROM read handler */
-	spchroms_load_address,		/* speech ROM load address handler */
-	spchroms_read_and_branch	/* speech ROM read and branch handler */
-#endif
-};
-
 /* Machine Initialization */
 
-static TIMER_DEVICE_CALLBACK( check_halt_callback )
+TIMER_DEVICE_CALLBACK_MEMBER(mpf1_state::check_halt_callback)
 {
-	mpf1_state *state = timer.machine().driver_data<mpf1_state>();
-
 	// halt-LED; the red one, is turned on when the processor is halted
 	// TODO: processor seems to halt, but restarts(?) at 0x0000 after a while -> fix
-	INT64 led_halt = cpu_get_reg(state->m_maincpu, Z80_HALT);
-	set_led_status(timer.machine(), 1, led_halt);
+	INT64 led_halt = m_maincpu->state_int(Z80_HALT);
+	set_led_status(machine(), 1, led_halt);
 }
 
 void mpf1_state::machine_start()
 {
-	m_led_refresh_timer = machine().scheduler().timer_alloc(FUNC(led_refresh));
+	m_led_refresh_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(mpf1_state::led_refresh),this));
 
 	/* register for state saving */
 	save_item(NAME(m_break));
@@ -374,17 +356,17 @@ static MACHINE_CONFIG_START( mpf1, mpf1_state )
 	MCFG_Z80PIO_ADD(Z80PIO_TAG, XTAL_3_579545MHz/2, mpf1_pio_intf)
 	MCFG_Z80CTC_ADD(Z80CTC_TAG, XTAL_3_579545MHz/2, mpf1_ctc_intf)
 	MCFG_I8255A_ADD(I8255A_TAG, ppi8255_intf)
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, mpf1_cassette_interface)
+	MCFG_CASSETTE_ADD("cassette", mpf1_cassette_interface)
 
 	/* video hardware */
 	MCFG_DEFAULT_LAYOUT(layout_mpf1)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_TIMER_ADD_PERIODIC("halt_timer", check_halt_callback, attotime::from_hz(1))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("halt_timer", mpf1_state, check_halt_callback, attotime::from_hz(1))
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( mpf1b, mpf1_state )
@@ -398,21 +380,20 @@ static MACHINE_CONFIG_START( mpf1b, mpf1_state )
 	MCFG_Z80PIO_ADD(Z80PIO_TAG, XTAL_3_579545MHz/2, mpf1_pio_intf)
 	MCFG_Z80CTC_ADD(Z80CTC_TAG, XTAL_3_579545MHz/2, mpf1_ctc_intf)
 	MCFG_I8255A_ADD(I8255A_TAG, ppi8255_intf)
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, mpf1_cassette_interface)
+	MCFG_CASSETTE_ADD("cassette", mpf1_cassette_interface)
 
 	/* video hardware */
 	MCFG_DEFAULT_LAYOUT(layout_mpf1b)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	MCFG_SOUND_ADD(TMS5220_TAG, TMS5220, 680000L)
-	MCFG_SOUND_CONFIG(mpf1_tms5220_intf)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_TIMER_ADD_PERIODIC("halt_timer", check_halt_callback, attotime::from_hz(1))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("halt_timer", mpf1_state, check_halt_callback, attotime::from_hz(1))
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( mpf1p, mpf1_state )
@@ -429,63 +410,59 @@ static MACHINE_CONFIG_START( mpf1p, mpf1_state )
 	MCFG_Z80PIO_ADD(Z80PIO_TAG, 2500000, mpf1_pio_intf)
 	MCFG_Z80CTC_ADD(Z80CTC_TAG, 2500000, mpf1_ctc_intf)
 	MCFG_I8255A_ADD(I8255A_TAG, ppi8255_intf)
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, mpf1_cassette_interface)
+	MCFG_CASSETTE_ADD("cassette", mpf1_cassette_interface)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_TIMER_ADD_PERIODIC("halt_timer", check_halt_callback, attotime::from_hz(1))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("halt_timer", mpf1_state, check_halt_callback, attotime::from_hz(1))
 MACHINE_CONFIG_END
 
 /* ROMs */
 
 ROM_START( mpf1 )
-    ROM_REGION( 0x10000, Z80_TAG, 0 )
-    ROM_LOAD( "mpf.u6", 0x0000, 0x1000, CRC(b60249ce) SHA1(78e0e8874d1497fabfdd6378266d041175e3797f) )
+	ROM_REGION( 0x10000, Z80_TAG, 0 )
+	ROM_LOAD( "mpf.u6", 0x0000, 0x1000, CRC(b60249ce) SHA1(78e0e8874d1497fabfdd6378266d041175e3797f) )
 ROM_END
 
 ROM_START( mpf1b )
-    ROM_REGION( 0x10000, Z80_TAG, 0 )
-    ROM_LOAD( "c55167.u6", 0x0000, 0x1000, CRC(28b06dac) SHA1(99cfbab739d71a914c39302d384d77bddc4b705b) )
-    ROM_LOAD( "basic.u7", 0x2000, 0x1000, CRC(d276ed6b) SHA1(a45fb98961be5e5396988498c6ed589a35398dcf) )
-    ROM_LOAD( "ssb-mpf.u", 0x5000, 0x1000, CRC(f926334f) SHA1(35847f8164eed4c0794a8b74e5d7fa972b10eb90) )
-    ROM_LOAD( "prt-mpf.u5", 0x6000, 0x1000, CRC(730f2fb0) SHA1(f31536ee9dbb9babb9ce16a7490db654ca0b5749) )
+	ROM_REGION( 0x10000, Z80_TAG, 0 )
+	ROM_LOAD( "c55167.u6", 0x0000, 0x1000, CRC(28b06dac) SHA1(99cfbab739d71a914c39302d384d77bddc4b705b) )
+	ROM_LOAD( "basic.u7", 0x2000, 0x1000, CRC(d276ed6b) SHA1(a45fb98961be5e5396988498c6ed589a35398dcf) )
+	ROM_LOAD( "ssb-mpf.u", 0x5000, 0x1000, CRC(f926334f) SHA1(35847f8164eed4c0794a8b74e5d7fa972b10eb90) )
+	ROM_LOAD( "prt-mpf.u5", 0x6000, 0x1000, CRC(730f2fb0) SHA1(f31536ee9dbb9babb9ce16a7490db654ca0b5749) )
 ROM_END
 
 ROM_START( mpf1p )
-    ROM_REGION( 0x10000, Z80_TAG, 0 )
+	ROM_REGION( 0x10000, Z80_TAG, 0 )
 	ROM_LOAD( "mpf1pmon.bin", 0x0000, 0x2000, CRC(91ace7d3) SHA1(22e3c16a81ac09f37741ad1b526a4456b2ba9493) )
-    ROM_LOAD( "prt-mpf-ip.u5", 0x6000, 0x1000, CRC(4dd2a4eb) SHA1(6a3e7daa7834d67fd572261ed4a9a62c4594fe3f) )
+	ROM_LOAD( "prt-mpf-ip.u5", 0x6000, 0x1000, CRC(4dd2a4eb) SHA1(6a3e7daa7834d67fd572261ed4a9a62c4594fe3f) )
 ROM_END
 
 /* System Drivers */
 
-DIRECT_UPDATE_HANDLER( mpf1_direct_update_handler )
+DIRECT_UPDATE_MEMBER(mpf1_state::mpf1_direct_update_handler)
 {
-	mpf1_state *state = machine.driver_data<mpf1_state>();
-
-	if (!state->m_break)
+	if (!m_break)
 	{
-		state->m_m1++;
+		m_m1++;
 
-		if (state->m_m1 == 5)
+		if (m_m1 == 5)
 		{
-			state->m_maincpu->set_input_line(INPUT_LINE_NMI, ASSERT_LINE);
+			m_maincpu->set_input_line(INPUT_LINE_NMI, ASSERT_LINE);
 		}
 	}
 
 	return 0;
 }
 
-static DRIVER_INIT( mpf1 )
+DRIVER_INIT_MEMBER(mpf1_state,mpf1)
 {
-	mpf1_state *state = machine.driver_data<mpf1_state>();
-
-	state->m_maincpu->memory().space(AS_PROGRAM)->set_direct_update_handler(direct_update_delegate(FUNC(mpf1_direct_update_handler), &machine));
+	m_maincpu->space(AS_PROGRAM).set_direct_update_handler(direct_update_delegate(FUNC(mpf1_state::mpf1_direct_update_handler), this));
 }
 
-COMP( 1979, mpf1,  0,    0, mpf1, mpf1,  mpf1, "Multitech", "Micro Professor 1", 0)
-COMP( 1979, mpf1b, mpf1, 0, mpf1b,mpf1b, mpf1, "Multitech", "Micro Professor 1B", 0)
-COMP( 1982, mpf1p, mpf1, 0, mpf1p,mpf1b, mpf1, "Multitech", "Micro Professor 1 Plus", GAME_NOT_WORKING)
+COMP( 1979, mpf1,  0,    0, mpf1, mpf1, mpf1_state,  mpf1, "Multitech", "Micro Professor 1", 0)
+COMP( 1979, mpf1b, mpf1, 0, mpf1b,mpf1b, mpf1_state, mpf1, "Multitech", "Micro Professor 1B", 0)
+COMP( 1982, mpf1p, mpf1, 0, mpf1p,mpf1b, mpf1_state, mpf1, "Multitech", "Micro Professor 1 Plus", GAME_NOT_WORKING)

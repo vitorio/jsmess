@@ -11,18 +11,15 @@
 #include "cpu/i8085/i8085.h"
 #include "imagedev/cassette.h"
 #include "machine/i8255.h"
-#include "machine/pit8253.h"
 #include "machine/pic8259.h"
-#include "machine/msm8251.h"
-#include "machine/wd17xx.h"
-#include "imagedev/flopdrv.h"
-#include "formats/basicdsk.h"
+#include "machine/i8251.h"
+#include "machine/wd_fdc.h"
 #include "machine/ram.h"
 #include "includes/b2m.h"
-
+#include "formats/smx_dsk.h"
 
 /* Address maps */
-static ADDRESS_MAP_START(b2m_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(b2m_mem, AS_PROGRAM, 8, b2m_state )
 	AM_RANGE (0x0000, 0x27ff) AM_RAMBANK("bank1")
 	AM_RANGE (0x2800, 0x2fff) AM_RAMBANK("bank2")
 	AM_RANGE (0x3000, 0x6fff) AM_RAMBANK("bank3")
@@ -30,32 +27,29 @@ static ADDRESS_MAP_START(b2m_mem, AS_PROGRAM, 8)
 	AM_RANGE (0xe000, 0xffff) AM_RAMBANK("bank5")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( b2m_io, AS_IO, 8 )
+static ADDRESS_MAP_START( b2m_io, AS_IO, 8, b2m_state )
 	ADDRESS_MAP_GLOBAL_MASK(0x1f)
-	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("pit8253", pit8253_r,pit8253_w)
-	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE_MODERN("ppi8255_2", i8255_device, read, write)
-	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE_MODERN("ppi8255_1", i8255_device, read, write)
-    AM_RANGE(0x0c, 0x0c) AM_READWRITE(b2m_localmachine_r,b2m_localmachine_w)
+	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("pit8253", pit8253_device, read, write)
+	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE("ppi8255_2", i8255_device, read, write)
+	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE("ppi8255_1", i8255_device, read, write)
+	AM_RANGE(0x0c, 0x0c) AM_READWRITE(b2m_localmachine_r,b2m_localmachine_w)
 	AM_RANGE(0x10, 0x13) AM_READWRITE(b2m_palette_r,b2m_palette_w)
-	AM_RANGE(0x14, 0x15) AM_DEVREADWRITE("pic8259", pic8259_r, pic8259_w )
-	AM_RANGE(0x18, 0x18) AM_DEVREADWRITE("uart", msm8251_data_r,msm8251_data_w)
-	AM_RANGE(0x19, 0x19) AM_DEVREADWRITE("uart", msm8251_status_r,msm8251_control_w)
-	AM_RANGE(0x1c, 0x1c) AM_DEVREADWRITE("wd1793", wd17xx_status_r,wd17xx_command_w)
-	AM_RANGE(0x1d, 0x1d) AM_DEVREADWRITE("wd1793", wd17xx_track_r,wd17xx_track_w)
-	AM_RANGE(0x1e, 0x1e) AM_DEVREADWRITE("wd1793", wd17xx_sector_r,wd17xx_sector_w)
-	AM_RANGE(0x1f, 0x1f) AM_DEVREADWRITE("wd1793", wd17xx_data_r,wd17xx_data_w)
+	AM_RANGE(0x14, 0x15) AM_DEVREADWRITE("pic8259", pic8259_device, read, write )
+	AM_RANGE(0x18, 0x18) AM_DEVREADWRITE("uart", i8251_device, data_r, data_w)
+	AM_RANGE(0x19, 0x19) AM_DEVREADWRITE("uart", i8251_device, status_r, control_w)
+	AM_RANGE(0x1c, 0x1f) AM_DEVREADWRITE("fd1793", fd1793_t, read, write)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( b2m_rom_io, AS_IO, 8 )
+static ADDRESS_MAP_START( b2m_rom_io, AS_IO, 8, b2m_state )
 	ADDRESS_MAP_GLOBAL_MASK(0x1f)
-	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("pit8253", pit8253_r,pit8253_w)
-	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE_MODERN("ppi8255_3", i8255_device, read, write)
-	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE_MODERN("ppi8255_1", i8255_device, read, write)
-    AM_RANGE(0x0c, 0x0c) AM_READWRITE(b2m_localmachine_r,b2m_localmachine_w)
+	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("pit8253", pit8253_device, read, write)
+	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE("ppi8255_3", i8255_device, read, write)
+	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE("ppi8255_1", i8255_device, read, write)
+	AM_RANGE(0x0c, 0x0c) AM_READWRITE(b2m_localmachine_r,b2m_localmachine_w)
 	AM_RANGE(0x10, 0x13) AM_READWRITE(b2m_palette_r,b2m_palette_w)
-	AM_RANGE(0x14, 0x15) AM_DEVREADWRITE("pic8259", pic8259_r, pic8259_w )
-	AM_RANGE(0x18, 0x18) AM_DEVREADWRITE("uart", msm8251_data_r, msm8251_data_w)
-	AM_RANGE(0x19, 0x19) AM_DEVREADWRITE("uart", msm8251_status_r, msm8251_control_w)
+	AM_RANGE(0x14, 0x15) AM_DEVREADWRITE("pic8259", pic8259_device, read, write )
+	AM_RANGE(0x18, 0x18) AM_DEVREADWRITE("uart", i8251_device, data_r, data_w)
+	AM_RANGE(0x19, 0x19) AM_DEVREADWRITE("uart", i8251_device, status_r, control_w)
 ADDRESS_MAP_END
 
 
@@ -154,7 +148,7 @@ static INPUT_PORTS_START( b2m )
 	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_CODE(KEYCODE_BACKSLASH) PORT_CHAR('?') PORT_CHAR('/')
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("Del") PORT_CODE(KEYCODE_DEL)
 	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_CODE(KEYCODE_QUOTE) PORT_CHAR('\"') PORT_CHAR(':')
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_CODE(KEYCODE_STOP)	PORT_CHAR('>') PORT_CHAR('.')
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_CODE(KEYCODE_STOP)    PORT_CHAR('>') PORT_CHAR('.')
 	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_UNUSED)
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_UNUSED)
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("PgUp") PORT_CODE(KEYCODE_PGUP)
@@ -172,54 +166,37 @@ static INPUT_PORTS_START( b2m )
 
 	PORT_START("MONITOR")
 	PORT_CONFNAME(0x01, 0x01, "Monitor")
-	PORT_CONFSETTING(	0x01, "Color")
-	PORT_CONFSETTING(	0x00, "B/W")
+	PORT_CONFSETTING(   0x01, "Color")
+	PORT_CONFSETTING(   0x00, "B/W")
 INPUT_PORTS_END
 
-static FLOPPY_OPTIONS_START(b2m)
-	FLOPPY_OPTION(b2m, "cpm", "Bashkiria-2M disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
-		HEADS([2])
-		TRACKS([80])
-		SECTORS([5])
-		SECTOR_LENGTH([1024])
-		FIRST_SECTOR_ID([1]))
-FLOPPY_OPTIONS_END
+FLOPPY_FORMATS_MEMBER( b2m_state::b2m_floppy_formats )
+	FLOPPY_SMX_FORMAT
+FLOPPY_FORMATS_END
 
-static const floppy_interface b2m_floppy_interface =
-{
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	FLOPPY_STANDARD_5_25_DSHD,
-	FLOPPY_OPTIONS_NAME(b2m),
-	NULL,
-	NULL
-};
+static SLOT_INTERFACE_START( b2m_floppies )
+	SLOT_INTERFACE( "525qd", FLOPPY_525_QD )
+SLOT_INTERFACE_END
+
 
 /* Machine driver */
 static MACHINE_CONFIG_START( b2m, b2m_state )
-    /* basic machine hardware */
-    MCFG_CPU_ADD("maincpu", I8080, 2000000)
-    MCFG_CPU_PROGRAM_MAP(b2m_mem)
-    MCFG_CPU_IO_MAP(b2m_io)
-    MCFG_CPU_VBLANK_INT("screen", b2m_vblank_interrupt)
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", I8080, 2000000)
+	MCFG_CPU_PROGRAM_MAP(b2m_mem)
+	MCFG_CPU_IO_MAP(b2m_io)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", b2m_state,  b2m_vblank_interrupt)
 
-    MCFG_MACHINE_START( b2m )
-    MCFG_MACHINE_RESET( b2m )
 
-    /* video hardware */
+	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(384, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 384-1, 0, 256-1)
-    MCFG_SCREEN_UPDATE(b2m)
+	MCFG_SCREEN_UPDATE_DRIVER(b2m_state, screen_update_b2m)
 
 	MCFG_PALETTE_LENGTH(4)
-	MCFG_PALETTE_INIT(b2m)
 
 	MCFG_PIT8253_ADD( "pit8253", b2m_pit8253_intf )
 
@@ -229,21 +206,21 @@ static MACHINE_CONFIG_START( b2m, b2m_state )
 
 	MCFG_I8255_ADD( "ppi8255_3", b2m_ppi8255_interface_3 )
 
-	MCFG_PIC8259_ADD( "pic8259", b2m_pic8259_config )
-
-	MCFG_VIDEO_START(b2m)
+	MCFG_PIC8259_ADD( "pic8259", WRITELINE(b2m_state,b2m_pic_set_int_line), VCC, NULL )
 
 	/* sound */
-    MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	/* uart */
-	MCFG_MSM8251_ADD("uart", default_msm8251_interface)
+	MCFG_I8251_ADD("uart", default_i8251_interface)
 
-	MCFG_FD1793_ADD("wd1793", default_wd17xx_interface_2_drives )
+	MCFG_FD1793x_ADD("fd1793", XTAL_8MHz / 8)
 
-	MCFG_FLOPPY_2_DRIVES_ADD(b2m_floppy_interface)
+	MCFG_FLOPPY_DRIVE_ADD("fd0", b2m_floppies, "525qd", b2m_state::b2m_floppy_formats)
+	MCFG_FLOPPY_DRIVE_ADD("fd1", b2m_floppies, "525qd", b2m_state::b2m_floppy_formats)
+	MCFG_SOFTWARE_LIST_ADD("flop_list","b2m")
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -252,26 +229,26 @@ static MACHINE_CONFIG_START( b2m, b2m_state )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( b2mrom, b2m )
-    MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_MODIFY("maincpu")
 	MCFG_CPU_IO_MAP(b2m_rom_io)
 MACHINE_CONFIG_END
 
 /* ROM definition */
 
 ROM_START( b2m )
-    ROM_REGION( 0x12000, "maincpu", ROMREGION_ERASEFF )
-    ROM_LOAD( "b2m.rom", 0x10000, 0x2000, CRC(3f3214d6) SHA1(dd93e7fbabf14d1aed6777fe1ccfe0a3ca8fcaf2) )
+	ROM_REGION( 0x12000, "maincpu", ROMREGION_ERASEFF )
+	ROM_LOAD( "b2m.rom", 0x10000, 0x2000, CRC(3f3214d6) SHA1(dd93e7fbabf14d1aed6777fe1ccfe0a3ca8fcaf2) )
 ROM_END
 
 ROM_START( b2mrom )
-    ROM_REGION( 0x22000, "maincpu", ROMREGION_ERASEFF )
-    ROM_LOAD( "bios2.rom",  0x10000, 0x2000, CRC(c22a98b7) SHA1(7de91e653bf4b191ded62cf21532578268e4a2c1) )
-    ROM_LOAD( "ramdos.sys", 0x12000, 0x60c0, CRC(91ed6df0) SHA1(4fd040f2647a6b7930c330c75560a035027d0606) )
+	ROM_REGION( 0x22000, "maincpu", ROMREGION_ERASEFF )
+	ROM_LOAD( "bios2.rom",  0x10000, 0x2000, CRC(c22a98b7) SHA1(7de91e653bf4b191ded62cf21532578268e4a2c1) )
+	ROM_LOAD( "ramdos.sys", 0x12000, 0x60c0, CRC(91ed6df0) SHA1(4fd040f2647a6b7930c330c75560a035027d0606) )
 ROM_END
 
 
 /* Driver */
 
-/*    YEAR  NAME    PARENT  COMPAT  MACHINE     INPUT       INIT     COMPANY                  FULLNAME   FLAGS */
-COMP( 1989, b2m,	0,		0,		b2m,		b2m,		b2m,	 "BNPO",					 "Bashkiria-2M",	 GAME_SUPPORTS_SAVE)
-COMP( 1989, b2mrom,	b2m,	0,		b2mrom,		b2m,		b2m,	 "BNPO",					 "Bashkiria-2M ROM-disk",	 GAME_SUPPORTS_SAVE)
+/*    YEAR  NAME    PARENT  COMPAT  MACHINE     INPUT               INIT     COMPANY   FULLNAME   FLAGS */
+COMP( 1989, b2m,    0,      0,      b2m,        b2m,   b2m_state,   b2m,     "BNPO",   "Bashkiria-2M",   GAME_SUPPORTS_SAVE)
+COMP( 1989, b2mrom, b2m,    0,      b2mrom,     b2m,   b2m_state,   b2m,     "BNPO",   "Bashkiria-2M ROM-disk",  GAME_SUPPORTS_SAVE)

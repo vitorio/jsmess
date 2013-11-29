@@ -123,159 +123,126 @@ unknown cycle: CME, SSE, SSS
 #include "debugger.h"
 #include "tms0980.h"
 
-#define LOG					0
+#define LOG                 0
 
-#define MICRO_MASK			0x80000000
-#define FIXED_INSTRUCTION	0x00000000
+
+const device_type TMS0980 = &device_creator<tms0980_cpu_device>;
+const device_type TMS1000 = &device_creator<tms1000_cpu_device>;
+const device_type TMS1070 = &device_creator<tms1070_cpu_device>;
+const device_type TMS1200 = &device_creator<tms1200_cpu_device>;
+const device_type TMS1270 = &device_creator<tms1270_cpu_device>;
+const device_type TMS1100 = &device_creator<tms1100_cpu_device>;
+const device_type TMS1300 = &device_creator<tms1300_cpu_device>;
+
+
+#define MICRO_MASK          0x80000000
+#define FIXED_INSTRUCTION   0x00000000
 
 
 /* Standard/fixed intructions */
-#define F_ILL				0x00000000
-#define F_BR				0x00000001
-#define F_CALL				0x00000002
-#define F_CLO				0x00000004
-#define F_COMC				0x00000008
-#define F_COMX				0x00000010
-#define F_COMX8				0x00000020
-#define F_LDP				0x00000040
-#define F_LDX				0x00000080
-#define F_OFF				0x00000100
-#define F_RBIT				0x00000200
-#define F_REAC				0x00000400
-#define F_RETN				0x00000800
-#define F_RSTR				0x00001000
-#define F_SAL				0x00002000
-#define F_SBIT				0x00004000
-#define F_SBL				0x00008000
-#define F_SEAC				0x00010000
-#define F_SETR				0x00020000
-#define F_TDO				0x00040000
+#define F_ILL               0x00000000
+#define F_BR                0x00000001
+#define F_CALL              0x00000002
+#define F_CLO               0x00000004
+#define F_COMC              0x00000008
+#define F_COMX              0x00000010
+#define F_COMX8             0x00000020
+#define F_LDP               0x00000040
+#define F_LDX               0x00000080
+#define F_OFF               0x00000100
+#define F_RBIT              0x00000200
+#define F_REAC              0x00000400
+#define F_RETN              0x00000800
+#define F_RSTR              0x00001000
+#define F_SAL               0x00002000
+#define F_SBIT              0x00004000
+#define F_SBL               0x00008000
+#define F_SEAC              0x00010000
+#define F_SETR              0x00020000
+#define F_TDO               0x00040000
 
 
 /* Microinstructions */
-#define M_15TN				0x00000001
-#define M_ATN				0x00000002
-#define M_AUTA				0x00000004
-#define M_AUTY				0x00000008
-#define M_C8				0x00000010
-#define M_CIN				0x00000020
-#define M_CKM				0x00000040
-#define M_CKN				0x00000080
-#define M_CKP				0x00000100
-#define M_CME				0x00000200
-#define M_DMTP				0x00000400
-#define M_MTN				0x00000800
-#define M_MTP				0x00001000
-#define M_NATN				0x00002000
-#define M_NDMTP				0x00004000
-#define M_NE				0x00008000
-#define M_SSE				0x00010000
-#define M_SSS				0x00020000
-#define M_STO				0x00040000
-#define M_STSL				0x00080000
-#define M_YTP				0x00100000
+#define M_15TN              0x00000001
+#define M_ATN               0x00000002
+#define M_AUTA              0x00000004
+#define M_AUTY              0x00000008
+#define M_C8                0x00000010
+#define M_CIN               0x00000020
+#define M_CKM               0x00000040
+#define M_CKN               0x00000080
+#define M_CKP               0x00000100
+#define M_CME               0x00000200
+#define M_DMTP              0x00000400
+#define M_MTN               0x00000800
+#define M_MTP               0x00001000
+#define M_NATN              0x00002000
+#define M_NDMTP             0x00004000
+#define M_NE                0x00008000
+#define M_SSE               0x00010000
+#define M_SSS               0x00020000
+#define M_STO               0x00040000
+#define M_STSL              0x00080000
+#define M_YTP               0x00100000
 
 
 /* instructions built from microinstructions */
-#define I_AC1AC		( MICRO_MASK | M_CKP | M_ATN | M_CIN | M_C8 | M_AUTA )
-#define I_A6AAC		I_ACACC
-#define I_A8AAC		I_ACACC
-#define I_A10AAC	I_ACACC
-#define I_ACACC		( MICRO_MASK | M_CKP | M_ATN | M_C8 | M_AUTA )
-#define I_ACNAA		( MICRO_MASK | M_CKP | M_NATN | M_AUTA )
-#define I_ALEC		( MICRO_MASK | M_CKP | M_NATN | M_CIN | M_C8 )
-#define I_ALEM		( MICRO_MASK | M_MTP | M_NATN | M_CIN | M_C8 )
-#define I_AMAAC		( MICRO_MASK | M_MTP | M_ATN | M_C8 | M_AUTA )
-#define I_CCLA		( MICRO_MASK | M_AUTA | M_SSS )
-#define I_CLA		( MICRO_MASK | M_AUTA )
-#define I_CPAIZ		( MICRO_MASK | M_NATN | M_CIN | M_C8 | M_AUTA )
-#define I_CTMDYN	( MICRO_MASK | M_YTP | M_15TN | M_C8 | M_AUTY | M_CME )
-#define I_DAN		( MICRO_MASK | M_CKP | M_ATN | M_CIN | M_C8 | M_AUTA )
-#define I_DMAN		( MICRO_MASK | M_MTP | M_15TN | M_C8 | M_AUTA )
-#define I_DMEA		( MICRO_MASK | M_MTP | M_DMTP | M_SSS | M_AUTA )
-#define I_DNAA		( MICRO_MASK | M_DMTP | M_NATN | M_SSS | M_AUTA )
-#define I_DYN		( MICRO_MASK | M_YTP | M_15TN | M_C8 | M_AUTY )
-#define I_IA		( MICRO_MASK | M_ATN | M_CIN | M_AUTA )
-#define I_IMAC		( MICRO_MASK | M_MTP | M_CIN | M_C8 | M_AUTA )
-#define I_IYC		( MICRO_MASK | M_YTP | M_CIN | M_C8 | M_AUTY )
-#define I_KNEZ		( MICRO_MASK | M_CKP | M_NE )
-#define I_MNEA		( MICRO_MASK | M_MTP | M_ATN | M_NE )
-#define I_MNEZ		( MICRO_MASK | M_MTP | M_NE )
-#define I_M_NDMEA	( MICRO_MASK | M_MTN | M_NDTMP | M_SSS | M_AUTA )
-#define I_SAMAN		( MICRO_MASK | M_MTP | M_NATN | M_CIN | M_C8 | M_AUTA )
-#define I_SETR		( MICRO_MASK | M_YTP | M_15TN | M_AUTY | M_C8 )
-#define I_TAM		( MICRO_MASK | M_STO )
-#define I_TAMACS	( MICRO_MASK | M_STO | M_ATN | M_CKP | M_AUTA | M_SSE )
-#define I_TAMDYN	( MICRO_MASK | M_STO | M_YTP | M_15TN | M_AUTY | M_C8 )
-#define I_TAMIY		( MICRO_MASK | M_STO | M_YTP | M_CIN | M_AUTY )
-#define I_TAMIYC	( MICRO_MASK | M_STO | M_YTP | M_CIN | M_C8 | M_AUTY )
-#define I_TAMZA		( MICRO_MASK | M_STO | M_AUTA )
-#define I_TAY		( MICRO_MASK | M_ATN | M_AUTY )
-#define I_TBIT		( MICRO_MASK | M_CKP | M_CKN | M_MTP | M_NE )
-#define I_TCY		( MICRO_MASK | M_CKP | M_AUTY )
-#define I_TCMIY		( MICRO_MASK | M_CKM | M_YTP | M_CIN | M_AUTY )
-#define I_TKA		( MICRO_MASK | M_CKP | M_AUTA )
-#define I_TKM		( MICRO_MASK | M_CKM )
-#define I_TMA		( MICRO_MASK | M_MTP | M_AUTA )
-#define I_TMY		( MICRO_MASK | M_MTP | M_AUTY )
-#define I_TYA		( MICRO_MASK | M_YTP | M_AUTA )
-#define I_XDA		( MICRO_MASK | M_DMTP | M_AUTA | M_STO )
-#define I_XMA		( MICRO_MASK | M_MTP | M_STO | M_AUTA )
-#define I_YMCY		( MICRO_MASK | M_CIN | M_YTP | M_CKN | M_AUTY )
-#define I_YNEA		( MICRO_MASK | M_YTP | M_ATN | M_NE )
-#define I_YNEC		( MICRO_MASK | M_YTP | M_CKN | M_NE )
-
-
-typedef struct _tms0980_state tms0980_state;
-struct _tms0980_state
-{
-	UINT8	prev_pc;		/* previous program counter */
-	UINT8	prev_pa;		/* previous page address register */
-	UINT8	pc;				/* program counter is a 7 bit register on tms0980, 6 bit register on tms1000/1070/1200/1270/1100/1300 */
-	UINT8	pa;				/* page address register is a 4 bit register */
-	UINT8	sr;				/* subroutine return register is a 7 bit register */
-	UINT8	pb;				/* page buffer register is a 4 bit register */
-	UINT8	a;				/* Accumulator is a 4 bit register (?) */
-	UINT8	x;				/* X-register is a 2 bit register */
-	UINT8	y;				/* Y-register is a 4 bit register */
-	UINT8	dam;			/* DAM register is a 4 bit register */
-	UINT8	ca;				/* Chapter address bit */
-	UINT8	cb;				/* Chapter buffer bit */
-	UINT8	cs;				/* Chapter subroutine bit */
-	UINT16	r;
-	UINT8	o;
-	UINT8	cki_bus;		/* CKI bus */
-	UINT8	p;				/* adder p-input */
-	UINT8	n;				/* adder n-input */
-	UINT8	adder_result;	/* adder result */
-	UINT8	carry_in;		/* carry in */
-	UINT8	status;
-	UINT8	status_latch;
-	UINT8	special_status;
-	UINT8	call_latch;
-	UINT8	add_latch;
-	UINT8	branch_latch;
-	int	subcycle;
-	UINT8	ram_address;
-	UINT16	ram_data;
-	UINT16	rom_address;
-	UINT16	opcode;
-	UINT32	decode;
-	int		icount;
-	UINT16	o_mask;			/* mask to determine the number of O outputs */
-	UINT16	r_mask;			/* mask to determine the number of R outputs */
-	UINT8	pc_size;		/* how bits in the PC register */
-	UINT8	byte_size;		/* 8 or 9 bit bytes */
-	const UINT32 *decode_table;
-	const tms0980_config	*config;
-	address_space *program;
-	address_space *data;
-};
+#define I_AC1AC     ( MICRO_MASK | M_CKP | M_ATN | M_CIN | M_C8 | M_AUTA )
+#define I_A6AAC     I_ACACC
+#define I_A8AAC     I_ACACC
+#define I_A10AAC    I_ACACC
+#define I_ACACC     ( MICRO_MASK | M_CKP | M_ATN | M_C8 | M_AUTA )
+#define I_ACNAA     ( MICRO_MASK | M_CKP | M_NATN | M_AUTA )
+#define I_ALEC      ( MICRO_MASK | M_CKP | M_NATN | M_CIN | M_C8 )
+#define I_ALEM      ( MICRO_MASK | M_MTP | M_NATN | M_CIN | M_C8 )
+#define I_AMAAC     ( MICRO_MASK | M_MTP | M_ATN | M_C8 | M_AUTA )
+#define I_CCLA      ( MICRO_MASK | M_AUTA | M_SSS )
+#define I_CLA       ( MICRO_MASK | M_AUTA )
+#define I_CPAIZ     ( MICRO_MASK | M_NATN | M_CIN | M_C8 | M_AUTA )
+#define I_CTMDYN    ( MICRO_MASK | M_YTP | M_15TN | M_C8 | M_AUTY | M_CME )
+#define I_DAN       ( MICRO_MASK | M_CKP | M_ATN | M_CIN | M_C8 | M_AUTA )
+#define I_DMAN      ( MICRO_MASK | M_MTP | M_15TN | M_C8 | M_AUTA )
+#define I_DMEA      ( MICRO_MASK | M_MTP | M_DMTP | M_SSS | M_AUTA )
+#define I_DNAA      ( MICRO_MASK | M_DMTP | M_NATN | M_SSS | M_AUTA )
+#define I_DYN       ( MICRO_MASK | M_YTP | M_15TN | M_C8 | M_AUTY )
+#define I_IA        ( MICRO_MASK | M_ATN | M_CIN | M_AUTA )
+#define I_IMAC      ( MICRO_MASK | M_MTP | M_CIN | M_C8 | M_AUTA )
+#define I_IYC       ( MICRO_MASK | M_YTP | M_CIN | M_C8 | M_AUTY )
+#define I_KNEZ      ( MICRO_MASK | M_CKP | M_NE )
+#define I_MNEA      ( MICRO_MASK | M_MTP | M_ATN | M_NE )
+#define I_MNEZ      ( MICRO_MASK | M_MTP | M_NE )
+#define I_M_NDMEA   ( MICRO_MASK | M_MTN | M_NDTMP | M_SSS | M_AUTA )
+#define I_SAMAN     ( MICRO_MASK | M_MTP | M_NATN | M_CIN | M_C8 | M_AUTA )
+#define I_SETR      ( MICRO_MASK | M_YTP | M_15TN | M_AUTY | M_C8 )
+#define I_TAM       ( MICRO_MASK | M_STO )
+#define I_TAMACS    ( MICRO_MASK | M_STO | M_ATN | M_CKP | M_AUTA | M_SSE )
+#define I_TAMDYN    ( MICRO_MASK | M_STO | M_YTP | M_15TN | M_AUTY | M_C8 )
+#define I_TAMIY     ( MICRO_MASK | M_STO | M_YTP | M_CIN | M_AUTY )
+#define I_TAMIYC    ( MICRO_MASK | M_STO | M_YTP | M_CIN | M_C8 | M_AUTY )
+#define I_TAMZA     ( MICRO_MASK | M_STO | M_AUTA )
+#define I_TAY       ( MICRO_MASK | M_ATN | M_AUTY )
+#define I_TBIT      ( MICRO_MASK | M_CKP | M_CKN | M_MTP | M_NE )
+#define I_TCY       ( MICRO_MASK | M_CKP | M_AUTY )
+#define I_TCMIY     ( MICRO_MASK | M_CKM | M_YTP | M_CIN | M_AUTY )
+#define I_TKA       ( MICRO_MASK | M_CKP | M_AUTA )
+#define I_TKM       ( MICRO_MASK | M_CKM )
+#define I_TMA       ( MICRO_MASK | M_MTP | M_AUTA )
+#define I_TMY       ( MICRO_MASK | M_MTP | M_AUTY )
+#define I_TYA       ( MICRO_MASK | M_YTP | M_AUTA )
+#define I_XDA       ( MICRO_MASK | M_DMTP | M_AUTA | M_STO )
+#define I_XMA       ( MICRO_MASK | M_MTP | M_STO | M_AUTA )
+#define I_YMCY      ( MICRO_MASK | M_CIN | M_YTP | M_CKN | M_AUTY )
+#define I_YNEA      ( MICRO_MASK | M_YTP | M_ATN | M_NE )
+#define I_YNEC      ( MICRO_MASK | M_YTP | M_CKN | M_NE )
 
 
 static const UINT8 tms0980_c2_value[4] =
 {
 	0x00, 0x02, 0x01, 0x03
+};
+static const UINT8 tms0980_c3_value[8] =
+{
+	0x00, 0x04, 0x02, 0x06, 0x01, 0x05, 0x03, 0x07
 };
 static const UINT8 tms0980_c4_value[16] =
 {
@@ -446,166 +413,115 @@ static const UINT32 tms1100_default_decode[256] = {
 };
 
 
-INLINE tms0980_state *get_safe_token(device_t *device)
-{
-	assert(device != NULL);
-	assert(device->type() == TMS0980 ||
-			device->type() == TMS1000 ||
-			device->type() == TMS1070 ||
-			device->type() == TMS1100 ||
-			device->type() == TMS1200 ||
-			device->type() == TMS1270 ||
-			device->type() == TMS1300 );
-	return (tms0980_state *)downcast<legacy_cpu_device *>(device)->token();
-}
-
-
-static ADDRESS_MAP_START(tms0980_internal_rom, AS_PROGRAM, 16)
+static ADDRESS_MAP_START(tms0980_internal_rom, AS_PROGRAM, 16, tms1xxx_cpu_device)
 	AM_RANGE( 0x0000, 0x0FFF ) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START(tms0980_internal_ram, AS_DATA, 8)
+static ADDRESS_MAP_START(tms0980_internal_ram, AS_DATA, 8, tms1xxx_cpu_device)
 	AM_RANGE( 0x0000, 0x0FFF ) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START(program_10bit_8, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(program_10bit_8, AS_PROGRAM, 8, tms1xxx_cpu_device)
 	AM_RANGE( 0x000, 0x3ff ) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START(program_11bit_8, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(program_11bit_8, AS_PROGRAM, 8, tms1xxx_cpu_device)
 	AM_RANGE( 0x000, 0x7ff ) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START(data_6bit, AS_DATA, 8)
+static ADDRESS_MAP_START(data_6bit, AS_DATA, 8, tms1xxx_cpu_device)
 	AM_RANGE( 0x00, 0x3f ) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START(data_7bit, AS_DATA, 8)
+static ADDRESS_MAP_START(data_7bit, AS_DATA, 8, tms1xxx_cpu_device)
 	AM_RANGE( 0x00, 0x7f ) AM_RAM
 ADDRESS_MAP_END
 
 
-static void cpu_init_tms_common( legacy_cpu_device *device, const UINT32* decode_table, UINT16 o_mask, UINT16 r_mask, UINT8 pc_size, UINT8 byte_size )
+void tms1xxx_cpu_device::device_start()
 {
-	tms0980_state *cpustate = get_safe_token( device );
+	m_program = &space( AS_PROGRAM );
+	m_data = &space( AS_DATA );
 
-	cpustate->config = (const tms0980_config *) device->static_config();
+	m_read_k.resolve_safe(0xff);
+	m_write_o.resolve_safe();
+	m_write_r.resolve_safe();
 
-	assert( cpustate->config != NULL );
+	save_item( NAME(m_prev_pc) );
+	save_item( NAME(m_prev_pa) );
+	save_item( NAME(m_pc) );
+	save_item( NAME(m_pa) );
+	save_item( NAME(m_sr) );
+	save_item( NAME(m_pb) );
+	save_item( NAME(m_a) );
+	save_item( NAME(m_x) );
+	save_item( NAME(m_y) );
+	save_item( NAME(m_dam) );
+	save_item( NAME(m_ca) );
+	save_item( NAME(m_cb) );
+	save_item( NAME(m_cs) );
+	save_item( NAME(m_r) );
+	save_item( NAME(m_o) );
+	save_item( NAME(m_cki_bus) );
+	save_item( NAME(m_p) );
+	save_item( NAME(m_n) );
+	save_item( NAME(m_adder_result) );
+	save_item( NAME(m_carry_in) );
+	save_item( NAME(m_status) );
+	save_item( NAME(m_status_latch) );
+	save_item( NAME(m_special_status) );
+	save_item( NAME(m_call_latch) );
+	save_item( NAME(m_add_latch) );
+	save_item( NAME(m_branch_latch) );
+	save_item( NAME(m_subcycle) );
+	save_item( NAME(m_ram_address) );
+	save_item( NAME(m_ram_data) );
+	save_item( NAME(m_rom_address) );
+	save_item( NAME(m_opcode) );
+	save_item( NAME(m_decode) );
 
-	cpustate->decode_table = decode_table;
-	cpustate->o_mask = o_mask;
-	cpustate->r_mask = r_mask;
-	cpustate->pc_size = pc_size;
-	cpustate->byte_size = byte_size;
+	// Register state for debugger
+	state_add( TMS0980_PC,     "PC",     m_pc     ).callimport().callexport().formatstr("%02X");
+	state_add( TMS0980_SR,     "SR",     m_sr     ).callimport().callexport().formatstr("%01X");
+	state_add( TMS0980_PA,     "PA",     m_pa     ).callimport().callexport().formatstr("%01X");
+	state_add( TMS0980_PB,     "PB",     m_pb     ).callimport().callexport().formatstr("%01X");
+	state_add( TMS0980_A,      "A",      m_a      ).callimport().callexport().formatstr("%01X");
+	state_add( TMS0980_X,      "X",      m_x      ).callimport().callexport().formatstr("%01X");
+	state_add( TMS0980_Y,      "Y",      m_y      ).callimport().callexport().formatstr("%01X");
+	state_add( TMS0980_STATUS, "STATUS", m_status ).callimport().callexport().formatstr("%01X");
 
-	cpustate->program = device->space( AS_PROGRAM );
-	cpustate->data = device->space( AS_PROGRAM );
+	state_add(STATE_GENPC, "curpc", m_pc).callimport().callexport().formatstr("%8s").noshow();
+	state_add(STATE_GENFLAGS, "GENFLAGS", m_sr).callimport().callexport().formatstr("%8s").noshow();
 
-	device->save_item( NAME(cpustate->prev_pc) );
-	device->save_item( NAME(cpustate->prev_pa) );
-	device->save_item( NAME(cpustate->pc) );
-	device->save_item( NAME(cpustate->pa) );
-	device->save_item( NAME(cpustate->sr) );
-	device->save_item( NAME(cpustate->pb) );
-	device->save_item( NAME(cpustate->a) );
-	device->save_item( NAME(cpustate->x) );
-	device->save_item( NAME(cpustate->y) );
-	device->save_item( NAME(cpustate->dam) );
-	device->save_item( NAME(cpustate->ca) );
-	device->save_item( NAME(cpustate->cb) );
-	device->save_item( NAME(cpustate->cs) );
-	device->save_item( NAME(cpustate->r) );
-	device->save_item( NAME(cpustate->o) );
-	device->save_item( NAME(cpustate->cki_bus) );
-	device->save_item( NAME(cpustate->p) );
-	device->save_item( NAME(cpustate->n) );
-	device->save_item( NAME(cpustate->adder_result) );
-	device->save_item( NAME(cpustate->carry_in) );
-	device->save_item( NAME(cpustate->status) );
-	device->save_item( NAME(cpustate->status_latch) );
-	device->save_item( NAME(cpustate->special_status) );
-	device->save_item( NAME(cpustate->call_latch) );
-	device->save_item( NAME(cpustate->add_latch) );
-	device->save_item( NAME(cpustate->branch_latch) );
-	device->save_item( NAME(cpustate->subcycle) );
-	device->save_item( NAME(cpustate->ram_address) );
-	device->save_item( NAME(cpustate->ram_data) );
-	device->save_item( NAME(cpustate->rom_address) );
-	device->save_item( NAME(cpustate->opcode) );
-	device->save_item( NAME(cpustate->decode) );
+	m_icountptr = &m_icount;
 }
 
 
-static CPU_INIT( tms0980 )
+void tms1xxx_cpu_device::device_reset()
 {
-	cpu_init_tms_common( device, tms0980_decode, 0x00ff, 0x07ff, 7, 9 );
-}
-
-
-static CPU_INIT( tms1000 )
-{
-	cpu_init_tms_common( device, tms1000_default_decode, 0x00ff, 0x07ff, 6, 8 );
-}
-
-
-static CPU_INIT( tms1070 )
-{
-	cpu_init_tms_common( device, tms1000_default_decode, 0x00ff, 0x07ff, 6, 8 );
-}
-
-
-static CPU_INIT( tms1200 )
-{
-	cpu_init_tms_common( device, tms1000_default_decode, 0x00ff, 0x1fff, 6, 8 );
-}
-
-
-static CPU_INIT( tms1270 )
-{
-	cpu_init_tms_common( device, tms1000_default_decode, 0x03ff, 0x1fff, 6, 8 );
-}
-
-
-static CPU_INIT( tms1100 )
-{
-	cpu_init_tms_common( device, tms1100_default_decode, 0x00ff, 0x07ff, 6, 8 );
-}
-
-
-static CPU_INIT( tms1300 )
-{
-	cpu_init_tms_common( device, tms1100_default_decode, 0x00ff, 0xffff, 6, 8 );
-}
-
-
-static CPU_RESET( tms0980 )
-{
-	tms0980_state *cpustate = get_safe_token( device );
-
-	cpustate->pa = 0x0F;
-	cpustate->pb = 0x0F;
-	cpustate->pc = 0;
-	cpustate->dam = 0;
-	cpustate->ca = 0;
-	cpustate->cb = 0;
-	cpustate->cs = 0;
-	cpustate->subcycle = 0;
-	cpustate->status = 1;
-	cpustate->status_latch = 0;
-	cpustate->call_latch = 0;
-	cpustate->add_latch = 0;
-	cpustate->branch_latch = 0;
-	cpustate->r = 0;
-	cpustate->o = 0;
-	cpustate->ram_address = 0;
-	cpustate->decode = F_ILL;
-	cpustate->opcode = 0;
+	m_pa = 0x0F;
+	m_pb = 0x0F;
+	m_pc = 0;
+	m_dam = 0;
+	m_ca = 0;
+	m_cb = 0;
+	m_cs = 0;
+	m_subcycle = 0;
+	m_status = 1;
+	m_status_latch = 0;
+	m_call_latch = 0;
+	m_add_latch = 0;
+	m_branch_latch = 0;
+	m_r = 0;
+	m_o = 0;
+	m_ram_address = 0;
+	m_decode = F_ILL;
+	m_opcode = 0;
 }
 
 
@@ -714,11 +630,11 @@ static const UINT8 tms1000_next_pc[64] = {
 /* emulator for the program counter increment on the tms0980/tmc0980 mcu;
  see patent 4064554 figure 19 (on page 13) for an explanation of feedback:
 
-  nand324 = NAND of PC0 thru pc4, i.e. output is true if ((pc&0x1f) != 0x1f)
+  nand324 = NAND of PC0 through pc4, i.e. output is true if ((pc&0x1f) != 0x1f)
   nand323 = NAND of pc5, pc6 and nand324
       i.e. output is true, if ((pc&0x1f)==0x1f) || pc5 is 0 || pc 6 is 0
   or321 = OR of pc5 and pc6, i.e. output is true if ((pc&0x60) != 0)
-  nand322 = NAND of pc0 thru pc5 plus /pc6,
+  nand322 = NAND of pc0 through pc5 plus /pc6,
       i.e. output is true if (pc != 0x3f)
   nand325 = nand pf nand323, or321 and nand322
       This one is complex:
@@ -729,18 +645,18 @@ static const UINT8 tms1000_next_pc[64] = {
 
       tms0980_nect_pc below implements an indentical function to this in a somewhat more elegant way.
 */
-INLINE void tms0980_next_pc( tms0980_state *cpustate )
+void tms1xxx_cpu_device::next_pc()
 {
-	if ( cpustate->byte_size > 8 )
+	if ( m_byte_size > 8 )
 	{
-		UINT8	xorval = ( cpustate->pc & 0x3F ) == 0x3F ? 1 : 0;
-		UINT8	new_bit = ( ( cpustate->pc ^ ( cpustate->pc << 1 ) ) & 0x40 ) ? xorval : 1 - xorval;
+		UINT8   xorval = ( m_pc & 0x3F ) == 0x3F ? 1 : 0;
+		UINT8   new_bit = ( ( m_pc ^ ( m_pc << 1 ) ) & 0x40 ) ? xorval : 1 - xorval;
 
-		cpustate->pc = ( cpustate->pc << 1 ) | new_bit;
+		m_pc = ( m_pc << 1 ) | new_bit;
 	}
 	else
 	{
-		cpustate->pc = tms1000_next_pc[ cpustate->pc & 0x3f ];
+		m_pc = tms1000_next_pc[ m_pc & 0x3f ];
 	}
 }
 
@@ -758,27 +674,18 @@ static const UINT8 tms1000_pc_decode[64] =
 };
 
 
-static void tms0980_set_cki_bus( device_t *device )
+void tms1xxx_cpu_device::set_cki_bus()
 {
-	tms0980_state *cpustate = get_safe_token( device );
-
-	switch( cpustate->opcode & 0x1F8 )
+	switch( m_opcode & 0x1F8 )
 	{
 	case 0x008:
-		if ( cpustate->config->read_k )
-		{
-			cpustate->cki_bus = cpustate->config->read_k( device, 0 );
-		}
-		else
-		{
-			cpustate->cki_bus = 0x0F;
-		}
+		m_cki_bus = m_read_k( 0, 0xff );
 		break;
 	case 0x020: case 0x028:
-		cpustate->cki_bus = 0;
+		m_cki_bus = 0;
 		break;
 	case 0x030: case 0x038:
-		cpustate->cki_bus = tms0980_nbit_value[ cpustate->opcode & 0x03 ];
+		m_cki_bus = tms0980_nbit_value[ m_opcode & 0x03 ];
 		break;
 	case 0x000:
 	case 0x040: case 0x048:
@@ -791,101 +698,96 @@ static void tms0980_set_cki_bus( device_t *device )
 	case 0x0d0: case 0x0d8:
 	case 0x0e0: case 0x0e8:
 	case 0x0f0: case 0x0f8:
-		cpustate->cki_bus = tms0980_c4_value[ cpustate->opcode & 0x0F ];
+		m_cki_bus = tms0980_c4_value[ m_opcode & 0x0F ];
 		break;
 	default:
-		cpustate->cki_bus = 0x0F;
+		m_cki_bus = 0x0F;
 		break;
 	}
 }
 
 
-static CPU_EXECUTE( tms0980 )
+void tms1xxx_cpu_device::execute_run()
 {
-	tms0980_state *cpustate = get_safe_token( device );
-
 	do
 	{
-//      debugger_instruction_hook( device, ( ( cpustate->pa << cpustate->pc_size ) | cpustate->pc ) << 1 );
-		cpustate->icount--;
-		switch( cpustate->subcycle )
+//      debugger_instruction_hook( this, ( ( m_pa << m_pc_size ) | m_pc ) << 1 );
+		m_icount--;
+		switch( m_subcycle )
 		{
 		case 0:
 			/* fetch: rom address 0 */
 			/* execute: read ram, alu input, execute br/call, k input valid */
-			tms0980_set_cki_bus( device );
-			cpustate->ram_data = cpustate->data->read_byte( cpustate->ram_address );
-			cpustate->status = 1;
-			cpustate->p = 0;
-			cpustate->n = 0;
-			cpustate->carry_in = 0;
+			set_cki_bus();
+			m_ram_data = m_data->read_byte( m_ram_address );
+			m_status = 1;
+			m_p = 0;
+			m_n = 0;
+			m_carry_in = 0;
 			break;
 		case 1:
 			/* fetch: rom address 1 */
-			if ( cpustate->pc_size == 6 )
-				cpustate->rom_address = ( cpustate->pa << 6 ) | tms1000_pc_decode[ cpustate->pc ];
-			else
-				cpustate->rom_address = ( cpustate->pa << 7 ) | cpustate->pc;
+			m_rom_address = ( m_ca << ( m_pc_size + 4 ) ) | ( m_pa << m_pc_size ) | m_pc;
 			/* execute: k input valid */
-			if ( cpustate->decode & MICRO_MASK )
+			if ( m_decode & MICRO_MASK )
 			{
 				/* Check N inputs */
-				if ( cpustate->decode & ( M_15TN | M_ATN | M_CKN | M_MTN | M_NATN ) )
+				if ( m_decode & ( M_15TN | M_ATN | M_CKN | M_MTN | M_NATN ) )
 				{
-					cpustate->n = 0;
-					if ( cpustate->decode & M_15TN )
+					m_n = 0;
+					if ( m_decode & M_15TN )
 					{
-						cpustate->n |= 0x0F;
+						m_n |= 0x0F;
 					}
-					if ( cpustate->decode & M_ATN )
+					if ( m_decode & M_ATN )
 					{
-						cpustate->n |= cpustate->a;
+						m_n |= m_a;
 					}
-					if ( cpustate->decode & M_CKN )
+					if ( m_decode & M_CKN )
 					{
-						cpustate->n |= cpustate->cki_bus;
+						m_n |= m_cki_bus;
 					}
-					if ( cpustate->decode & M_MTN )
+					if ( m_decode & M_MTN )
 					{
-						cpustate->n |= cpustate->ram_data;
+						m_n |= m_ram_data;
 					}
-					if ( cpustate->decode & M_NATN )
+					if ( m_decode & M_NATN )
 					{
-						cpustate->n |= ( ( ~cpustate->a ) & 0x0F );
+						m_n |= ( ( ~m_a ) & 0x0F );
 					}
 				}
 
 
 				/* Check P inputs */
-				if ( cpustate->decode & ( M_CKP | M_DMTP | M_MTP | M_NDMTP | M_YTP ) )
+				if ( m_decode & ( M_CKP | M_DMTP | M_MTP | M_NDMTP | M_YTP ) )
 				{
-					cpustate->p = 0;
-					if ( cpustate->decode & M_CKP )
+					m_p = 0;
+					if ( m_decode & M_CKP )
 					{
-						cpustate->p |= cpustate->cki_bus;
+						m_p |= m_cki_bus;
 					}
-					if ( cpustate->decode & M_DMTP )
+					if ( m_decode & M_DMTP )
 					{
-						cpustate->p |= cpustate->dam;
+						m_p |= m_dam;
 					}
-					if ( cpustate->decode & M_MTP )
+					if ( m_decode & M_MTP )
 					{
-						cpustate->p |= cpustate->ram_data;
+						m_p |= m_ram_data;
 					}
-					if ( cpustate->decode & M_NDMTP )
+					if ( m_decode & M_NDMTP )
 					{
-						cpustate->p |= ( ( ~cpustate->dam ) & 0x0F );
+						m_p |= ( ( ~m_dam ) & 0x0F );
 					}
-					if ( cpustate->decode & M_YTP )
+					if ( m_decode & M_YTP )
 					{
-						cpustate->p |= cpustate->y;
+						m_p |= m_y;
 					}
 				}
 
 				/* Carry In input */
-				if ( cpustate->decode & M_CIN )
+				if ( m_decode & M_CIN )
 				{
-					cpustate->carry_in = 1;
+					m_carry_in = 1;
 				}
 			}
 			break;
@@ -893,113 +795,126 @@ static CPU_EXECUTE( tms0980 )
 			/* fetch: nothing */
 			/* execute: write ram */
 			/* perform adder logic */
-			cpustate->adder_result = cpustate->p + cpustate->n + cpustate->carry_in;
-			if ( cpustate->decode & MICRO_MASK )
+			m_adder_result = m_p + m_n + m_carry_in;
+			if ( m_decode & MICRO_MASK )
 			{
-				if ( cpustate->decode & M_NE )
+				if ( m_decode & M_NE )
 				{
-					if ( cpustate->n == cpustate->p )
+					if ( m_n == m_p )
 					{
-						cpustate->status = 0;
+						m_status = 0;
 					}
 				}
-				if ( cpustate->decode & M_C8 )
+				if ( m_decode & M_C8 )
 				{
-					cpustate->status = cpustate->adder_result >> 4;
+					m_status = m_adder_result >> 4;
 				}
-				if ( cpustate->decode & M_STO )
+				if ( m_decode & M_STO )
 				{
-					cpustate->data->write_byte( cpustate->ram_address, cpustate->a );
+//printf("write ram %02x data %01x\n", m_ram_address, m_a );
+					m_data->write_byte( m_ram_address, m_a );
 				}
-				if ( cpustate->decode & M_CKM )
+				if ( m_decode & M_CKM )
 				{
-					cpustate->data->write_byte( cpustate->ram_address, cpustate->cki_bus );
+//printf("write ram %02x data %01x\n", m_ram_address, m_cki_bus );
+					m_data->write_byte( m_ram_address, m_cki_bus );
 				}
 			}
 			else
 			{
-				if ( cpustate->decode & F_SBIT )
+				if ( m_decode & F_SBIT )
 				{
-					cpustate->data->write_byte( cpustate->ram_address, cpustate->ram_data | tms0980_bit_value[ cpustate->opcode & 0x03 ] );
+//printf("write ram %02x data %01x\n", m_ram_address, m_ram_data | tms0980_bit_value[ m_opcode & 0x03 ] );
+					m_data->write_byte( m_ram_address, m_ram_data | tms0980_bit_value[ m_opcode & 0x03 ] );
 				}
-				if ( cpustate->decode & F_RBIT )
+				if ( m_decode & F_RBIT )
 				{
-					cpustate->data->write_byte( cpustate->ram_address, cpustate->ram_data & tms0980_nbit_value[ cpustate->opcode & 0x03 ] );
+//printf("write ram %02x data %01x\n", m_ram_address, m_ram_data & tms0980_nbit_value[ m_opcode & 0x03 ] );
+					m_data->write_byte( m_ram_address, m_ram_data & tms0980_nbit_value[ m_opcode & 0x03 ] );
 				}
-				if ( cpustate->decode & F_SETR )
+				if ( m_decode & F_SETR )
 				{
-					cpustate->r = cpustate->r | ( 1 << cpustate->y );
-					if ( cpustate->config->write_r )
-					{
-						cpustate->config->write_r( device, 0, cpustate->r & cpustate->r_mask, 0xffff );
-					}
+					m_r = m_r | ( 1 << m_y );
+					m_write_r( 0, m_r & m_r_mask, 0xffff );
 				}
-				if ( cpustate->decode & F_RSTR )
+				if ( m_decode & F_RSTR )
 				{
-					cpustate->r = cpustate->r & ( ~( 1 << cpustate->y ) );
-					if ( cpustate->config->write_r )
-					{
-						cpustate->config->write_r( device, 0, cpustate->r & cpustate->r_mask, 0xffff );
-					}
+					m_r = m_r & ( ~( 1 << m_y ) );
+					m_write_r( 0, m_r & m_r_mask, 0xffff );
 				}
-				if ( cpustate->decode & F_TDO )
+				if ( m_decode & F_TDO )
 				{
-					int i = 0;
-
 					/* Calculate O-outputs based on status latch, A, and the output PLA configuration */
-					cpustate->o = 0;
-					for ( i = 0; i < 20; i++ )
+					m_o = c_output_pla[ ( m_status_latch << 4 ) | m_a ];
+					if ( ( c_output_pla[ ( m_status_latch << 4 ) | m_a ] & 0xFF00 ) == 0xFF00 )
 					{
-						if ( ( ( cpustate->status_latch << 4 ) | cpustate->a ) == cpustate->config->o_pla[i].value )
-						{
-							cpustate->o = cpustate->config->o_pla[i].output;
-						}
+						logerror("unknown output pla mapping for status latch = %d and a = %X\n", m_status_latch, m_a);
 					}
+//if ( ( c_output_pla[ ( m_status_latch << 4 ) | m_a ] & 0xFF00 ) == 0xFF00 )
+//printf("****** o output m_status_latch = %X, m_a = %X\n", m_status_latch, m_a);
+//else
+//printf("o output m_status_latch = %X, m_a = %X\n", m_status_latch, m_a);
 
-					if ( cpustate->config->write_o )
+					m_write_o( 0, m_o & m_o_mask, 0xffff );
+				}
+				if ( m_decode & F_CLO )
+				{
+					m_o = 0;
+					m_write_o( 0, m_o & m_o_mask, 0xffff );
+				}
+				if ( m_decode & F_LDX )
+				{
+					switch( m_x_bits )
 					{
-						cpustate->config->write_o( device, 0, cpustate->o & cpustate->o_mask, 0xffff );
+						case 2:
+							m_x = tms0980_c2_value[ m_opcode & 0x03 ];
+							break;
+						case 3:
+							m_x = tms0980_c3_value[ m_opcode & 0x07 ];
+							break;
+						case 4:
+							m_x = tms0980_c4_value[ m_opcode & 0x0f ];
+							break;
 					}
 				}
-				if ( cpustate->decode & F_CLO )
+				if ( m_decode & F_COMX )
 				{
-					cpustate->o = 0;
-					if ( cpustate->config->write_o )
+					switch ( m_x_bits )
 					{
-						cpustate->config->write_o( device, 0, cpustate->o & cpustate->o_mask, 0xffff );
+						case 2:
+							m_x = m_x ^ 0x03;
+							break;
+						case 3:
+							m_x = m_x ^ 0x07;
+							break;
+						case 4:
+							m_x = m_x ^ 0x0f;
+							break;
 					}
 				}
-				if ( cpustate->decode & F_LDX )
+				if ( m_decode & F_COMC )
 				{
-					cpustate->x = tms0980_c2_value[ cpustate->opcode & 0x03 ];
+					m_cb = m_cb ^ 0x01;
 				}
-				if ( cpustate->decode & F_COMX )
+				if ( m_decode & F_LDP )
 				{
-					cpustate->x = cpustate->x ^ 0x03;
+					m_pb = tms0980_c4_value[ m_opcode & 0x0F ];
 				}
-				if ( cpustate->decode & F_COMC )
+				if ( m_decode & F_REAC )
 				{
-					cpustate->cb = cpustate->cb ^ 0x01;
+					m_special_status = 0;
 				}
-				if ( cpustate->decode & F_LDP )
+				if ( m_decode & F_SEAC )
 				{
-					cpustate->pb = tms0980_c4_value[ cpustate->opcode & 0x0F ];
+					m_special_status = 1;
 				}
-				if ( cpustate->decode & F_REAC )
+				if ( m_decode == F_SAL )
 				{
-					cpustate->special_status = 0;
+					m_add_latch = 1;
 				}
-				if ( cpustate->decode & F_SEAC )
+				if ( m_decode == F_SBL )
 				{
-					cpustate->special_status = 1;
-				}
-				if ( cpustate->decode == F_SAL )
-				{
-					cpustate->add_latch = 1;
-				}
-				if ( cpustate->decode == F_SBL )
-				{
-					cpustate->branch_latch = 1;
+					m_branch_latch = 1;
 				}
 			}
 			break;
@@ -1009,277 +924,197 @@ static CPU_EXECUTE( tms0980 )
 			break;
 		case 4:
 			/* execute: register store */
-			if ( cpustate->decode & MICRO_MASK )
+			if ( m_decode & MICRO_MASK )
 			{
-				if ( cpustate->decode & M_AUTA )
+				if ( m_decode & M_AUTA )
 				{
-					cpustate->a = cpustate->adder_result & 0x0F;
+					m_a = m_adder_result & 0x0F;
 				}
-				if ( cpustate->decode & M_AUTY )
+				if ( m_decode & M_AUTY )
 				{
-					cpustate->y = cpustate->adder_result & 0x0F;
+					m_y = m_adder_result & 0x0F;
 				}
-				if ( cpustate->decode & M_STSL )
+				if ( m_decode & M_STSL )
 				{
-					cpustate->status_latch = cpustate->status;
+					m_status_latch = m_status;
 				}
 			}
 			/* fetch: fetch, update pc, ram address */
-			if ( cpustate->byte_size > 8 )
+			if ( m_byte_size > 8 )
 			{
-				debugger_instruction_hook( device, cpustate->rom_address << 1 );
-				cpustate->opcode = cpustate->program->read_word( cpustate->rom_address << 1 ) & 0x1FF;
+				debugger_instruction_hook( this, m_rom_address << 1 );
+				m_opcode = m_program->read_word( m_rom_address << 1 ) & 0x1FF;
 			}
 			else
 			{
-				debugger_instruction_hook( device, cpustate->rom_address );
-				cpustate->opcode = cpustate->program->read_word( cpustate->rom_address ) & 0xFF;
+				debugger_instruction_hook( this, m_rom_address );
+				m_opcode = m_program->read_byte( m_rom_address );
 			}
-			tms0980_next_pc( cpustate );
+			next_pc();
 			if (LOG)
-				logerror( "tms0980: read opcode %04x from %04x. Set pc to %04x\n", cpustate->opcode, cpustate->rom_address, cpustate->pc );
+				logerror( "tms0980: read opcode %04x from %04x. Set pc to %04x\n", m_opcode, m_rom_address, m_pc );
 
 			/* ram address */
-			cpustate->ram_address = ( cpustate->x << 4 ) | cpustate->y;
+			m_ram_address = ( m_x << 4 ) | m_y;
 			break;
 		case 5:
 			/* fetch: instruction decode */
-			cpustate->decode = cpustate->decode_table[ cpustate->opcode ];
+			m_decode = m_decode_table[ m_opcode ];
 			/* execute: execute br/call */
-			if ( cpustate->status )
+			if ( m_status )
 			{
-				if ( cpustate->decode == F_BR )
+				if ( m_decode == F_BR )
 				{
-					if ( cpustate->call_latch == 0 )
+					m_ca = m_cb;
+					if ( m_call_latch == 0 )
 					{
-						cpustate->pa = cpustate->pb;
+						m_pa = m_pb;
 					}
-					cpustate->pc = cpustate->opcode & ( ( 1 << cpustate->pc_size ) - 1 );
+					m_pc = m_opcode & ( ( 1 << m_pc_size ) - 1 );
 				}
-				if ( cpustate->decode == F_CALL )
+				if ( m_decode == F_CALL )
 				{
-					UINT8 t = cpustate->pa;
-					if ( cpustate->call_latch == 0 )
+					UINT8 t = m_pa;
+					if ( m_call_latch == 0 )
 					{
-						cpustate->sr = cpustate->pc;
-						cpustate->call_latch = 1;
-						cpustate->pa = cpustate->pb;
+						m_sr = m_pc;
+						m_call_latch = 1;
+						m_pa = m_pb;
+						m_cs = m_ca;
 					}
-					cpustate->pb = t;
-					cpustate->pc = cpustate->opcode & ( ( 1 << cpustate->pc_size ) - 1 );
+					m_ca = m_cb;
+					m_pb = t;
+					m_pc = m_opcode & ( ( 1 << m_pc_size ) - 1 );
 				}
 			}
-			if ( cpustate->decode == F_RETN )
+			if ( m_decode == F_RETN )
 			{
-				if ( cpustate->call_latch == 1 )
+				if ( m_call_latch == 1 )
 				{
-					cpustate->pc = cpustate->sr;
-					cpustate->call_latch = 0;
+					m_pc = m_sr;
+					m_call_latch = 0;
+					m_ca = m_cs;
 				}
-				cpustate->add_latch = 0;
-				cpustate->pa = cpustate->pb;
+				m_add_latch = 0;
+				m_pa = m_pb;
 			} else {
-				cpustate->branch_latch = 0;
+				m_branch_latch = 0;
 			}
 			break;
 		}
-		cpustate->subcycle = ( cpustate->subcycle + 1 ) % 6;
-	} while( cpustate->icount > 0 );
+		m_subcycle = ( m_subcycle + 1 ) % 6;
+	} while( m_icount > 0 );
 }
 
 
-static CPU_SET_INFO( tms0980 )
+void tms0980_cpu_device::state_string_export(const device_state_entry &entry, astring &string)
 {
-	tms0980_state *cpustate = get_safe_token( device );
-
-	switch( state )
+	switch( entry.index() )
 	{
-		case CPUINFO_INT_PC:										cpustate->pc = ( info->i >> 1 ) & 0x7f; cpustate->pa = info->i >> 8; break;
-		case CPUINFO_INT_REGISTER + TMS0980_PC:						cpustate->pc = info->i; break;
-		case CPUINFO_INT_REGISTER + TMS0980_SR:						cpustate->sr = info->i; break;
-		case CPUINFO_INT_REGISTER + TMS0980_PA:						cpustate->pa = info->i; break;
-		case CPUINFO_INT_REGISTER + TMS0980_PB:						cpustate->pb = info->i; break;
-		case CPUINFO_INT_REGISTER + TMS0980_A:						cpustate->a = info->i; break;
-		case CPUINFO_INT_REGISTER + TMS0980_X:						cpustate->x = info->i; break;
-		case CPUINFO_INT_REGISTER + TMS0980_Y:						cpustate->y = info->i; break;
-		case CPUINFO_INT_REGISTER + TMS0980_STATUS:					cpustate->status = info->i; break;
+		case STATE_GENPC:
+			string.printf( "%03X", ( ( m_pa << 7 ) | m_pc ) << 1 );
+			break;
 	}
 }
 
 
-static CPU_GET_INFO( tms_generic )
+void tms1000_cpu_device::state_string_export(const device_state_entry &entry, astring &string)
 {
-	tms0980_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
-
-	switch(state)
+	switch( entry.index() )
 	{
-		case CPUINFO_INT_CONTEXT_SIZE:									info->i = sizeof(tms0980_state); break;
-		case CPUINFO_INT_INPUT_LINES:									info->i = 1; break;
-		case DEVINFO_INT_ENDIANNESS:									info->i = ENDIANNESS_BIG; break;
-		case CPUINFO_INT_CLOCK_MULTIPLIER:								info->i = 1; break;
-		case CPUINFO_INT_CLOCK_DIVIDER:									info->i = 1; break;
-		case CPUINFO_INT_MIN_CYCLES:									info->i = 1; break;
-		case CPUINFO_INT_MAX_CYCLES:									info->i = 6; break;
-
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:			info->i = 0; break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:			info->i = 8 /* 4 */; break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:			info->i = 0; break;
-
-		case CPUINFO_INT_PREVIOUSPC:									info->i = ( ( cpustate->prev_pa << 7 ) | cpustate->prev_pc ) << 1; break;
-		case CPUINFO_INT_PC:											info->i = ( ( cpustate->pa << 7 ) | cpustate->pc ) << 1; break;
-		case CPUINFO_INT_SP:											info->i = 0xFFFF; break;
-		case CPUINFO_INT_REGISTER + TMS0980_PC:							info->i = cpustate->pc; break;
-		case CPUINFO_INT_REGISTER + TMS0980_SR:							info->i = cpustate->sr; break;
-		case CPUINFO_INT_REGISTER + TMS0980_PA:							info->i = cpustate->pa; break;
-		case CPUINFO_INT_REGISTER + TMS0980_PB:							info->i = cpustate->pb; break;
-		case CPUINFO_INT_REGISTER + TMS0980_A:							info->i = cpustate->a; break;
-		case CPUINFO_INT_REGISTER + TMS0980_X:							info->i = cpustate->x; break;
-		case CPUINFO_INT_REGISTER + TMS0980_Y:							info->i = cpustate->y; break;
-		case CPUINFO_INT_REGISTER + TMS0980_STATUS:						info->i = cpustate->status; break;
-
-		case CPUINFO_FCT_SET_INFO:										info->setinfo = CPU_SET_INFO_NAME( tms0980 ); break;
-		case CPUINFO_FCT_INIT:											info->init = CPU_INIT_NAME( tms0980 ); break;
-		case CPUINFO_FCT_RESET:											info->reset = CPU_RESET_NAME( tms0980 ); break;
-		case CPUINFO_FCT_EXECUTE:										info->execute = CPU_EXECUTE_NAME( tms0980 ); break;
-		case CPUINFO_PTR_INSTRUCTION_COUNTER:							info->icount = &cpustate->icount; break;
-
-		case DEVINFO_STR_FAMILY:										strcpy( info->s, "Texas Instruments TMS0980/TMS1000" ); break;
-		case DEVINFO_STR_VERSION:										strcpy( info->s, "0.2" ); break;
-		case DEVINFO_STR_SOURCE_FILE:									strcpy( info->s, __FILE__ ); break;
-		case DEVINFO_STR_CREDITS:										strcpy( info->s, "Copyright the MESS and MAME teams" ); break;
-
-		case CPUINFO_STR_FLAGS:											strcpy( info->s, "N/A" ); break;
-
-		case CPUINFO_STR_REGISTER + TMS0980_PC:							sprintf( info->s, "PC:%02X", cpustate->pc ); break;
-		case CPUINFO_STR_REGISTER + TMS0980_SR:							sprintf( info->s, "SR:%01X", cpustate->sr ); break;
-		case CPUINFO_STR_REGISTER + TMS0980_PA:							sprintf( info->s, "PA:%01X", cpustate->pa ); break;
-		case CPUINFO_STR_REGISTER + TMS0980_PB:							sprintf( info->s, "PB:%01X", cpustate->pb ); break;
-		case CPUINFO_STR_REGISTER + TMS0980_A:							sprintf( info->s, "A:%01X", cpustate->a ); break;
-		case CPUINFO_STR_REGISTER + TMS0980_X:							sprintf( info->s, "X:%01X", cpustate->x ); break;
-		case CPUINFO_STR_REGISTER + TMS0980_Y:							sprintf( info->s, "Y:%01X", cpustate->y ); break;
-		case CPUINFO_STR_REGISTER + TMS0980_STATUS:						sprintf( info->s, "STATUS:%01X", cpustate->status ); break;
-
+		case STATE_GENPC:
+			string.printf( "%03X", ( m_pa << 6 ) | tms1000_pc_decode[ m_pc ] );
+			break;
 	}
 }
 
 
-CPU_GET_INFO( tms0980 )
+void tms1100_cpu_device::state_string_export(const device_state_entry &entry, astring &string)
 {
-	tms0980_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
-
-	switch(state)
+	switch( entry.index() )
 	{
-		case CPUINFO_INT_MIN_INSTRUCTION_BYTES:							info->i = 2; break;
-		case CPUINFO_INT_MAX_INSTRUCTION_BYTES:							info->i = 2; break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 16 /* 9 */; break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:			info->i = 12; break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 7; break;
-		case CPUINFO_INT_PREVIOUSPC:									info->i = ( ( cpustate->prev_pa << 7 ) | cpustate->prev_pc ) << 1; break;
-		case CPUINFO_INT_PC:											info->i = ( ( cpustate->pa << 7 ) | cpustate->pc ) << 1; break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:					info->internal_map16 = ADDRESS_MAP_NAME( tms0980_internal_rom ); break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:						info->internal_map8 = ADDRESS_MAP_NAME( tms0980_internal_ram ); break;
-		case CPUINFO_FCT_INIT:											info->init = CPU_INIT_NAME( tms0980 ); break;
-		case CPUINFO_FCT_DISASSEMBLE:									info->disassemble = CPU_DISASSEMBLE_NAME( tms0980 ); break;
-		case DEVINFO_STR_NAME:											strcpy( info->s, "TMS0980" ); break;
-		default:														CPU_GET_INFO_CALL( tms_generic );
+		case STATE_GENPC:
+			string.printf( "%03X", ( m_ca << 10 ) | ( m_pa << 6 ) | m_pc );
+			break;
 	}
 }
 
 
-CPU_GET_INFO( tms1000 )
+tms0980_cpu_device::tms0980_cpu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: tms1xxx_cpu_device( mconfig, TMS0980, "TMS0980", tag, owner, clock, tms0980_decode, 0x00ff, 0x07ff, 7, 9, 4
+						, 12, ADDRESS_MAP_NAME( tms0980_internal_rom ), 7, ADDRESS_MAP_NAME( tms0980_internal_ram ), "tms0980", __FILE__)
 {
-	tms0980_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
-
-	switch(state)
-	{
-		case CPUINFO_INT_MIN_INSTRUCTION_BYTES:							info->i = 1; break;
-		case CPUINFO_INT_MAX_INSTRUCTION_BYTES:							info->i = 1; break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 8; break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:			info->i = 10; break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 6; break;
-		case CPUINFO_INT_PREVIOUSPC:									info->i = ( cpustate->prev_pa << 6 ) | tms1000_pc_decode[ cpustate->prev_pc ]; break;
-		case CPUINFO_INT_PC:											info->i = ( cpustate->pa << 6 ) | tms1000_pc_decode[ cpustate->pc ]; break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:					info->internal_map8 = ADDRESS_MAP_NAME( program_10bit_8 ); break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:						info->internal_map8 = ADDRESS_MAP_NAME( data_6bit ); break;
-		case CPUINFO_FCT_INIT:											info->init = CPU_INIT_NAME( tms1000 ); break;
-		case CPUINFO_FCT_DISASSEMBLE:									info->disassemble = CPU_DISASSEMBLE_NAME( tms1000 ); break;
-		case DEVINFO_STR_NAME:											strcpy( info->s, "TMS1000" ); break;
-		default:														CPU_GET_INFO_CALL( tms_generic );
-	}
 }
 
 
-CPU_GET_INFO( tms1070 )
+offs_t tms0980_cpu_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options)
 {
-	switch(state)
-	{
-		case CPUINFO_FCT_INIT:											info->init = CPU_INIT_NAME( tms1070 ); break;
-		case DEVINFO_STR_NAME:											strcpy( info->s, "TMS1070" ); break;
-		default:														CPU_GET_INFO_CALL( tms1000 );
-	}
+	extern CPU_DISASSEMBLE( tms0980 );
+	return CPU_DISASSEMBLE_NAME(tms0980)(this, buffer, pc, oprom, opram, options);
 }
 
 
-CPU_GET_INFO( tms1200 )
+tms1000_cpu_device::tms1000_cpu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: tms1xxx_cpu_device( mconfig, TMS1000, "TMS1000", tag, owner, clock, tms1000_default_decode, 0x00ff, 0x07ff, 6, 8, 2
+						, 11, ADDRESS_MAP_NAME( program_11bit_8 ), 7, ADDRESS_MAP_NAME( data_7bit ), "tms1000", __FILE__)
 {
-	switch(state)
-	{
-		case CPUINFO_FCT_INIT:											info->init = CPU_INIT_NAME( tms1200 ); break;
-		case DEVINFO_STR_NAME:											strcpy( info->s, "TMS1200" ); break;
-		default:														CPU_GET_INFO_CALL( tms1000 );
-	}
 }
 
 
-CPU_GET_INFO( tms1270 )
+tms1000_cpu_device::tms1000_cpu_device(const machine_config &mconfig, device_type type, const char*name, const char *tag, device_t *owner, UINT32 clock, UINT16 o_mask, UINT16 r_mask, const char *shortname, const char *source)
+	: tms1xxx_cpu_device( mconfig, type, name, tag, owner, clock, tms1000_default_decode, o_mask, r_mask, 6, 8, 2
+						, 10, ADDRESS_MAP_NAME( program_10bit_8 ), 6, ADDRESS_MAP_NAME( data_6bit ), shortname, source )
 {
-	switch(state)
-	{
-		case CPUINFO_FCT_INIT:											info->init = CPU_INIT_NAME( tms1270 ); break;
-		case DEVINFO_STR_NAME:											strcpy( info->s, "TMS1270" ); break;
-		default:														CPU_GET_INFO_CALL( tms1000 );
-	}
 }
 
 
-
-CPU_GET_INFO( tms1100 )
+offs_t tms1000_cpu_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options)
 {
-	tms0980_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
-
-	switch(state)
-	{
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 8; break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:			info->i = 11; break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 7; break;
-		case CPUINFO_INT_PREVIOUSPC:									info->i = ( cpustate->prev_pa << 6 ) | tms1000_pc_decode[ cpustate->prev_pc ]; break;
-		case CPUINFO_INT_PC:											info->i = ( cpustate->pa << 6 ) | tms1000_pc_decode[ cpustate->pc ]; break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:					info->internal_map8 = ADDRESS_MAP_NAME( program_11bit_8 ); break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:						info->internal_map8 = ADDRESS_MAP_NAME( data_7bit ); break;
-		case CPUINFO_FCT_INIT:											info->init = CPU_INIT_NAME( tms1100 ); break;
-		case CPUINFO_FCT_DISASSEMBLE:									info->disassemble = CPU_DISASSEMBLE_NAME( tms1100 ); break;
-		case DEVINFO_STR_NAME:											strcpy( info->s, "TMS1100" ); break;
-		default:														CPU_GET_INFO_CALL( tms_generic );
-	}
+	extern CPU_DISASSEMBLE( tms1000 );
+	return CPU_DISASSEMBLE_NAME(tms1000)(this, buffer, pc, oprom, opram, options);
 }
 
 
-CPU_GET_INFO( tms1300 )
+tms1070_cpu_device::tms1070_cpu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: tms1000_cpu_device( mconfig, TMS1070, "TMS1070", tag, owner, clock, 0x00ff, 0x07ff, "tms1070", __FILE__)
 {
-	switch(state)
-	{
-		case CPUINFO_FCT_INIT:											info->init = CPU_INIT_NAME( tms1300 ); break;
-		case DEVINFO_STR_NAME:											strcpy( info->s, "TMS1300" ); break;
-		default:														CPU_GET_INFO_CALL( tms1100 );
-	}
 }
 
 
-DEFINE_LEGACY_CPU_DEVICE(TMS0980, tms0980);
+tms1200_cpu_device::tms1200_cpu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: tms1000_cpu_device( mconfig, TMS1200, "TMS1200", tag, owner, clock, 0x00ff, 0x1fff, "tms1200", __FILE__)
+{
+}
 
-DEFINE_LEGACY_CPU_DEVICE(TMS1000, tms1000);
-DEFINE_LEGACY_CPU_DEVICE(TMS1070, tms1070);
-DEFINE_LEGACY_CPU_DEVICE(TMS1100, tms1100);
-DEFINE_LEGACY_CPU_DEVICE(TMS1200, tms1200);
-DEFINE_LEGACY_CPU_DEVICE(TMS1270, tms1270);
-DEFINE_LEGACY_CPU_DEVICE(TMS1300, tms1300);
+
+tms1270_cpu_device::tms1270_cpu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: tms1000_cpu_device( mconfig, TMS1270, "TMS1270", tag, owner, clock, 0x03ff, 0x1fff, "tms1270", __FILE__)
+{
+}
+
+
+tms1100_cpu_device::tms1100_cpu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: tms1xxx_cpu_device( mconfig, TMS1100, "TMS1100", tag, owner, clock, tms1100_default_decode, 0x00ff, 0x07ff, 6, 8, 3
+						, 11, ADDRESS_MAP_NAME( program_11bit_8 ), 7, ADDRESS_MAP_NAME( data_7bit ), "tms1100", __FILE__ )
+{
+}
+
+
+tms1100_cpu_device::tms1100_cpu_device(const machine_config &mconfig, device_type type, const char*name, const char *tag, device_t *owner, UINT32 clock, UINT16 o_mask, UINT16 r_mask, const char *shortname, const char *source)
+	: tms1xxx_cpu_device( mconfig, type, name, tag, owner, clock, tms1100_default_decode, o_mask, r_mask, 6, 8, 3
+						, 11, ADDRESS_MAP_NAME( program_11bit_8 ), 7, ADDRESS_MAP_NAME( data_7bit ), shortname, source )
+{
+}
+
+
+offs_t tms1100_cpu_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options)
+{
+	extern CPU_DISASSEMBLE( tms1100 );
+	return CPU_DISASSEMBLE_NAME(tms1100)(this, buffer, pc, oprom, opram, options);
+}
+
+
+tms1300_cpu_device::tms1300_cpu_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: tms1100_cpu_device( mconfig, TMS1300, "TMS1300", tag, owner, clock, 0x00ff, 0xffff, "tms1300", __FILE__ )
+{
+}

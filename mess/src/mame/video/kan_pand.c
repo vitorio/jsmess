@@ -50,101 +50,125 @@
 #include "emu.h"
 #include "video/kan_pand.h"
 
-typedef struct _kaneko_pandora_state  kaneko_pandora_state;
-struct _kaneko_pandora_state
+const device_type KANEKO_PANDORA = &device_creator<kaneko_pandora_device>;
+
+kaneko_pandora_device::kaneko_pandora_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, KANEKO_PANDORA, "Kaneko Pandora - PX79C480FP-3", tag, owner, clock, "kaneko_pandora", __FILE__),
+		device_video_interface(mconfig, *this)
 {
-	screen_device *screen;
-	UINT8 *      spriteram;
-	bitmap_t     *sprites_bitmap; /* bitmap to render sprites to, Pandora seems to be frame'buffered' */
-	int          clear_bitmap;
-	UINT8        region;
-	int          xoffset, yoffset;
-	int			 bg_pen; // might work some other way..
-};
-
-/*****************************************************************************
-    INLINE FUNCTIONS
-*****************************************************************************/
-
-INLINE kaneko_pandora_state *get_safe_token( device_t *device )
-{
-	assert(device != NULL);
-	assert(device->type() == KANEKO_PANDORA);
-
-	return (kaneko_pandora_state *)downcast<legacy_device_base *>(device)->token();
 }
 
-INLINE const kaneko_pandora_interface *get_interface( device_t *device )
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void kaneko_pandora_device::device_config_complete()
 {
-	assert(device != NULL);
-	assert((device->type() == KANEKO_PANDORA));
-	return (const kaneko_pandora_interface *) device->static_config();
+	// inherit a copy of the static data
+	const kaneko_pandora_interface *intf = reinterpret_cast<const kaneko_pandora_interface *>(static_config());
+	if (intf != NULL)
+		*static_cast<kaneko_pandora_interface *>(this) = *intf;
+
+	// or initialize to defaults if none provided
+	else
+	{
+		m_gfx_region = 0;
+		m_xoffset = 0;
+		m_yoffset = 0;
+	}
 }
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void kaneko_pandora_device::device_start()
+{
+	m_bg_pen = 0;
+
+	m_spriteram = auto_alloc_array(machine(), UINT8, 0x1000);
+
+	m_sprites_bitmap = auto_bitmap_ind16_alloc(machine(), m_screen->width(), m_screen->height());
+
+	save_item(NAME(m_clear_bitmap));
+	save_item(NAME(m_bg_pen));
+	save_pointer(NAME(m_spriteram), 0x1000);
+	save_item(NAME(*m_sprites_bitmap));
+}
+
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void kaneko_pandora_device::device_reset()
+{
+	memset(m_spriteram, 0x00, 0x1000);
+
+	m_clear_bitmap = 1;
+}
+
 
 /*****************************************************************************
     IMPLEMENTATION
 *****************************************************************************/
 
-void pandora_set_bg_pen( device_t *device, int pen )
+void kaneko_pandora_device::set_bg_pen( int pen )
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-	pandora->bg_pen = pen;
+	m_bg_pen = pen;
 }
 
-void pandora_set_clear_bitmap( device_t *device, int clear )
+void kaneko_pandora_device::set_clear_bitmap( int clear )
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-	pandora->clear_bitmap = clear;
+	m_clear_bitmap = clear;
 }
 
-void pandora_update( device_t *device, bitmap_t *bitmap, const rectangle *cliprect )
+void kaneko_pandora_device::update( bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-
-	if (!pandora->sprites_bitmap)
+	if (!m_sprites_bitmap)
 	{
 		printf("ERROR: pandora_update with no pandora_sprites_bitmap\n");
 		return;
 	}
 
-	copybitmap_trans(bitmap, pandora->sprites_bitmap, 0, 0, 0, 0, cliprect, 0);
+	copybitmap_trans(bitmap, *m_sprites_bitmap, 0, 0, 0, 0, cliprect, 0);
 }
 
 
-static void pandora_draw( device_t *device, bitmap_t *bitmap, const rectangle *cliprect )
+void kaneko_pandora_device::draw( bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
 	int sx = 0, sy = 0, x = 0, y = 0, offs;
 
 
 	/*
-     * Sprite Tile Format
-     * ------------------
-     *
-     * Byte | Bit(s)   | Use
-     * -----+-76543210-+----------------
-     *  0-2 | -------- | unused
-     *  3   | xxxx.... | Palette Bank
-     *  3   | .......x | XPos - Sign Bit
-     *  3   | ......x. | YPos - Sign Bit
-     *  3   | .....x.. | Use Relative offsets
-     *  4   | xxxxxxxx | XPos
-     *  5   | xxxxxxxx | YPos
-     *  6   | xxxxxxxx | Sprite Number (low 8 bits)
-     *  7   | ....xxxx | Sprite Number (high 4 bits)
-     *  7   | x....... | Flip Sprite Y-Axis
-     *  7   | .x...... | Flip Sprite X-Axis
-     */
+	 * Sprite Tile Format
+	 * ------------------
+	 *
+	 * Byte | Bit(s)   | Use
+	 * -----+-76543210-+----------------
+	 *  0-2 | -------- | unused
+	 *  3   | xxxx.... | Palette Bank
+	 *  3   | .......x | XPos - Sign Bit
+	 *  3   | ......x. | YPos - Sign Bit
+	 *  3   | .....x.. | Use Relative offsets
+	 *  4   | xxxxxxxx | XPos
+	 *  5   | xxxxxxxx | YPos
+	 *  6   | xxxxxxxx | Sprite Number (low 8 bits)
+	 *  7   | ....xxxx | Sprite Number (high 4 bits)
+	 *  7   | x....... | Flip Sprite Y-Axis
+	 *  7   | .x...... | Flip Sprite X-Axis
+	 */
 
 	for (offs = 0; offs < 0x1000; offs += 8)
 	{
-		int dx = pandora->spriteram[offs + 4];
-		int dy = pandora->spriteram[offs + 5];
-		int tilecolour = pandora->spriteram[offs + 3];
-		int attr = pandora->spriteram[offs + 7];
+		int dx = m_spriteram[offs + 4];
+		int dy = m_spriteram[offs + 5];
+		int tilecolour = m_spriteram[offs + 3];
+		int attr = m_spriteram[offs + 7];
 		int flipx =   attr & 0x80;
 		int flipy =  (attr & 0x40) << 1;
-		int tile  = ((attr & 0x3f) << 8) + (pandora->spriteram[offs + 6] & 0xff);
+		int tile  = ((attr & 0x3f) << 8) + (m_spriteram[offs + 6] & 0xff);
 
 		if (tilecolour & 1)
 			dx |= 0x100;
@@ -162,7 +186,7 @@ static void pandora_draw( device_t *device, bitmap_t *bitmap, const rectangle *c
 			y = dy;
 		}
 
-		if (flip_screen_get(device->machine()))
+		if (machine().driver_data()->flip_screen())
 		{
 			sx = 240 - x;
 			sy = 240 - y;
@@ -176,8 +200,8 @@ static void pandora_draw( device_t *device, bitmap_t *bitmap, const rectangle *c
 		}
 
 		/* global offset */
-		sx += pandora->xoffset;
-		sy += pandora->yoffset;
+		sx += m_xoffset;
+		sy += m_yoffset;
 
 		sx &= 0x1ff;
 		sy &= 0x1ff;
@@ -187,7 +211,7 @@ static void pandora_draw( device_t *device, bitmap_t *bitmap, const rectangle *c
 		if (sy & 0x100)
 			sy -= 0x200;
 
-		drawgfx_transpen(bitmap,cliprect,device->machine().gfx[pandora->region],
+		drawgfx_transpen(bitmap,cliprect,machine().gfx[m_gfx_region],
 				tile,
 				(tilecolour & 0xf0) >> 4,
 				flipx, flipy,
@@ -195,143 +219,89 @@ static void pandora_draw( device_t *device, bitmap_t *bitmap, const rectangle *c
 	}
 }
 
-void pandora_eof( device_t *device )
+void kaneko_pandora_device::eof( )
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-	assert(pandora->spriteram != NULL);
+	assert(m_spriteram != NULL);
 
 	// the games can disable the clearing of the sprite bitmap, to leave sprite trails
-	if (pandora->clear_bitmap)
-		bitmap_fill(pandora->sprites_bitmap, &pandora->screen->visible_area(), pandora->bg_pen);
+	if (m_clear_bitmap)
+		m_sprites_bitmap->fill(m_bg_pen, m_screen->visible_area());
 
-	pandora_draw(device, pandora->sprites_bitmap, &pandora->screen->visible_area());
+	kaneko_pandora_device::draw(*m_sprites_bitmap, m_screen->visible_area());
 }
 
 /*****************************************************************************
     DEVICE HANDLERS
 *****************************************************************************/
 
-WRITE8_DEVICE_HANDLER ( pandora_spriteram_w )
+WRITE8_MEMBER ( kaneko_pandora_device::spriteram_w )
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-
 	// it's either hooked up oddly on this, or on the 16-bit games
 	// either way, we swap the address lines so that the spriteram is in the same format
 	offset = BITSWAP16(offset,  15,14,13,12, 11,   7,6,5,4,3,2,1,0,   10,9,8  );
 
-	if (!pandora->spriteram)
+	if (!m_spriteram)
 	{
-		printf("ERROR: pandora->spriteram_w with no pandora_spriteram\n");
+		printf("ERROR: spriteram_w with no m__spriteram\n");
 		return;
 	}
 
 	if (offset >= 0x1000)
 	{
-		logerror("pandora->spriteram_w write past spriteram, offset %04x %02x\n", offset, data);
+		logerror("spriteram_w write past spriteram, offset %04x %02x\n", offset, data);
 		return;
 	}
 
-	pandora->spriteram[offset] = data;
+	m_spriteram[offset] = data;
 }
 
-READ8_DEVICE_HANDLER( pandora_spriteram_r )
+READ8_MEMBER( kaneko_pandora_device::spriteram_r )
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-
 	// it's either hooked up oddly on this, or ont the 16-bit games
 	// either way, we swap the address lines so that the spriteram is in the same format
 	offset = BITSWAP16(offset,  15,14,13,12, 11,  7,6,5,4,3,2,1,0,  10,9,8  );
 
-	if (!pandora->spriteram)
+	if (!m_spriteram)
 	{
-		printf("ERROR: pandora->spriteram_r with no pandora_spriteram\n");
+		printf("ERROR: spriteram_r with no m_spriteram\n");
 		return 0x00;
 	}
 
 	if (offset >= 0x1000)
 	{
-		logerror("pandora->spriteram_r read past spriteram, offset %04x\n", offset);
+		logerror("spriteram_r read past spriteram, offset %04x\n", offset);
 		return 0x00;
 	}
-	return pandora->spriteram[offset];
+	return m_spriteram[offset];
 }
 
 /* I don't know if this MSB/LSB mirroring is correct, or if there is twice as much ram, with half of it unused */
-WRITE16_DEVICE_HANDLER( pandora_spriteram_LSB_w )
+WRITE16_MEMBER( kaneko_pandora_device::spriteram_LSB_w )
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-
-	if (!pandora->spriteram)
+	if (!m_spriteram)
 	{
-		printf("ERROR: pandora->spriteram_LSB_w with no pandora_spriteram\n");
+		printf("ERROR: m_spriteram_LSB_w with no m_spriteram\n");
 		return;
 	}
 
 	if (ACCESSING_BITS_8_15)
 	{
-		pandora->spriteram[offset] = (data >> 8) & 0xff;
+		m_spriteram[offset] = (data >> 8) & 0xff;
 	}
 
 	if (ACCESSING_BITS_0_7)
 	{
-		pandora->spriteram[offset] = data & 0xff;
+		m_spriteram[offset] = data & 0xff;
 	}
 }
 
-READ16_DEVICE_HANDLER( pandora_spriteram_LSB_r )
+READ16_MEMBER( kaneko_pandora_device::spriteram_LSB_r )
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-
-	if (!pandora->spriteram)
+	if (!m_spriteram)
 	{
-		printf("ERROR: pandora_spriteram_LSB_r with no pandora_spriteram\n");
+		printf("ERROR: spriteram_LSB_r with no m_spriteram\n");
 		return 0x0000;
 	}
 
-	return pandora->spriteram[offset] | (pandora->spriteram[offset] << 8);
+	return m_spriteram[offset] | (m_spriteram[offset] << 8);
 }
-
-
-/*****************************************************************************
-    DEVICE INTERFACE
-*****************************************************************************/
-
-static DEVICE_START( kaneko_pandora )
-{
-	kaneko_pandora_state *pandora = get_safe_token(device);
-	const kaneko_pandora_interface *intf = get_interface(device);
-
-	pandora->screen = device->machine().device<screen_device>(intf->screen);
-	pandora->region = intf->gfx_region;
-	pandora->xoffset = intf->x;
-	pandora->yoffset = intf->y;
-	pandora->bg_pen = 0;
-
-	pandora->spriteram = auto_alloc_array(device->machine(), UINT8, 0x1000);
-
-	pandora->sprites_bitmap = pandora->screen->alloc_compatible_bitmap();
-
-	device->save_item(NAME(pandora->clear_bitmap));
-	device->save_pointer(NAME(pandora->spriteram), 0x1000);
-	device->save_item(NAME(*pandora->sprites_bitmap));
-}
-
-static DEVICE_RESET( kaneko_pandora )
-{
-	kaneko_pandora_state *pandora = get_safe_token(device);
-
-	memset(pandora->spriteram, 0x00, 0x1000);
-
-	pandora->clear_bitmap = 1;
-}
-
-static const char DEVTEMPLATE_SOURCE[] = __FILE__;
-
-#define DEVTEMPLATE_ID( p, s )	p##kaneko_pandora##s
-#define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_RESET
-#define DEVTEMPLATE_NAME		"Kaneko Pandora - PX79C480FP-3"
-#define DEVTEMPLATE_FAMILY		"Kaneko Video Chips"
-#include "devtempl.h"
-
-
-DEFINE_LEGACY_DEVICE(KANEKO_PANDORA, kaneko_pandora);

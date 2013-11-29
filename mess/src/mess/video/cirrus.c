@@ -62,73 +62,10 @@
 ***************************************************************************/
 
 #include "emu.h"
-#include "memconv.h"
 #include "cirrus.h"
 #include "video/pc_vga.h"
 
-#define LOG_PCIACCESS	0
-
-static void cirrus_update_8bpp(bitmap_t *bitmap)
-{
-	UINT16 *line;
-	const UINT8 *vram;
-	int y, x;
-
-	vram = (const UINT8 *) pc_vga_memory();
-
-	for (y = 0; y < 480; y++)
-	{
-		line = BITMAP_ADDR16(bitmap, y, 0);
-
-		for (x = 0; x < 640; x++)
-			*line++ = *vram++;
-	}
-}
-
-
-
-static void cirrus_update_16bpp(bitmap_t *bitmap)
-{
-	fatalerror("NYI");
-}
-
-
-
-static void cirrus_update_24bpp(bitmap_t *bitmap)
-{
-	fatalerror("NYI");
-}
-
-
-
-static void cirrus_update_32bpp(bitmap_t *bitmap)
-{
-	fatalerror("NYI");
-}
-
-
-
-static pc_video_update_proc cirrus_choosevideomode(const UINT8 *sequencer,
-	const UINT8 *crtc, const UINT8 *gc, int *width, int *height)
-{
-	pc_video_update_proc proc = NULL;
-
-	if ((sequencer[0x06] == 0x12) && (sequencer[0x07] & 0x01))
-	{
-		*width = 640;
-		*height = 480;
-
-		switch(sequencer[0x07] & 0x0E)
-		{
-			case 0x00:	proc = cirrus_update_8bpp; break;
-			case 0x02:	proc = cirrus_update_16bpp; break;
-			case 0x04:	proc = cirrus_update_24bpp; break;
-			case 0x06:	proc = cirrus_update_16bpp; break;
-			case 0x08:	proc = cirrus_update_32bpp; break;
-		}
-	}
-	return proc;
-}
+#define LOG_PCIACCESS   0
 
 //**************************************************************************
 //  DEVICE DEFINITIONS
@@ -145,39 +82,10 @@ const device_type CIRRUS = &device_creator<cirrus_device>;
 //-------------------------------------------------
 
 cirrus_device::cirrus_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-     : device_t(mconfig, CIRRUS, "CIRRUS", tag, owner, clock)
+		: device_t(mconfig, CIRRUS, "CIRRUS", tag, owner, clock, "cirrus", __FILE__),
+		pci_device_interface( mconfig, *this )
 {
 }
-
-static void bebox_map_vga_memory(running_machine &machine, offs_t begin, offs_t end, read8_space_func rh, const char *rh_name, write8_space_func wh, const char *wh_name )
-{
-	address_space *space = machine.device("ppc1")->memory().space(AS_PROGRAM);
-
-	space->nop_readwrite(0xC00A0000, 0xC00BFFFF);
-
-	space->install_readwrite_bank(0xC0000000 + begin, 0xC0000000 + end, "bank4");
-}
-
-static const struct pc_vga_interface bebox_vga_interface =
-{
-	"bank4",
-	bebox_map_vga_memory,
-
-	NULL,
-
-	AS_PROGRAM,
-	0x80000000
-};
-
-const struct pc_svga_interface cirrus_svga_interface =
-{
-	2 * 1024 * 1024,	/* 2 megs vram */
-	8,					/* 8 sequencer registers */
-	10,					/* 10 gc registers */
-	25,					/* 25 crtc registers */
-	cirrus_choosevideomode
-};
-
 
 //-------------------------------------------------
 //  device_start - device-specific startup
@@ -185,7 +93,6 @@ const struct pc_svga_interface cirrus_svga_interface =
 
 void cirrus_device::device_start()
 {
-	pc_vga_init(machine(), &bebox_vga_interface, &cirrus_svga_interface);
 }
 
 //-------------------------------------------------
@@ -200,7 +107,7 @@ void cirrus_device::device_reset()
 //  pci_read - implementation of PCI read
 //-------------------------------------------------
 
-UINT32 cirrus_device::pci_read(device_t *busdevice, int function, int offset, UINT32 mem_mask)
+UINT32 cirrus_device::pci_read(pci_bus_device *pcibus, int function, int offset, UINT32 mem_mask)
 {
 	UINT32 result = 0;
 
@@ -208,7 +115,7 @@ UINT32 cirrus_device::pci_read(device_t *busdevice, int function, int offset, UI
 	{
 		switch(offset)
 		{
-			case 0x00:	/* vendor/device ID */
+			case 0x00:  /* vendor/device ID */
 				result = 0x00A01013;
 				break;
 
@@ -236,25 +143,11 @@ UINT32 cirrus_device::pci_read(device_t *busdevice, int function, int offset, UI
 //  pci_write - implementation of PCI write
 //-------------------------------------------------
 
-void cirrus_device::pci_write(device_t *busdevice, int function, int offset, UINT32 data, UINT32 mem_mask)
+void cirrus_device::pci_write(pci_bus_device *pcibus, int function, int offset, UINT32 data, UINT32 mem_mask)
 {
 	if (LOG_PCIACCESS)
 		logerror("cirrus5430_pci_write(): function=%d offset=0x%02X data=0x%04X\n", function, offset, data);
 }
-
-
-UINT32 cirrus5430_pci_read(device_t *busdevice, device_t *device, int function, int offset, UINT32 mem_mask)
-{
-	cirrus_device *cirrus = dynamic_cast<cirrus_device *>(device);
-	return cirrus->pci_read(busdevice, function, offset, mem_mask);
-}
-
-void cirrus5430_pci_write(device_t *busdevice, device_t *device, int function, int offset, UINT32 data, UINT32 mem_mask)
-{
-	cirrus_device *cirrus = dynamic_cast<cirrus_device *>(device);
-	cirrus->pci_write(busdevice, function, offset, data, mem_mask);
-}
-
 
 /*************************************
  *
@@ -262,8 +155,8 @@ void cirrus5430_pci_write(device_t *busdevice, device_t *device, int function, i
  *
  *************************************/
 
-WRITE8_DEVICE_HANDLER( cirrus_42E8_w )
+WRITE8_MEMBER( cirrus_device::cirrus_42E8_w )
 {
 	if (data & 0x80)
-		pc_vga_reset(device->machine());
+		machine().device("vga")->reset();
 }

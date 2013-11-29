@@ -8,108 +8,6 @@
 #include "tia.h"
 #include "sound/tiaintf.h"
 
-#define HMOVE_INACTIVE		-200
-#define PLAYER_GFX_SLOTS	4
-
-// Per player graphic
-// - pixel number to start drawing from (0-7, from GRPx) / number of pixels drawn from GRPx
-// - display position to start drawing
-// - size to use
-struct player_gfx {
-	int	start_pixel[PLAYER_GFX_SLOTS];
-	int start_drawing[PLAYER_GFX_SLOTS];
-	int size[PLAYER_GFX_SLOTS];
-	int skipclip[PLAYER_GFX_SLOTS];
-};
-
-static struct player_gfx p0gfx;
-static struct player_gfx p1gfx;
-
-static UINT64 frame_cycles;
-static UINT64 paddle_cycles;
-
-static int horzP0;
-static int horzP1;
-static int horzM0;
-static int horzM1;
-static int horzBL;
-static int motclkP0;
-static int motclkP1;
-static int motclkM0;
-static int motclkM1;
-static int motclkBL;
-static int startP0;
-static int startP1;
-static int startM0;
-static int startM1;
-static int skipclipP0;
-static int skipclipP1;
-static int skipM0delay;
-static int skipM1delay;
-
-static int current_bitmap;
-
-static int prev_x;
-static int prev_y;
-
-static UINT8 VSYNC;
-static UINT8 VBLANK;
-static UINT8 COLUP0;
-static UINT8 COLUP1;
-static UINT8 COLUBK;
-static UINT8 COLUPF;
-static UINT8 CTRLPF;
-static UINT8 GRP0;
-static UINT8 GRP1;
-static UINT8 REFP0;
-static UINT8 REFP1;
-static UINT8 HMP0;
-static UINT8 HMP1;
-static UINT8 HMM0;
-static UINT8 HMM1;
-static UINT8 HMBL;
-static UINT8 VDELP0;
-static UINT8 VDELP1;
-static UINT8 VDELBL;
-static UINT8 NUSIZ0;
-static UINT8 NUSIZ1;
-static UINT8 ENAM0;
-static UINT8 ENAM1;
-static UINT8 ENABL;
-static UINT8 CXM0P;
-static UINT8 CXM1P;
-static UINT8 CXP0FB;
-static UINT8 CXP1FB;
-static UINT8 CXM0FB;
-static UINT8 CXM1FB;
-static UINT8 CXBLPF;
-static UINT8 CXPPMM;
-static UINT8 RESMP0;
-static UINT8 RESMP1;
-static UINT8 PF0;
-static UINT8 PF1;
-static UINT8 PF2;
-static UINT8 INPT4;
-static UINT8 INPT5;
-
-static UINT8 prevGRP0;
-static UINT8 prevGRP1;
-static UINT8 prevENABL;
-
-static int HMOVE_started;
-static int HMOVE_started_previous;
-static UINT8 HMP0_latch;
-static UINT8 HMP1_latch;
-static UINT8 HMM0_latch;
-static UINT8 HMM1_latch;
-static UINT8 HMBL_latch;
-static UINT8 REFLECT;		/* Should playfield be reflected or not */
-static UINT8 NUSIZx_changed;
-
-static bitmap_t *helper[3];
-
-static UINT16 screen_height;
-
 static const int nusiz[8][3] =
 {
 	{ 1, 1, 0 },
@@ -122,26 +20,22 @@ static const int nusiz[8][3] =
 	{ 1, 4, 0 }
 };
 
-static read16_space_func	tia_read_input_port;
-static read8_space_func	tia_get_databus;
-static write16_space_func	tia_vsync_callback;
-
 static void extend_palette(running_machine &machine) {
-	int	i,j;
+	int i,j;
 
 	for( i = 0; i < 128; i ++ )
 	{
-		rgb_t	new_rgb = palette_get_color( machine, i );
-		UINT8	new_r = RGB_RED( new_rgb );
-		UINT8	new_g = RGB_GREEN( new_rgb );
-		UINT8	new_b = RGB_BLUE( new_rgb );
+		rgb_t   new_rgb = palette_get_color( machine, i );
+		UINT8   new_r = RGB_RED( new_rgb );
+		UINT8   new_g = RGB_GREEN( new_rgb );
+		UINT8   new_b = RGB_BLUE( new_rgb );
 
 		for ( j = 0; j < 128; j++ )
 		{
-			rgb_t	old_rgb = palette_get_color( machine, j );
-			UINT8	old_r = RGB_RED( old_rgb );
-			UINT8	old_g = RGB_GREEN( old_rgb );
-			UINT8	old_b = RGB_BLUE( old_rgb );
+			rgb_t   old_rgb = palette_get_color( machine, j );
+			UINT8   old_r = RGB_RED( old_rgb );
+			UINT8   old_g = RGB_GREEN( old_rgb );
+			UINT8   old_b = RGB_BLUE( old_rgb );
 
 			palette_set_color_rgb(machine, ( ( i + 1 ) << 7 ) | j,
 				( new_r + old_r ) / 2,
@@ -151,28 +45,140 @@ static void extend_palette(running_machine &machine) {
 	}
 }
 
-PALETTE_INIT( tia_NTSC )
+PALETTE_INIT_MEMBER(tia_ntsc_video_device, tia_ntsc)
 {
 	int i, j;
+/********************************
+Phase Shift 24.7
+        {  0.000,  0.000 },
+        {  0.192, -0.127 },
+        {  0.239, -0.052 },
+        {  0.244,  0.030 },
+        {  0.201,  0.108 },
+        {  0.125,  0.166 },
+        {  0.026,  0.194 },
+        { -0.080,  0.185 },
+        { -0.169,  0.145 },
+        { -0.230,  0.077 },
+        { -0.247, -0.006 },
+        { -0.220, -0.087 },
+        { -0.152, -0.153 },
+        { -0.057, -0.189 },
+        {  0.049, -0.193 },
+        {  0.144, -0.161 }
+
+Phase Shift 25.2
+        {  0.000,  0.000 },
+        {  0.192, -0.127 },
+        {  0.239, -0.052 },
+        {  0.244,  0.033 },
+        {  0.200,  0.113 },
+        {  0.119,  0.169 },
+        {  0.013,  0.195 },
+        { -0.094,  0.183 },
+        { -0.182,  0.136 },
+        { -0.237,  0.062 },
+        { -0.245, -0.020 },
+        { -0.210, -0.103 },
+        { -0.131, -0.164 },
+        { -0.027, -0.193 },
+        {  0.079, -0.187 },
+        {  0.169, -0.145 }
+
+Phase Shift 25.7
+        {  0.000,  0.000 },
+        {  0.192, -0.127 },
+        {  0.243, -0.049 },
+        {  0.242,  0.038 },
+        {  0.196,  0.116 },
+        {  0.109,  0.172 },
+        {  0.005,  0.196 },
+        { -0.104,  0.178 },
+        { -0.192,  0.127 },
+        { -0.241,  0.051 },
+        { -0.244, -0.037 },
+        { -0.197, -0.115 },
+        { -0.112, -0.173 },
+        { -0.004, -0.197 },
+        {  0.102, -0.179 },
+        {  0.190, -0.128 }
+
+Phase Shift 26.7
+        {  0.000,  0.000 },
+        {  0.192, -0.127 },
+        {  0.242, -0.046 },
+        {  0.240,  0.044 },
+        {  0.187,  0.125 },
+        {  0.092,  0.180 },
+        { -0.020,  0.195 },
+        { -0.128,  0.170 },
+        { -0.210,  0.107 },
+        { -0.247,  0.022 },
+        { -0.231, -0.067 },
+        { -0.166, -0.142 },
+        { -0.064, -0.188 },
+        {  0.049, -0.193 },
+        {  0.154, -0.155 },
+        {  0.227, -0.086 }
+
+Phase Shift 27.2
+        {  0.000,  0.000 },
+        {  0.192, -0.127 },
+        {  0.243, -0.044 },
+        {  0.239,  0.047 },
+        {  0.183,  0.129 },
+        {  0.087,  0.181 },
+        { -0.029,  0.195 },
+        { -0.138,  0.164 },
+        { -0.217,  0.098 },
+        { -0.246,  0.009 },
+        { -0.223, -0.081 },
+        { -0.149, -0.153 },
+        { -0.041, -0.192 },
+        {  0.073, -0.188 },
+        {  0.173, -0.142 },
+        {  0.235, -0.067 }
+
+Phase Shift 27.7
+        {  0.000,  0.000 },
+        {  0.192, -0.127 },
+        {  0.243, -0.044 },
+        {  0.238,  0.051 },
+        {  0.178,  0.134 },
+        {  0.078,  0.184 },
+        { -0.041,  0.194 },
+        { -0.151,  0.158 },
+        { -0.224,  0.087 },
+        { -0.248, -0.005 },
+        { -0.214, -0.096 },
+        { -0.131, -0.164 },
+        { -0.019, -0.195 },
+        {  0.099, -0.182 },
+        {  0.194, -0.126 },
+        {  0.244, -0.042 }
+**********************************/
 
 	static const double color[16][2] =
+/*********************************
+Phase Shift 26.2
+**********************************/
 	{
 		{  0.000,  0.000 },
-		{  0.144, -0.189 },
-		{  0.231, -0.081 },
-		{  0.243,  0.032 },
-		{  0.217,  0.121 },
-		{  0.117,  0.216 },
-		{  0.021,  0.233 },
-		{ -0.066,  0.196 },
-		{ -0.139,  0.134 },
-		{ -0.182,  0.062 },
-		{ -0.175, -0.022 },
-		{ -0.136, -0.100 },
-		{ -0.069, -0.150 },
-		{  0.005, -0.159 },
-		{  0.071, -0.125 },
-		{  0.124, -0.089 }
+		{  0.192, -0.127 },
+		{  0.241, -0.048 },
+		{  0.240,  0.040 },
+		{  0.191,  0.121 },
+		{  0.103,  0.175 },
+		{ -0.008,  0.196 },
+		{ -0.116,  0.174 },
+		{ -0.199,  0.118 },
+		{ -0.243,  0.037 },
+		{ -0.237, -0.052 },
+		{ -0.180, -0.129 },
+		{ -0.087, -0.181 },
+		{  0.021, -0.196 },
+		{  0.130, -0.169 },
+		{  0.210, -0.107 }
 	};
 
 	for (i = 0; i < 16; i++)
@@ -200,17 +206,17 @@ PALETTE_INIT( tia_NTSC )
 			if (G > 1) G = 1;
 			if (B > 1) B = 1;
 
-			palette_set_color_rgb(machine,8 * i + j,
+			palette_set_color_rgb(machine(),8 * i + j,
 				(UINT8) (255 * R + 0.5),
 				(UINT8) (255 * G + 0.5),
 				(UINT8) (255 * B + 0.5));
 		}
 	}
-	extend_palette( machine );
+	extend_palette( machine() );
 }
 
 
-PALETTE_INIT( tia_PAL )
+PALETTE_INIT_MEMBER(tia_pal_video_device, tia_pal)
 {
 	int i, j;
 
@@ -259,36 +265,128 @@ PALETTE_INIT( tia_PAL )
 			if (G > 1) G = 1;
 			if (B > 1) B = 1;
 
-			palette_set_color_rgb(machine,8 * i + j,
+			palette_set_color_rgb(machine(),8 * i + j,
 				(UINT8) (255 * R + 0.5),
 				(UINT8) (255 * G + 0.5),
 				(UINT8) (255 * B + 0.5));
 		}
 	}
-	extend_palette( machine );
+	extend_palette( machine() );
+}
+
+tia_video_device::tia_video_device(const machine_config &mconfig, device_type type, const char *name, const char *shortname, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, type, name, tag, owner, clock, shortname, __FILE__),
+		device_video_interface(mconfig, *this)
+{
+}
+
+// device type definition
+const device_type TIA_PAL_VIDEO = &device_creator<tia_pal_video_device>;
+
+//-------------------------------------------------
+//  tia_pal_video_device - constructor
+//-------------------------------------------------
+
+tia_pal_video_device::tia_pal_video_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: tia_video_device(mconfig, TIA_PAL_VIDEO, "TIA Video (PAL)", "tia_pal_video", tag, owner, clock)
+{
+}
+
+static MACHINE_CONFIG_FRAGMENT( tia_pal )
+	MCFG_PALETTE_INIT_OVERRIDE(tia_pal_video_device, tia_pal)
+MACHINE_CONFIG_END
+
+//-------------------------------------------------
+//  machine_config_additions - return a pointer to
+//  the device's machine fragment
+//-------------------------------------------------
+
+machine_config_constructor tia_pal_video_device::device_mconfig_additions() const
+{
+	return MACHINE_CONFIG_NAME( tia_pal );
+}
+
+// device type definition
+const device_type TIA_NTSC_VIDEO = &device_creator<tia_ntsc_video_device>;
+
+//-------------------------------------------------
+//  tia_ntsc_video_device - constructor
+//-------------------------------------------------
+
+tia_ntsc_video_device::tia_ntsc_video_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: tia_video_device(mconfig, TIA_NTSC_VIDEO, "TIA Video (NTSC)", "tia_ntsc_video", tag, owner, clock)
+{
+}
+
+static MACHINE_CONFIG_FRAGMENT( tia_ntsc )
+	MCFG_PALETTE_INIT_OVERRIDE(tia_ntsc_video_device, tia_ntsc)
+MACHINE_CONFIG_END
+
+//-------------------------------------------------
+//  machine_config_additions - return a pointer to
+//  the device's machine fragment
+//-------------------------------------------------
+
+machine_config_constructor tia_ntsc_video_device::device_mconfig_additions() const
+{
+	return MACHINE_CONFIG_NAME( tia_ntsc );
+}
+
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void tia_video_device::device_config_complete()
+{
+	// inherit a copy of the static data
+	const tia_interface *intf = reinterpret_cast<const tia_interface *>(static_config());
+	if (intf != NULL)
+		*static_cast<tia_interface *>(this) = *intf;
+
+	// or initialize to defaults if none provided
+	else
+	{
+		memset(&m_read_input_port_cb, 0, sizeof(m_read_input_port_cb));
+		memset(&m_databus_contents_cb, 0, sizeof(m_databus_contents_cb));
+		memset(&m_vsync_callback_cb, 0, sizeof(m_vsync_callback_cb));
+	}
+}
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void tia_video_device::device_start()
+{
+	// resolve callbacks
+	m_read_input_port_func.resolve(m_read_input_port_cb, *this);
+	m_databus_contents_func.resolve(m_databus_contents_cb, *this);
+	m_vsync_callback_func.resolve(m_vsync_callback_cb, *this);
+
+
+	int cx = m_screen->width();
+
+	screen_height = m_screen->height();
+	helper[0] = auto_bitmap_ind16_alloc(machine(), cx, TIA_MAX_SCREEN_HEIGHT);
+	helper[1] = auto_bitmap_ind16_alloc(machine(), cx, TIA_MAX_SCREEN_HEIGHT);
+	helper[2] = auto_bitmap_ind16_alloc(machine(), cx, TIA_MAX_SCREEN_HEIGHT);
 }
 
 
-VIDEO_START( tia )
+//-------------------------------------------------
+//  screen_update -
+//-------------------------------------------------
+
+UINT32 tia_video_device::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	int cx = machine.primary_screen->width();
-
-	screen_height = machine.primary_screen->height();
-	helper[0] = auto_bitmap_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT, machine.primary_screen->format());
-	helper[1] = auto_bitmap_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT, machine.primary_screen->format());
-	helper[2] = auto_bitmap_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT, machine.primary_screen->format());
-}
-
-
-SCREEN_UPDATE( tia )
-{
-	screen_height = screen->height();
-	copybitmap(bitmap, helper[2], 0, 0, 0, 0, cliprect);
+	screen_height = screen.height();
+	copybitmap(bitmap, *helper[2], 0, 0, 0, 0, cliprect);
 	return 0;
 }
 
 
-static void draw_sprite_helper(UINT8* p, UINT8 *col, struct player_gfx *gfx,
+void tia_video_device::draw_sprite_helper(UINT8* p, UINT8 *col, struct player_gfx *gfx,
 	UINT8 GRP, UINT8 COLUP, UINT8 REFP)
 {
 	int i;
@@ -321,7 +419,7 @@ static void draw_sprite_helper(UINT8* p, UINT8 *col, struct player_gfx *gfx,
 }
 
 
-static void draw_missile_helper(UINT8* p, UINT8* col, int horz, int skipdelay, int latch, int start,
+void tia_video_device::draw_missile_helper(UINT8* p, UINT8* col, int horz, int skipdelay, int latch, int start,
 	UINT8 RESMP, UINT8 ENAM, UINT8 NUSIZ, UINT8 COLUM)
 {
 	int num = nusiz[NUSIZ & 7][0];
@@ -385,7 +483,7 @@ static void draw_missile_helper(UINT8* p, UINT8* col, int horz, int skipdelay, i
 }
 
 
-static void draw_playfield_helper(UINT8* p, UINT8* col, int horz,
+void tia_video_device::draw_playfield_helper(UINT8* p, UINT8* col, int horz,
 	UINT8 COLU, UINT8 REFPF)
 {
 	UINT32 PF =
@@ -431,7 +529,7 @@ static void draw_playfield_helper(UINT8* p, UINT8* col, int horz,
 }
 
 
-static void draw_ball_helper(UINT8* p, UINT8* col, int horz, UINT8 ENAB)
+void tia_video_device::draw_ball_helper(UINT8* p, UINT8* col, int horz, UINT8 ENAB)
 {
 	int width = 1 << ((CTRLPF >> 4) & 3);
 
@@ -450,37 +548,37 @@ static void draw_ball_helper(UINT8* p, UINT8* col, int horz, UINT8 ENAB)
 }
 
 
-static void drawS0(UINT8* p, UINT8* col)
+void tia_video_device::drawS0(UINT8* p, UINT8* col)
 {
 	draw_sprite_helper(p, col, &p0gfx, (VDELP0 & 1) ? prevGRP0 : GRP0, COLUP0, REFP0);
 }
 
 
-static void drawS1(UINT8* p, UINT8* col)
+void tia_video_device::drawS1(UINT8* p, UINT8* col)
 {
 	draw_sprite_helper(p, col, &p1gfx, (VDELP1 & 1) ? prevGRP1 : GRP1, COLUP1, REFP1);
 }
 
 
-static void drawM0(UINT8* p, UINT8* col)
+void tia_video_device::drawM0(UINT8* p, UINT8* col)
 {
 	draw_missile_helper(p, col, horzM0, skipM0delay, HMM0_latch, startM0, RESMP0, ENAM0, NUSIZ0, COLUP0);
 }
 
 
-static void drawM1(UINT8* p, UINT8* col)
+void tia_video_device::drawM1(UINT8* p, UINT8* col)
 {
 	draw_missile_helper(p, col, horzM1, skipM1delay, HMM1_latch, startM1, RESMP1, ENAM1, NUSIZ1, COLUP1);
 }
 
 
-static void drawBL(UINT8* p, UINT8* col)
+void tia_video_device::drawBL(UINT8* p, UINT8* col)
 {
 	draw_ball_helper(p, col, horzBL, (VDELBL & 1) ? prevENABL : ENABL);
 }
 
 
-static void drawPF(UINT8* p, UINT8 *col)
+void tia_video_device::drawPF(UINT8* p, UINT8 *col)
 {
 	draw_playfield_helper(p, col, 0,
 		((CTRLPF & 6) == 2) ? COLUP0 : COLUPF, 0);
@@ -490,7 +588,7 @@ static void drawPF(UINT8* p, UINT8 *col)
 }
 
 
-static int collision_check(UINT8* p1, UINT8* p2, int x1, int x2)
+int tia_video_device::collision_check(UINT8* p1, UINT8* p2, int x1, int x2)
 {
 	int i;
 
@@ -506,19 +604,19 @@ static int collision_check(UINT8* p1, UINT8* p2, int x1, int x2)
 }
 
 
-INLINE int current_x(address_space *space)
+int tia_video_device::current_x()
 {
-	return 3 * ((space->machine().firstcpu->total_cycles() - frame_cycles) % 76) - 68;
+	return 3 * ((machine().firstcpu->total_cycles() - frame_cycles) % 76) - 68;
 }
 
 
-INLINE int current_y(address_space *space)
+int tia_video_device::current_y()
 {
-	return (space->machine().firstcpu->total_cycles() - frame_cycles) / 76;
+	return (machine().firstcpu->total_cycles() - frame_cycles) / 76;
 }
 
 
-static void setup_pXgfx(void)
+void tia_video_device::setup_pXgfx(void)
 {
 	int i;
 	for ( i = 0; i < PLAYER_GFX_SLOTS; i++ )
@@ -529,7 +627,7 @@ static void setup_pXgfx(void)
 			if ( i )
 			{
 				p0gfx.start_drawing[i] = ( horzP0 + (p0gfx.size[i] > 1 ? 1 : 0)
-										 + i * 8 * ( nusiz[NUSIZ0 & 7][2] + p0gfx.size[i] ) ) % 160;
+											+ i * 8 * ( nusiz[NUSIZ0 & 7][2] + p0gfx.size[i] ) ) % 160;
 				p0gfx.skipclip[i] = 0;
 			}
 			else
@@ -549,7 +647,7 @@ static void setup_pXgfx(void)
 			if ( i )
 			{
 				p1gfx.start_drawing[i] = ( horzP1 + (p1gfx.size[i] > 1 ? 1 : 0)
-										 + i * 8 * ( nusiz[NUSIZ1 & 7][2] + p1gfx.size[i] ) ) % 160;
+											+ i * 8 * ( nusiz[NUSIZ1 & 7][2] + p1gfx.size[i] ) ) % 160;
 				p1gfx.skipclip[i] = 0;
 			}
 			else
@@ -566,7 +664,7 @@ static void setup_pXgfx(void)
 	}
 }
 
-static void update_bitmap(int next_x, int next_y)
+void tia_video_device::update_bitmap(int next_x, int next_y)
 {
 	int x;
 	int y;
@@ -664,7 +762,7 @@ static void update_bitmap(int next_x, int next_y)
 				redraw_line = 1;
 			}
 
-			/* Redraw line if a RESPx or NUSIZx occured during the last line */
+			/* Redraw line if a RESPx or NUSIZx occurred during the last line */
 			if ( ! startP0 || ! startP1 || ! startM0 || ! startM1) {
 				startP0 = 1;
 				startP1 = 1;
@@ -819,7 +917,7 @@ static void update_bitmap(int next_x, int next_y)
 		if (collision_check(lineM0, lineM1, colx1, x2))
 			CXPPMM |= 0x40;
 
-		p = BITMAP_ADDR16(helper[current_bitmap], y % screen_height, 34);
+		p = &helper[current_bitmap]->pix16(y % screen_height, 34);
 
 		for (x = x1; x < x2; x++)
 		{
@@ -827,13 +925,13 @@ static void update_bitmap(int next_x, int next_y)
 		}
 
 		if ( x2 == 160 && y % screen_height == (screen_height - 1) ) {
-			int	t_y;
-			for ( t_y = 0; t_y < helper[2]->height; t_y++ ) {
-				UINT16*	l0 = BITMAP_ADDR16( helper[current_bitmap], t_y, 0 );
-				UINT16*	l1 = BITMAP_ADDR16( helper[1 - current_bitmap], t_y, 0 );
-				UINT16*	l2 = BITMAP_ADDR16( helper[2], t_y, 0 );
+			int t_y;
+			for ( t_y = 0; t_y < helper[2]->height(); t_y++ ) {
+				UINT16* l0 = &helper[current_bitmap]->pix16(t_y);
+				UINT16* l1 = &helper[1 - current_bitmap]->pix16(t_y);
+				UINT16* l2 = &helper[2]->pix16(t_y);
 				int t_x;
-				for( t_x = 0; t_x < helper[2]->width; t_x++ ) {
+				for( t_x = 0; t_x < helper[2]->width(); t_x++ ) {
 					if ( l0[t_x] != l1[t_x] ) {
 						/* Combine both entries */
 						l2[t_x] = ( ( l0[t_x] + 1 ) << 7 ) | l1[t_x];
@@ -851,38 +949,38 @@ static void update_bitmap(int next_x, int next_y)
 }
 
 
-static WRITE8_HANDLER( WSYNC_w )
+WRITE8_MEMBER( tia_video_device::WSYNC_w )
 {
-	int cycles = space->machine().firstcpu->total_cycles() - frame_cycles;
+	int cycles = machine().firstcpu->total_cycles() - frame_cycles;
 
 	if (cycles % 76)
 	{
-		device_adjust_icount(&space->device(), cycles % 76 - 76);
+		space.device().execute().adjust_icount(cycles % 76 - 76);
 	}
 }
 
 
-static WRITE8_HANDLER( VSYNC_w )
+WRITE8_MEMBER( tia_video_device::VSYNC_w )
 {
 	if (data & 2)
 	{
 		if (!(VSYNC & 2))
 		{
-			int curr_y = current_y(space);
+			int curr_y = current_y();
 
 			if ( curr_y > 5 )
 				update_bitmap(
-					space->machine().primary_screen->width(),
-					space->machine().primary_screen->height());
+					m_screen->width(),
+					m_screen->height());
 
-			if ( tia_vsync_callback ) {
-				tia_vsync_callback( space, 0, curr_y, 0xFFFF );
+			if ( !m_vsync_callback_func.isnull() ) {
+				m_vsync_callback_func(0, curr_y, 0xFFFF );
 			}
 
 			prev_y = 0;
 			prev_x = 0;
 
-			frame_cycles += 76 * current_y(space);
+			frame_cycles += 76 * current_y();
 		}
 	}
 
@@ -890,11 +988,11 @@ static WRITE8_HANDLER( VSYNC_w )
 }
 
 
-static WRITE8_HANDLER( VBLANK_w )
+WRITE8_MEMBER( tia_video_device::VBLANK_w )
 {
 	if (data & 0x80)
 	{
-		paddle_cycles = space->machine().firstcpu->total_cycles();
+		paddle_start = machine().firstcpu->total_cycles();
 	}
 	if ( ! ( VBLANK & 0x40 ) ) {
 		INPT4 = 0x80;
@@ -904,9 +1002,9 @@ static WRITE8_HANDLER( VBLANK_w )
 }
 
 
-static WRITE8_HANDLER( CTRLPF_w )
+WRITE8_MEMBER( tia_video_device::CTRLPF_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 
 	CTRLPF = data;
 	if ( curr_x < 80 ) {
@@ -914,9 +1012,9 @@ static WRITE8_HANDLER( CTRLPF_w )
 	}
 }
 
-static WRITE8_HANDLER( HMP0_w )
+WRITE8_MEMBER( tia_video_device::HMP0_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 
 	data &= 0xF0;
 
@@ -946,9 +1044,9 @@ static WRITE8_HANDLER( HMP0_w )
 	HMP0 = data;
 }
 
-static WRITE8_HANDLER( HMP1_w )
+WRITE8_MEMBER( tia_video_device::HMP1_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 
 	data &= 0xF0;
 
@@ -978,9 +1076,9 @@ static WRITE8_HANDLER( HMP1_w )
 	HMP1 = data;
 }
 
-static WRITE8_HANDLER( HMM0_w )
+WRITE8_MEMBER( tia_video_device::HMM0_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 
 	data &= 0xF0;
 
@@ -1009,9 +1107,9 @@ static WRITE8_HANDLER( HMM0_w )
 	HMM0 = data;
 }
 
-static WRITE8_HANDLER( HMM1_w )
+WRITE8_MEMBER( tia_video_device::HMM1_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 
 	data &= 0xF0;
 
@@ -1040,9 +1138,9 @@ static WRITE8_HANDLER( HMM1_w )
 	HMM1 = data;
 }
 
-static WRITE8_HANDLER( HMBL_w )
+WRITE8_MEMBER( tia_video_device::HMBL_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 
 	data &= 0xF0;
 
@@ -1071,10 +1169,10 @@ static WRITE8_HANDLER( HMBL_w )
 	HMBL = data;
 }
 
-static WRITE8_HANDLER( HMOVE_w )
+WRITE8_MEMBER( tia_video_device::HMOVE_w )
 {
-	int curr_x = current_x(space);
-	int curr_y = current_y(space);
+	int curr_x = current_x();
+	int curr_y = current_y();
 
 	HMOVE_started = curr_x;
 
@@ -1176,7 +1274,7 @@ static WRITE8_HANDLER( HMOVE_w )
 		horzBL %= 160;
 
 		/* When HMOVE is triggered on CPU cycle 75, the HBlank period on the
-           next line is also extended. */
+		   next line is also extended. */
 		if (curr_x >= 157)
 		{
 			curr_y += 1;
@@ -1188,7 +1286,7 @@ static WRITE8_HANDLER( HMOVE_w )
 		}
 		if (curr_y < screen_height)
 		{
-			memset(BITMAP_ADDR16(helper[current_bitmap], curr_y, 34), 0, 16);
+			memset(&helper[current_bitmap]->pix16(curr_y, 34), 0, 16);
 		}
 
 		prev_x = 8;
@@ -1196,15 +1294,15 @@ static WRITE8_HANDLER( HMOVE_w )
 }
 
 
-static WRITE8_HANDLER( RSYNC_w )
+WRITE8_MEMBER( tia_video_device::RSYNC_w )
 {
 	/* this address is used in chip testing */
 }
 
 
-static WRITE8_HANDLER( NUSIZ0_w )
+WRITE8_MEMBER( tia_video_device::NUSIZ0_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 
 	/* Check if relevant bits have changed */
 	if ( ( data & 7 ) != ( NUSIZ0 & 7 ) ) {
@@ -1219,7 +1317,7 @@ static WRITE8_HANDLER( NUSIZ0_w )
 						/* This copy has started drawing */
 						if ( p0gfx.size[i] == 1 && nusiz[data & 7][1] > 1 ) {
 							int delay = 1 + ( ( p0gfx.start_pixel[i] + ( curr_x - p0gfx.start_drawing[i] ) ) & 1 );
-							update_bitmap( curr_x + delay, current_y(space) );
+							update_bitmap( curr_x + delay, current_y() );
 							p0gfx.start_pixel[i] += ( curr_x + delay - p0gfx.start_drawing[i] );
 							if ( p0gfx.start_pixel[i] > 8 )
 								p0gfx.start_pixel[i] = 8;
@@ -1229,7 +1327,7 @@ static WRITE8_HANDLER( NUSIZ0_w )
 							if ( delay ) {
 								delay = p0gfx.size[i] - delay;
 							}
-							update_bitmap( curr_x + delay, current_y(space) );
+							update_bitmap( curr_x + delay, current_y() );
 							p0gfx.start_pixel[i] += ( curr_x - p0gfx.start_drawing[i] ) / p0gfx.size[i];
 							p0gfx.start_drawing[i] = curr_x + delay;
 						} else {
@@ -1254,7 +1352,7 @@ static WRITE8_HANDLER( NUSIZ0_w )
 					}
 				} else {
 					/* We are passed the copy or the copy still needs to be done. Mark
-                       it as done/invalid, the data will be reset in the next loop. */
+					   it as done/invalid, the data will be reset in the next loop. */
 					p0gfx.start_pixel[i] = 8;
 				}
 			}
@@ -1280,9 +1378,9 @@ static WRITE8_HANDLER( NUSIZ0_w )
 }
 
 
-static WRITE8_HANDLER( NUSIZ1_w )
+WRITE8_MEMBER( tia_video_device::NUSIZ1_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 
 	/* Check if relevant bits have changed */
 	if ( ( data & 7 ) != ( NUSIZ1 & 7 ) ) {
@@ -1297,7 +1395,7 @@ static WRITE8_HANDLER( NUSIZ1_w )
 						/* This copy has started drawing */
 						if ( p1gfx.size[i] == 1 && nusiz[data & 7][1] > 1 ) {
 							int delay = 1 + ( ( p0gfx.start_pixel[i] + ( curr_x - p0gfx.start_drawing[i] ) ) & 1 );
-							update_bitmap( curr_x + delay, current_y(space) );
+							update_bitmap( curr_x + delay, current_y() );
 							p1gfx.start_pixel[i] += ( curr_x + delay - p1gfx.start_drawing[i] );
 							if ( p1gfx.start_pixel[i] > 8 )
 								p1gfx.start_pixel[i] = 8;
@@ -1307,7 +1405,7 @@ static WRITE8_HANDLER( NUSIZ1_w )
 							if ( delay ) {
 								delay = p1gfx.size[i] - delay;
 							}
-							update_bitmap( curr_x + delay, current_y(space) );
+							update_bitmap( curr_x + delay, current_y() );
 							p1gfx.start_pixel[i] += ( curr_x - p1gfx.start_drawing[i] ) / p1gfx.size[i];
 							p1gfx.start_drawing[i] = curr_x + delay;
 						} else {
@@ -1332,7 +1430,7 @@ static WRITE8_HANDLER( NUSIZ1_w )
 					}
 				} else {
 					/* We are passed the copy or the copy still needs to be done. Mark
-                       it as done/invalid, the data will be reset in the next loop. */
+					   it as done/invalid, the data will be reset in the next loop. */
 					p1gfx.start_pixel[i] = 8;
 				}
 			}
@@ -1358,7 +1456,7 @@ static WRITE8_HANDLER( NUSIZ1_w )
 }
 
 
-static WRITE8_HANDLER( HMCLR_w )
+WRITE8_MEMBER( tia_video_device::HMCLR_w )
 {
 	HMP0_w( space, offset, 0 );
 	HMP1_w( space, offset, 0 );
@@ -1368,7 +1466,7 @@ static WRITE8_HANDLER( HMCLR_w )
 }
 
 
-static WRITE8_HANDLER( CXCLR_w )
+WRITE8_MEMBER( tia_video_device::CXCLR_w )
 {
 	CXM0P = 0;
 	CXM1P = 0;
@@ -1381,31 +1479,31 @@ static WRITE8_HANDLER( CXCLR_w )
 }
 
 
-#define RESXX_APPLY_ACTIVE_HMOVE(HORZ,MOTION,MOTCLK)									\
-	if ( curr_x < MIN( HMOVE_started + 6 + 16 * 4, 7 ) ) {								\
-		int decrements_passed = ( curr_x - ( HMOVE_started + 4 ) ) / 4;					\
-		HORZ += 8;																		\
-		if ( ( MOTCLK - decrements_passed ) > 0 ) {										\
-			HORZ -= ( MOTCLK - decrements_passed );										\
-			if ( HORZ < 0 )																\
-				HORZ += 160;															\
-		}																				\
+#define RESXX_APPLY_ACTIVE_HMOVE(HORZ,MOTION,MOTCLK)                                    \
+	if ( curr_x < MIN( HMOVE_started + 6 + 16 * 4, 7 ) ) {                              \
+		int decrements_passed = ( curr_x - ( HMOVE_started + 4 ) ) / 4;                 \
+		HORZ += 8;                                                                      \
+		if ( ( MOTCLK - decrements_passed ) > 0 ) {                                     \
+			HORZ -= ( MOTCLK - decrements_passed );                                     \
+			if ( HORZ < 0 )                                                             \
+				HORZ += 160;                                                            \
+		}                                                                               \
 	}
 
-#define RESXX_APPLY_PREVIOUS_HMOVE(HORZ,MOTION)												\
-	if ( HMOVE_started_previous != HMOVE_INACTIVE )											\
-	{																						\
-		UINT8	motclk = ( MOTION ^ 0x80 ) >> 4;											\
-		if ( curr_x <= HMOVE_started_previous - 228 + 5 + motclk * 4 )						\
-		{																					\
-			UINT8	motclk_passed = ( curr_x - ( HMOVE_started_previous - 228 + 6 ) ) / 4;	\
-			HORZ -= ( motclk - motclk_passed );												\
-		}																					\
+#define RESXX_APPLY_PREVIOUS_HMOVE(HORZ,MOTION)                                             \
+	if ( HMOVE_started_previous != HMOVE_INACTIVE )                                         \
+	{                                                                                       \
+		UINT8   motclk = ( MOTION ^ 0x80 ) >> 4;                                            \
+		if ( curr_x <= HMOVE_started_previous - 228 + 5 + motclk * 4 )                      \
+		{                                                                                   \
+			UINT8   motclk_passed = ( curr_x - ( HMOVE_started_previous - 228 + 6 ) ) / 4;  \
+			HORZ -= ( motclk - motclk_passed );                                             \
+		}                                                                                   \
 	}
 
-static WRITE8_HANDLER( RESP0_w )
+WRITE8_MEMBER( tia_video_device::RESP0_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 	int new_horzP0;
 
 	/* Check if HMOVE is activated during this line */
@@ -1439,7 +1537,7 @@ static WRITE8_HANDLER( RESP0_w )
 					}
 				} else {
 					/* We are passed the copy or the copy still needs to be done. Mark
-                       it as done/invalid, the data will be reset in the next loop. */
+					   it as done/invalid, the data will be reset in the next loop. */
 					p0gfx.start_pixel[i] = 8;
 				}
 			}
@@ -1463,9 +1561,9 @@ static WRITE8_HANDLER( RESP0_w )
 }
 
 
-static WRITE8_HANDLER( RESP1_w )
+WRITE8_MEMBER( tia_video_device::RESP1_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 	int new_horzP1;
 
 	/* Check if HMOVE is activated during this line */
@@ -1499,7 +1597,7 @@ static WRITE8_HANDLER( RESP1_w )
 					}
 				} else {
 					/* We are passed the copy or the copy still needs to be done. Mark
-                       it as done/invalid, the data will be reset in the next loop. */
+					   it as done/invalid, the data will be reset in the next loop. */
 					p1gfx.start_pixel[i] = 8;
 				}
 			}
@@ -1523,9 +1621,9 @@ static WRITE8_HANDLER( RESP1_w )
 }
 
 
-static WRITE8_HANDLER( RESM0_w )
+WRITE8_MEMBER( tia_video_device::RESM0_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 	int new_horzM0;
 
 	/* Check if HMOVE is activated during this line */
@@ -1545,9 +1643,9 @@ static WRITE8_HANDLER( RESM0_w )
 }
 
 
-static WRITE8_HANDLER( RESM1_w )
+WRITE8_MEMBER( tia_video_device::RESM1_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 	int new_horzM1;
 
 	/* Check if HMOVE is activated during this line */
@@ -1567,9 +1665,9 @@ static WRITE8_HANDLER( RESM1_w )
 }
 
 
-static WRITE8_HANDLER( RESBL_w )
+WRITE8_MEMBER( tia_video_device::RESBL_w )
 {
-	int curr_x = current_x(space);
+	int curr_x = current_x();
 
 	/* Check if HMOVE is activated during this line */
 	if ( HMOVE_started != HMOVE_INACTIVE ) {
@@ -1583,7 +1681,7 @@ static WRITE8_HANDLER( RESBL_w )
 }
 
 
-static WRITE8_HANDLER( RESMP0_w )
+WRITE8_MEMBER( tia_video_device::RESMP0_w )
 {
 	if (RESMP0 & 2)
 	{
@@ -1605,7 +1703,7 @@ static WRITE8_HANDLER( RESMP0_w )
 }
 
 
-static WRITE8_HANDLER( RESMP1_w )
+WRITE8_MEMBER( tia_video_device::RESMP1_w )
 {
 	if (RESMP1 & 2)
 	{
@@ -1627,7 +1725,7 @@ static WRITE8_HANDLER( RESMP1_w )
 }
 
 
-static WRITE8_HANDLER( GRP0_w )
+WRITE8_MEMBER( tia_video_device::GRP0_w )
 {
 	prevGRP1 = GRP1;
 
@@ -1635,7 +1733,7 @@ static WRITE8_HANDLER( GRP0_w )
 }
 
 
-static WRITE8_HANDLER( GRP1_w )
+WRITE8_MEMBER( tia_video_device::GRP1_w )
 {
 	prevGRP0 = GRP0;
 
@@ -1645,13 +1743,13 @@ static WRITE8_HANDLER( GRP1_w )
 }
 
 
-static READ8_HANDLER( INPT_r )
+READ8_MEMBER( tia_video_device::INPT_r )
 {
-	UINT64 elapsed = space->machine().firstcpu->total_cycles() - paddle_cycles;
-	int input = TIA_INPUT_PORT_ALWAYS_ON;
-	if ( tia_read_input_port )
+	UINT64 elapsed = machine().firstcpu->total_cycles() - paddle_start;
+	UINT16 input = TIA_INPUT_PORT_ALWAYS_ON;
+	if ( !m_read_input_port_func.isnull() )
 	{
-		input = tia_read_input_port(space, offset & 3, 0xFFFF);
+		input = m_read_input_port_func(offset & 3, 0xFFFF);
 	}
 
 	if ( input == TIA_INPUT_PORT_ALWAYS_ON )
@@ -1659,27 +1757,28 @@ static READ8_HANDLER( INPT_r )
 	if ( input == TIA_INPUT_PORT_ALWAYS_OFF )
 		return 0x00;
 
-	return elapsed > 76 * input ? 0x80 : 0x00;
+	UINT16 paddle_cycles = input * 76;
+	return elapsed > paddle_cycles ? 0x80 : 0x00;
 }
 
 
-READ8_HANDLER( tia_r )
+READ8_MEMBER( tia_video_device::read )
 {
-	 /* lower bits 0 - 5 seem to depend on the last byte on the
-         data bus. If the driver supplied a routine to retrieve
-         that we will call that, otherwise we will use the lower
-         bit of the offset.
-    */
+		/* lower bits 0 - 5 seem to depend on the last byte on the
+		 data bus. If the driver supplied a routine to retrieve
+		 that we will call that, otherwise we will use the lower
+		 bit of the offset.
+	*/
 	UINT8 data = offset & 0x3f;
 
-	if ( tia_get_databus )
+	if ( !m_databus_contents_func.isnull() )
 	{
-		data = tia_get_databus(space, offset) & 0x3f;
+		data = m_databus_contents_func(offset) & 0x3f;
 	}
 
 	if (!(offset & 0x8))
 	{
-		update_bitmap(current_x(space), current_y(space));
+		update_bitmap(current_x(), current_y());
 	}
 
 	switch (offset & 0xF)
@@ -1710,13 +1809,13 @@ READ8_HANDLER( tia_r )
 		return data | INPT_r(space,3);
 	case 0xC:
 		{
-			int	button = tia_read_input_port ? ( tia_read_input_port(space,4,0xFFFF) & 0x80 ) : 0x80;
+			int button = !m_read_input_port_func.isnull() ? ( m_read_input_port_func(4,0xFFFF) & 0x80 ) : 0x80;
 			INPT4 = ( VBLANK & 0x40) ? ( INPT4 & button ) : button;
 		}
 		return data | INPT4;
 	case 0xD:
 		{
-			int button = tia_read_input_port ? ( tia_read_input_port(space,5,0xFFFF) & 0x80 ) : 0x80;
+			int button = !m_read_input_port_func.isnull() ? ( m_read_input_port_func(5,0xFFFF) & 0x80 ) : 0x80;
 			INPT5 = ( VBLANK & 0x40) ? ( INPT5 & button ) : button;
 		}
 		return data | INPT5;
@@ -1726,58 +1825,58 @@ READ8_HANDLER( tia_r )
 }
 
 
-WRITE8_HANDLER( tia_w )
+WRITE8_MEMBER( tia_video_device::write )
 {
 	static const int delay[0x40] =
 	{
-		 0,	// VSYNC
-		 0,	// VBLANK
-		 0,	// WSYNC
-		 0,	// RSYNC
-		 0,	// NUSIZ0
-		 0,	// NUSIZ1
-		 0,	// COLUP0
-		 0,	// COLUP1
-		 0,	// COLUPF
-		 0,	// COLUBK
-		 0,	// CTRLPF
-		 1,	// REFP0
-		 1,	// REFP1
-		 4,	// PF0
-		 4,	// PF1
-		 4,	// PF2
-		 0,	// RESP0
-		 0,	// RESP1
-		 0,	// RESM0
-		 0,	// RESM1
-		 0,	// RESBL
-		-1,	// AUDC0
-		-1,	// AUDC1
-		-1,	// AUDF0
-		-1,	// AUDF1
-		-1,	// AUDV0
-		-1,	// AUDV1
-		 1,	// GRP0
-		 1,	// GRP1
-		 1,	// ENAM0
-		 1,	// ENAM1
-		 1,	// ENABL
-		 0,	// HMP0
-		 0,	// HMP1
-		 0,	// HMM0
-		 0,	// HMM1
-		 0,	// HMBL
-		 0,	// VDELP0
-		 0,	// VDELP1
-		 0,	// VDELBL
-		 0,	// RESMP0
-		 0,	// RESMP1
-		 3,	// HMOVE
-		 0,	// HMCLR
-		 0,	// CXCLR
+			0,  // VSYNC
+			0,  // VBLANK
+			0,  // WSYNC
+			0,  // RSYNC
+			0,  // NUSIZ0
+			0,  // NUSIZ1
+			0,  // COLUP0
+			0,  // COLUP1
+			0,  // COLUPF
+			0,  // COLUBK
+			0,  // CTRLPF
+			1,  // REFP0
+			1,  // REFP1
+			4,  // PF0
+			4,  // PF1
+			4,  // PF2
+			0,  // RESP0
+			0,  // RESP1
+			0,  // RESM0
+			0,  // RESM1
+			0,  // RESBL
+		-1, // AUDC0
+		-1, // AUDC1
+		-1, // AUDF0
+		-1, // AUDF1
+		-1, // AUDV0
+		-1, // AUDV1
+			1,  // GRP0
+			1,  // GRP1
+			1,  // ENAM0
+			1,  // ENAM1
+			1,  // ENABL
+			0,  // HMP0
+			0,  // HMP1
+			0,  // HMM0
+			0,  // HMM1
+			0,  // HMBL
+			0,  // VDELP0
+			0,  // VDELP1
+			0,  // VDELBL
+			0,  // RESMP0
+			0,  // RESMP1
+			3,  // HMOVE
+			0,  // HMCLR
+			0,  // CXCLR
 	};
-	int curr_x = current_x(space);
-	int curr_y = current_y(space);
+	int curr_x = current_x();
+	int curr_y = current_y();
 
 	offset &= 0x3F;
 
@@ -1863,7 +1962,7 @@ WRITE8_HANDLER( tia_w )
 	case 0x18: /* AUDF1 */
 	case 0x19: /* AUDV0 */
 	case 0x1A: /* AUDV1 */
-		tia_sound_w(space->machine().device("tia"), offset, data);
+		machine().device<tia_device>("tia")->tia_sound_w(space, offset, data);
 		break;
 
 	case 0x1B:
@@ -1924,7 +2023,11 @@ WRITE8_HANDLER( tia_w )
 }
 
 
-static void tia_reset(running_machine &machine)
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void tia_video_device::device_reset()
 {
 	int i;
 
@@ -1966,6 +2069,9 @@ static void tia_reset(running_machine &machine)
 	motclkM1 = 0;
 	motclkBL = 0;
 
+	horzP0 = 0;
+	horzP1 = 0;
+
 	for( i = 0; i < PLAYER_GFX_SLOTS; i++ )
 	{
 		p0gfx.start_pixel[i] = 8;
@@ -1974,27 +2080,41 @@ static void tia_reset(running_machine &machine)
 		p1gfx.size[i] = 1;
 	}
 
+	current_bitmap = 0;
+
 	NUSIZx_changed = 0;
+
+	VBLANK = 0;
+	CTRLPF = 0;
+	PF0 = 0;
+	PF1 = 0;
+	PF2 = 0;
+	VDELBL = 0;
+	prevENABL = 0;
+	ENABL = 0;
+	VDELP0 = 0;
+	VDELP1 = 0;
+	prevGRP0 = 0;
+	GRP0 = 0;
+	prevGRP1 = 0;
+	GRP1 = 0;
+	COLUP0 = 0;
+	COLUP1 = 0;
+	REFP0 = 0;
+	REFP1 = 0;
+	NUSIZ0 = 0;
+	NUSIZ1 = 0;
+	horzM0 = 0;
+	horzM1 = 0;
+	RESMP0 = 0;
+	RESMP1 = 0;
+	ENAM0 = 0;
+	ENAM1 = 0;
+	skipclipP0 = 0;
+	skipclipP1 = 0;
+	horzBL = 0;
+	VSYNC = 0;
+	CXM0P = 0;
+	COLUBK = 0;
+	COLUPF = 0;
 }
-
-
-
-void tia_init(running_machine &machine, const struct tia_interface* ti)
-{
-	assert_always(machine.phase() == MACHINE_PHASE_INIT, "Can only call tia_init at init time!");
-
-	if ( ti ) {
-		tia_read_input_port = ti->read_input_port;
-		tia_get_databus = ti->databus_contents;
-		tia_vsync_callback = ti->vsync_callback;
-	} else {
-		tia_read_input_port = NULL;
-		tia_get_databus = NULL;
-		tia_vsync_callback = NULL;
-	}
-
-	tia_reset( machine );
-
-	machine.add_notifier(MACHINE_NOTIFY_RESET, machine_notify_delegate(FUNC(tia_reset), &machine));
-}
-

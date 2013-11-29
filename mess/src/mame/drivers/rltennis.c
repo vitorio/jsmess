@@ -63,42 +63,39 @@ player - when there's nothing to play - first, empty 2k of ROMs are selected.
 #include "cpu/m68000/m68000.h"
 #include "machine/nvram.h"
 #include "sound/dac.h"
+#include "video/ramdac.h"
 
-#define	RLT_REFRESH_RATE   60
+#define RLT_REFRESH_RATE   60
 #define RLT_TIMER_FREQ     (RLT_REFRESH_RATE*256)
 #define RLT_XTAL           XTAL_12MHz
 
-static READ16_HANDLER( rlt_io_r )
+READ16_MEMBER(rltennis_state::rlt_io_r)
 {
-	rltennis_state *state = space->machine().driver_data<rltennis_state>();
-
-	return (input_port_read(space->machine(), "P1" )&0x1fff) | (state->m_unk_counter<<13); /* top 3 bits controls smaple address update */
+	return (ioport("P1" )->read()&0x1fff) | (m_unk_counter<<13); /* top 3 bits controls smaple address update */
 }
 
-static WRITE16_HANDLER(rlt_snd1_w)
+WRITE16_MEMBER(rltennis_state::rlt_snd1_w)
 {
-	rltennis_state *state = space->machine().driver_data<rltennis_state>();
-	COMBINE_DATA(&state->m_data760000);
+	COMBINE_DATA(&m_data760000);
 }
 
-static WRITE16_HANDLER(rlt_snd2_w)
+WRITE16_MEMBER(rltennis_state::rlt_snd2_w)
 {
-	rltennis_state *state = space->machine().driver_data<rltennis_state>();
-	COMBINE_DATA(&state->m_data740000);
+	COMBINE_DATA(&m_data740000);
 }
 
-static ADDRESS_MAP_START( rltennis_main, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( rltennis_main, AS_PROGRAM, 16, rltennis_state )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM
 	AM_RANGE(0x700000, 0x70000f) AM_WRITE(rlt_blitter_w)
-	AM_RANGE(0x720000, 0x720001) AM_WRITE(rlt_ramdac_address_wm_w)
-	AM_RANGE(0x720002, 0x720003) AM_READWRITE(rlt_ramdac_data_r, rlt_ramdac_data_w)
-	AM_RANGE(0x720006, 0x720007) AM_WRITE(rlt_ramdac_address_rm_w)
+	AM_RANGE(0x720000, 0x720001) AM_DEVWRITE8("ramdac",ramdac_device,index_w,0x00ff)
+	AM_RANGE(0x720002, 0x720003) AM_DEVREADWRITE8("ramdac",ramdac_device,pal_r,pal_w,0x00ff)
+	AM_RANGE(0x720006, 0x720007) AM_DEVWRITE8("ramdac",ramdac_device,index_r_w,0x00ff)
 	AM_RANGE(0x740000, 0x740001) AM_WRITE(rlt_snd1_w)
 	AM_RANGE(0x760000, 0x760001) AM_WRITE(rlt_snd2_w)
-	AM_RANGE(0x780000, 0x780001) AM_WRITENOP	/* sound control, unknown, usually = 0x0044 */
-	AM_RANGE(0x7a0000, 0x7a0003) AM_READNOP 	/* unknown, read only at boot time*/
+	AM_RANGE(0x780000, 0x780001) AM_WRITENOP    /* sound control, unknown, usually = 0x0044 */
+	AM_RANGE(0x7a0000, 0x7a0003) AM_READNOP     /* unknown, read only at boot time*/
 	AM_RANGE(0x7e0000, 0x7e0001) AM_READ(rlt_io_r)
 	AM_RANGE(0x7e0002, 0x7e0003) AM_READ_PORT("P2")
 ADDRESS_MAP_END
@@ -132,77 +129,73 @@ static INPUT_PORTS_START( rltennis )
 	PORT_BIT( 0xff80, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
-static TIMER_CALLBACK( sample_player )
+TIMER_CALLBACK_MEMBER(rltennis_state::sample_player)
 {
-	rltennis_state *state = machine.driver_data<rltennis_state>();
-
-	if((state->m_dac_counter&0x7ff) == 0x7ff) /* reload top address bits */
+	if((m_dac_counter&0x7ff) == 0x7ff) /* reload top address bits */
 	{
-		state->m_sample_rom_offset_1=(( state->m_data740000 >> state->m_offset_shift ) & 0xff )<<11;
-		state->m_sample_rom_offset_2=(( state->m_data760000 >> state->m_offset_shift ) & 0xff )<<11;
-		state->m_offset_shift^=8; /* switch between MSB and LSB */
+		m_sample_rom_offset_1=(( m_data740000 >> m_offset_shift ) & 0xff )<<11;
+		m_sample_rom_offset_2=(( m_data760000 >> m_offset_shift ) & 0xff )<<11;
+		m_offset_shift^=8; /* switch between MSB and LSB */
 	}
-	++state->m_dac_counter; /* update low address bits */
+	++m_dac_counter; /* update low address bits */
 
-	dac_signed_data_w(state->m_dac_1, state->m_samples_1[state->m_sample_rom_offset_1 + ( state->m_dac_counter&0x7ff )]);
-	dac_data_w(state->m_dac_2, state->m_samples_2[state->m_sample_rom_offset_2 + ( state->m_dac_counter&0x7ff )]);
-	state->m_timer->adjust(attotime::from_hz( RLT_TIMER_FREQ ));
+	m_dac_1->write_signed8(m_samples_1[m_sample_rom_offset_1 + ( m_dac_counter&0x7ff )]);
+	m_dac_2->write_unsigned8(m_samples_2[m_sample_rom_offset_2 + ( m_dac_counter&0x7ff )]);
+	m_timer->adjust(attotime::from_hz( RLT_TIMER_FREQ ));
 }
 
-static INTERRUPT_GEN(  rltennis_interrupt )
+INTERRUPT_GEN_MEMBER(rltennis_state::rltennis_interrupt)
 {
-	rltennis_state *state = device->machine().driver_data<rltennis_state>();
-	++state->m_unk_counter; /* frame counter? verify */
-	device_set_input_line(device, 4, HOLD_LINE);
-	device_set_input_line(device, 1, HOLD_LINE); /* hack, to avoid dead loop */
+	++m_unk_counter; /* frame counter? verify */
+	device.execute().set_input_line(4, HOLD_LINE);
+	device.execute().set_input_line(1, HOLD_LINE); /* hack, to avoid dead loop */
 }
 
-static MACHINE_START( rltennis )
+void rltennis_state::machine_start()
 {
-	rltennis_state *state = machine.driver_data<rltennis_state>();
-	state->m_maincpu = machine.device( "maincpu");
-	state->m_screen = machine.device(  "screen");
-	state->m_palette = auto_alloc_array(machine, UINT8, 256*3 );
-	state->m_dac_1 = machine.device("dac1");
-	state->m_dac_2 = machine.device("dac2");
-	state->m_samples_1 = machine.region("samples1")->base();
-	state->m_samples_2 = machine.region("samples2")->base();
-	state->m_gfx =  machine.region("gfx1")->base();
-	state->m_timer = machine.scheduler().timer_alloc(FUNC(sample_player));
+	m_samples_1 = memregion("samples1")->base();
+	m_samples_2 = memregion("samples2")->base();
+	m_gfx =  memregion("gfx1")->base();
+	m_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(rltennis_state::sample_player),this));
 }
 
-static MACHINE_RESET( rltennis )
+void rltennis_state::machine_reset()
 {
-	rltennis_state *state = machine.driver_data<rltennis_state>();
-	state->m_timer->adjust(attotime::from_hz(RLT_TIMER_FREQ));
+	m_timer->adjust(attotime::from_hz(RLT_TIMER_FREQ));
 }
+
+static ADDRESS_MAP_START( ramdac_map, AS_0, 8, rltennis_state )
+	AM_RANGE(0x000, 0x3ff) AM_DEVREADWRITE("ramdac",ramdac_device,ramdac_pal_r,ramdac_rgb888_w)
+ADDRESS_MAP_END
+
+static RAMDAC_INTERFACE( ramdac_intf )
+{
+	1
+};
 
 static MACHINE_CONFIG_START( rltennis, rltennis_state )
 
 	MCFG_CPU_ADD("maincpu", M68000, RLT_XTAL/2) /* 68000P8  ??? */
 	MCFG_CPU_PROGRAM_MAP(rltennis_main)
-	MCFG_CPU_VBLANK_INT("screen", rltennis_interrupt)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", rltennis_state,  rltennis_interrupt)
 
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE( RLT_REFRESH_RATE )
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(320, 240)
 	MCFG_SCREEN_VISIBLE_AREA(0,319, 0, 239)
 
-	MCFG_SCREEN_UPDATE(rltennis)
+	MCFG_SCREEN_UPDATE_DRIVER(rltennis_state, screen_update_rltennis)
 	MCFG_PALETTE_LENGTH(256)
 
-	MCFG_MACHINE_START( rltennis )
-	MCFG_MACHINE_RESET( rltennis )
 	MCFG_NVRAM_ADD_0FILL("nvram")
 
-	MCFG_VIDEO_START( rltennis )
+	MCFG_RAMDAC_ADD("ramdac", ramdac_intf, ramdac_map)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("dac1", DAC, 0)
+	MCFG_DAC_ADD("dac1")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", .5)
-	MCFG_SOUND_ADD("dac2", DAC, 0)
+	MCFG_DAC_ADD("dac2")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", .5)
 
 MACHINE_CONFIG_END
@@ -231,4 +224,4 @@ ROM_START( rltennis )
 	ROM_LOAD( "tennis_3.u52", 0x00000, 0x80000, CRC(517dcd0e) SHA1(b2703e185ee8cf7e115ea07151e7bee8be34948b) )
 ROM_END
 
-GAME( 1993, rltennis,    0, rltennis,    rltennis,    0, ROT0,  "TCH", "Reality Tennis", GAME_IMPERFECT_GRAPHICS)
+GAME( 1993, rltennis,    0, rltennis,    rltennis, driver_device,    0, ROT0,  "TCH", "Reality Tennis", GAME_IMPERFECT_GRAPHICS)

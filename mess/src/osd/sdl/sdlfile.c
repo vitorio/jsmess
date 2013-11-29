@@ -52,7 +52,7 @@ extern const char *sdlfile_ptty_identifier;
 #define INVPATHSEPCH '\\'
 #endif
 
-#define NO_ERROR	(0)
+#define NO_ERROR    (0)
 
 //============================================================
 //  Prototypes
@@ -103,7 +103,7 @@ file_error osd_open(const char *path, UINT32 openflags, osd_file **file, UINT64 
 	UINT32 access;
 	const char *src;
 	char *dst;
-	#if defined(SDLMAME_DARWIN) || defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_BSD) || defined(SDLMAME_OS2) || defined(SDLMAME_EMSCRIPTEN)
+	#if defined(SDLMAME_DARWIN) || defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_BSD) || defined(SDLMAME_OS2) || defined(SDLMAME_HAIKU)
 	struct stat st;
 	#else
 	struct stat64 st;
@@ -203,7 +203,7 @@ file_error osd_open(const char *path, UINT32 openflags, osd_file **file, UINT64 
 	#endif
 
 	// attempt to open the file
-	#if defined(SDLMAME_DARWIN) || defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_BSD) || defined(SDLMAME_OS2) || defined(SDLMAME_EMSCRIPTEN)
+	#if defined(SDLMAME_DARWIN) || defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_BSD) || defined(SDLMAME_OS2) || defined(SDLMAME_HAIKU)
 	(*file)->handle = open(tmpstr, access, 0666);
 	#else
 	(*file)->handle = open64(tmpstr, access, 0666);
@@ -226,7 +226,7 @@ file_error osd_open(const char *path, UINT32 openflags, osd_file **file, UINT64 
 				// attempt to reopen the file
 				if (error == NO_ERROR)
 				{
-					#if defined(SDLMAME_DARWIN) || defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_BSD) || defined(SDLMAME_OS2) || defined(SDLMAME_EMSCRIPTEN)
+					#if defined(SDLMAME_DARWIN) || defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_BSD) || defined(SDLMAME_OS2) || defined(SDLMAME_HAIKU)
 					(*file)->handle = open(tmpstr, access, 0666);
 					#else
 					(*file)->handle = open64(tmpstr, access, 0666);
@@ -247,7 +247,7 @@ file_error osd_open(const char *path, UINT32 openflags, osd_file **file, UINT64 
 
 	// get the file size
 	#ifdef SDLMAME_EMSCRIPTEN
-	//for some reason the fstat approach does not work on emscripten, work around for now
+	//the fstat approach does not work on emscripten, work around for now
 	FILE *fileptr;
 	fileptr = fdopen((*file)->handle,"rb");
 	if (fileptr == NULL)
@@ -261,7 +261,7 @@ file_error osd_open(const char *path, UINT32 openflags, osd_file **file, UINT64 
 		fseek(fileptr, 0, SEEK_SET);
 	}
 	#else
-	#if defined(SDLMAME_DARWIN) || defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_BSD) || defined(SDLMAME_OS2) || defined(SDLMAME_EMSCRIPTEN)
+	#if defined(SDLMAME_DARWIN) || defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_BSD) || defined(SDLMAME_OS2) || defined(SDLMAME_HAIKU)
 	fstat((*file)->handle, &st);
 	#else
 	fstat64((*file)->handle, &st);
@@ -292,41 +292,41 @@ file_error osd_read(osd_file *file, void *buffer, UINT64 offset, UINT32 count, U
 {
 	ssize_t result;
 
-   switch (file->type)
-   {
-      case SDLFILE_FILE:
-#if defined(SDLMAME_DARWIN) || defined(SDLMAME_BSD)
-         result = pread(file->handle, buffer, count, offset);
-         if (result < 0)
-#elif defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_OS2) || defined(SDLMAME_EMSCRIPTEN)
-         lseek(file->handle, (UINT32)offset&0xffffffff, SEEK_SET);
-         result = read(file->handle, buffer, count);
-         if (result < 0)
+	switch (file->type)
+	{
+		case SDLFILE_FILE:
+#if defined(SDLMAME_DARWIN) || defined(SDLMAME_BSD) || defined(SDLMAME_EMSCRIPTEN)
+			result = pread(file->handle, buffer, count, offset);
+			if (result < 0)
+#elif defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_OS2)
+			lseek(file->handle, (UINT32)offset&0xffffffff, SEEK_SET);
+			result = read(file->handle, buffer, count);
+			if (result < 0)
 #elif defined(SDLMAME_UNIX)
-         result = pread64(file->handle, buffer, count, offset);
-         if (result < 0)
+			result = pread64(file->handle, buffer, count, offset);
+			if (result < 0)
 #else
 #error Unknown SDL SUBARCH!
 #endif
-		      return error_to_file_error(errno);
+				return error_to_file_error(errno);
 
-         if (actual != NULL)
-            *actual = result;
+			if (actual != NULL)
+			*actual = result;
 
-         return FILERR_NONE;
-         break;
+			return FILERR_NONE;
+			break;
 
-      case SDLFILE_SOCKET:
-         return sdl_read_socket(file, buffer, offset, count, actual);
-         break;
+		case SDLFILE_SOCKET:
+			return sdl_read_socket(file, buffer, offset, count, actual);
+			break;
 
-      case SDLFILE_PTTY:
-         return sdl_read_ptty(file, buffer, offset, count, actual);
-         break;
+		case SDLFILE_PTTY:
+			return sdl_read_ptty(file, buffer, offset, count, actual);
+			break;
 
-      default:
-         return FILERR_FAILURE;
-    }
+		default:
+			return FILERR_FAILURE;
+	}
 }
 
 
@@ -338,40 +338,40 @@ file_error osd_write(osd_file *file, const void *buffer, UINT64 offset, UINT32 c
 {
 	UINT32 result;
 
-   switch (file->type)
-   {
-      case SDLFILE_FILE:
-#if defined(SDLMAME_DARWIN) || defined(SDLMAME_BSD)
-         result = pwrite(file->handle, buffer, count, offset);
-         if (!result)
-#elif defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_OS2) || defined(SDLMAME_EMSCRIPTEN)
-         lseek(file->handle, (UINT32)offset&0xffffffff, SEEK_SET);
-         result = write(file->handle, buffer, count);
-         if (!result)
+	switch (file->type)
+	{
+		case SDLFILE_FILE:
+#if defined(SDLMAME_DARWIN) || defined(SDLMAME_BSD) || defined(SDLMAME_EMSCRIPTEN)
+			result = pwrite(file->handle, buffer, count, offset);
+			if (!result)
+#elif defined(SDLMAME_WIN32) || defined(SDLMAME_NO64BITIO) || defined(SDLMAME_OS2)
+			lseek(file->handle, (UINT32)offset&0xffffffff, SEEK_SET);
+			result = write(file->handle, buffer, count);
+			if (!result)
 #elif defined(SDLMAME_UNIX)
-         result = pwrite64(file->handle, buffer, count, offset);
-         if (!result)
+			result = pwrite64(file->handle, buffer, count, offset);
+			if (!result)
 #else
 #error Unknown SDL SUBARCH!
 #endif
 		return error_to_file_error(errno);
 
-         if (actual != NULL)
-            *actual = result;
-         return FILERR_NONE;
-         break;
+			if (actual != NULL)
+			*actual = result;
+			return FILERR_NONE;
+			break;
 
-      case SDLFILE_SOCKET:
-         return sdl_write_socket(file, buffer, offset, count, actual);
-         break;
+		case SDLFILE_SOCKET:
+			return sdl_write_socket(file, buffer, offset, count, actual);
+			break;
 
-      case SDLFILE_PTTY:
-         return sdl_write_ptty(file, buffer, offset, count, actual);
-         break;
+		case SDLFILE_PTTY:
+			return sdl_write_ptty(file, buffer, offset, count, actual);
+			break;
 
-      default:
-         return FILERR_FAILURE;
-    }
+		default:
+			return FILERR_FAILURE;
+	}
 }
 
 
@@ -382,25 +382,25 @@ file_error osd_write(osd_file *file, const void *buffer, UINT64 offset, UINT32 c
 file_error osd_close(osd_file *file)
 {
 	// close the file handle and free the file structure
-   switch (file->type)
-   {
-      case SDLFILE_FILE:
-         close(file->handle);
-         osd_free(file);
-         return FILERR_NONE;
-         break;
+	switch (file->type)
+	{
+		case SDLFILE_FILE:
+			close(file->handle);
+			osd_free(file);
+			return FILERR_NONE;
+			break;
 
-      case SDLFILE_SOCKET:
-         return sdl_close_socket(file);
-         break;
+		case SDLFILE_SOCKET:
+			return sdl_close_socket(file);
+			break;
 
-      case SDLFILE_PTTY:
-         return sdl_close_ptty(file);
-         break;
+		case SDLFILE_PTTY:
+			return sdl_close_ptty(file);
+			break;
 
-      default:
-         return FILERR_FAILURE;
-    }
+		default:
+			return FILERR_FAILURE;
+	}
 }
 
 //============================================================
@@ -457,7 +457,7 @@ static UINT32 create_path_recursive(char *path)
 
 int osd_get_physical_drive_geometry(const char *filename, UINT32 *cylinders, UINT32 *heads, UINT32 *sectors, UINT32 *bps)
 {
-	return FALSE;		// no, no way, huh-uh, forget it
+	return FALSE;       // no, no way, huh-uh, forget it
 }
 
 //============================================================

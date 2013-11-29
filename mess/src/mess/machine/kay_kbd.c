@@ -64,9 +64,9 @@
  * - "Keypad ," is not mapped
  */
 
-typedef struct _kay_kbd_t
+struct kay_kbd_t
 {
-	device_t *beeper;
+	beep_device *beeper;
 	UINT8 buff[16];
 	UINT8 head;
 	UINT8 tail;
@@ -78,104 +78,104 @@ typedef struct _kay_kbd_t
 	int key;
 	int repeat;
 	int repeater;
-} kay_kbd_t;
+};
 
 INPUT_PORTS_START( kay_kbd )
 	PORT_START("ROW0")
-	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_ESC)			PORT_CHAR(UCHAR_MAMEKEY(ESC))
-	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_1)				PORT_CHAR('1') PORT_CHAR('!')
-	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_2)				PORT_CHAR('2') PORT_CHAR('@')
-	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_3) 			PORT_CHAR('3') PORT_CHAR('#')
-	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_4) 			PORT_CHAR('4') PORT_CHAR('$')
-	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_5) 			PORT_CHAR('5') PORT_CHAR('%')
-	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_6) 			PORT_CHAR('6') PORT_CHAR('^')
-	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_7)				PORT_CHAR('7') PORT_CHAR('&')
+	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_ESC)           PORT_CHAR(UCHAR_MAMEKEY(ESC))
+	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_1)             PORT_CHAR('1') PORT_CHAR('!')
+	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_2)             PORT_CHAR('2') PORT_CHAR('@')
+	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_3)             PORT_CHAR('3') PORT_CHAR('#')
+	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_4)             PORT_CHAR('4') PORT_CHAR('$')
+	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_5)             PORT_CHAR('5') PORT_CHAR('%')
+	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_6)             PORT_CHAR('6') PORT_CHAR('^')
+	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_7)             PORT_CHAR('7') PORT_CHAR('&')
 
 	PORT_START("ROW1")
-	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_8) 			PORT_CHAR('8') PORT_CHAR('*')
-	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_9) 			PORT_CHAR('9') PORT_CHAR('(')
-	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_0) 			PORT_CHAR('0') PORT_CHAR(')')
-	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_MINUS) 			PORT_CHAR('-') PORT_CHAR('_')
-	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_EQUALS)			PORT_CHAR('=') PORT_CHAR('+')
-	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_TILDE) 			PORT_CHAR('`') PORT_CHAR('~')
-	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_NAME("BACK SPACE")			PORT_CODE(KEYCODE_BACKSPACE) PORT_CHAR(8)
-	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_TAB)			PORT_CHAR('\t')
+	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_8)             PORT_CHAR('8') PORT_CHAR('*')
+	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_9)             PORT_CHAR('9') PORT_CHAR('(')
+	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_0)             PORT_CHAR('0') PORT_CHAR(')')
+	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_MINUS)             PORT_CHAR('-') PORT_CHAR('_')
+	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_EQUALS)            PORT_CHAR('=') PORT_CHAR('+')
+	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_TILDE)             PORT_CHAR('`') PORT_CHAR('~')
+	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_NAME("BACK SPACE")          PORT_CODE(KEYCODE_BACKSPACE) PORT_CHAR(8)
+	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_TAB)           PORT_CHAR('\t')
 
 	PORT_START("ROW2")
-	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_Q) 			PORT_CHAR('q') PORT_CHAR('Q')
-	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_W) 			PORT_CHAR('w') PORT_CHAR('W')
-	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_E) 			PORT_CHAR('e') PORT_CHAR('E')
-	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_R) 			PORT_CHAR('r') PORT_CHAR('R')
-	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_T) 			PORT_CHAR('t') PORT_CHAR('T')
-	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_Y) 			PORT_CHAR('y') PORT_CHAR('Y')
-	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_U) 			PORT_CHAR('u') PORT_CHAR('U')
-	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_I) 			PORT_CHAR('i') PORT_CHAR('I')
+	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_Q)             PORT_CHAR('q') PORT_CHAR('Q')
+	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_W)             PORT_CHAR('w') PORT_CHAR('W')
+	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_E)             PORT_CHAR('e') PORT_CHAR('E')
+	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_R)             PORT_CHAR('r') PORT_CHAR('R')
+	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_T)             PORT_CHAR('t') PORT_CHAR('T')
+	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_Y)             PORT_CHAR('y') PORT_CHAR('Y')
+	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_U)             PORT_CHAR('u') PORT_CHAR('U')
+	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_I)             PORT_CHAR('i') PORT_CHAR('I')
 
 	PORT_START("ROW3")
-	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_O) 			PORT_CHAR('o') PORT_CHAR('O')
-	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_P) 			PORT_CHAR('p') PORT_CHAR('P')
-	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_OPENBRACE)			PORT_CHAR('[') PORT_CHAR('{')
-	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_CLOSEBRACE)		PORT_CHAR(']') PORT_CHAR('}')
-	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_NAME("RETURN")				PORT_CODE(KEYCODE_ENTER) PORT_CHAR(13)
-	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_NAME("DEL") PORT_CODE(KEYCODE_DEL)	PORT_CHAR(UCHAR_MAMEKEY(DEL))
-	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_LCONTROL)			PORT_CHAR(UCHAR_SHIFT_2)
-	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_CAPSLOCK)			PORT_TOGGLE PORT_CHAR(UCHAR_MAMEKEY(CAPSLOCK))
+	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_O)             PORT_CHAR('o') PORT_CHAR('O')
+	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_P)             PORT_CHAR('p') PORT_CHAR('P')
+	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_OPENBRACE)         PORT_CHAR('[') PORT_CHAR('{')
+	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_CLOSEBRACE)        PORT_CHAR(']') PORT_CHAR('}')
+	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_NAME("RETURN")              PORT_CODE(KEYCODE_ENTER) PORT_CHAR(13)
+	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_NAME("DEL") PORT_CODE(KEYCODE_DEL)  PORT_CHAR(UCHAR_MAMEKEY(DEL))
+	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_LCONTROL)          PORT_CHAR(UCHAR_SHIFT_2)
+	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_CAPSLOCK)          PORT_TOGGLE PORT_CHAR(UCHAR_MAMEKEY(CAPSLOCK))
 
 	PORT_START("ROW4")
-	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_A) 			PORT_CHAR('a') PORT_CHAR('A')
-	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_S) 			PORT_CHAR('s') PORT_CHAR('S')
-	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_D) 			PORT_CHAR('d') PORT_CHAR('D')
-	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_F) 			PORT_CHAR('f') PORT_CHAR('F')
-	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_G) 			PORT_CHAR('g') PORT_CHAR('G')
-	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_H) 			PORT_CHAR('h') PORT_CHAR('H')
-	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_J) 			PORT_CHAR('j') PORT_CHAR('J')
-	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_K) 			PORT_CHAR('k') PORT_CHAR('K')
+	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_A)             PORT_CHAR('a') PORT_CHAR('A')
+	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_S)             PORT_CHAR('s') PORT_CHAR('S')
+	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_D)             PORT_CHAR('d') PORT_CHAR('D')
+	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_F)             PORT_CHAR('f') PORT_CHAR('F')
+	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_G)             PORT_CHAR('g') PORT_CHAR('G')
+	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_H)             PORT_CHAR('h') PORT_CHAR('H')
+	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_J)             PORT_CHAR('j') PORT_CHAR('J')
+	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_K)             PORT_CHAR('k') PORT_CHAR('K')
 
 	PORT_START("ROW5")
-	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_L) 			PORT_CHAR('l') PORT_CHAR('L')
-	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_COLON)			PORT_CHAR(';') PORT_CHAR(':')
-	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_QUOTE)			PORT_CHAR('\'') PORT_CHAR('"')
-	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_BACKSLASH)			PORT_CHAR('\\') PORT_CHAR('|')
-	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_LSHIFT)			PORT_CHAR(UCHAR_MAMEKEY(LSHIFT))
-	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_Z) 			PORT_CHAR('z') PORT_CHAR('Z')
-	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_X) 			PORT_CHAR('x') PORT_CHAR('X')
-	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_C) 			PORT_CHAR('c') PORT_CHAR('C')
+	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_L)             PORT_CHAR('l') PORT_CHAR('L')
+	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_COLON)         PORT_CHAR(';') PORT_CHAR(':')
+	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_QUOTE)         PORT_CHAR('\'') PORT_CHAR('"')
+	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_BACKSLASH)         PORT_CHAR('\\') PORT_CHAR('|')
+	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_LSHIFT)            PORT_CHAR(UCHAR_MAMEKEY(LSHIFT))
+	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_Z)             PORT_CHAR('z') PORT_CHAR('Z')
+	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_X)             PORT_CHAR('x') PORT_CHAR('X')
+	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_C)             PORT_CHAR('c') PORT_CHAR('C')
 
 	PORT_START("ROW6")
-	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_V) 			PORT_CHAR('v') PORT_CHAR('V')
-	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_B) 			PORT_CHAR('b') PORT_CHAR('B')
-	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_N) 			PORT_CHAR('n') PORT_CHAR('N')
-	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_M)				PORT_CHAR('m') PORT_CHAR('M')
-	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_COMMA)			PORT_CHAR(',') PORT_CHAR('<')
-	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_STOP)			PORT_CHAR('.') PORT_CHAR('>')
-	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_SLASH)			PORT_CHAR('/') PORT_CHAR('?')
-	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_RSHIFT)			PORT_CHAR(UCHAR_MAMEKEY(RSHIFT))
+	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_V)             PORT_CHAR('v') PORT_CHAR('V')
+	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_B)             PORT_CHAR('b') PORT_CHAR('B')
+	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_N)             PORT_CHAR('n') PORT_CHAR('N')
+	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_M)             PORT_CHAR('m') PORT_CHAR('M')
+	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_COMMA)         PORT_CHAR(',') PORT_CHAR('<')
+	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_STOP)          PORT_CHAR('.') PORT_CHAR('>')
+	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_SLASH)         PORT_CHAR('/') PORT_CHAR('?')
+	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_RSHIFT)            PORT_CHAR(UCHAR_MAMEKEY(RSHIFT))
 
 	PORT_START("ROW7")
-	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_NAME("LINE FEED")			PORT_CODE(KEYCODE_END) PORT_CHAR(UCHAR_MAMEKEY(END))
-	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_SPACE)			PORT_CHAR(' ')
-	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_MINUS_PAD)			PORT_CHAR(UCHAR_MAMEKEY(MINUS_PAD))
-	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_NAME("Keypad ,")			PORT_CODE(KEYCODE_PLUS_PAD)
-	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_ENTER_PAD)			PORT_CHAR(UCHAR_MAMEKEY(ENTER_PAD))
-	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_DEL_PAD)			PORT_CHAR(UCHAR_MAMEKEY(DEL_PAD))
-	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_0_PAD) 			PORT_CHAR(UCHAR_MAMEKEY(0_PAD))
-	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_1_PAD) 			PORT_CHAR(UCHAR_MAMEKEY(1_PAD))
+	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_NAME("LINE FEED")           PORT_CODE(KEYCODE_END) PORT_CHAR(UCHAR_MAMEKEY(END))
+	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_SPACE)         PORT_CHAR(' ')
+	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_MINUS_PAD)         PORT_CHAR(UCHAR_MAMEKEY(MINUS_PAD))
+	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_NAME("Keypad ,")            PORT_CODE(KEYCODE_PLUS_PAD)
+	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_ENTER_PAD)         PORT_CHAR(UCHAR_MAMEKEY(ENTER_PAD))
+	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_DEL_PAD)           PORT_CHAR(UCHAR_MAMEKEY(DEL_PAD))
+	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_0_PAD)             PORT_CHAR(UCHAR_MAMEKEY(0_PAD))
+	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_1_PAD)             PORT_CHAR(UCHAR_MAMEKEY(1_PAD))
 
 	PORT_START("ROW8")
-	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_2_PAD) 			PORT_CHAR(UCHAR_MAMEKEY(2_PAD))
-	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_3_PAD) 			PORT_CHAR(UCHAR_MAMEKEY(3_PAD))
-	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_4_PAD) 			PORT_CHAR(UCHAR_MAMEKEY(4_PAD))
-	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_5_PAD) 			PORT_CHAR(UCHAR_MAMEKEY(5_PAD))
-	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_6_PAD) 			PORT_CHAR(UCHAR_MAMEKEY(6_PAD))
-	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_7_PAD) 			PORT_CHAR(UCHAR_MAMEKEY(7_PAD))
-	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_8_PAD) 			PORT_CHAR(UCHAR_MAMEKEY(8_PAD))
-	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_9_PAD)			PORT_CHAR(UCHAR_MAMEKEY(9_PAD))
+	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_2_PAD)             PORT_CHAR(UCHAR_MAMEKEY(2_PAD))
+	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_3_PAD)             PORT_CHAR(UCHAR_MAMEKEY(3_PAD))
+	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_4_PAD)             PORT_CHAR(UCHAR_MAMEKEY(4_PAD))
+	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_5_PAD)             PORT_CHAR(UCHAR_MAMEKEY(5_PAD))
+	PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_6_PAD)             PORT_CHAR(UCHAR_MAMEKEY(6_PAD))
+	PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_7_PAD)             PORT_CHAR(UCHAR_MAMEKEY(7_PAD))
+	PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_8_PAD)             PORT_CHAR(UCHAR_MAMEKEY(8_PAD))
+	PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_9_PAD)         PORT_CHAR(UCHAR_MAMEKEY(9_PAD))
 
 	PORT_START("ROW9")
-	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_NAME("\xE2\x86\x91")			PORT_CODE(KEYCODE_UP) PORT_CHAR(UCHAR_MAMEKEY(UP))
-	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_NAME("\xE2\x86\x93")			PORT_CODE(KEYCODE_DOWN) PORT_CHAR(UCHAR_MAMEKEY(DOWN))
-	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_NAME("\xE2\x86\x90")			PORT_CODE(KEYCODE_LEFT) PORT_CHAR(UCHAR_MAMEKEY(LEFT))
-	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_NAME("\xE2\x86\x92")			PORT_CODE(KEYCODE_RIGHT) PORT_CHAR(UCHAR_MAMEKEY(RIGHT))
+	PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_NAME("\xE2\x86\x91")            PORT_CODE(KEYCODE_UP) PORT_CHAR(UCHAR_MAMEKEY(UP))
+	PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_NAME("\xE2\x86\x93")            PORT_CODE(KEYCODE_DOWN) PORT_CHAR(UCHAR_MAMEKEY(DOWN))
+	PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_NAME("\xE2\x86\x90")            PORT_CODE(KEYCODE_LEFT) PORT_CHAR(UCHAR_MAMEKEY(LEFT))
+	PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_NAME("\xE2\x86\x92")            PORT_CODE(KEYCODE_RIGHT) PORT_CHAR(UCHAR_MAMEKEY(RIGHT))
 	PORT_BIT(0xf0, 0x00, IPT_UNUSED)
 INPUT_PORTS_END
 
@@ -280,20 +280,19 @@ static const UINT8 keyboard[8][10][8] = {
 	},
 };
 
-MACHINE_RESET( kay_kbd )
+MACHINE_RESET_MEMBER(kaypro_state,kay_kbd)
 {
-	kaypro_state *state = machine.driver_data<kaypro_state>();
-	kay_kbd_t *kbd = state->m_kbd = auto_alloc_clear(machine, kay_kbd_t);
+	kay_kbd_t *kbd = m_kbd = auto_alloc_clear(machine(), kay_kbd_t);
 
 	/* disable CapsLock LED initially */
-	set_led_status(machine, 1, 1);
-	set_led_status(machine, 1, 0);
-	kbd->beeper = machine.device(BEEPER_TAG);
+	set_led_status(machine(), 1, 1);
+	set_led_status(machine(), 1, 0);
+	kbd->beeper = machine().device<beep_device>("beeper");
 	kbd->beep_on = 1;
 	kbd->control_status = 0x14;
-	beep_set_state(kbd->beeper, 0);
-	beep_set_frequency(kbd->beeper, 950);	/* piezo-device needs to be measured */
-	kbd->head = kbd->tail = 0;			/* init buffer */
+	kbd->beeper->set_state(0);
+	kbd->beeper->set_frequency(950);   /* piezo-device needs to be measured */
+	kbd->head = kbd->tail = 0;          /* init buffer */
 }
 
 /******************************************************
@@ -303,10 +302,9 @@ MACHINE_RESET( kay_kbd )
  * also drives keyboard LEDs and
  * and handles autorepeating keys
  ******************************************************/
-INTERRUPT_GEN( kay_kbd_interrupt )
+INTERRUPT_GEN_MEMBER(kaypro_state::kay_kbd_interrupt)
 {
-	kaypro_state *state = device->machine().driver_data<kaypro_state>();
-	kay_kbd_t *kbd = state->m_kbd;
+	kay_kbd_t *kbd = m_kbd;
 	int mod, row, col, chg, newval;
 	UINT8 *keyrows = kbd->keyrows;
 
@@ -322,18 +320,18 @@ INTERRUPT_GEN( kay_kbd_interrupt )
 	}
 
 	row = 9;
-	newval = input_port_read(device->machine(), "ROW9");
+	newval = machine().root_device().ioport("ROW9")->read();
 	chg = keyrows[row] ^ newval;
 
-	if (!chg) { newval = input_port_read(device->machine(), "ROW8"); chg = keyrows[--row] ^ newval; }
-	if (!chg) { newval = input_port_read(device->machine(), "ROW7"); chg = keyrows[--row] ^ newval; }
-	if (!chg) { newval = input_port_read(device->machine(), "ROW6"); chg = keyrows[--row] ^ newval; }
-	if (!chg) { newval = input_port_read(device->machine(), "ROW5"); chg = keyrows[--row] ^ newval; }
-	if (!chg) { newval = input_port_read(device->machine(), "ROW4"); chg = keyrows[--row] ^ newval; }
-	if (!chg) { newval = input_port_read(device->machine(), "ROW3"); chg = keyrows[--row] ^ newval; }
-	if (!chg) { newval = input_port_read(device->machine(), "ROW2"); chg = keyrows[--row] ^ newval; }
-	if (!chg) { newval = input_port_read(device->machine(), "ROW1"); chg = keyrows[--row] ^ newval; }
-	if (!chg) { newval = input_port_read(device->machine(), "ROW0"); chg = keyrows[--row] ^ newval; }
+	if (!chg) { newval = machine().root_device().ioport("ROW8")->read(); chg = keyrows[--row] ^ newval; }
+	if (!chg) { newval = machine().root_device().ioport("ROW7")->read(); chg = keyrows[--row] ^ newval; }
+	if (!chg) { newval = machine().root_device().ioport("ROW6")->read(); chg = keyrows[--row] ^ newval; }
+	if (!chg) { newval = machine().root_device().ioport("ROW5")->read(); chg = keyrows[--row] ^ newval; }
+	if (!chg) { newval = machine().root_device().ioport("ROW4")->read(); chg = keyrows[--row] ^ newval; }
+	if (!chg) { newval = machine().root_device().ioport("ROW3")->read(); chg = keyrows[--row] ^ newval; }
+	if (!chg) { newval = machine().root_device().ioport("ROW2")->read(); chg = keyrows[--row] ^ newval; }
+	if (!chg) { newval = machine().root_device().ioport("ROW1")->read(); chg = keyrows[--row] ^ newval; }
+	if (!chg) { newval = machine().root_device().ioport("ROW0")->read(); chg = keyrows[--row] ^ newval; }
 	if (!chg) --row;
 
 	if (row >= 0)
@@ -344,9 +342,9 @@ INTERRUPT_GEN( kay_kbd_interrupt )
 		kbd->lastrow = row;
 		/* CapsLock LED */
 		if( row == 3 && chg == 0x80 )
-			set_led_status(device->machine(), 1, (kbd->keyrows[3] & 0x80) ? 0 : 1);
+			set_led_status(machine(), 1, (kbd->keyrows[3] & 0x80) ? 0 : 1);
 
-		if (newval & chg)	/* key(s) pressed ? */
+		if (newval & chg)   /* key(s) pressed ? */
 		{
 			mod = 0;
 
@@ -374,14 +372,14 @@ INTERRUPT_GEN( kay_kbd_interrupt )
 				}
 				kbd->mask <<= 1;
 			}
-			if( kbd->key )	/* normal key */
+			if( kbd->key )  /* normal key */
 			{
 				kbd->repeater = 30;
-				kay_kbd_in(device->machine(), kbd->key);
+				kay_kbd_in(machine(), kbd->key);
 			}
 			else
 			if( (row == 0) && (chg == 0x04) ) /* Ctrl-@ (NUL) */
-				kay_kbd_in(device->machine(), 0);
+				kay_kbd_in(machine(), 0);
 			keyrows[row] |= newval;
 		}
 		else
@@ -392,7 +390,7 @@ INTERRUPT_GEN( kay_kbd_interrupt )
 	}
 	else if ( kbd->key && (keyrows[kbd->lastrow] & kbd->mask) && kbd->repeat == 0 )
 	{
-		kay_kbd_in(device->machine(), kbd->key);
+		kay_kbd_in(machine(), kbd->key);
 	}
 }
 
@@ -473,7 +471,7 @@ static TIMER_CALLBACK( kay_kbd_beepoff )
 {
 	kaypro_state *state = machine.driver_data<kaypro_state>();
 	kay_kbd_t *kbd = state->m_kbd;
-	beep_set_state(kbd->beeper, 0);
+	kbd->beeper->set_state(0);
 	kbd->control_status |= 4;
 }
 
@@ -511,7 +509,7 @@ void kay_kbd_d_w( running_machine &machine, UINT8 data )
 		{
 			kbd->control_status &= 0xfb;
 			machine.scheduler().timer_set(attotime::from_msec(length), FUNC(kay_kbd_beepoff));
-			beep_set_state(kbd->beeper, 1);
+			kbd->beeper->set_state(1);
 		}
 	}
 }

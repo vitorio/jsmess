@@ -8,14 +8,20 @@ class blueprnt_state : public driver_device
 {
 public:
 	blueprnt_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_audiocpu(*this, "audiocpu"),
+		m_videoram(*this, "videoram"),
+		m_scrollram(*this, "scrollram"),
+		m_spriteram(*this, "spriteram"),
+		m_colorram(*this, "colorram"),
+		m_maincpu(*this, "maincpu") { }
 
-	/* memory pointers */
-	UINT8 * m_videoram;
-	UINT8 * m_colorram;
-	UINT8 * m_spriteram;
-	UINT8 * m_scrollram;
-	size_t  m_spriteram_size;
+	/* device/memory pointers */
+	required_device<cpu_device> m_audiocpu;
+	required_shared_ptr<UINT8> m_videoram;
+	required_shared_ptr<UINT8> m_scrollram;
+	required_shared_ptr<UINT8> m_spriteram;
+	required_shared_ptr<UINT8> m_colorram;
 
 	/* video-related */
 	tilemap_t *m_bg_tilemap;
@@ -24,17 +30,20 @@ public:
 	/* misc */
 	int     m_dipsw;
 
-	/* devices */
-	device_t *m_audiocpu;
+	DECLARE_READ8_MEMBER(blueprnt_sh_dipsw_r);
+	DECLARE_READ8_MEMBER(grasspin_sh_dipsw_r);
+	DECLARE_WRITE8_MEMBER(blueprnt_sound_command_w);
+	DECLARE_WRITE8_MEMBER(blueprnt_coin_counter_w);
+	DECLARE_WRITE8_MEMBER(blueprnt_videoram_w);
+	DECLARE_WRITE8_MEMBER(blueprnt_colorram_w);
+	DECLARE_WRITE8_MEMBER(blueprnt_flipscreen_w);
+	DECLARE_WRITE8_MEMBER(dipsw_w);
+	TILE_GET_INFO_MEMBER(get_bg_tile_info);
+	virtual void machine_start();
+	virtual void machine_reset();
+	DECLARE_VIDEO_START(blueprnt);
+	virtual void palette_init();
+	UINT32 screen_update_blueprnt(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	void draw_sprites( bitmap_ind16 &bitmap, const rectangle &cliprect );
+	required_device<cpu_device> m_maincpu;
 };
-
-
-/*----------- defined in video/blueprnt.c -----------*/
-
-WRITE8_HANDLER( blueprnt_videoram_w );
-WRITE8_HANDLER( blueprnt_colorram_w );
-WRITE8_HANDLER( blueprnt_flipscreen_w );
-
-PALETTE_INIT( blueprnt );
-VIDEO_START( blueprnt );
-SCREEN_UPDATE( blueprnt );

@@ -1,46 +1,13 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 //============================================================
 //
 //  window.c - Win32 window handling
 //
 //============================================================
-//
-//  Copyright Aaron Giles
-//  All rights reserved.
-//
-//  Redistribution and use in source and binary forms, with or
-//  without modification, are permitted provided that the
-//  following conditions are met:
-//
-//    * Redistributions of source code must retain the above
-//      copyright notice, this list of conditions and the
-//      following disclaimer.
-//    * Redistributions in binary form must reproduce the
-//      above copyright notice, this list of conditions and
-//      the following disclaimer in the documentation and/or
-//      other materials provided with the distribution.
-//    * Neither the name 'MAME' nor the names of its
-//      contributors may be used to endorse or promote
-//      products derived from this software without specific
-//      prior written permission.
-//
-//  THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND
-//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-//  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
-//  FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
-//  EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-//  DAMAGE (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-//  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-//  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-//  ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-//  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-//  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-//  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-//============================================================
 
-#define LOG_THREADS			0
-#define LOG_TEMP_PAUSE		0
+#define LOG_THREADS         0
+#define LOG_TEMP_PAUSE      0
 
 // Needed for RAW Input
 #define WM_INPUT 0x00FF
@@ -80,29 +47,29 @@ extern int drawd3d_init(running_machine &machine, win_draw_callbacks *callbacks)
 //============================================================
 
 // window styles
-#define WINDOW_STYLE					WS_OVERLAPPEDWINDOW
-#define WINDOW_STYLE_EX					0
+#define WINDOW_STYLE                    WS_OVERLAPPEDWINDOW
+#define WINDOW_STYLE_EX                 0
 
 // debugger window styles
-#define DEBUG_WINDOW_STYLE				WS_OVERLAPPED
-#define DEBUG_WINDOW_STYLE_EX			0
+#define DEBUG_WINDOW_STYLE              WS_OVERLAPPED
+#define DEBUG_WINDOW_STYLE_EX           0
 
 // full screen window styles
-#define FULLSCREEN_STYLE				WS_POPUP
-#define FULLSCREEN_STYLE_EX				WS_EX_TOPMOST
+#define FULLSCREEN_STYLE                WS_POPUP
+#define FULLSCREEN_STYLE_EX             WS_EX_TOPMOST
 
 // minimum window dimension
-#define MIN_WINDOW_DIM					200
+#define MIN_WINDOW_DIM                  200
 
 // custom window messages
-#define WM_USER_FINISH_CREATE_WINDOW	(WM_USER + 0)
-#define WM_USER_SELF_TERMINATE			(WM_USER + 1)
-#define WM_USER_REDRAW					(WM_USER + 2)
-#define WM_USER_SET_FULLSCREEN			(WM_USER + 3)
-#define WM_USER_SET_MAXSIZE				(WM_USER + 4)
-#define WM_USER_SET_MINSIZE				(WM_USER + 5)
-#define WM_USER_UI_TEMP_PAUSE			(WM_USER + 6)
-#define WM_USER_EXEC_FUNC				(WM_USER + 7)
+#define WM_USER_FINISH_CREATE_WINDOW    (WM_USER + 0)
+#define WM_USER_SELF_TERMINATE          (WM_USER + 1)
+#define WM_USER_REDRAW                  (WM_USER + 2)
+#define WM_USER_SET_FULLSCREEN          (WM_USER + 3)
+#define WM_USER_SET_MAXSIZE             (WM_USER + 4)
+#define WM_USER_SET_MINSIZE             (WM_USER + 5)
+#define WM_USER_UI_TEMP_PAUSE           (WM_USER + 6)
+#define WM_USER_EXEC_FUNC               (WM_USER + 7)
 
 
 
@@ -173,18 +140,18 @@ static void set_fullscreen(win_window_info *window, int fullscreen);
 
 // temporary hacks
 #if LOG_THREADS
-struct _mtlog
+struct mtlog
 {
-	osd_ticks_t	timestamp;
+	osd_ticks_t timestamp;
 	const char *event;
 };
 
-static struct _mtlog mtlog[100000];
+static mtlog mtlog[100000];
 static volatile LONG mtlogindex;
 
 void mtlog_add(const char *event)
 {
-	int index = InterlockedIncrement((LONG *) &mtlogindex) - 1;
+	int index = atomic_increment32((LONG *) &mtlogindex) - 1;
 	if (index < ARRAY_LENGTH(mtlog))
 	{
 		mtlog[index].timestamp = osd_ticks();
@@ -238,7 +205,7 @@ void winwindow_init(running_machine &machine)
 	// create an event to signal UI pausing
 	ui_pause_event = CreateEvent(NULL, TRUE, FALSE, NULL);
 	if (!ui_pause_event)
-		fatalerror("Failed to create pause event");
+		fatalerror("Failed to create pause event\n");
 
 	// if multithreading, create a thread to run the windows
 	if (multithreading_enabled)
@@ -246,13 +213,13 @@ void winwindow_init(running_machine &machine)
 		// create an event to signal when the window thread is ready
 		window_thread_ready_event = CreateEvent(NULL, TRUE, FALSE, NULL);
 		if (!window_thread_ready_event)
-			fatalerror("Failed to create window thread ready event");
+			fatalerror("Failed to create window thread ready event\n");
 
 		// create a thread to run the windows from
 		temp = _beginthreadex(NULL, 0, thread_entry, NULL, 0, (unsigned *)&window_threadid);
 		window_thread = (HANDLE)temp;
 		if (window_thread == NULL)
-			fatalerror("Failed to create window thread");
+			fatalerror("Failed to create window thread\n");
 
 		// set the thread priority equal to the main MAME thread
 		SetThreadPriority(window_thread, GetThreadPriority(GetCurrentThread()));
@@ -295,10 +262,6 @@ void winwindow_init(running_machine &machine)
 static void winwindow_exit(running_machine &machine)
 {
 	assert(GetCurrentThreadId() == main_threadid);
-
-	// possibly kill the debug window
-	if (machine.debug_flags & DEBUG_FLAG_OSD_ENABLED)
-		debugwin_destroy_windows();
 
 	// free all the windows
 	while (win_window_list != NULL)
@@ -348,7 +311,7 @@ void winwindow_process_events_periodic(running_machine &machine)
 	// update once every 1/8th of a second
 	if (currticks - last_event_check < 1000 / 8)
 		return;
-	winwindow_process_events(machine, TRUE);
+	winwindow_process_events(machine, TRUE, FALSE);
 }
 
 
@@ -375,7 +338,7 @@ static BOOL is_mame_window(HWND hwnd)
 //  (main thread)
 //============================================================
 
-void winwindow_process_events(running_machine &machine, int ingame)
+void winwindow_process_events(running_machine &machine, int ingame, bool nodispatch)
 {
 	MSG message;
 
@@ -397,10 +360,12 @@ void winwindow_process_events(running_machine &machine, int ingame)
 		// loop over all messages in the queue
 		while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
 		{
-			int dispatch = TRUE;
+			// prevent debugger windows from getting messages during reset
+			int dispatch = TRUE && !nodispatch;
 
 			if (message.hwnd == NULL || is_mame_window(message.hwnd))
 			{
+				dispatch = TRUE;
 				switch (message.message)
 				{
 					// ignore keyboard messages
@@ -522,6 +487,29 @@ void winwindow_take_snap(void)
 
 
 //============================================================
+//  winwindow_toggle_fsfx
+//  (main thread)
+//============================================================
+
+void winwindow_toggle_fsfx(void)
+{
+	if (draw.window_toggle_fsfx == NULL)
+		return;
+
+	win_window_info *window;
+
+	assert(GetCurrentThreadId() == main_threadid);
+
+	// iterate over windows and request a snap
+	for (window = win_window_list; window != NULL; window = window->next)
+	{
+		(*draw.window_toggle_fsfx)(window);
+	}
+}
+
+
+
+//============================================================
 //  winwindow_take_video
 //  (main thread)
 //============================================================
@@ -601,7 +589,7 @@ void winwindow_update_cursor_state(running_machine &machine)
 
 	assert(GetCurrentThreadId() == main_threadid);
 
-	// if we should hide the mouse, then do it
+	// if we should hide the mouse cursor, then do it
 	// rules are:
 	//   1. we must have focus before hiding the cursor
 	//   2. we also hide the cursor in full screen mode and when the window doesn't have a menu
@@ -656,6 +644,7 @@ void winwindow_video_window_create(running_machine &machine, int index, win_moni
 
 	// allocate a new window object
 	window = global_alloc_clear(win_window_info(machine));
+	//printf("%d, %d\n", config->width, config->height);
 	window->maxwidth = config->width;
 	window->maxheight = config->height;
 	window->refresh = config->refresh;
@@ -689,9 +678,9 @@ void winwindow_video_window_create(running_machine &machine, int index, win_moni
 
 	// make the window title
 	if (video_config.numscreens == 1)
-		sprintf(window->title, APPNAME ": %s [%s]", machine.system().description, machine.system().name);
+		sprintf(window->title, "%s: %s [%s]", emulator_info::get_appname(), machine.system().description, machine.system().name);
 	else
-		sprintf(window->title, APPNAME ": %s [%s] - Screen %d", machine.system().description, machine.system().name, index);
+		sprintf(window->title, "%s: %s [%s] - Screen %d", emulator_info::get_appname(), machine.system().description, machine.system().name, index);
 
 	// set the initial maximized state
 	window->startmaximized = options.maximize();
@@ -704,14 +693,17 @@ void winwindow_video_window_create(running_machine &machine, int index, win_moni
 
 		PostThreadMessage(window_threadid, WM_USER_FINISH_CREATE_WINDOW, 0, (LPARAM)window);
 		while (window->init_state == 0)
+		{
+			winwindow_process_events(machine, 0, 1); //pump the message queue
 			Sleep(1);
+		}
 	}
 	else
 		window->init_state = complete_create(window) ? -1 : 1;
 
 	// handle error conditions
 	if (window->init_state == -1)
-		fatalerror("Unable to complete window creation");
+		fatalerror("Unable to complete window creation\n");
 }
 
 
@@ -872,15 +864,15 @@ static void create_window_class(void)
 		WNDCLASS wc = { 0 };
 
 		// initialize the description of the window class
-		wc.lpszClassName	= TEXT("MAME");
-		wc.hInstance		= GetModuleHandle(NULL);
-		wc.lpfnWndProc		= winwindow_video_window_proc_ui;
-		wc.hCursor			= LoadCursor(NULL, IDC_ARROW);
-		wc.hIcon			= LoadIcon(NULL, IDI_APPLICATION);
+		wc.lpszClassName    = TEXT("MAME");
+		wc.hInstance        = GetModuleHandle(NULL);
+		wc.lpfnWndProc      = winwindow_video_window_proc_ui;
+		wc.hCursor          = LoadCursor(NULL, IDC_ARROW);
+		wc.hIcon            = LoadIcon(wc.hInstance, MAKEINTRESOURCE(2));
 
 		// register the class; fail if we can't
 		if (!RegisterClass(&wc))
-			fatalerror("Failed to create window class");
+			fatalerror("Failed to create window class\n");
 		classes_created = TRUE;
 	}
 }
@@ -1903,3 +1895,23 @@ static void set_fullscreen(win_window_info *window, int fullscreen)
 	// ensure we're still adjusted correctly
 	adjust_window_position_after_major_change(window);
 }
+
+#ifdef USE_QTDEBUG
+bool winwindow_qt_filter(void *message)
+{
+	MSG *msg = (MSG *)message;
+
+	if(is_mame_window(msg->hwnd) || (!msg->hwnd && (msg->message >= WM_USER)))
+	{
+		LONG_PTR ptr;
+		if(msg->hwnd) // get the machine associated with this window
+			ptr = GetWindowLongPtr(msg->hwnd, GWLP_USERDATA);
+		else // any one will have to do
+			ptr = (LONG_PTR)win_window_list;
+
+		winwindow_dispatch_message(((win_window_info *)ptr)->machine(), msg);
+		return true;
+	}
+	return false;
+}
+#endif

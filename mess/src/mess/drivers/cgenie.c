@@ -38,49 +38,49 @@ NMI
 #include "formats/cgen_cas.h"
 #include "machine/ram.h"
 
-static ADDRESS_MAP_START (cgenie_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START (cgenie_mem, AS_PROGRAM, 8, cgenie_state )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 //  AM_RANGE(0x4000, 0xbfff) AM_RAM // set up in MACHINE_START
 //  AM_RANGE(0xc000, 0xdfff) AM_ROM // installed in cgenie_init_machine
 //  AM_RANGE(0xe000, 0xefff) AM_ROM // installed in cgenie_init_machine
-	AM_RANGE(0xf000, 0xf3ff) AM_READWRITE( cgenie_colorram_r, cgenie_colorram_w ) AM_BASE_MEMBER(cgenie_state, m_colorram )
-	AM_RANGE(0xf400, 0xf7ff) AM_READWRITE( cgenie_fontram_r, cgenie_fontram_w) AM_BASE_MEMBER(cgenie_state, m_fontram )
-	AM_RANGE(0xf800, 0xf8ff) AM_READ( cgenie_keyboard_r )
+	AM_RANGE(0xf000, 0xf3ff) AM_READWRITE(cgenie_colorram_r, cgenie_colorram_w ) AM_SHARE("colorram")
+	AM_RANGE(0xf400, 0xf7ff) AM_READWRITE(cgenie_fontram_r, cgenie_fontram_w) AM_SHARE("fontram")
+	AM_RANGE(0xf800, 0xf8ff) AM_READ(cgenie_keyboard_r )
 	AM_RANGE(0xf900, 0xffdf) AM_NOP
-	AM_RANGE(0xffe0, 0xffe3) AM_READWRITE( cgenie_irq_status_r, cgenie_motor_w )
+	AM_RANGE(0xffe0, 0xffe3) AM_READWRITE(cgenie_irq_status_r, cgenie_motor_w )
 	AM_RANGE(0xffe4, 0xffeb) AM_NOP
-	AM_RANGE(0xffec, 0xffec) AM_READWRITE( cgenie_status_r, cgenie_command_w )
+	AM_RANGE(0xffec, 0xffec) AM_READWRITE(cgenie_status_r, cgenie_command_w )
 	AM_RANGE(0xffe4, 0xffeb) AM_NOP
-	AM_RANGE(0xffec, 0xffec) AM_WRITE( cgenie_command_w )
-	AM_RANGE(0xffed, 0xffed) AM_READWRITE( cgenie_track_r, cgenie_track_w )
-	AM_RANGE(0xffee, 0xffee) AM_READWRITE( cgenie_sector_r, cgenie_sector_w )
-	AM_RANGE(0xffef, 0xffef) AM_READWRITE( cgenie_data_r, cgenie_data_w )
+	AM_RANGE(0xffec, 0xffec) AM_WRITE(cgenie_command_w )
+	AM_RANGE(0xffed, 0xffed) AM_READWRITE(cgenie_track_r, cgenie_track_w )
+	AM_RANGE(0xffee, 0xffee) AM_READWRITE(cgenie_sector_r, cgenie_sector_w )
+	AM_RANGE(0xffef, 0xffef) AM_READWRITE(cgenie_data_r, cgenie_data_w )
 	AM_RANGE(0xfff0, 0xffff) AM_NOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START (cgenie_io, AS_IO, 8)
+static ADDRESS_MAP_START (cgenie_io, AS_IO, 8, cgenie_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0xf8, 0xf8) AM_DEVREADWRITE("ay8910", cgenie_sh_control_port_r, cgenie_sh_control_port_w )
-	AM_RANGE(0xf9, 0xf9) AM_DEVREADWRITE("ay8910", ay8910_r, ay8910_data_w )
-	AM_RANGE(0xfa, 0xfa) AM_READWRITE( cgenie_index_r, cgenie_index_w )
-	AM_RANGE(0xfb, 0xfb) AM_READWRITE( cgenie_register_r, cgenie_register_w )
-	AM_RANGE(0xff, 0xff) AM_READWRITE( cgenie_port_ff_r, cgenie_port_ff_w )
+	AM_RANGE(0xf8, 0xf8) AM_READWRITE(cgenie_sh_control_port_r, cgenie_sh_control_port_w )
+	AM_RANGE(0xf9, 0xf9) AM_DEVREADWRITE("ay8910", ay8910_device, data_r, data_w)
+	AM_RANGE(0xfa, 0xfa) AM_READWRITE(cgenie_index_r, cgenie_index_w )
+	AM_RANGE(0xfb, 0xfb) AM_READWRITE(cgenie_register_r, cgenie_register_w )
+	AM_RANGE(0xff, 0xff) AM_READWRITE(cgenie_port_ff_r, cgenie_port_ff_w )
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( cgenie )
 	PORT_START("DSW0")
 	PORT_DIPNAME( 0x80, 0x80, "Floppy Disc Drives")
-	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x80, DEF_STR( On ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 	PORT_DIPNAME( 0x40, 0x40, "CG-DOS ROM C000-DFFF")
-	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x40, DEF_STR( On ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
 	PORT_DIPNAME( 0x20, 0x00, "Extension  E000-EFFF")
-	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x20, DEF_STR( On ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
 	PORT_DIPNAME( 0x10, 0x10, "Video Display accuracy") PORT_CODE(KEYCODE_F5) PORT_TOGGLE
-	PORT_DIPSETTING(	0x10, "TV set" )
-	PORT_DIPSETTING(	0x00, "RGB monitor" )
+	PORT_DIPSETTING(    0x10, "TV set" )
+	PORT_DIPSETTING(    0x00, "RGB monitor" )
 	PORT_BIT(0x0f, 0x0f, IPT_UNUSED)
 
 /**************************************************************************
@@ -106,78 +106,78 @@ static INPUT_PORTS_START( cgenie )
 ***************************************************************************/
 
 	PORT_START("ROW0")
-		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_OPENBRACE)		PORT_CHAR('@') PORT_CHAR('`')
-		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_A)				PORT_CHAR('a') PORT_CHAR('A')
-		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_B) 			PORT_CHAR('b') PORT_CHAR('B')
-		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_C) 			PORT_CHAR('c') PORT_CHAR('C')
-		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_D) 			PORT_CHAR('d') PORT_CHAR('D')
-		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_E) 			PORT_CHAR('e') PORT_CHAR('E')
-		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_F) 			PORT_CHAR('f') PORT_CHAR('F')
-		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_G) 			PORT_CHAR('g') PORT_CHAR('G')
+		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_OPENBRACE)     PORT_CHAR('@') PORT_CHAR('`')
+		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_A)             PORT_CHAR('a') PORT_CHAR('A')
+		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_B)             PORT_CHAR('b') PORT_CHAR('B')
+		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_C)             PORT_CHAR('c') PORT_CHAR('C')
+		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_D)             PORT_CHAR('d') PORT_CHAR('D')
+		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_E)             PORT_CHAR('e') PORT_CHAR('E')
+		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_F)             PORT_CHAR('f') PORT_CHAR('F')
+		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_G)             PORT_CHAR('g') PORT_CHAR('G')
 
 	PORT_START("ROW1")
-		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_H) 			PORT_CHAR('h') PORT_CHAR('H')
-		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_I) 			PORT_CHAR('i') PORT_CHAR('I')
-		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_J) 			PORT_CHAR('j') PORT_CHAR('J')
-		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_K) 			PORT_CHAR('k') PORT_CHAR('K')
-		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_L) 			PORT_CHAR('l') PORT_CHAR('L')
-		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_M) 			PORT_CHAR('m') PORT_CHAR('M')
-		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_N) 			PORT_CHAR('n') PORT_CHAR('N')
-		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_O) 			PORT_CHAR('o') PORT_CHAR('O')
+		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_H)             PORT_CHAR('h') PORT_CHAR('H')
+		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_I)             PORT_CHAR('i') PORT_CHAR('I')
+		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_J)             PORT_CHAR('j') PORT_CHAR('J')
+		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_K)             PORT_CHAR('k') PORT_CHAR('K')
+		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_L)             PORT_CHAR('l') PORT_CHAR('L')
+		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_M)             PORT_CHAR('m') PORT_CHAR('M')
+		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_N)             PORT_CHAR('n') PORT_CHAR('N')
+		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_O)             PORT_CHAR('o') PORT_CHAR('O')
 
 	PORT_START("ROW2")
-		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_P) 			PORT_CHAR('p') PORT_CHAR('P')
-		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_Q) 			PORT_CHAR('q') PORT_CHAR('Q')
-		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_R) 			PORT_CHAR('r') PORT_CHAR('R')
-		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_S) 			PORT_CHAR('s') PORT_CHAR('S')
-		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_T) 			PORT_CHAR('t') PORT_CHAR('T')
-		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_U) 			PORT_CHAR('u') PORT_CHAR('U')
-		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_V) 			PORT_CHAR('v') PORT_CHAR('V')
-		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_W) 			PORT_CHAR('w') PORT_CHAR('W')
+		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_P)             PORT_CHAR('p') PORT_CHAR('P')
+		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_Q)             PORT_CHAR('q') PORT_CHAR('Q')
+		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_R)             PORT_CHAR('r') PORT_CHAR('R')
+		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_S)             PORT_CHAR('s') PORT_CHAR('S')
+		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_T)             PORT_CHAR('t') PORT_CHAR('T')
+		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_U)             PORT_CHAR('u') PORT_CHAR('U')
+		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_V)             PORT_CHAR('v') PORT_CHAR('V')
+		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_W)             PORT_CHAR('w') PORT_CHAR('W')
 
 	PORT_START("ROW3")
-		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_X) 			PORT_CHAR('x') PORT_CHAR('X')
-		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_Y) 			PORT_CHAR('y') PORT_CHAR('Y')
-		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_Z) 			PORT_CHAR('z') PORT_CHAR('Z')
+		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_X)             PORT_CHAR('x') PORT_CHAR('X')
+		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_Y)             PORT_CHAR('y') PORT_CHAR('Y')
+		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_Z)             PORT_CHAR('z') PORT_CHAR('Z')
 		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_NAME("[  { (Not Connected)") PORT_CHAR('[') PORT_CHAR('{')
-		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_F1)			PORT_CHAR(UCHAR_MAMEKEY(F1)) PORT_CHAR(UCHAR_MAMEKEY(F5))
-		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_F2)			PORT_CHAR(UCHAR_MAMEKEY(F2)) PORT_CHAR(UCHAR_MAMEKEY(F6))
-		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_F3)			PORT_CHAR(UCHAR_MAMEKEY(F3)) PORT_CHAR(UCHAR_MAMEKEY(F7))
-		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_F4)			PORT_CHAR(UCHAR_MAMEKEY(F4)) PORT_CHAR(UCHAR_MAMEKEY(F8))
+		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_F1)            PORT_CHAR(UCHAR_MAMEKEY(F1)) PORT_CHAR(UCHAR_MAMEKEY(F5))
+		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_F2)            PORT_CHAR(UCHAR_MAMEKEY(F2)) PORT_CHAR(UCHAR_MAMEKEY(F6))
+		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_F3)            PORT_CHAR(UCHAR_MAMEKEY(F3)) PORT_CHAR(UCHAR_MAMEKEY(F7))
+		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_F4)            PORT_CHAR(UCHAR_MAMEKEY(F4)) PORT_CHAR(UCHAR_MAMEKEY(F8))
 
 	PORT_START("ROW4")
-		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_0) 			PORT_CHAR('0')
-		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_1) 			PORT_CHAR('1') PORT_CHAR('!')
-		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_2) 			PORT_CHAR('2') PORT_CHAR('"')
-		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_3) 			PORT_CHAR('3') PORT_CHAR('#')
-		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_4) 			PORT_CHAR('4') PORT_CHAR('$')
-		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_5) 			PORT_CHAR('5') PORT_CHAR('%')
-		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_6) 			PORT_CHAR('6') PORT_CHAR('&')
-		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_7) 			PORT_CHAR('7') PORT_CHAR('\'')
+		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_0)             PORT_CHAR('0')
+		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_1)             PORT_CHAR('1') PORT_CHAR('!')
+		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_2)             PORT_CHAR('2') PORT_CHAR('"')
+		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_3)             PORT_CHAR('3') PORT_CHAR('#')
+		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_4)             PORT_CHAR('4') PORT_CHAR('$')
+		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_5)             PORT_CHAR('5') PORT_CHAR('%')
+		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_6)             PORT_CHAR('6') PORT_CHAR('&')
+		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_7)             PORT_CHAR('7') PORT_CHAR('\'')
 
 	PORT_START("ROW5")
-		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_8) 			PORT_CHAR('8') PORT_CHAR('(')
-		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_9) 			PORT_CHAR('9') PORT_CHAR(')')
-		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_MINUS) 		PORT_CHAR(':') PORT_CHAR('*')
-		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_COLON) 		PORT_CHAR(';') PORT_CHAR('+')
-		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_COMMA) 		PORT_CHAR(',') PORT_CHAR('<')
-		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_QUOTE) 		PORT_CHAR('-') PORT_CHAR('=')
-		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_STOP)			PORT_CHAR('.') PORT_CHAR('>')
-		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_SLASH) 		PORT_CHAR('/') PORT_CHAR('?')
+		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_8)             PORT_CHAR('8') PORT_CHAR('(')
+		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_9)             PORT_CHAR('9') PORT_CHAR(')')
+		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_MINUS)         PORT_CHAR(':') PORT_CHAR('*')
+		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_COLON)         PORT_CHAR(';') PORT_CHAR('+')
+		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_COMMA)         PORT_CHAR(',') PORT_CHAR('<')
+		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_QUOTE)         PORT_CHAR('-') PORT_CHAR('=')
+		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_STOP)          PORT_CHAR('.') PORT_CHAR('>')
+		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_SLASH)         PORT_CHAR('/') PORT_CHAR('?')
 
 	PORT_START("ROW6")
-		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_ENTER)			PORT_CHAR(13)
+		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_ENTER)         PORT_CHAR(13)
 		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_NAME("Clear") PORT_CODE(KEYCODE_EQUALS) PORT_CHAR(UCHAR_MAMEKEY(F10))
 		PORT_BIT(0x04, 0x00, IPT_KEYBOARD) PORT_NAME("Break") PORT_CODE(KEYCODE_BACKSLASH2) PORT_CHAR(UCHAR_MAMEKEY(ESC))
-		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_UP)			PORT_CHAR(UCHAR_MAMEKEY(UP))
-		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_DOWN)			PORT_CHAR(UCHAR_MAMEKEY(DOWN))
-		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_LEFT)			PORT_CHAR(UCHAR_MAMEKEY(LEFT))
-		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_RIGHT)			PORT_CHAR(UCHAR_MAMEKEY(RIGHT))
-		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_SPACE)			PORT_CHAR(' ')
+		PORT_BIT(0x08, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_UP)            PORT_CHAR(UCHAR_MAMEKEY(UP))
+		PORT_BIT(0x10, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_DOWN)          PORT_CHAR(UCHAR_MAMEKEY(DOWN))
+		PORT_BIT(0x20, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_LEFT)          PORT_CHAR(UCHAR_MAMEKEY(LEFT))
+		PORT_BIT(0x40, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_RIGHT)         PORT_CHAR(UCHAR_MAMEKEY(RIGHT))
+		PORT_BIT(0x80, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_SPACE)         PORT_CHAR(' ')
 
 	/* 2008-05 FP: Below we still miss a 'Lock' key, two 'Rst' keys (used in pair, they should restart the
-    system) and, I guess, two unused inputs (according to the user manual, there are no other keys on the
-    keyboard)  */
+	system) and, I guess, two unused inputs (according to the user manual, there are no other keys on the
+	keyboard)  */
 	PORT_START("ROW7")
 		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_CODE(KEYCODE_LSHIFT) PORT_CODE(KEYCODE_LSHIFT) PORT_CHAR(UCHAR_SHIFT_1)
 		PORT_BIT(0x02, 0x00, IPT_KEYBOARD) PORT_NAME("Mod Sel") PORT_CODE(KEYCODE_LALT)  PORT_CHAR(UCHAR_MAMEKEY(F9))
@@ -213,10 +213,10 @@ static INPUT_PORTS_START( cgenie )
 	/* FB/DF  2  [1] [4] [7] [*]  */
 
 	/* 2008-05 FP: temporarily I mapped these as follows:
-        - Joy 1 at Keypad
-        - Joy 2 at a Joystick buttons
-    A better mapping would be needed...
-    */
+	    - Joy 1 at Keypad
+	    - Joy 2 at a Joystick buttons
+	A better mapping would be needed...
+	*/
 
 	PORT_START("KP0")
 		PORT_BIT(0x01, 0x00, IPT_KEYBOARD) PORT_NAME("Joy 1 [3]") PORT_CODE(KEYCODE_3_PAD)
@@ -257,24 +257,24 @@ INPUT_PORTS_END
 
 static const gfx_layout cgenie_charlayout =
 {
-	8,8,		   /* 8*8 characters */
-	384,		   /* 256 fixed + 128 defineable characters */
-	1,			   /* 1 bits per pixel */
-	{ 0 },		   /* no bitplanes; 1 bit per pixel */
+	8,8,           /* 8*8 characters */
+	384,           /* 256 fixed + 128 defineable characters */
+	1,             /* 1 bits per pixel */
+	{ 0 },         /* no bitplanes; 1 bit per pixel */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },   /* x offsets */
 	{ 0*8,1*8,2*8,3*8,4*8,5*8,6*8,7*8 },
-	8*8 		   /* every char takes 8 bytes */
+	8*8            /* every char takes 8 bytes */
 };
 
 static const gfx_layout cgenie_gfxlayout =
 {
-	8,8,			/* 4*8 characters */
-	256,			/* 256 graphics patterns */
-	2,				/* 2 bits per pixel */
-	{ 0, 1 },		/* two bitplanes; 2 bit per pixel */
+	8,8,            /* 4*8 characters */
+	256,            /* 256 graphics patterns */
+	2,              /* 2 bits per pixel */
+	{ 0, 1 },       /* two bitplanes; 2 bit per pixel */
 	{ 0, 0, 2, 2, 4, 4, 6, 6}, /* x offsets */
 	{ 0*8,1*8,2*8,3*8,4*8,5*8,6*8,7*8 },
-	8*8 			/* every char takes 8 bytes */
+	8*8             /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( cgenie )
@@ -307,57 +307,57 @@ static const unsigned char cgenie_colors[] = {
 
 /* this is the 'RGB monitor' version, strong and clean */
 	15*4, 15*4, 15*4,  /* gray         */
-	 0*4, 48*4, 48*4,  /* cyan         */
+		0*4, 48*4, 48*4,  /* cyan         */
 	60*4,  0*4,  0*4,  /* red          */
 	47*4, 47*4, 47*4,  /* white        */
 	55*4, 55*4,  0*4,  /* yellow       */
-	 0*4, 56*4,  0*4,  /* green        */
+		0*4, 56*4,  0*4,  /* green        */
 	42*4, 32*4,  0*4,  /* orange       */
 	63*4, 63*4,  0*4,  /* light yellow */
-	 0*4,  0*4, 48*4,  /* blue         */
-	 0*4, 24*4, 63*4,  /* light blue   */
+		0*4,  0*4, 48*4,  /* blue         */
+		0*4, 24*4, 63*4,  /* light blue   */
 	60*4,  0*4, 38*4,  /* pink         */
 	38*4,  0*4, 60*4,  /* purple       */
 	31*4, 31*4, 31*4,  /* light gray   */
-	 0*4, 63*4, 63*4,  /* light cyan   */
+		0*4, 63*4, 63*4,  /* light cyan   */
 	58*4,  0*4, 58*4,  /* magenta      */
 	63*4, 63*4, 63*4,  /* bright white */
 #endif
 
 /* this is the 'TV screen' version, weak and blurred by repeating pixels */
-	15*2+80, 15*2+80, 15*2+80,	/* gray         */
-	 0*2+80, 48*2+80, 48*2+80,	/* cyan         */
-	60*2+80,  0*2+80,  0*2+80,	/* red          */
-	47*2+80, 47*2+80, 47*2+80,	/* white        */
-	55*2+80, 55*2+80,  0*2+80,	/* yellow       */
-	 0*2+80, 56*2+80,  0*2+80,	/* green        */
-	42*2+80, 32*2+80,  0*2+80,	/* orange       */
-	63*2+80, 63*2+80,  0*2+80,	/* light yellow */
-	 0*2+80,  0*2+80, 48*2+80,	/* blue         */
-	 0*2+80, 24*2+80, 63*2+80,	/* light blue   */
-	60*2+80,  0*2+80, 38*2+80,	/* pink         */
-	38*2+80,  0*2+80, 60*2+80,	/* purple       */
-	31*2+80, 31*2+80, 31*2+80,	/* light gray   */
-	 0*2+80, 63*2+80, 63*2+80,	/* light cyan   */
-	58*2+80,  0*2+80, 58*2+80,	/* magenta      */
-	63*2+80, 63*2+80, 63*2+80,	/* bright white */
+	15*2+80, 15*2+80, 15*2+80,  /* gray         */
+		0*2+80, 48*2+80, 48*2+80,   /* cyan         */
+	60*2+80,  0*2+80,  0*2+80,  /* red          */
+	47*2+80, 47*2+80, 47*2+80,  /* white        */
+	55*2+80, 55*2+80,  0*2+80,  /* yellow       */
+		0*2+80, 56*2+80,  0*2+80,   /* green        */
+	42*2+80, 32*2+80,  0*2+80,  /* orange       */
+	63*2+80, 63*2+80,  0*2+80,  /* light yellow */
+		0*2+80,  0*2+80, 48*2+80,   /* blue         */
+		0*2+80, 24*2+80, 63*2+80,   /* light blue   */
+	60*2+80,  0*2+80, 38*2+80,  /* pink         */
+	38*2+80,  0*2+80, 60*2+80,  /* purple       */
+	31*2+80, 31*2+80, 31*2+80,  /* light gray   */
+		0*2+80, 63*2+80, 63*2+80,   /* light cyan   */
+	58*2+80,  0*2+80, 58*2+80,  /* magenta      */
+	63*2+80, 63*2+80, 63*2+80,  /* bright white */
 
-	15*2+96, 15*2+96, 15*2+96,	/* gray         */
-	 0*2+96, 48*2+96, 48*2+96,	/* cyan         */
-	60*2+96,  0*2+96,  0*2+96,	/* red          */
-	47*2+96, 47*2+96, 47*2+96,	/* white        */
-	55*2+96, 55*2+96,  0*2+96,	/* yellow       */
-	 0*2+96, 56*2+96,  0*2+96,	/* green        */
-	42*2+96, 32*2+96,  0*2+96,	/* orange       */
-	63*2+96, 63*2+96,  0*2+96,	/* light yellow */
-	 0*2+96,  0*2+96, 48*2+96,	/* blue         */
-	 0*2+96, 24*2+96, 63*2+96,	/* light blue   */
-	60*2+96,  0*2+96, 38*2+96,	/* pink         */
-	38*2+96,  0*2+96, 60*2+96,	/* purple       */
-	31*2+96, 31*2+96, 31*2+96,	/* light gray   */
-	 0*2+96, 63*2+96, 63*2+96,	/* light cyan   */
-	58*2+96,  0*2+96, 58*2+96,	/* magenta      */
-	63*2+96, 63*2+96, 63*2+96,	/* bright white */
+	15*2+96, 15*2+96, 15*2+96,  /* gray         */
+		0*2+96, 48*2+96, 48*2+96,   /* cyan         */
+	60*2+96,  0*2+96,  0*2+96,  /* red          */
+	47*2+96, 47*2+96, 47*2+96,  /* white        */
+	55*2+96, 55*2+96,  0*2+96,  /* yellow       */
+		0*2+96, 56*2+96,  0*2+96,   /* green        */
+	42*2+96, 32*2+96,  0*2+96,  /* orange       */
+	63*2+96, 63*2+96,  0*2+96,  /* light yellow */
+		0*2+96,  0*2+96, 48*2+96,   /* blue         */
+		0*2+96, 24*2+96, 63*2+96,   /* light blue   */
+	60*2+96,  0*2+96, 38*2+96,  /* pink         */
+	38*2+96,  0*2+96, 60*2+96,  /* purple       */
+	31*2+96, 31*2+96, 31*2+96,  /* light gray   */
+		0*2+96, 63*2+96, 63*2+96,   /* light cyan   */
+	58*2+96,  0*2+96, 58*2+96,  /* magenta      */
+	63*2+96, 63*2+96, 63*2+96,  /* bright white */
 
 
 };
@@ -383,39 +383,39 @@ static const unsigned char cgenienz_colors[] = {
 
 
 /* this is the 'TV screen' version, weak and blurred by repeating pixels */
-	15*2+80, 15*2+80, 15*2+80,	/* gray         */
-	 0*2+80, 48*2+80, 48*2+80,	/* cyan         */
-	60*2+80,  0*2+80,  0*2+80,	/* red          */
-	47*2+80, 47*2+80, 47*2+80,	/* white        */
-	55*2+80, 55*2+80,  0*2+80,	/* yellow       */
-	 0*2+80, 56*2+80,  0*2+80,	/* green        */
-	42*2+80, 32*2+80,  0*2+80,	/* orange       */
-	63*2+80, 63*2+80,  0*2+80,	/* light yellow */
-	 0*2+80,  0*2+80, 48*2+80,	/* blue         */
-	 0*2+80, 24*2+80, 63*2+80,	/* light blue   */
-	60*2+80,  0*2+80, 38*2+80,	/* pink         */
-	38*2+80,  0*2+80, 60*2+80,	/* purple       */
-	31*2+80, 31*2+80, 31*2+80,	/* light gray   */
-	 0*2+80, 63*2+80, 63*2+80,	/* light cyan   */
-	58*2+80,  0*2+80, 58*2+80,	/* magenta      */
-	63*2+80, 63*2+80, 63*2+80,	/* bright white */
+	15*2+80, 15*2+80, 15*2+80,  /* gray         */
+		0*2+80, 48*2+80, 48*2+80,   /* cyan         */
+	60*2+80,  0*2+80,  0*2+80,  /* red          */
+	47*2+80, 47*2+80, 47*2+80,  /* white        */
+	55*2+80, 55*2+80,  0*2+80,  /* yellow       */
+		0*2+80, 56*2+80,  0*2+80,   /* green        */
+	42*2+80, 32*2+80,  0*2+80,  /* orange       */
+	63*2+80, 63*2+80,  0*2+80,  /* light yellow */
+		0*2+80,  0*2+80, 48*2+80,   /* blue         */
+		0*2+80, 24*2+80, 63*2+80,   /* light blue   */
+	60*2+80,  0*2+80, 38*2+80,  /* pink         */
+	38*2+80,  0*2+80, 60*2+80,  /* purple       */
+	31*2+80, 31*2+80, 31*2+80,  /* light gray   */
+		0*2+80, 63*2+80, 63*2+80,   /* light cyan   */
+	58*2+80,  0*2+80, 58*2+80,  /* magenta      */
+	63*2+80, 63*2+80, 63*2+80,  /* bright white */
 
-	15*2+96, 15*2+96, 15*2+96,	/* gray         */
-	 0*2+96, 48*2+96, 48*2+96,	/* cyan         */
-	60*2+96,  0*2+96,  0*2+96,	/* red          */
-	47*2+96, 47*2+96, 47*2+96,	/* white        */
-	55*2+96, 55*2+96,  0*2+96,	/* yellow       */
-	 0*2+96, 56*2+96,  0*2+96,	/* green        */
-	42*2+96, 32*2+96,  0*2+96,	/* orange       */
-	63*2+96, 63*2+96,  0*2+96,	/* light yellow */
-	 0*2+96,  0*2+96, 48*2+96,	/* blue         */
-	 0*2+96, 24*2+96, 63*2+96,	/* light blue   */
-	60*2+96,  0*2+96, 38*2+96,	/* pink         */
-	38*2+96,  0*2+96, 60*2+96,	/* purple       */
-	31*2+96, 31*2+96, 31*2+96,	/* light gray   */
-	 0*2+96, 63*2+96, 63*2+96,	/* light cyan   */
-	58*2+96,  0*2+96, 58*2+96,	/* magenta      */
-	63*2+96, 63*2+96, 63*2+96,	/* bright white */
+	15*2+96, 15*2+96, 15*2+96,  /* gray         */
+		0*2+96, 48*2+96, 48*2+96,   /* cyan         */
+	60*2+96,  0*2+96,  0*2+96,  /* red          */
+	47*2+96, 47*2+96, 47*2+96,  /* white        */
+	55*2+96, 55*2+96,  0*2+96,  /* yellow       */
+		0*2+96, 56*2+96,  0*2+96,   /* green        */
+	42*2+96, 32*2+96,  0*2+96,  /* orange       */
+	63*2+96, 63*2+96,  0*2+96,  /* light yellow */
+		0*2+96,  0*2+96, 48*2+96,   /* blue         */
+		0*2+96, 24*2+96, 63*2+96,   /* light blue   */
+	60*2+96,  0*2+96, 38*2+96,  /* pink         */
+	38*2+96,  0*2+96, 60*2+96,  /* purple       */
+	31*2+96, 31*2+96, 31*2+96,  /* light gray   */
+		0*2+96, 63*2+96, 63*2+96,   /* light cyan   */
+	58*2+96,  0*2+96, 58*2+96,  /* magenta      */
+	63*2+96, 63*2+96, 63*2+96,  /* bright white */
 
 
 };
@@ -437,52 +437,52 @@ static const unsigned short cgenie_palette[] =
 	0,41, 0,42, 0,43, 0,44,
 	0,45, 0,46, 0,47, 0,48,
 
-	0,	  9,	7,	  6,	/* RGB monitor graphics colors */
-	0,	  25,	23,   22,	/* TV set graphics colors: darker */
-	0,	  41,	39,   38,	/* TV set graphics colors: a bit brighter */
+	0,    9,    7,    6,    /* RGB monitor graphics colors */
+	0,    25,   23,   22,   /* TV set graphics colors: darker */
+	0,    41,   39,   38,   /* TV set graphics colors: a bit brighter */
 };
 
 /* Initialise the palette */
-static PALETTE_INIT( cgenie )
+PALETTE_INIT_MEMBER(cgenie_state,cgenie)
 {
 	UINT8 i, r, g, b;
 
-	machine.colortable = colortable_alloc(machine, 49);
+	machine().colortable = colortable_alloc(machine(), 49);
 
 	for ( i = 0; i < 49; i++ )
 	{
 		r = cgenie_colors[i*3]; g = cgenie_colors[i*3+1]; b = cgenie_colors[i*3+2];
-		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine().colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	for(i=0; i<108; i++)
-		colortable_entry_set_value(machine.colortable, i, cgenie_palette[i]);
+		colortable_entry_set_value(machine().colortable, i, cgenie_palette[i]);
 }
 
-static PALETTE_INIT( cgenienz )
+PALETTE_INIT_MEMBER(cgenie_state,cgenienz)
 {
 	UINT8 i, r, g, b;
 
-	machine.colortable = colortable_alloc(machine, 49);
+	machine().colortable = colortable_alloc(machine(), 49);
 
 	for ( i = 0; i < 49; i++ )
 	{
 		r = cgenienz_colors[i*3]; g = cgenienz_colors[i*3+1]; b = cgenienz_colors[i*3+2];
-		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine().colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	for(i=0; i<108; i++)
-		colortable_entry_set_value(machine.colortable, i, cgenie_palette[i]);
+		colortable_entry_set_value(machine().colortable, i, cgenie_palette[i]);
 }
 
 static const ay8910_interface cgenie_ay8910_interface =
 {
 	AY8910_LEGACY_OUTPUT,
 	AY8910_DEFAULT_LOADS,
-	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, cgenie_psg_port_a_r),
-	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, cgenie_psg_port_b_r),
-	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, cgenie_psg_port_a_w),
-	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, cgenie_psg_port_b_w)
+	DEVCB_DRIVER_MEMBER(cgenie_state, cgenie_psg_port_a_r),
+	DEVCB_DRIVER_MEMBER(cgenie_state, cgenie_psg_port_b_r),
+	DEVCB_DRIVER_MEMBER(cgenie_state, cgenie_psg_port_a_w),
+	DEVCB_DRIVER_MEMBER(cgenie_state, cgenie_psg_port_b_w)
 };
 
 
@@ -496,14 +496,14 @@ static const cassette_interface cgenie_cassette_interface =
 };
 
 // This is currently broken
-static FLOPPY_OPTIONS_START(cgenie )
-	FLOPPY_OPTION( cgd, "cgd", "Colour Genie disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
+static LEGACY_FLOPPY_OPTIONS_START(cgenie )
+	LEGACY_FLOPPY_OPTION( cgd, "cgd", "Colour Genie disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
 		HEADS([2])
 		TRACKS([40])
 		SECTORS([10])
 		SECTOR_LENGTH([256])
 		FIRST_SECTOR_ID([1]))
-FLOPPY_OPTIONS_END
+LEGACY_FLOPPY_OPTIONS_END
 
 static const floppy_interface cgenie_floppy_interface =
 {
@@ -513,7 +513,7 @@ static const floppy_interface cgenie_floppy_interface =
 	DEVCB_NULL,
 	DEVCB_NULL,
 	FLOPPY_STANDARD_5_25_DSHD,
-	FLOPPY_OPTIONS_NAME(cgenie),
+	LEGACY_FLOPPY_OPTIONS_NAME(cgenie),
 	NULL,
 	NULL
 };
@@ -523,27 +523,23 @@ static MACHINE_CONFIG_START( cgenie_common, cgenie_state )
 	MCFG_CPU_ADD("maincpu", Z80, XTAL_17_73447MHz/8)        /* 2,2168 MHz */
 	MCFG_CPU_PROGRAM_MAP(cgenie_mem)
 	MCFG_CPU_IO_MAP(cgenie_io)
-	MCFG_CPU_VBLANK_INT("screen", cgenie_frame_interrupt)
-	MCFG_CPU_PERIODIC_INT(cgenie_timer_interrupt, 40)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", cgenie_state,  cgenie_frame_interrupt)
+	MCFG_CPU_PERIODIC_INT_DRIVER(cgenie_state, cgenie_timer_interrupt,  40)
 	MCFG_QUANTUM_TIME(attotime::from_hz(240))
 
-	MCFG_MACHINE_START( cgenie )
-	MCFG_MACHINE_RESET( cgenie )
 
-    /* video hardware */
+	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(48*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1,0*8,32*8-1)
-	MCFG_SCREEN_UPDATE( cgenie )
+	MCFG_SCREEN_UPDATE_DRIVER(cgenie_state, screen_update_cgenie)
 
 	MCFG_GFXDECODE( cgenie )
 	MCFG_PALETTE_LENGTH(108)
 
 	// Actually the video is driven by an HD46505 clocked at XTAL_17_73447MHz/16
-	MCFG_VIDEO_START( cgenie )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -553,11 +549,11 @@ static MACHINE_CONFIG_START( cgenie_common, cgenie_state )
 	MCFG_SOUND_CONFIG(cgenie_ay8910_interface)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, cgenie_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", cgenie_cassette_interface )
 
 	MCFG_FD1793_ADD("wd179x", cgenie_wd17xx_interface ) // TODO confirm type
 
-	MCFG_FLOPPY_4_DRIVES_ADD(cgenie_floppy_interface)
+	MCFG_LEGACY_FLOPPY_4_DRIVES_ADD(cgenie_floppy_interface)
 	/* cartridge */
 	MCFG_CARTSLOT_ADD("cart")
 	MCFG_CARTSLOT_EXTENSION_LIST("rom")
@@ -571,12 +567,12 @@ MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( cgenie, cgenie_common )
 
-	MCFG_PALETTE_INIT( cgenie )
+	MCFG_PALETTE_INIT_OVERRIDE(cgenie_state, cgenie )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( cgenienz, cgenie_common )
 
-	MCFG_PALETTE_INIT( cgenienz )
+	MCFG_PALETTE_INIT_OVERRIDE(cgenie_state, cgenienz )
 MACHINE_CONFIG_END
 
 /***************************************************************************
@@ -630,33 +626,33 @@ ROM_END
 //   GATL GAT Length
 //   GATM GAT Mask
 //   DDGA Disk Directory Granule Allocation
-typedef struct
+struct PDRIVE
 {
-    UINT8 DDSL;      // Disk Directory Start Lump (lump number of GAT)
-    UINT8 GATL;      // # of bytes used in the Granule Allocation Table sector
-    UINT8 STEPRATE;  // step rate and somet SD/DD flag ...
-    UINT8 TRK;       // number of tracks
-    UINT8 SPT;       // sectors per track (both heads counted!)
-    UINT8 GATM;      // number of used bits per byte in the GAT sector (GAT mask)
-    UINT8 P7;        // ???? always zero
-    UINT8 FLAGS;     // ???? some flags (SS/DS bit 6)
-    UINT8 GPL;       // Sectors per granule (always 5 for the Colour Genie)
-    UINT8 DDGA;      // Disk Directory Granule allocation (number of driectory granules)
-}   PDRIVE;
+	UINT8 DDSL;      // Disk Directory Start Lump (lump number of GAT)
+	UINT8 GATL;      // # of bytes used in the Granule Allocation Table sector
+	UINT8 STEPRATE;  // step rate and somet SD/DD flag ...
+	UINT8 TRK;       // number of tracks
+	UINT8 SPT;       // sectors per track (both heads counted!)
+	UINT8 GATM;      // number of used bits per byte in the GAT sector (GAT mask)
+	UINT8 P7;        // ???? always zero
+	UINT8 FLAGS;     // ???? some flags (SS/DS bit 6)
+	UINT8 GPL;       // Sectors per granule (always 5 for the Colour Genie)
+	UINT8 DDGA;      // Disk Directory Granule allocation (number of driectory granules)
+};
 
 static const PDRIVE pd_list[12] = {
-    {0x14, 0x28, 0x07, 0x28, 0x0A, 0x02, 0x00, 0x00, 0x05, 0x02}, // CMD"<0=A" 40 tracks, SS, SD
-    {0x14, 0x28, 0x07, 0x28, 0x14, 0x04, 0x00, 0x40, 0x05, 0x04}, // CMD"<0=B" 40 tracks, DS, SD
-    {0x18, 0x30, 0x53, 0x28, 0x12, 0x03, 0x00, 0x03, 0x05, 0x03}, // CMD"<0=C" 40 tracks, SS, DD
-    {0x18, 0x30, 0x53, 0x28, 0x24, 0x06, 0x00, 0x43, 0x05, 0x06}, // CMD"<0=D" 40 tracks, DS, DD
-    {0x14, 0x28, 0x07, 0x28, 0x0A, 0x02, 0x00, 0x04, 0x05, 0x02}, // CMD"<0=E" 40 tracks, SS, SD
-    {0x14, 0x28, 0x07, 0x28, 0x14, 0x04, 0x00, 0x44, 0x05, 0x04}, // CMD"<0=F" 40 tracks, DS, SD
-    {0x18, 0x30, 0x53, 0x28, 0x12, 0x03, 0x00, 0x07, 0x05, 0x03}, // CMD"<0=G" 40 tracks, SS, DD
-    {0x18, 0x30, 0x53, 0x28, 0x24, 0x06, 0x00, 0x47, 0x05, 0x06}, // CMD"<0=H" 40 tracks, DS, DD
-    {0x28, 0x50, 0x07, 0x50, 0x0A, 0x02, 0x00, 0x00, 0x05, 0x02}, // CMD"<0=I" 80 tracks, SS, SD
-    {0x28, 0x50, 0x07, 0x50, 0x14, 0x04, 0x00, 0x40, 0x05, 0x04}, // CMD"<0=J" 80 tracks, DS, SD
-    {0x30, 0x60, 0x53, 0x50, 0x12, 0x03, 0x00, 0x03, 0x05, 0x03}, // CMD"<0=K" 80 tracks, SS, DD
-    {0x30, 0x60, 0x53, 0x50, 0x24, 0x06, 0x00, 0x43, 0x05, 0x06}, // CMD"<0=L" 80 tracks, DS, DD
+	{0x14, 0x28, 0x07, 0x28, 0x0A, 0x02, 0x00, 0x00, 0x05, 0x02}, // CMD"<0=A" 40 tracks, SS, SD
+	{0x14, 0x28, 0x07, 0x28, 0x14, 0x04, 0x00, 0x40, 0x05, 0x04}, // CMD"<0=B" 40 tracks, DS, SD
+	{0x18, 0x30, 0x53, 0x28, 0x12, 0x03, 0x00, 0x03, 0x05, 0x03}, // CMD"<0=C" 40 tracks, SS, DD
+	{0x18, 0x30, 0x53, 0x28, 0x24, 0x06, 0x00, 0x43, 0x05, 0x06}, // CMD"<0=D" 40 tracks, DS, DD
+	{0x14, 0x28, 0x07, 0x28, 0x0A, 0x02, 0x00, 0x04, 0x05, 0x02}, // CMD"<0=E" 40 tracks, SS, SD
+	{0x14, 0x28, 0x07, 0x28, 0x14, 0x04, 0x00, 0x44, 0x05, 0x04}, // CMD"<0=F" 40 tracks, DS, SD
+	{0x18, 0x30, 0x53, 0x28, 0x12, 0x03, 0x00, 0x07, 0x05, 0x03}, // CMD"<0=G" 40 tracks, SS, DD
+	{0x18, 0x30, 0x53, 0x28, 0x24, 0x06, 0x00, 0x47, 0x05, 0x06}, // CMD"<0=H" 40 tracks, DS, DD
+	{0x28, 0x50, 0x07, 0x50, 0x0A, 0x02, 0x00, 0x00, 0x05, 0x02}, // CMD"<0=I" 80 tracks, SS, SD
+	{0x28, 0x50, 0x07, 0x50, 0x14, 0x04, 0x00, 0x40, 0x05, 0x04}, // CMD"<0=J" 80 tracks, DS, SD
+	{0x30, 0x60, 0x53, 0x50, 0x12, 0x03, 0x00, 0x03, 0x05, 0x03}, // CMD"<0=K" 80 tracks, SS, DD
+	{0x30, 0x60, 0x53, 0x50, 0x24, 0x06, 0x00, 0x43, 0x05, 0x06}, // CMD"<0=L" 80 tracks, DS, DD
 };
 
 // basic-dsk is a disk image format which has the tracks and sectors
@@ -666,95 +662,95 @@ static const PDRIVE pd_list[12] = {
 //
 DEVICE_IMAGE_LOAD( cgenie_floppy )
 {
-    int i, j, dir_offset;
-    UINT8 buff[16];
-    UINT8 tracks = 0;
-    UINT8 heads = 0;
-    UINT8 spt = 0;
-    short dir_sector = 0;
-    short dir_length = 0;
+	int i, j, dir_offset;
+	UINT8 buff[16];
+	UINT8 tracks = 0;
+	UINT8 heads = 0;
+	UINT8 spt = 0;
+	short dir_sector = 0;
+	short dir_length = 0;
 
-    // A Floppy Isnt manditory, so return if none
-    if (device_load_basicdsk_floppy(image) != IMAGE_INIT_PASS)
-        return IMAGE_INIT_FAIL;
+	// A Floppy Isnt manditory, so return if none
+	if (device_load_basicdsk_floppy(image) != IMAGE_INIT_PASS)
+		return IMAGE_INIT_FAIL;
 
-    // determine image geometry
-    image.fseek(0, SEEK_SET);
+	// determine image geometry
+	image.fseek(0, SEEK_SET);
 
-    // determine geometry from disk contents
-    for( i = 0; i < 12; i++ )
-    {
-        image.fseek(pd_list[i].SPT * 256, SEEK_SET);
-        image.fread( buff, 16);
-        // find an entry with matching DDSL
-        if (buff[0] != 0x00 || buff[1] != 0xfe || buff[2] != pd_list[i].DDSL)
-            continue;
-        logerror("cgenie: checking format #%d\n", i);
+	// determine geometry from disk contents
+	for( i = 0; i < 12; i++ )
+	{
+		image.fseek(pd_list[i].SPT * 256, SEEK_SET);
+		image.fread( buff, 16);
+		// find an entry with matching DDSL
+		if (buff[0] != 0x00 || buff[1] != 0xfe || buff[2] != pd_list[i].DDSL)
+			continue;
+		logerror("cgenie: checking format #%d\n", i);
 
-        dir_sector = pd_list[i].DDSL * pd_list[i].GATM * pd_list[i].GPL + pd_list[i].SPT;
-        dir_length = pd_list[i].DDGA * pd_list[i].GPL;
+		dir_sector = pd_list[i].DDSL * pd_list[i].GATM * pd_list[i].GPL + pd_list[i].SPT;
+		dir_length = pd_list[i].DDGA * pd_list[i].GPL;
 
-        // scan directory for DIR/SYS or NCW1983/JHL files
-        // look into sector 2 and 3 first entry relative to DDSL
-        for( j = 16; j < 32; j += 8 )
-        {
-            dir_offset = dir_sector * 256 + j * 32;
-            if( image.fseek(dir_offset, SEEK_SET) < 0 )
-                break;
-            if( image.fread( buff, 16) != 16 )
-                break;
-            if( !strncmp((char*)buff + 5, "DIR     SYS", 11) ||
-                !strncmp((char*)buff + 5, "NCW1983 JHL", 11) )
-            {
-                tracks = pd_list[i].TRK;
-                heads = (pd_list[i].SPT > 18) ? 2 : 1;
-                spt = pd_list[i].SPT / heads;
-                dir_sector = pd_list[i].DDSL * pd_list[i].GATM * pd_list[i].GPL + pd_list[i].SPT;
-                dir_length = pd_list[i].DDGA * pd_list[i].GPL;
-                memcpy(image.device().machine().region("maincpu")->base() + 0x5A71 + floppy_get_drive(image) * sizeof(PDRIVE), &pd_list[i], sizeof(PDRIVE));
-                break;
-            }
-        }
+		// scan directory for DIR/SYS or NCW1983/JHL files
+		// look into sector 2 and 3 first entry relative to DDSL
+		for( j = 16; j < 32; j += 8 )
+		{
+			dir_offset = dir_sector * 256 + j * 32;
+			if( image.fseek(dir_offset, SEEK_SET) < 0 )
+				break;
+			if( image.fread( buff, 16) != 16 )
+				break;
+			if( !strncmp((char*)buff + 5, "DIR     SYS", 11) ||
+				!strncmp((char*)buff + 5, "NCW1983 JHL", 11) )
+			{
+				tracks = pd_list[i].TRK;
+				heads = (pd_list[i].SPT > 18) ? 2 : 1;
+				spt = pd_list[i].SPT / heads;
+				dir_sector = pd_list[i].DDSL * pd_list[i].GATM * pd_list[i].GPL + pd_list[i].SPT;
+				dir_length = pd_list[i].DDGA * pd_list[i].GPL;
+				memcpy(memregion("maincpu")->base() + 0x5A71 + floppy_get_drive(image) * sizeof(PDRIVE), &pd_list[i], sizeof(PDRIVE));
+				break;
+			}
+		}
 
-        logerror("cgenie: geometry %d tracks, %d heads, %d sec/track\n", tracks, heads, spt);
-        // set geometry so disk image can be read
-        basicdsk_set_geometry(image, tracks, heads, spt, 256, 0, 0, FALSE);
+		logerror("cgenie: geometry %d tracks, %d heads, %d sec/track\n", tracks, heads, spt);
+		// set geometry so disk image can be read
+		basicdsk_set_geometry(image, tracks, heads, spt, 256, 0, 0, FALSE);
 
-        logerror("cgenie: directory sectors %d - %d (%d sectors)\n", dir_sector, dir_sector + dir_length - 1, dir_length);
-        // mark directory sectors with deleted data address mark
-        // assumption dir_sector is a sector offset
-        for (j = 0; j < dir_length; j++)
-        {
-            UINT8 track;
-            UINT8 side;
-            UINT8 sector_id;
-            UINT16 track_offset;
-            UINT16 sector_offset;
+		logerror("cgenie: directory sectors %d - %d (%d sectors)\n", dir_sector, dir_sector + dir_length - 1, dir_length);
+		// mark directory sectors with deleted data address mark
+		// assumption dir_sector is a sector offset
+		for (j = 0; j < dir_length; j++)
+		{
+			UINT8 track;
+			UINT8 side;
+			UINT8 sector_id;
+			UINT16 track_offset;
+			UINT16 sector_offset;
 
-            // calc sector offset
-            sector_offset = dir_sector + j;
+			// calc sector offset
+			sector_offset = dir_sector + j;
 
-            // get track offset
-            track_offset = sector_offset / spt;
+			// get track offset
+			track_offset = sector_offset / spt;
 
-            // calc track
-            track = track_offset / heads;
+			// calc track
+			track = track_offset / heads;
 
-            // calc side
-            side = track_offset % heads;
+			// calc side
+			side = track_offset % heads;
 
-            // calc sector id - first sector id is 0!
-            sector_id = sector_offset % spt;
+			// calc sector id - first sector id is 0!
+			sector_id = sector_offset % spt;
 
-            // set deleted data address mark for sector specified
-            basicdsk_set_ddam(image, track, side, sector_id, 1);
-        }
+			// set deleted data address mark for sector specified
+			basicdsk_set_ddam(image, track, side, sector_id, 1);
+		}
 
-    }
-    return IMAGE_INIT_PASS;
+	}
+	return IMAGE_INIT_PASS;
 }
 #endif
 
 /*    YEAR  NAME      PARENT    COMPAT  MACHINE   INPUT     INIT     COMPANY    FULLNAME */
-COMP( 1982, cgenie,   0,        0,      cgenie,   cgenie,	0,       "EACA Computers Ltd",  "Colour Genie EG2000" , 0)
-COMP( 1982, cgenienz, cgenie,   0,      cgenienz, cgenie,	0,       "EACA Computers Ltd",  "Colour Genie EG2000 (New Zealand)" , 0)
+COMP( 1982, cgenie,   0,        0,      cgenie,   cgenie, driver_device,    0,       "EACA Computers Ltd",  "Colour Genie EG2000" , 0)
+COMP( 1982, cgenienz, cgenie,   0,      cgenienz, cgenie, driver_device,    0,       "EACA Computers Ltd",  "Colour Genie EG2000 (New Zealand)" , 0)

@@ -9,7 +9,6 @@
 
 ***************************************************************************/
 
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
@@ -28,18 +27,19 @@ class unixpc_state : public driver_device
 public:
 	unixpc_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, "maincpu"),
-		  m_ram(*this, RAM_TAG),
-		  m_wd2797(*this, "wd2797"),
-		  m_floppy(*this, FLOPPY_0)
-	{ }
+			m_maincpu(*this, "maincpu"),
+			m_ram(*this, RAM_TAG),
+			m_wd2797(*this, "wd2797"),
+			m_floppy(*this, FLOPPY_0),
+			m_mapram(*this, "mapram"),
+			m_videoram(*this, "videoram"){ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_ram;
-	required_device<device_t> m_wd2797;
-	required_device<device_t> m_floppy;
+	required_device<ram_device> m_ram;
+	required_device<wd2797_device> m_wd2797;
+	required_device<legacy_floppy_image_device> m_floppy;
 
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	virtual void machine_reset();
 
@@ -51,8 +51,8 @@ public:
 	DECLARE_WRITE_LINE_MEMBER( wd2797_intrq_w );
 	DECLARE_WRITE_LINE_MEMBER( wd2797_drq_w );
 
-	UINT16 *m_mapram;
-	UINT16 *m_videoram;
+	required_shared_ptr<UINT16> m_mapram;
+	required_shared_ptr<UINT16> m_videoram;
 };
 
 
@@ -63,17 +63,17 @@ public:
 WRITE16_MEMBER( unixpc_state::romlmap_w )
 {
 	if (BIT(data, 15))
-		space.install_ram(0x000000, 0x3fffff, ram_get_ptr(m_ram));
+		space.install_ram(0x000000, 0x3fffff, m_ram->pointer());
 	else
-		space.install_rom(0x000000, 0x3fffff, space.machine().region("bootrom")->base());
+		space.install_rom(0x000000, 0x3fffff, memregion("bootrom")->base());
 }
 
 void unixpc_state::machine_reset()
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
+	address_space &program = m_maincpu->space(AS_PROGRAM);
 
 	// force ROM into lower mem on reset
-	romlmap_w(*program, 0, 0, 0xffff);
+	romlmap_w(program, 0, 0, 0xffff);
 
 	// reset cpu so that it can pickup the new values
 	m_maincpu->reset();
@@ -138,12 +138,12 @@ WRITE_LINE_MEMBER( unixpc_state::wd2797_drq_w )
     VIDEO
 ***************************************************************************/
 
-bool unixpc_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
+UINT32 unixpc_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	for (int y = 0; y < 348; y++)
 		for (int x = 0; x < 720/16; x++)
 			for (int b = 0; b < 16; b++)
-				*BITMAP_ADDR16(&bitmap, y, x * 16 + b) = BIT(m_videoram[y * (720/16) + x], b);
+				bitmap.pix16(y, x * 16 + b) = BIT(m_videoram[y * (720/16) + x], b);
 
 	return 0;
 }
@@ -155,8 +155,8 @@ bool unixpc_state::screen_update(screen_device &screen, bitmap_t &bitmap, const 
 
 static ADDRESS_MAP_START( unixpc_mem, AS_PROGRAM, 16, unixpc_state )
 	AM_RANGE(0x000000, 0x3fffff) AM_RAMBANK("bank1")
-	AM_RANGE(0x400000, 0x4007ff) AM_RAM AM_BASE(m_mapram)
-	AM_RANGE(0x420000, 0x427fff) AM_RAM AM_BASE(m_videoram)
+	AM_RANGE(0x400000, 0x4007ff) AM_RAM AM_SHARE("mapram")
+	AM_RANGE(0x420000, 0x427fff) AM_RAM AM_SHARE("videoram")
 	AM_RANGE(0x470000, 0x470001) AM_READ(line_printer_r)
 	AM_RANGE(0x4a0000, 0x4a0001) AM_WRITE(misc_control_w)
 	AM_RANGE(0x4e0000, 0x4e0001) AM_WRITE(disk_control_w)
@@ -186,7 +186,7 @@ static const floppy_interface unixpc_floppy_interface =
 	DEVCB_NULL,
 	DEVCB_NULL,
 	FLOPPY_STANDARD_5_25_DSDD,
-	FLOPPY_OPTIONS_NAME(default),
+	LEGACY_FLOPPY_OPTIONS_NAME(default),
 	NULL,
 	NULL
 };
@@ -206,14 +206,14 @@ static MACHINE_CONFIG_START( unixpc, unixpc_state )
 
 	// video hardware
 	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(unixpc_state, screen_update)
 	MCFG_SCREEN_RAW_PARAMS(XTAL_20MHz, 896, 0, 720, 367, 0, 348)
 	// vsync should actually last 17264 pixels
 
 	MCFG_DEFAULT_LAYOUT(layout_unixpc)
 
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
 	// internal ram
 	MCFG_RAM_ADD(RAM_TAG)
@@ -222,7 +222,7 @@ static MACHINE_CONFIG_START( unixpc, unixpc_state )
 
 	// floppy
 	MCFG_WD2797_ADD("wd2797", unixpc_wd17xx_intf)
-	MCFG_FLOPPY_DRIVE_ADD(FLOPPY_0, unixpc_floppy_interface)
+	MCFG_LEGACY_FLOPPY_DRIVE_ADD(FLOPPY_0, unixpc_floppy_interface)
 MACHINE_CONFIG_END
 
 
@@ -243,4 +243,4 @@ ROM_END
 ***************************************************************************/
 
 //    YEAR  NAME  PARENT  COMPAT  MACHINE  INPUT   INIT  COMPANY  FULLNAME  FLAGS
-COMP( 1985, 3b1,  0,      0,      unixpc,  unixpc, 0,    "AT&T",  "3B1",    GAME_NOT_WORKING | GAME_NO_SOUND )
+COMP( 1985, 3b1,  0,      0,      unixpc,  unixpc, driver_device, 0,    "AT&T",  "3B1",    GAME_NOT_WORKING | GAME_NO_SOUND )

@@ -22,7 +22,6 @@
 **********************************************************************/
 
 #include "emu.h"
-#include "memconv.h"
 #include "z80dma.h"
 #include "cpu/z80/z80daisy.h"
 
@@ -39,26 +38,26 @@ enum
 	INT_MATCH_END_OF_BLOCK
 };
 
-const int COMMAND_RESET							= 0xc3;
-const int COMMAND_RESET_PORT_A_TIMING			= 0xc7;
-const int COMMAND_RESET_PORT_B_TIMING			= 0xcb;
-const int COMMAND_LOAD							= 0xcf;
-const int COMMAND_CONTINUE						= 0xd3;
-const int COMMAND_DISABLE_INTERRUPTS			= 0xaf;
-const int COMMAND_ENABLE_INTERRUPTS				= 0xab;
-const int COMMAND_RESET_AND_DISABLE_INTERRUPTS	= 0xa3;
-const int COMMAND_ENABLE_AFTER_RETI				= 0xb7;
-const int COMMAND_READ_STATUS_BYTE				= 0xbf;
-const int COMMAND_REINITIALIZE_STATUS_BYTE		= 0x8b;
-const int COMMAND_INITIATE_READ_SEQUENCE		= 0xa7;
-const int COMMAND_FORCE_READY					= 0xb3;
-const int COMMAND_ENABLE_DMA					= 0x87;
-const int COMMAND_DISABLE_DMA					= 0x83;
-const int COMMAND_READ_MASK_FOLLOWS				= 0xbb;
+const int COMMAND_RESET                         = 0xc3;
+const int COMMAND_RESET_PORT_A_TIMING           = 0xc7;
+const int COMMAND_RESET_PORT_B_TIMING           = 0xcb;
+const int COMMAND_LOAD                          = 0xcf;
+const int COMMAND_CONTINUE                      = 0xd3;
+const int COMMAND_DISABLE_INTERRUPTS            = 0xaf;
+const int COMMAND_ENABLE_INTERRUPTS             = 0xab;
+const int COMMAND_RESET_AND_DISABLE_INTERRUPTS  = 0xa3;
+const int COMMAND_ENABLE_AFTER_RETI             = 0xb7;
+const int COMMAND_READ_STATUS_BYTE              = 0xbf;
+const int COMMAND_REINITIALIZE_STATUS_BYTE      = 0x8b;
+const int COMMAND_INITIATE_READ_SEQUENCE        = 0xa7;
+const int COMMAND_FORCE_READY                   = 0xb3;
+const int COMMAND_ENABLE_DMA                    = 0x87;
+const int COMMAND_DISABLE_DMA                   = 0x83;
+const int COMMAND_READ_MASK_FOLLOWS             = 0xbb;
 
-const int TM_TRANSFER			= 0x01;
-const int TM_SEARCH				= 0x02;
-const int TM_SEARCH_TRANSFER	= 0x03;
+const int TM_TRANSFER           = 0x01;
+const int TM_SEARCH             = 0x02;
+const int TM_SEARCH_TRANSFER    = 0x03;
 
 
 
@@ -67,68 +66,69 @@ const int TM_SEARCH_TRANSFER	= 0x03;
 //**************************************************************************
 
 #define LOG 0
+#define DMA_LOG 0
 
-#define REGNUM(_m, _s)			(((_m)<<3) + (_s))
-#define GET_REGNUM(_r)			(&(_r) - &(WR0))
-#define REG(_m, _s) 			m_regs[REGNUM(_m,_s)]
-#define WR0						REG(0, 0)
-#define WR1						REG(1, 0)
-#define WR2						REG(2, 0)
-#define WR3						REG(3, 0)
-#define WR4						REG(4, 0)
-#define WR5						REG(5, 0)
-#define WR6						REG(6, 0)
+#define REGNUM(_m, _s)          (((_m)<<3) + (_s))
+#define GET_REGNUM(_r)          (&(_r) - &(WR0))
+#define REG(_m, _s)             m_regs[REGNUM(_m,_s)]
+#define WR0                     REG(0, 0)
+#define WR1                     REG(1, 0)
+#define WR2                     REG(2, 0)
+#define WR3                     REG(3, 0)
+#define WR4                     REG(4, 0)
+#define WR5                     REG(5, 0)
+#define WR6                     REG(6, 0)
 
-#define PORTA_ADDRESS_L			REG(0,1)
-#define PORTA_ADDRESS_H			REG(0,2)
+#define PORTA_ADDRESS_L         REG(0,1)
+#define PORTA_ADDRESS_H         REG(0,2)
 
-#define BLOCKLEN_L				REG(0,3)
-#define BLOCKLEN_H				REG(0,4)
+#define BLOCKLEN_L              REG(0,3)
+#define BLOCKLEN_H              REG(0,4)
 
-#define PORTA_TIMING			REG(1,1)
-#define PORTB_TIMING			REG(2,1)
+#define PORTA_TIMING            REG(1,1)
+#define PORTB_TIMING            REG(2,1)
 
-#define MASK_BYTE				REG(3,1)
-#define MATCH_BYTE				REG(3,2)
+#define MASK_BYTE               REG(3,1)
+#define MATCH_BYTE              REG(3,2)
 
-#define PORTB_ADDRESS_L			REG(4,1)
-#define PORTB_ADDRESS_H			REG(4,2)
-#define INTERRUPT_CTRL			REG(4,3)
-#define INTERRUPT_VECTOR		REG(4,4)
-#define PULSE_CTRL				REG(4,5)
+#define PORTB_ADDRESS_L         REG(4,1)
+#define PORTB_ADDRESS_H         REG(4,2)
+#define INTERRUPT_CTRL          REG(4,3)
+#define INTERRUPT_VECTOR        REG(4,4)
+#define PULSE_CTRL              REG(4,5)
 
-#define READ_MASK				REG(6,1)
+#define READ_MASK               REG(6,1)
 
-#define PORTA_ADDRESS			((PORTA_ADDRESS_H<<8) | PORTA_ADDRESS_L)
-#define PORTB_ADDRESS			((PORTB_ADDRESS_H<<8) | PORTB_ADDRESS_L)
-#define BLOCKLEN				((BLOCKLEN_H<<8) | BLOCKLEN_L)
+#define PORTA_ADDRESS           ((PORTA_ADDRESS_H<<8) | PORTA_ADDRESS_L)
+#define PORTB_ADDRESS           ((PORTB_ADDRESS_H<<8) | PORTB_ADDRESS_L)
+#define BLOCKLEN                ((BLOCKLEN_H<<8) | BLOCKLEN_L)
 
-#define PORTA_INC				(WR1 & 0x10)
-#define PORTB_INC				(WR2 & 0x10)
-#define PORTA_FIXED				(((WR1 >> 4) & 0x02) == 0x02)
-#define PORTB_FIXED				(((WR2 >> 4) & 0x02) == 0x02)
-#define PORTA_MEMORY			(((WR1 >> 3) & 0x01) == 0x00)
-#define PORTB_MEMORY			(((WR2 >> 3) & 0x01) == 0x00)
+#define PORTA_INC               (WR1 & 0x10)
+#define PORTB_INC               (WR2 & 0x10)
+#define PORTA_FIXED             (((WR1 >> 4) & 0x02) == 0x02)
+#define PORTB_FIXED             (((WR2 >> 4) & 0x02) == 0x02)
+#define PORTA_MEMORY            (((WR1 >> 3) & 0x01) == 0x00)
+#define PORTB_MEMORY            (((WR2 >> 3) & 0x01) == 0x00)
 
-#define PORTA_CYCLE_LEN			(4-(PORTA_TIMING & 0x03))
-#define PORTB_CYCLE_LEN			(4-(PORTB_TIMING & 0x03))
+#define PORTA_CYCLE_LEN         (4-(PORTA_TIMING & 0x03))
+#define PORTB_CYCLE_LEN         (4-(PORTB_TIMING & 0x03))
 
-#define PORTA_IS_SOURCE			((WR0 >> 2) & 0x01)
-#define PORTB_IS_SOURCE			(!PORTA_IS_SOURCE)
-#define TRANSFER_MODE			(WR0 & 0x03)
+#define PORTA_IS_SOURCE         ((WR0 >> 2) & 0x01)
+#define PORTB_IS_SOURCE         (!PORTA_IS_SOURCE)
+#define TRANSFER_MODE           (WR0 & 0x03)
 
-#define MATCH_F_SET				(m_status &= ~0x10)
-#define MATCH_F_CLEAR			(m_status |= 0x10)
-#define EOB_F_SET				(m_status &= ~0x20)
-#define EOB_F_CLEAR				(m_status |= 0x20)
+#define MATCH_F_SET             (m_status &= ~0x10)
+#define MATCH_F_CLEAR           (m_status |= 0x10)
+#define EOB_F_SET               (m_status &= ~0x20)
+#define EOB_F_CLEAR             (m_status |= 0x20)
 
-#define READY_ACTIVE_HIGH		((WR5>>3) & 0x01)
+#define READY_ACTIVE_HIGH       ((WR5>>3) & 0x01)
 
-#define INTERRUPT_ENABLE		(WR3 & 0x20)
-#define INT_ON_MATCH			(INTERRUPT_CTRL & 0x01)
-#define INT_ON_END_OF_BLOCK		(INTERRUPT_CTRL & 0x02)
-#define INT_ON_READY			(INTERRUPT_CTRL & 0x40)
-#define STATUS_AFFECTS_VECTOR	(INTERRUPT_CTRL & 0x20)
+#define INTERRUPT_ENABLE        (WR3 & 0x20)
+#define INT_ON_MATCH            (INTERRUPT_CTRL & 0x01)
+#define INT_ON_END_OF_BLOCK     (INTERRUPT_CTRL & 0x02)
+#define INT_ON_READY            (INTERRUPT_CTRL & 0x40)
+#define STATUS_AFFECTS_VECTOR   (INTERRUPT_CTRL & 0x20)
 
 
 
@@ -144,8 +144,8 @@ const device_type Z80DMA = &device_creator<z80dma_device>;
 //-------------------------------------------------
 
 z80dma_device::z80dma_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, Z80DMA, "Z8410", tag, owner, clock),
-	  device_z80daisy_interface(mconfig, *this)
+	: device_t(mconfig, Z80DMA, "Z8410", tag, owner, clock, "z80dma", __FILE__),
+		device_z80daisy_interface(mconfig, *this)
 {
 }
 
@@ -229,6 +229,9 @@ void z80dma_device::device_reset()
 	m_dma_enabled = 0;
 	m_read_num_follow = m_read_cur_follow = 0;
 	m_reset_pointer = 0;
+	m_is_read = false;
+	memset(m_regs, 0, sizeof(m_regs));
+	memset(m_regs_follow, 0, sizeof(m_regs_follow));
 
 	// disable interrupts
 	WR3 &= ~0x20;
@@ -280,11 +283,11 @@ int z80dma_device::z80daisy_irq_ack()
 {
 	if (m_ip)
 	{
-	    if (LOG) logerror("Z80DMA '%s' Interrupt Acknowledge\n", tag());
+		if (LOG) logerror("Z80DMA '%s' Interrupt Acknowledge\n", tag());
 
 		// clear interrupt pending flag
 		m_ip = 0;
-	    interrupt_check();
+		interrupt_check();
 
 		// set interrupt under service flag
 		m_ius = 1;
@@ -310,11 +313,11 @@ void z80dma_device::z80daisy_irq_reti()
 {
 	if (m_ius)
 	{
-	    if (LOG) logerror("Z80DMA '%s' Return from Interrupt\n", tag());
+		if (LOG) logerror("Z80DMA '%s' Return from Interrupt\n", tag());
 
 		// clear interrupt under service flag
 		m_ius = 0;
-	    interrupt_check();
+		interrupt_check();
 
 		return;
 	}
@@ -390,6 +393,7 @@ void z80dma_device::do_read()
 	switch(mode) {
 		case TM_TRANSFER:
 		case TM_SEARCH:
+		case TM_SEARCH_TRANSFER:
 			if (PORTA_IS_SOURCE)
 			{
 				if (PORTA_MEMORY)
@@ -397,8 +401,7 @@ void z80dma_device::do_read()
 				else
 					m_latch = m_in_iorq_func(m_addressA);
 
-				if (LOG) logerror("Z80DMA '%s' A src: %04x %s -> data: %02x\n", tag(), m_addressA, PORTA_MEMORY ? "mem" : "i/o", m_latch);
-				m_addressA += PORTA_FIXED ? 0 : PORTA_INC ? 1 : -1;
+				if (DMA_LOG) logerror("Z80DMA '%s' A src: %04x %s -> data: %02x\n", tag(), m_addressA, PORTA_MEMORY ? "mem" : "i/o", m_latch);
 			}
 			else
 			{
@@ -407,12 +410,8 @@ void z80dma_device::do_read()
 				else
 					m_latch = m_in_iorq_func(m_addressB);
 
-				if (LOG) logerror("Z80DMA '%s' B src: %04x %s -> data: %02x\n", tag(), m_addressB, PORTB_MEMORY ? "mem" : "i/o", m_latch);
-				m_addressB += PORTB_FIXED ? 0 : PORTB_INC ? 1 : -1;
+				if (DMA_LOG) logerror("Z80DMA '%s' B src: %04x %s -> data: %02x\n", tag(), m_addressB, PORTB_MEMORY ? "mem" : "i/o", m_latch);
 			}
-			break;
-		case TM_SEARCH_TRANSFER:
-			fatalerror("z80dma_do_operation: unhandled search & transfer mode !\n");
 			break;
 		default:
 			logerror("z80dma_do_operation: invalid mode %d!\n", mode);
@@ -424,6 +423,43 @@ void z80dma_device::do_read()
 //-------------------------------------------------
 //  do_write - perform DMA write
 //-------------------------------------------------
+
+void z80dma_device::do_transfer_write()
+{
+	if (PORTA_IS_SOURCE)
+	{
+		if (PORTB_MEMORY)
+			m_out_mreq_func(m_addressB, m_latch);
+		else
+			m_out_iorq_func(m_addressB, m_latch);
+
+		if (DMA_LOG) logerror("Z80DMA '%s' B dst: %04x %s\n", tag(), m_addressB, PORTB_MEMORY ? "mem" : "i/o");
+	}
+	else
+	{
+		if (PORTA_MEMORY)
+			m_out_mreq_func(m_addressA, m_latch);
+		else
+			m_out_iorq_func(m_addressA, m_latch);
+
+		if (DMA_LOG) logerror("Z80DMA '%s' A dst: %04x %s\n", tag(), m_addressA, PORTA_MEMORY ? "mem" : "i/o");
+	}
+}
+
+void z80dma_device::do_search()
+{
+	UINT8 load_byte,match_byte;
+	load_byte = m_latch | MASK_BYTE;
+	match_byte = MATCH_BYTE | MASK_BYTE;
+	//if (LOG) logerror("%02x %02x\n",load_byte,match_byte));
+	if (load_byte == match_byte)
+	{
+		if (INT_ON_MATCH)
+		{
+			trigger_interrupt(INT_MATCH);
+		}
+	}
+}
 
 int z80dma_device::do_write()
 {
@@ -437,57 +473,29 @@ int z80dma_device::do_write()
 	}
 	switch(mode) {
 		case TM_TRANSFER:
-			if (PORTA_IS_SOURCE)
-			{
-				if (PORTB_MEMORY)
-					m_out_mreq_func(m_addressB, m_latch);
-				else
-					m_out_iorq_func(m_addressB, m_latch);
-
-				if (LOG) logerror("Z80DMA '%s' B dst: %04x %s\n", tag(), m_addressB, PORTB_MEMORY ? "mem" : "i/o");
-				m_addressB += PORTB_FIXED ? 0 : PORTB_INC ? 1 : -1;
-			}
-			else
-			{
-				if (PORTA_MEMORY)
-					m_out_mreq_func(m_addressA, m_latch);
-				else
-					m_out_iorq_func(m_addressA, m_latch);
-
-				if (LOG) logerror("Z80DMA '%s' A dst: %04x %s\n", tag(), m_addressA, PORTA_MEMORY ? "mem" : "i/o");
-				m_addressA += PORTA_FIXED ? 0 : PORTA_INC ? 1 : -1;
-			}
-			m_count--;
-			done = (m_count == 0xFFFF);
+			do_transfer_write();
 			break;
 
 		case TM_SEARCH:
-			{
-				UINT8 load_byte,match_byte;
-				load_byte = m_latch | MASK_BYTE;
-				match_byte = MATCH_BYTE | MASK_BYTE;
-				//if (LOG) logerror("%02x %02x\n",load_byte,match_byte));
-				if (load_byte == match_byte)
-				{
-					if (INT_ON_MATCH)
-					{
-						trigger_interrupt(INT_MATCH);
-					}
-				}
-
-				m_count--;
-				done = (m_count == 0xFFFF); //correct?
-			}
+			do_search();
 			break;
 
 		case TM_SEARCH_TRANSFER:
-			fatalerror("z80dma_do_operation: unhandled search & transfer mode !\n");
+			do_transfer_write();
+			do_search();
 			break;
 
 		default:
 			logerror("z80dma_do_operation: invalid mode %d!\n", mode);
 			break;
 	}
+
+	m_addressA += PORTA_FIXED ? 0 : PORTA_INC ? 1 : -1;
+	m_addressB += PORTB_FIXED ? 0 : PORTB_INC ? 1 : -1;
+
+	m_count--;
+	done = (m_count == 0xFFFF); //correct?
+
 	if (done)
 	{
 		//FIXME: interrupt ?
@@ -513,6 +521,7 @@ void z80dma_device::timerproc()
 
 	if (m_is_read)
 	{
+		/* TODO: there's a nasty recursion bug with Alpha for Sharp X1 Turbo on the transfers with this function! */
 		do_read();
 		done = 0;
 		m_is_read = false;
@@ -528,7 +537,7 @@ void z80dma_device::timerproc()
 	if (done)
 	{
 		m_dma_enabled = 0; //FIXME: Correct?
-        m_status = 0x19;
+		m_status = 0x09;
 
 		m_status |= !is_ready() << 1; // ready line status
 
@@ -538,9 +547,9 @@ void z80dma_device::timerproc()
 		if (LOG) logerror("Z80DMA '%s' End of Block\n", tag());
 
 		if (INT_ON_END_OF_BLOCK)
-        {
+		{
 			trigger_interrupt(INT_END_OF_BLOCK);
-        }
+		}
 	}
 }
 
@@ -595,7 +604,11 @@ UINT8 z80dma_device::read()
 {
 	UINT8 res;
 
-	res = m_read_regs_follow[m_read_cur_follow];
+	if(m_read_num_follow == 0) // special case: Legend of Kage on X1 Turbo
+		res = m_status;
+	else
+		res = m_read_regs_follow[m_read_cur_follow];
+
 	m_read_cur_follow++;
 
 	if(m_read_cur_follow >= m_read_num_follow)
@@ -674,12 +687,13 @@ void z80dma_device::write(UINT8 data)
 			switch (data)
 			{
 				case COMMAND_ENABLE_AFTER_RETI:
-					fatalerror("Z80DMA '%s' Unimplemented WR6 command %02x", tag(), data);
+					fatalerror("Z80DMA '%s' Unimplemented WR6 command %02x\n", tag(), data);
 					break;
 				case COMMAND_READ_STATUS_BYTE:
 					if (LOG) logerror("Z80DMA '%s' CMD Read status Byte\n", tag());
-        			READ_MASK = 0;
-        			break;
+					READ_MASK = 1;
+					m_read_regs_follow[m_read_num_follow++] = m_status;
+					break;
 				case COMMAND_RESET_AND_DISABLE_INTERRUPTS:
 					WR3 &= ~0x20;
 					m_ip = 0;
@@ -691,12 +705,12 @@ void z80dma_device::write(UINT8 data)
 					if (LOG) logerror("Z80DMA '%s' Initiate Read Sequence\n", tag());
 					m_read_cur_follow = m_read_num_follow = 0;
 					if(READ_MASK & 0x01) { m_read_regs_follow[m_read_num_follow++] = m_status; }
-					if(READ_MASK & 0x02) { m_read_regs_follow[m_read_num_follow++] = BLOCKLEN_L; } //byte counter (low)
-					if(READ_MASK & 0x04) { m_read_regs_follow[m_read_num_follow++] = BLOCKLEN_H; } //byte counter (high)
-					if(READ_MASK & 0x08) { m_read_regs_follow[m_read_num_follow++] = PORTA_ADDRESS_L; } //port A address (low)
-					if(READ_MASK & 0x10) { m_read_regs_follow[m_read_num_follow++] = PORTA_ADDRESS_H; } //port A address (high)
-					if(READ_MASK & 0x20) { m_read_regs_follow[m_read_num_follow++] = PORTB_ADDRESS_L; } //port B address (low)
-					if(READ_MASK & 0x40) { m_read_regs_follow[m_read_num_follow++] = PORTB_ADDRESS_H; } //port B address (high)
+					if(READ_MASK & 0x02) { m_read_regs_follow[m_read_num_follow++] = m_count & 0xff; } //byte counter (low)
+					if(READ_MASK & 0x04) { m_read_regs_follow[m_read_num_follow++] = m_count >> 8; } //byte counter (high)
+					if(READ_MASK & 0x08) { m_read_regs_follow[m_read_num_follow++] = m_addressA & 0xff; } //port A address (low)
+					if(READ_MASK & 0x10) { m_read_regs_follow[m_read_num_follow++] = m_addressA >> 8; } //port A address (high)
+					if(READ_MASK & 0x20) { m_read_regs_follow[m_read_num_follow++] = m_addressB & 0xff; } //port B address (low)
+					if(READ_MASK & 0x40) { m_read_regs_follow[m_read_num_follow++] = m_addressB >> 8; } //port B address (high)
 					break;
 				case COMMAND_RESET:
 					if (LOG) logerror("Z80DMA '%s' Reset\n", tag());
@@ -723,6 +737,7 @@ void z80dma_device::write(UINT8 data)
 					m_addressB = PORTB_ADDRESS;
 					m_count = BLOCKLEN;
 					m_status |= 0x30;
+
 					if (LOG) logerror("Z80DMA '%s' Load A: %x B: %x N: %x\n", tag(), m_addressA, m_addressB, m_count);
 					break;
 				case COMMAND_DISABLE_DMA:
@@ -772,16 +787,17 @@ void z80dma_device::write(UINT8 data)
 					m_ip = 0;
 					break;
 				case 0xFB:
+				case 0xFF: // TODO: p8k triggers this, it probably crashed.
 					if (LOG) logerror("Z80DMA '%s' undocumented command triggered 0x%02X!\n", tag(), data);
 					break;
 				default:
-					fatalerror("Z80DMA '%s' Unknown WR6 command %02x", tag(), data);
+					printf("Z80DMA '%s' Unknown WR6 command %02x\n", tag(), data);
 			}
 		}
 		else if(data == 0x8e) //newtype on Sharp X1, unknown purpose
 			printf("Z80DMA '%s' Unknown base register %02x\n", tag(), data);
 		else
-			fatalerror("Z80DMA '%s' Unknown base register %02x", tag(), data);
+			fatalerror("Z80DMA '%s' Unknown base register %02x\n", tag(), data);
 		m_cur_follow = 0;
 	}
 	else
@@ -799,6 +815,18 @@ void z80dma_device::write(UINT8 data)
 			if (data & 0x10)
 				m_regs_follow[m_num_follow++] = GET_REGNUM(INTERRUPT_VECTOR);
 			m_cur_follow = 0;
+		}
+		else if(m_regs_follow[m_num_follow] == GET_REGNUM(READ_MASK))
+		{
+			m_read_cur_follow = m_read_num_follow = 0;
+
+			if(READ_MASK & 0x01) { m_read_regs_follow[m_read_num_follow++] = m_status; }
+			if(READ_MASK & 0x02) { m_read_regs_follow[m_read_num_follow++] = m_count & 0xff; } //byte counter (low)
+			if(READ_MASK & 0x04) { m_read_regs_follow[m_read_num_follow++] = m_count >> 8; } //byte counter (high)
+			if(READ_MASK & 0x08) { m_read_regs_follow[m_read_num_follow++] = m_addressA & 0xff; } //port A address (low)
+			if(READ_MASK & 0x10) { m_read_regs_follow[m_read_num_follow++] = m_addressA >> 8; } //port A address (high)
+			if(READ_MASK & 0x20) { m_read_regs_follow[m_read_num_follow++] = m_addressB & 0xff; } //port B address (low)
+			if(READ_MASK & 0x40) { m_read_regs_follow[m_read_num_follow++] = m_addressB >> 8; } //port B address (high)
 		}
 
 		m_reset_pointer++;
@@ -820,9 +848,9 @@ void z80dma_device::rdy_write_callback(int state)
 	update_status();
 
 	if (is_ready() && INT_ON_READY)
-    {
+	{
 		trigger_interrupt(INT_RDY);
-    }
+	}
 }
 
 

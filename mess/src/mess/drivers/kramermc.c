@@ -17,21 +17,21 @@ static GFXDECODE_START( kramermc )
 GFXDECODE_END
 
 /* Address maps */
-static ADDRESS_MAP_START(kramermc_mem, AS_PROGRAM, 8)
-    AM_RANGE( 0x0000, 0x03ff ) AM_ROM  // Monitor
-    AM_RANGE( 0x0400, 0x07ff ) AM_ROM  // Debugger
-    AM_RANGE( 0x0800, 0x0bff ) AM_ROM  // Reassembler
-    AM_RANGE( 0x0c00, 0x0fff ) AM_RAM  // System RAM
-    AM_RANGE( 0x1000, 0x7fff ) AM_RAM  // User RAM
-    AM_RANGE( 0x8000, 0xafff ) AM_ROM  // BASIC
-    AM_RANGE( 0xc000, 0xc3ff ) AM_ROM  // Editor
-    AM_RANGE( 0xc400, 0xdfff ) AM_ROM  // Assembler
-    AM_RANGE( 0xfc00, 0xffff ) AM_RAM  // Video RAM
+static ADDRESS_MAP_START(kramermc_mem, AS_PROGRAM, 8, kramermc_state )
+	AM_RANGE( 0x0000, 0x03ff ) AM_ROM  // Monitor
+	AM_RANGE( 0x0400, 0x07ff ) AM_ROM  // Debugger
+	AM_RANGE( 0x0800, 0x0bff ) AM_ROM  // Reassembler
+	AM_RANGE( 0x0c00, 0x0fff ) AM_RAM  // System RAM
+	AM_RANGE( 0x1000, 0x7fff ) AM_RAM  // User RAM
+	AM_RANGE( 0x8000, 0xafff ) AM_ROM  // BASIC
+	AM_RANGE( 0xc000, 0xc3ff ) AM_ROM  // Editor
+	AM_RANGE( 0xc400, 0xdfff ) AM_ROM  // Assembler
+	AM_RANGE( 0xfc00, 0xffff ) AM_RAM  // Video RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kramermc_io, AS_IO, 8 )
+static ADDRESS_MAP_START( kramermc_io, AS_IO, 8, kramermc_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0xfc, 0x0ff) AM_DEVREADWRITE("z80pio", z80pio_cd_ba_r, z80pio_cd_ba_w)
+	AM_RANGE(0xfc, 0x0ff) AM_DEVREADWRITE("z80pio", z80pio_device, read, write)
 ADDRESS_MAP_END
 
 /* Input ports */
@@ -109,7 +109,6 @@ static MACHINE_CONFIG_START( kramermc, kramermc_state )
 	MCFG_CPU_ADD("maincpu", Z80, 1500000)
 	MCFG_CPU_PROGRAM_MAP(kramermc_mem)
 	MCFG_CPU_IO_MAP(kramermc_io)
-	MCFG_MACHINE_RESET( kramermc )
 
 	MCFG_Z80PIO_ADD( "z80pio", 1500000, kramermc_z80pio_intf )
 
@@ -117,17 +116,15 @@ static MACHINE_CONFIG_START( kramermc, kramermc_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 16*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 64*8-1, 0, 16*8-1)
-	MCFG_SCREEN_UPDATE(kramermc)
+	MCFG_SCREEN_UPDATE_DRIVER(kramermc_state, screen_update_kramermc)
 
 	MCFG_GFXDECODE( kramermc )
 
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
-	MCFG_VIDEO_START(kramermc)
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -138,7 +135,7 @@ ROM_START( kramermc )
 	ROM_LOAD( "reass.kmc",    0x0800, 0x0400, CRC(7cc8e605) SHA1(3319a96aad710441af30dace906b9725e07ca92c) )
 	ROM_LOAD( "basic.kmc",  0x8000, 0x3000, CRC(7531801e) SHA1(61d055495ffcc4a281ef0abc3e299ea95f42544b) )
 	ROM_LOAD( "editor.kmc", 0xc000, 0x0400, CRC(2fd4cb84) SHA1(505615a218865aa8becde13848a23e1241a14b96) )
-	ROM_LOAD( "ass.kmc",		0xc400, 0x1c00, CRC(9a09422e) SHA1(a578d2cf0ea6eb35dcd13e4107e15187de906097) )
+	ROM_LOAD( "ass.kmc",        0xc400, 0x1c00, CRC(9a09422e) SHA1(a578d2cf0ea6eb35dcd13e4107e15187de906097) )
 	ROM_REGION(0x0800, "gfx1",0)
 	ROM_LOAD ("chargen.kmc", 0x0000, 0x0800, CRC(1ba52f9f) SHA1(71bbad90dd427d0132c871a4d3848ab3d4d84b8a))
 ROM_END
@@ -146,4 +143,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME   PARENT  COMPAT  MACHINE  INPUT   INIT                 COMPANY                 FULLNAME   FLAGS */
-COMP( 1987, kramermc,     0,      0,	kramermc,	kramermc,	kramermc,"Manfred Kramer", "Kramer MC",		 GAME_NO_SOUND)
+COMP( 1987, kramermc,     0,      0,    kramermc,   kramermc, kramermc_state,   kramermc,"Manfred Kramer", "Kramer MC",      GAME_NO_SOUND)

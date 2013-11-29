@@ -16,7 +16,7 @@
         Either device will signal an interrupt to the CPU when a key
         is pressed/sent.
 
-        For the moment, the "terminal" device is used for the keyboard.
+        For the moment, the "ascii keyboard" device is used for the keyboard.
 
         TODO:
         - Create device or HLE of MM5740N keyboard controller
@@ -25,21 +25,20 @@
         - Finish connecting up the 8250
         - Verify beep lengths
         - Verify ram size
-        - When the internal keyboard works, get rid of the generic_terminal.
+        - When the internal keyboard works, get rid of the "ascii_keyboard".
+
+        Bios 1 (super19) has the videoram at D800. This is not emulated.
+        However, a keyclick can be heard, to assure you it does in fact work.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "video/mc6845.h"
 #include "sound/beep.h"
 #include "machine/ins8250.h"
-#include "machine/terminal.h"
+#include "machine/keyboard.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define VIDEO_START_MEMBER(name) void name::video_start()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
 #define H19_CLOCK (XTAL_12_288MHz / 6)
 #define H19_BEEP_FRQ (H19_CLOCK / 1024)
@@ -48,37 +47,50 @@
 class h19_state : public driver_device
 {
 public:
+	enum
+	{
+		TIMER_BEEP_OFF
+	};
+
 	h19_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-	m_maincpu(*this, "maincpu"),
-	m_crtc(*this, "crtc"),
-	m_ace(*this, "ins8250"),
-	m_term(*this, TERMINAL_TAG),
-	m_beep(*this, BEEPER_TAG)
+			m_maincpu(*this, "maincpu"),
+			m_crtc(*this, "crtc"),
+			m_ace(*this, "ins8250"),
+			m_beep(*this, "beeper"),
+			m_p_videoram(*this, "videoram")
 	{ }
 
 	required_device<cpu_device> m_maincpu;
 	required_device<mc6845_device> m_crtc;
-	required_device<device_t> m_ace;
-	required_device<device_t> m_term;
-	required_device<device_t> m_beep;
+	required_device<ins8250_device> m_ace;
+	required_device<beep_device> m_beep;
 	DECLARE_READ8_MEMBER(h19_80_r);
 	DECLARE_READ8_MEMBER(h19_a0_r);
 	DECLARE_WRITE8_MEMBER(h19_c0_w);
-	WRITE8_MEMBER(h19_kbd_put);
-	UINT8 *m_p_videoram;
+	DECLARE_WRITE8_MEMBER(h19_kbd_put);
+	required_shared_ptr<UINT8> m_p_videoram;
 	UINT8 *m_p_chargen;
 	UINT8 m_term_data;
 	virtual void machine_reset();
 	virtual void video_start();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	DECLARE_WRITE_LINE_MEMBER(h19_ace_irq);
+
+protected:
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 };
 
 
-static TIMER_CALLBACK( h19_beepoff )
+void h19_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	h19_state *state = machine.driver_data<h19_state>();
-	beep_set_state(state->m_beep, 0);
+	switch (id)
+	{
+	case TIMER_BEEP_OFF:
+		m_beep->set_state(0);
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in h19_state::device_timer");
+	}
 }
 
 READ8_MEMBER( h19_state::h19_80_r )
@@ -92,7 +104,7 @@ READ8_MEMBER( h19_state::h19_80_r )
 READ8_MEMBER( h19_state::h19_a0_r )
 {
 // keyboard status
-	cputag_set_input_line(machine(), "maincpu", 0, CLEAR_LINE);
+	m_maincpu->set_input_line(0, CLEAR_LINE);
 	return 0x7f; // says that a key is ready and no modifier keys are pressed
 }
 
@@ -104,15 +116,15 @@ WRITE8_MEMBER( h19_state::h19_c0_w )
     offset 20-3F = terminal bell */
 
 	UINT8 length = (offset & 0x20) ? 200 : 4;
-	beep_set_state(m_beep, 1);
-	machine().scheduler().timer_set(attotime::from_msec(length), FUNC(h19_beepoff));
+	m_beep->set_state(1);
+	timer_set(attotime::from_msec(length), TIMER_BEEP_OFF);
 }
 
 static ADDRESS_MAP_START(h19_mem, AS_PROGRAM, 8, h19_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0xf7ff) AM_RAM
-	AM_RANGE(0xf800, 0xffff) AM_RAM AM_BASE(m_p_videoram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("videoram")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( h19_io, AS_IO, 8, h19_state)
@@ -120,7 +132,7 @@ static ADDRESS_MAP_START( h19_io, AS_IO, 8, h19_state)
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x1F) AM_READ_PORT("S401")
 	AM_RANGE(0x20, 0x3F) AM_READ_PORT("S402")
-	AM_RANGE(0x40, 0x47) AM_MIRROR(0x18) AM_DEVREADWRITE_LEGACY("ins8250", ins8250_r, ins8250_w )
+	AM_RANGE(0x40, 0x47) AM_MIRROR(0x18) AM_DEVREADWRITE("ins8250", ins8250_device, ins8250_r, ins8250_w )
 	AM_RANGE(0x60, 0x60) AM_DEVWRITE("crtc", mc6845_device, address_w)
 	AM_RANGE(0x61, 0x61) AM_DEVREADWRITE("crtc", mc6845_device, register_r, register_w)
 	AM_RANGE(0x80, 0x9F) AM_READ(h19_80_r)
@@ -291,32 +303,26 @@ static INPUT_PORTS_START( h19 )
 	PORT_DIPNAME( 0x80, 0x00, "Refresh")
 	PORT_DIPSETTING(    0x00, "50Hz")
 	PORT_DIPSETTING(    0x80, "60Hz")
-
 INPUT_PORTS_END
 
 
-MACHINE_RESET_MEMBER(h19_state)
+void h19_state::machine_reset()
 {
-	beep_set_frequency(m_beep, H19_BEEP_FRQ);
+	m_beep->set_frequency(H19_BEEP_FRQ);
 }
 
-VIDEO_START_MEMBER( h19_state )
+void h19_state::video_start()
 {
-	m_p_chargen = machine().region("chargen")->base();
-}
-
-SCREEN_UPDATE_MEMBER( h19_state )
-{
-	m_crtc->update( &bitmap, &cliprect);
-	return 0;
+	m_p_chargen = memregion("chargen")->base();
 }
 
 static MC6845_UPDATE_ROW( h19_update_row )
 {
 	h19_state *state = device->machine().driver_data<h19_state>();
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
 	UINT8 chr,gfx;
 	UINT16 mem,x;
-	UINT16 *p = BITMAP_ADDR16(bitmap, y, 0);
+	UINT32 *p = &bitmap.pix32(y);
 
 	for (x = 0; x < x_count; x++)
 	{
@@ -335,34 +341,36 @@ static MC6845_UPDATE_ROW( h19_update_row )
 		gfx = state->m_p_chargen[(chr<<4) | ra] ^ inv;
 
 		/* Display a scanline of a character (8 pixels) */
-		*p++ = BIT(gfx, 7);
-		*p++ = BIT(gfx, 6);
-		*p++ = BIT(gfx, 5);
-		*p++ = BIT(gfx, 4);
-		*p++ = BIT(gfx, 3);
-		*p++ = BIT(gfx, 2);
-		*p++ = BIT(gfx, 1);
-		*p++ = BIT(gfx, 0);
+		*p++ = palette[BIT(gfx, 7)];
+		*p++ = palette[BIT(gfx, 6)];
+		*p++ = palette[BIT(gfx, 5)];
+		*p++ = palette[BIT(gfx, 4)];
+		*p++ = palette[BIT(gfx, 3)];
+		*p++ = palette[BIT(gfx, 2)];
+		*p++ = palette[BIT(gfx, 1)];
+		*p++ = palette[BIT(gfx, 0)];
 	}
 }
 
-static WRITE_LINE_DEVICE_HANDLER(h19_ace_irq)
+WRITE_LINE_MEMBER(h19_state::h19_ace_irq)
 {
-	cputag_set_input_line(device->machine(), "maincpu", 0, (state ? HOLD_LINE : CLEAR_LINE));
+	m_maincpu->set_input_line(0, (state ? HOLD_LINE : CLEAR_LINE));
 }
 
 static const ins8250_interface h19_ace_interface =
 {
-	XTAL_12_288MHz / 4, // 3.072mhz clock which gets divided down for the various baud rates
-	DEVCB_LINE(h19_ace_irq), // interrupt
-	NULL, // transmit func
-	NULL, // handshake out
-	NULL // refresh func
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_DRIVER_LINE_MEMBER(h19_state, h19_ace_irq), // interrupt
+	DEVCB_NULL,
+	DEVCB_NULL
 };
 
-static const mc6845_interface h19_crtc6845_interface =
+
+static MC6845_INTERFACE( h19_crtc6845_interface )
 {
-	"screen",
+	false,
 	8 /*?*/,
 	NULL,
 	h19_update_row,
@@ -377,15 +385,15 @@ static const mc6845_interface h19_crtc6845_interface =
 /* F4 Character Displayer */
 static const gfx_layout h19_charlayout =
 {
-	8, 10,					/* 8 x 10 characters */
-	128,					/* 128 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 10,                  /* 8 x 10 characters */
+	128,                    /* 128 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8, 8*8, 9*8 },
-	8*16					/* every char takes 16 bytes */
+	8*16                    /* every char takes 16 bytes */
 };
 
 static GFXDECODE_START( h19 )
@@ -395,10 +403,10 @@ GFXDECODE_END
 WRITE8_MEMBER( h19_state::h19_kbd_put )
 {
 	m_term_data = data;
-	cputag_set_input_line(machine(), "maincpu", 0, HOLD_LINE);
+	m_maincpu->set_input_line(0, HOLD_LINE);
 }
 
-static GENERIC_TERMINAL_INTERFACE( h19_terminal_intf )
+static ASCII_KEYBOARD_INTERFACE( keyboard_intf )
 {
 	DEVCB_DRIVER_MEMBER(h19_state, h19_kbd_put)
 };
@@ -408,26 +416,26 @@ static MACHINE_CONFIG_START( h19, h19_state )
 	MCFG_CPU_ADD("maincpu",Z80, H19_CLOCK) // From schematics
 	MCFG_CPU_PROGRAM_MAP(h19_mem)
 	MCFG_CPU_IO_MAP(h19_io)
-	//MCFG_DEVICE_PERIODIC_INT(irq0_line_hold, 50) // for testing, causes a keyboard scan
+	//MCFG_DEVICE_PERIODIC_INT_DRIVER(h19_state, irq0_line_hold,  50) // for testing, causes a keyboard scan
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DEVICE("crtc", mc6845_device, screen_update)
 	MCFG_SCREEN_SIZE(640, 200)
 	MCFG_SCREEN_VISIBLE_AREA(0, 640 - 1, 0, 200 - 1)
 	MCFG_GFXDECODE(h19)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(monochrome_green)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, monochrome_green)
 
-	MCFG_MC6845_ADD("crtc", MC6845, XTAL_12_288MHz / 8, h19_crtc6845_interface) // clk taken from schematics
-	MCFG_INS8250_ADD( "ins8250", h19_ace_interface )
-	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, h19_terminal_intf) // keyboard only
+	MCFG_MC6845_ADD("crtc", MC6845, "screen", XTAL_12_288MHz / 8, h19_crtc6845_interface) // clk taken from schematics
+	MCFG_INS8250_ADD( "ins8250", h19_ace_interface, XTAL_12_288MHz / 4) // 3.072mhz clock which gets divided down for the various baud rates
+	MCFG_ASCII_KEYBOARD_ADD(KEYBOARD_TAG, keyboard_intf)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(BEEPER_TAG, BEEP, 0)
+	MCFG_SOUND_ADD("beeper", BEEP, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 MACHINE_CONFIG_END
 
@@ -439,7 +447,7 @@ ROM_START( h19 )
 	ROMX_LOAD( "2732_444-46_h19code.bin", 0x0000, 0x1000, CRC(F4447DA0) SHA1(fb4093d5b763be21a9580a0defebed664b1f7a7b), ROM_BIOS(1))
 	// Super H19 ROM (
 	ROM_SYSTEM_BIOS(1, "super", "Super 19")
-	ROMX_LOAD( "2732_super19_h447.bin", 0x0000, 0x1000, CRC(68FBFF54) SHA1(c0aa7199900709d717b07e43305dfdf36824da9b), ROM_BIOS(2))
+	ROMX_LOAD( "2732_super19_h447.bin", 0x0000, 0x1000, CRC(6c51aaa6) SHA1(5e368b39fe2f1af44a905dc474663198ab630117), ROM_BIOS(2))
 	// Watzman ROM
 	ROM_SYSTEM_BIOS(2, "watzman", "Watzman")
 	ROMX_LOAD( "watzman.bin", 0x0000, 0x1000, CRC(8168b6dc) SHA1(bfaebb9d766edbe545d24bc2b6630be4f3aa0ce9), ROM_BIOS(3))
@@ -458,4 +466,4 @@ ROM_END
 /* Driver (year is either 1978 or 1979) */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1978, h19,     0,       0,	h19,	h19,	 0, 	"Heath Inc", "Heathkit H-19", GAME_NOT_WORKING )
+COMP( 1978, h19,     0,       0,    h19,    h19, driver_device,  0,     "Heath Inc", "Heathkit H-19", GAME_NOT_WORKING )

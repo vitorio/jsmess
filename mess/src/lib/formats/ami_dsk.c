@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Olivier Galibert
 /*********************************************************************
 
     formats/ami_dsk.c
@@ -6,93 +8,160 @@
 
 *********************************************************************/
 
-
-#include <string.h>
-
 #include "formats/ami_dsk.h"
-#include "formats/basicdsk.h"
 
-
-
-/*****************************************************************************
- Amiga floppy core functions
-*****************************************************************************/
-
-
-static FLOPPY_IDENTIFY( amiga_dsk_identify )
+adf_format::adf_format() : floppy_image_format_t()
 {
-	UINT64 size;
-
-	*vote = 100;
-
-	/* first check the size of the image */
-	size = floppy_image_size(floppy);
-	if ((size != 901120) && (size != 1802240))
-		*vote = 0;
-
-	return FLOPPY_ERROR_SUCCESS;
 }
 
-
-static FLOPPY_CONSTRUCT( amiga_dsk_construct )
+const char *adf_format::name() const
 {
-	struct basicdsk_geometry geometry;
+	return "adf";
+}
 
-	/* setup geometry with standard values */
-	memset(&geometry, 0, sizeof(geometry));
-	geometry.heads = 2;
-	geometry.tracks = 80;
-	geometry.first_sector_id = 0;
-	geometry.sector_length = 512;
+const char *adf_format::description() const
+{
+	return "Amiga ADF floppy disk image";
+}
 
-	if (params)
+const char *adf_format::extensions() const
+{
+	return "adf";
+}
+
+bool adf_format::supports_save() const
+{
+	return true;
+}
+
+int adf_format::identify(io_generic *io, UINT32 form_factor)
+{
+	UINT64 size = io_generic_size(io);
+	if ((size == 901120) || (size == 912384) || (size == 1802240))
 	{
-		/* create */
-		geometry.sectors = option_resolution_lookup_int(params, PARAM_SECTORS);
+		return 50;
+	}
+	return 0;
+}
+
+bool adf_format::load(io_generic *io, UINT32 form_factor, floppy_image *image)
+{
+	desc_s sectors[22];
+	UINT8 sectdata[512*22];
+	bool is_hd = false;
+	int tracks = 80;
+
+	for(int i=0; i<22; i++) {
+		sectors[i].data = sectdata + 512*i;
+		sectors[i].size = 512;
+		sectors[i].sector_id = i;
+	}
+
+	UINT64 size = io_generic_size(io);
+	if(size == 901120)
+	{
+		is_hd = false;
+		tracks = 80;
+	}
+	else if (size == 912384)
+	{
+		is_hd = false;
+		tracks = 81;
 	}
 	else
 	{
-		/* open */
-		UINT64 size = floppy_image_size(floppy);
-		geometry.sectors = size/512/80/2;
-		if (geometry.sectors != 11 && geometry.sectors != 22)
-			return FLOPPY_ERROR_INVALIDIMAGE;
+		is_hd = true;
+		tracks = 80;
 	}
 
-	return basicdsk_construct(floppy, &geometry);
+	if (!is_hd) {
+		image->set_variant(floppy_image::DSDD);
+		for(int track=0; track < tracks; track++) {
+			for(int side=0; side < 2; side++) {
+				io_generic_read(io, sectdata, (track*2 + side)*512*11, 512*11);
+				generate_track(amiga_11, track, side, sectors, 11, 100000, image);
+			}
+		}
+	} else {
+		image->set_variant(floppy_image::DSHD);
+		for(int track=0; track < tracks; track++) {
+			for(int side=0; side < 2; side++) {
+				io_generic_read(io, sectdata, (track*2 + side)*512*22, 512*22);
+				generate_track(amiga_22, track, side, sectors, 22, 200000, image);
+			}
+		}
+	}
+
+	return true;
 }
 
+UINT32 adf_format::g32(const UINT8 *trackbuf, int track_size, int pos)
+{
+	if(pos >= 0 && track_size-pos >= 40) {
+		int pp = pos >> 3;
+		int dp = pos & 7;
+		return
+			(trackbuf[pp] << (24+dp)) |
+			(trackbuf[pp+1] << (16+dp)) |
+			(trackbuf[pp+2] << (8+dp)) |
+			(trackbuf[pp+3] << dp) |
+			(trackbuf[pp+4] >> (8-dp));
+	} else {
+		UINT32 res = 0;
+		for(int i=0; i<32; i++) {
+			int pp = (pos+i) % track_size;
+			if(trackbuf[pp>>3] & (0x80 >> (pp & 7)))
+				res |= 0x80000000 >> i;
+		}
+		return res;
+	}
+}
 
+UINT32 adf_format::checksum(const UINT8 *trackbuf, int track_size, int pos, int long_count)
+{
+	UINT32 check = 0;
+	for(int i=0; i<long_count; i++)
+		check ^= g32(trackbuf, track_size, pos+32*i);
+	return check & 0x55555555;
+}
 
-/*****************************************************************************
- Amiga floppy options
-*****************************************************************************/
+bool adf_format::save(io_generic *io, floppy_image *image)
+{
+	UINT8 sectdata[512*22];
+	UINT8 trackbuf[300000/8];
 
+	bool hd = image->get_variant() == floppy_image::DSHD;
 
-FLOPPY_OPTIONS_START( amiga )
-	FLOPPY_OPTION(
-		ami_dsk,
-		"adf",
-		"Amiga floppy disk image",
-		amiga_dsk_identify,
-		amiga_dsk_construct,
-		NULL,
-		HEADS([2])
-		TRACKS([80])
-		SECTORS([11]/22)
-	)
-FLOPPY_OPTIONS_END
+	int data_track_size = hd ? 512*22 : 512*11;
 
-FLOPPY_OPTIONS_START( amiga_only )
-	FLOPPY_OPTION(
-		ami_dsk,
-		"adf",
-		"Amiga floppy disk image",
-		amiga_dsk_identify,
-		amiga_dsk_construct,
-		NULL,
-		HEADS([2])
-		TRACKS([80])
-		SECTORS([11]/22)
-	)
-FLOPPY_OPTIONS_END0
+	for(int track=0; track < 80; track++) {
+		for(int side=0; side < 2; side++) {
+			int track_size;
+			generate_bitstream_from_track(track, side, hd ? 1000 : 2000, trackbuf, track_size, image);
+
+			for(int i=0; i<track_size; i++)
+				if(g32(trackbuf, track_size, i) == 0x44894489 &&
+					(g32(trackbuf, track_size, i+384) & 0x55555555) == checksum(trackbuf, track_size, i+32, 10) &&
+					(g32(trackbuf, track_size, i+448) & 0x55555555) == checksum(trackbuf, track_size, i+480, 256)) {
+					UINT32 head = ((g32(trackbuf, track_size, i+32) & 0x55555555) << 1) | (g32(trackbuf, track_size, i+64) & 0x55555555);
+					int sect = (head >> 8) & 0xff;
+					if(sect > (hd ? 22 : 11))
+						continue;
+
+					UINT8 *dest = sectdata + 512*sect;
+					for(int j=0; j<128; j++) {
+						UINT32 val = ((g32(trackbuf, track_size, i+480+32*j) & 0x55555555) << 1) | (g32(trackbuf, track_size, i+4576+32*j) & 0x55555555);
+						*dest++ = val >> 24;
+						*dest++ = val >> 16;
+						*dest++ = val >> 8;
+						*dest++ = val;
+					}
+
+					io_generic_write(io, sectdata, (track*2 + side)*data_track_size, data_track_size);
+				}
+		}
+	}
+	return true;
+}
+
+const floppy_format_type FLOPPY_ADF_FORMAT = &floppy_image_format_creator<adf_format>;

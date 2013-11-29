@@ -1,5 +1,5 @@
-#define ADDRESS_MAP_MODERN
-
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 #include "emu.h"
 #include "sound/cdp1869.h"
 #include "includes/tmc600.h"
@@ -45,11 +45,9 @@ WRITE8_MEMBER( tmc600_state::vismac_data_w )
 	}
 }
 
-static TIMER_DEVICE_CALLBACK( blink_tick )
+TIMER_DEVICE_CALLBACK_MEMBER(tmc600_state::blink_tick)
 {
-	tmc600_state *state = timer.machine().driver_data<tmc600_state>();
-
-	state->m_blink = !state->m_blink;
+	m_blink = !m_blink;
 }
 
 UINT8 tmc600_state::get_color(UINT16 pma)
@@ -72,7 +70,7 @@ WRITE8_MEMBER( tmc600_state::page_ram_w )
 }
 
 static ADDRESS_MAP_START( cdp1869_page_ram, AS_0, 8, tmc600_state )
-	AM_RANGE(0x000, 0x3ff) AM_MIRROR(0x400) AM_RAM AM_BASE(m_page_ram) AM_WRITE(page_ram_w)
+	AM_RANGE(0x000, 0x3ff) AM_MIRROR(0x400) AM_RAM AM_SHARE("page_ram") AM_WRITE(page_ram_w)
 ADDRESS_MAP_END
 
 static CDP1869_CHAR_RAM_READ( tmc600_char_ram_r )
@@ -82,7 +80,7 @@ static CDP1869_CHAR_RAM_READ( tmc600_char_ram_r )
 	UINT16 pageaddr = pma & TMC600_PAGE_RAM_MASK;
 	UINT8 color = state->get_color(pageaddr);
 	UINT16 charaddr = ((cma & 0x08) << 8) | (pmd << 3) | (cma & 0x07);
-	UINT8 cdb = state->m_char_rom[charaddr] & 0x3f;
+	UINT8 cdb = state->m_char_rom->base()[charaddr] & 0x3f;
 
 	int ccb0 = BIT(color, 2);
 	int ccb1 = BIT(color, 1);
@@ -102,7 +100,6 @@ static CDP1869_PCB_READ( tmc600_pcb_r )
 
 static CDP1869_INTERFACE( vis_intf )
 {
-	SCREEN_TAG,
 	CDP1869_COLOR_CLK_PAL,
 	CDP1869_PAL,
 	tmc600_pcb_r,
@@ -114,31 +111,26 @@ static CDP1869_INTERFACE( vis_intf )
 void tmc600_state::video_start()
 {
 	// allocate memory
-	m_color_ram = auto_alloc_array(machine(), UINT8, TMC600_PAGE_RAM_SIZE);
-
-	// find memory regions
-	m_char_rom = machine().region("chargen")->base();
+	m_color_ram.allocate(TMC600_PAGE_RAM_SIZE);
 
 	// register for state saving
-	state_save_register_global_pointer(machine(), m_color_ram, TMC600_PAGE_RAM_SIZE);
-
-	state_save_register_global(machine(), m_vismac_reg_latch);
-	state_save_register_global(machine(), m_vismac_color_latch);
-	state_save_register_global(machine(), m_vismac_bkg_latch);
-	state_save_register_global(machine(), m_blink);
+	save_item(NAME(m_vismac_reg_latch));
+	save_item(NAME(m_vismac_color_latch));
+	save_item(NAME(m_vismac_bkg_latch));
+	save_item(NAME(m_blink));
 }
 
 static const gfx_layout tmc600_charlayout =
 {
-	6, 9,					// 6 x 9 characters
-	256,					// 256 characters
-	1,						// 1 bits per pixel
-	{ 0 },					// no bitplanes
+	6, 9,                   // 6 x 9 characters
+	256,                    // 256 characters
+	1,                      // 1 bits per pixel
+	{ 0 },                  // no bitplanes
 	// x offsets
 	{ 2, 3, 4, 5, 6, 7 },
 	// y offsets
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8, 2048*8 },
-	8*8						// every char takes 8 x 8 bytes
+	8*8                     // every char takes 8 x 8 bytes
 };
 
 static GFXDECODE_START( tmc600 )
@@ -147,8 +139,8 @@ GFXDECODE_END
 
 MACHINE_CONFIG_FRAGMENT( tmc600_video )
 	// video hardware
-	MCFG_CDP1869_SCREEN_PAL_ADD(SCREEN_TAG, CDP1869_DOT_CLK_PAL)
-	MCFG_TIMER_ADD_PERIODIC("blink", blink_tick, attotime::from_hz(2))
+	MCFG_CDP1869_SCREEN_PAL_ADD(CDP1869_TAG, SCREEN_TAG, CDP1869_DOT_CLK_PAL)
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("blink", tmc600_state, blink_tick, attotime::from_hz(2))
 	MCFG_GFXDECODE(tmc600)
 
 	// sound hardware

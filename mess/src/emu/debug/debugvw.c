@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /*********************************************************************
 
     debugvw.c
 
     Debugger view engine.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -44,6 +15,8 @@
 #include "dvstate.h"
 #include "dvdisasm.h"
 #include "dvmemory.h"
+#include "dvbpoints.h"
+#include "dvwpoints.h"
 #include "debugcmd.h"
 #include "debugcpu.h"
 #include "debugcon.h"
@@ -61,9 +34,14 @@
 
 debug_view_source::debug_view_source(const char *name, device_t *device)
 	: m_next(NULL),
-	  m_name(name),
-	  m_device(device)
+		m_name(name),
+		m_device(device),
+		m_is_octal(false)
 {
+	device_execute_interface *intf;
+	if (device && device->interface(intf))
+		m_is_octal = intf->is_octal();
+
 }
 
 
@@ -87,9 +65,9 @@ debug_view_source::~debug_view_source()
 
 debug_view_source_list::debug_view_source_list(running_machine &machine)
 	: m_machine(machine),
-	  m_head(NULL),
-	  m_tail(NULL),
-	  m_count(0)
+		m_head(NULL),
+		m_tail(NULL),
+		m_count(0)
 {
 }
 
@@ -201,24 +179,24 @@ const debug_view_source *debug_view_source_list::match_device(device_t *device) 
 
 debug_view::debug_view(running_machine &machine, debug_view_type type, debug_view_osd_update_func osdupdate, void *osdprivate)
 	: m_next(NULL),
-	  m_type(type),
-	  m_source(NULL),
-	  m_source_list(machine),
-	  m_osdupdate(osdupdate),
-	  m_osdprivate(osdprivate),
-	  m_visible(10,10),
-	  m_total(10,10),
-	  m_topleft(0,0),
-	  m_cursor(0,0),
-	  m_supports_cursor(false),
-	  m_cursor_visible(false),
-	  m_recompute(true),
-	  m_update_level(0),
-	  m_update_pending(true),
-	  m_osd_update_pending(true),
-	  m_viewdata(NULL),
-	  m_viewdata_size(0),
-	  m_machine(machine)
+		m_type(type),
+		m_source(NULL),
+		m_source_list(machine),
+		m_osdupdate(osdupdate),
+		m_osdprivate(osdprivate),
+		m_visible(10,10),
+		m_total(10,10),
+		m_topleft(0,0),
+		m_cursor(0,0),
+		m_supports_cursor(false),
+		m_cursor_visible(false),
+		m_recompute(true),
+		m_update_level(0),
+		m_update_pending(true),
+		m_osd_update_pending(true),
+		m_viewdata(NULL),
+		m_viewdata_size(0),
+		m_machine(machine)
 {
 	// allocate memory for the buffer
 	m_viewdata_size = m_visible.y * m_visible.x;
@@ -424,6 +402,17 @@ void debug_view::view_char(int chval)
 }
 
 
+//-------------------------------------------------
+//  view_click - handle a mouse click within the
+//  current view
+//-------------------------------------------------
+
+void debug_view::view_click(const int button, const debug_view_xy& pos)
+{
+	// default does nothing
+}
+
+
 
 //**************************************************************************
 //  DEBUG VIEW MANAGER
@@ -435,7 +424,7 @@ void debug_view::view_char(int chval)
 
 debug_view_manager::debug_view_manager(running_machine &machine)
 	: m_machine(machine),
-	  m_viewlist(NULL)
+		m_viewlist(NULL)
 {
 }
 
@@ -483,6 +472,12 @@ debug_view *debug_view_manager::alloc_view(debug_view_type type, debug_view_osd_
 
 		case DVT_ALLOCS:
 //          return append(auto_alloc(machine(), debug_view_allocs(machine(), osdupdate, osdprivate)));
+
+		case DVT_BREAK_POINTS:
+			return append(auto_alloc(machine(), debug_view_breakpoints(machine(), osdupdate, osdprivate)));
+
+		case DVT_WATCH_POINTS:
+			return append(auto_alloc(machine(), debug_view_watchpoints(machine(), osdupdate, osdprivate)));
 
 		default:
 			fatalerror("Attempt to create invalid debug view type %d\n", type);
@@ -557,10 +552,10 @@ debug_view *debug_view_manager::append(debug_view *view)
 
 debug_view_expression::debug_view_expression(running_machine &machine)
 	: m_machine(machine),
-	  m_dirty(true),
-	  m_result(0),
-	  m_parsed(debug_cpu_get_global_symtable(machine)),
-	  m_string("0")
+		m_dirty(true),
+		m_result(0),
+		m_parsed(debug_cpu_get_global_symtable(machine)),
+		m_string("0")
 {
 }
 

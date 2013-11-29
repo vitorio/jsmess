@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
     TEC-1 driver, written by Robbbert in April, 2009 for MESS.
@@ -17,11 +19,18 @@ The cpu speed could be adjusted by using a potentiometer, the range being
 We emulate the original version. Later enhancements included more RAM, speech
 synthesis and various attachments, however I have no information on these.
 
+Pasting:
+        0-F : as is
+        + (inc) : ^
+        - (dec) : V
+        AD : -
+        GO : X
+
 Keys:
 0 to 9, A to F are on the key of the same name.
-AD (input an address) is the J key.
-+ and - (increment / decrement address) are the - and = keys.
-GO (execute program at current address) is the Enter key.
+AD (input an address) is the '-' key.
++ and - (increment / decrement address) are the up and down-arrow keys.
+GO (execute program at current address) is the X key.
 SHIFT - later monitor versions utilised an extra shift button. Hold
         it down and press another key (use Left Shift).
 
@@ -31,13 +40,22 @@ Each key causes a beep to be heard. You may need to press more than once
 to get it to register.
 
 Inbuilt games - press the following sequence of keys:
-- Welcome: RESET D 1 + 0 2 AD 0 2 7 0 GO GO
-- Nim: RESET AD 3 E 0 GO GO
-- Invaders: RESET AD 3 2 0 GO GO
-- Luna Lander: RESET AD 4 9 0 GO GO
+- Welcome: RESET D 1 + 0 2 AD 0 2 7 0 GO GO (Paste: D1^02 -0270XX)
+- Nim: RESET AD 3 E 0 GO GO (Paste: -3E0XX)
+- Invaders: RESET AD 3 2 0 GO GO (Paste: -320XX)
+- Luna Lander: RESET AD 4 9 0 GO GO (Paste: -490XX)
 
 Thanks to Chris Schwartz who dumped his ROM for me way back in the old days.
 It's only taken 25 years to get around to emulating it...
+
+
+Differences between tec1 and tecjmon:
+
+On the tec1 a keypress is indicated by an NMI from the 74C923; but on
+the jmon it sets bit 6 of port 3 low instead. The NMI code is simply
+a 'retn' in the jmon rom, so we can use the same code.
+The jmon includes a cassette interface, a serial input connection,
+and an optional LCD, but the games of the tec1 have been removed.
 
 
 ToDo:
@@ -45,40 +63,54 @@ ToDo:
 - The 74C923 code may need to be revisited to improve keyboard response.
   Sometimes have to press a key a few times before it registers.
 - The 10ms debounce is not emulated.
-- Needs proper artwork.
 
 
 JMON ToDo:
-- Add cassette circuitry
-- Fix keyboard
 - Add LCD display (2 rows by 16 characters)
 
 
 ***************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/speaker.h"
+#include "sound/wave.h"
+#include "imagedev/cassette.h"
 #include "tec1.lh"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define MACHINE_START_MEMBER(name) void name::machine_start()
 
 class tec1_state : public driver_device
 {
 public:
 	tec1_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, "maincpu"),
-		  m_speaker(*this, SPEAKER_TAG)
+		m_maincpu(*this, "maincpu"),
+		m_speaker(*this, "speaker"),
+		m_cass(*this, "cassette"),
+		m_wave(*this, WAVE_TAG),
+		m_key_pressed(0),
+		m_io_line0(*this, "LINE0"),
+		m_io_line1(*this, "LINE1"),
+		m_io_line2(*this, "LINE2"),
+		m_io_line3(*this, "LINE3"),
+		m_io_shift(*this, "SHIFT")
 	{ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_speaker;
+	required_device<speaker_sound_device> m_speaker;
+	optional_device<cassette_image_device> m_cass;
+	optional_device<wave_device> m_wave;
+	bool m_key_pressed;
+	required_ioport m_io_line0;
+	required_ioport m_io_line1;
+	required_ioport m_io_line2;
+	required_ioport m_io_line3;
+	required_ioport m_io_shift;
 	emu_timer *m_kbd_timer;
 	DECLARE_READ8_MEMBER( tec1_kbd_r );
+	DECLARE_READ8_MEMBER( latch_r );
 	DECLARE_WRITE8_MEMBER( tec1_digit_w );
+	DECLARE_WRITE8_MEMBER( tecjmon_digit_w );
 	DECLARE_WRITE8_MEMBER( tec1_segment_w );
 	UINT8 m_kbd;
 	UINT8 m_segment;
@@ -88,6 +120,7 @@ public:
 	UINT8 tec1_convert_col_to_bin( UINT8 col, UINT8 row );
 	virtual void machine_reset();
 	virtual void machine_start();
+	TIMER_CALLBACK_MEMBER(tec1_kbd_callback);
 };
 
 
@@ -124,8 +157,24 @@ WRITE8_MEMBER( tec1_state::tec1_digit_w )
     d1 address digit 3
     d0 address digit 4 */
 
-	speaker_level_w(m_speaker, BIT(data, 7));
+	m_speaker->level_w(BIT(data, 7));
 
+	m_digit = data & 0x3f;
+}
+
+WRITE8_MEMBER( tec1_state::tecjmon_digit_w )
+{
+/*  d7 speaker & cassout
+    d6 not used
+    d5 data digit 1
+    d4 data digit 2
+    d3 address digit 1
+    d2 address digit 2
+    d1 address digit 3
+    d0 address digit 4 */
+
+	m_speaker->level_w(BIT(data, 7));
+	m_cass->output(BIT(data, 7) ? -1.0 : +1.0);
 	m_digit = data & 0x3f;
 }
 
@@ -136,10 +185,22 @@ WRITE8_MEMBER( tec1_state::tec1_digit_w )
 
 ***************************************************************************/
 
+READ8_MEMBER( tec1_state::latch_r )
+{
+// bit 7 - cass in ; bit 6 low = key pressed
+	UINT8 data = (m_key_pressed) ? 0 : 0x40;
+
+	if (m_cass->input() > 0.03)
+		data |= 0x80;
+
+	return data;
+}
+
+
 READ8_MEMBER( tec1_state::tec1_kbd_r )
 {
-	cputag_set_input_line(machine(), "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
-	return m_kbd | input_port_read(machine(), "SHIFT");
+	m_maincpu->set_input_line(INPUT_LINE_NMI, CLEAR_LINE);
+	return m_kbd | m_io_shift->read();
 }
 
 UINT8 tec1_state::tec1_convert_col_to_bin( UINT8 col, UINT8 row )
@@ -161,47 +222,75 @@ UINT8 tec1_state::tec1_convert_col_to_bin( UINT8 col, UINT8 row )
 	return data;
 }
 
-static TIMER_CALLBACK( tec1_kbd_callback )
+TIMER_CALLBACK_MEMBER(tec1_state::tec1_kbd_callback)
 {
-	static const char *const keynames[] = { "LINE0", "LINE1", "LINE2", "LINE3" };
-	tec1_state *state = machine.driver_data<tec1_state>();
 	UINT8 i;
 
-    // Display the digits. Blank any digits that haven't been refreshed for a while.
-    // This will fix the problem reported by a user.
+	// Display the digits. Blank any digits that haven't been refreshed for a while.
+	// This will fix the problem reported by a user.
 	for (i = 0; i < 6; i++)
 	{
-		if (BIT(state->m_digit, i))
+		if (BIT(m_digit, i))
 		{
-			state->m_refresh[i] = 1;
-			output_set_digit_value(i, state->m_segment);
+			m_refresh[i] = 1;
+			output_set_digit_value(i, m_segment);
 		}
 		else
-		if (state->m_refresh[i] == 0x80)
+		if (m_refresh[i] == 0x80)
 		{
 			output_set_digit_value(i, 0);
-			state->m_refresh[i] = 0;
+			m_refresh[i] = 0;
 		}
 		else
-		if (state->m_refresh[i])
-			state->m_refresh[i]++;
+		if (m_refresh[i])
+			m_refresh[i]++;
 	}
 
-    // 74C923 4 by 5 key encoder.
-    // if previous key is still held, bail out
-	if (input_port_read(machine, keynames[state->m_kbd_row]))
-		if (state->tec1_convert_col_to_bin(input_port_read(machine, keynames[state->m_kbd_row]), state->m_kbd_row) == state->m_kbd)
+	// 74C923 4 by 5 key encoder.
+
+	/* Look at old row */
+	if (m_kbd_row == 0)
+		i = m_io_line0->read();
+	else
+	if (m_kbd_row == 1)
+		i = m_io_line1->read();
+	else
+	if (m_kbd_row == 2)
+		i = m_io_line2->read();
+	else
+	if (m_kbd_row == 3)
+		i = m_io_line3->read();
+
+	/* if previous key is still held, bail out */
+	if (i)
+		if (tec1_convert_col_to_bin(i, m_kbd_row) == m_kbd)
 			return;
 
-	state->m_kbd_row++;
-	state->m_kbd_row &= 3;
+	m_kbd_row++;
+	m_kbd_row &= 3;
+
+	/* Look at a new row */
+	if (m_kbd_row == 0)
+		i = m_io_line0->read();
+	else
+	if (m_kbd_row == 1)
+		i = m_io_line1->read();
+	else
+	if (m_kbd_row == 2)
+		i = m_io_line2->read();
+	else
+	if (m_kbd_row == 3)
+		i = m_io_line3->read();
 
 	/* see if a key pressed */
-	if (input_port_read(machine, keynames[state->m_kbd_row]))
+	if (i)
 	{
-		state->m_kbd = state->tec1_convert_col_to_bin(input_port_read(machine, keynames[state->m_kbd_row]), state->m_kbd_row);
-		cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, HOLD_LINE);
+		m_kbd = tec1_convert_col_to_bin(i, m_kbd_row);
+		m_maincpu->set_input_line(INPUT_LINE_NMI, HOLD_LINE);
+		m_key_pressed = TRUE;
 	}
+	else
+		m_key_pressed = FALSE;
 }
 
 
@@ -211,13 +300,13 @@ static TIMER_CALLBACK( tec1_kbd_callback )
 
 ***************************************************************************/
 
-MACHINE_START_MEMBER( tec1_state )
+void tec1_state::machine_start()
 {
-	m_kbd_timer = machine().scheduler().timer_alloc(FUNC(tec1_kbd_callback));
+	m_kbd_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(tec1_state::tec1_kbd_callback),this));
 	m_kbd_timer->adjust( attotime::zero, 0, attotime::from_hz(500) );
 }
 
-MACHINE_RESET_MEMBER( tec1_state )
+void tec1_state::machine_reset()
 {
 	m_kbd = 0;
 }
@@ -255,9 +344,9 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( tecjmon_io, AS_IO, 8, tec1_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(tec1_kbd_r)
-	AM_RANGE(0x01, 0x01) AM_WRITE(tec1_digit_w)
+	AM_RANGE(0x01, 0x01) AM_WRITE(tecjmon_digit_w)
 	AM_RANGE(0x02, 0x02) AM_WRITE(tec1_segment_w)
-	//AM_RANGE(0x03, 0x03) AM_READ(latch_r)
+	AM_RANGE(0x03, 0x03) AM_READ(latch_r)
 	//AM_RANGE(0x04, 0x04) AM_WRITE(lcd_en_w)
 	//AM_RANGE(0x84, 0x84) AM_WRITE(lcd_2nd_w)
 ADDRESS_MAP_END
@@ -271,32 +360,32 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( tec1 )
 	PORT_START("LINE0") /* KEY ROW 0 */
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("0") PORT_CODE(KEYCODE_0)	PORT_CHAR('0')
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4") PORT_CODE(KEYCODE_4)	PORT_CHAR('4')
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("8") PORT_CODE(KEYCODE_8)	PORT_CHAR('8')
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("C") PORT_CODE(KEYCODE_C)	PORT_CHAR('C')
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("+") PORT_CODE(KEYCODE_EQUALS)	PORT_CHAR('=')
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("0") PORT_CODE(KEYCODE_0)    PORT_CHAR('0')
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("4") PORT_CODE(KEYCODE_4)    PORT_CHAR('4')
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("8") PORT_CODE(KEYCODE_8)    PORT_CHAR('8')
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("C") PORT_CODE(KEYCODE_C)    PORT_CHAR('C')
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("+") PORT_CODE(KEYCODE_UP)   PORT_CHAR('^')
 
 	PORT_START("LINE1") /* KEY ROW 1 */
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1") PORT_CODE(KEYCODE_1)	PORT_CHAR('1')
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("5") PORT_CODE(KEYCODE_5)	PORT_CHAR('5')
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("9") PORT_CODE(KEYCODE_9)	PORT_CHAR('9')
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("D") PORT_CODE(KEYCODE_D)	PORT_CHAR('D')
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("-") PORT_CODE(KEYCODE_MINUS)	PORT_CHAR('-')
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("1") PORT_CODE(KEYCODE_1)    PORT_CHAR('1')
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("5") PORT_CODE(KEYCODE_5)    PORT_CHAR('5')
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("9") PORT_CODE(KEYCODE_9)    PORT_CHAR('9')
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("D") PORT_CODE(KEYCODE_D)    PORT_CHAR('D')
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("-") PORT_CODE(KEYCODE_DOWN) PORT_CHAR('V')
 
 	PORT_START("LINE2") /* KEY ROW 2 */
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2") PORT_CODE(KEYCODE_2)	PORT_CHAR('2')
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("6") PORT_CODE(KEYCODE_6)	PORT_CHAR('6')
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("A") PORT_CODE(KEYCODE_A)	PORT_CHAR('A')
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("E") PORT_CODE(KEYCODE_E)	PORT_CHAR('E')
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("GO") PORT_CODE(KEYCODE_ENTER)	PORT_CHAR(13)
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("2") PORT_CODE(KEYCODE_2)    PORT_CHAR('2')
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("6") PORT_CODE(KEYCODE_6)    PORT_CHAR('6')
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("A") PORT_CODE(KEYCODE_A)    PORT_CHAR('A')
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("E") PORT_CODE(KEYCODE_E)    PORT_CHAR('E')
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("GO") PORT_CODE(KEYCODE_X)   PORT_CHAR('X')
 
 	PORT_START("LINE3") /* KEY ROW 3 */
-	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3") PORT_CODE(KEYCODE_3)	PORT_CHAR('3')
-	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("7") PORT_CODE(KEYCODE_7)	PORT_CHAR('7')
-	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("B") PORT_CODE(KEYCODE_B)	PORT_CHAR('B')
-	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("F") PORT_CODE(KEYCODE_F)	PORT_CHAR('F')
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("AD") PORT_CODE(KEYCODE_J)	PORT_CHAR('J')
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("3") PORT_CODE(KEYCODE_3)    PORT_CHAR('3')
+	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("7") PORT_CODE(KEYCODE_7)    PORT_CHAR('7')
+	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("B") PORT_CODE(KEYCODE_B)    PORT_CHAR('B')
+	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("F") PORT_CODE(KEYCODE_F)    PORT_CHAR('F')
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("AD") PORT_CODE(KEYCODE_MINUS)   PORT_CHAR('-')
 
 	PORT_START("SHIFT")
 	PORT_BIT(0x1f, IP_ACTIVE_HIGH, IPT_UNUSED)
@@ -313,7 +402,7 @@ INPUT_PORTS_END
 
 static MACHINE_CONFIG_START( tec1, tec1_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 1000000)	/* speed can be varied between 250kHz and 2MHz */
+	MCFG_CPU_ADD("maincpu", Z80, 1000000)   /* speed can be varied between 250kHz and 2MHz */
 	MCFG_CPU_PROGRAM_MAP(tec1_map)
 	MCFG_CPU_IO_MAP(tec1_io)
 
@@ -322,7 +411,7 @@ static MACHINE_CONFIG_START( tec1, tec1_state )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_CONFIG_END
 
@@ -337,8 +426,13 @@ static MACHINE_CONFIG_START( tecjmon, tec1_state )
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+
+	/* Devices */
+	MCFG_CASSETTE_ADD( "cassette", default_cassette_interface )
 MACHINE_CONFIG_END
 
 
@@ -364,6 +458,6 @@ ROM_START(tecjmon)
 	ROM_LOAD("util.rom",    0x3800, 0x0800, CRC(7c19700d) SHA1(dc5b3ade66bb11c54430056966ed99cdd299d82b) )
 ROM_END
 
-/*    YEAR  NAME      PARENT  COMPAT  MACHINE     INPUT    INIT       COMPANY  FULLNAME */
-COMP( 1984, tec1,     0,      0,      tec1,       tec1,    0,		"Talking Electronics magazine",  "TEC-1" , 0 )
-COMP( 1984, tecjmon,  tec1,   0,      tecjmon,    tec1,    0,		"Talking Electronics magazine",  "TEC-1A with JMON" , GAME_NOT_WORKING )
+/*    YEAR  NAME      PARENT  COMPAT  MACHINE     INPUT    INIT       COMPANY                     FULLNAME */
+COMP( 1984, tec1,     0,      0,      tec1,       tec1, driver_device,    0,    "Talking Electronics magazine",  "TEC-1" , 0 )
+COMP( 1984, tecjmon,  tec1,   0,      tecjmon,    tec1, driver_device,    0,    "Talking Electronics magazine",  "TEC-1A with JMON" , 0 )

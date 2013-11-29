@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     Sega vector hardware
@@ -122,7 +124,7 @@
 
     Known problems:
 
-    1 The games seem to run too fast. This is most noticable
+    1 The games seem to run too fast. This is most noticeable
       with the speech samples in Zektor - they don't match the mouth.
       Slowing down the Z80 doesn't help and in fact hurts performance.
 
@@ -136,7 +138,6 @@
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/samples.h"
-#include "audio/segasnd.h"
 #include "machine/segag80.h"
 #include "includes/segag80v.h"
 
@@ -147,8 +148,8 @@
  *
  *************************************/
 
-#define CPU_CLOCK			8000000
-#define VIDEO_CLOCK			15468480
+#define CPU_CLOCK           8000000
+#define VIDEO_CLOCK         15468480
 
 
 
@@ -158,23 +159,22 @@
  *
  *************************************/
 
-static INPUT_CHANGED( service_switch )
+INPUT_CHANGED_MEMBER(segag80v_state::service_switch)
 {
 	/* pressing the service switch sends an NMI */
 	if (newval)
-		cputag_set_input_line(field.machine(), "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+		m_maincpu->set_input_line(INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
-static MACHINE_START( g80v )
+void segag80v_state::machine_start()
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
 	/* register for save states */
-	state_save_register_global_array(machine, state->m_mult_data);
-	state_save_register_global(machine, state->m_mult_result);
-	state_save_register_global(machine, state->m_spinner_select);
-	state_save_register_global(machine, state->m_spinner_sign);
-	state_save_register_global(machine, state->m_spinner_count);
+	save_item(NAME(m_mult_data));
+	save_item(NAME(m_mult_result));
+	save_item(NAME(m_spinner_select));
+	save_item(NAME(m_spinner_sign));
+	save_item(NAME(m_spinner_count));
 }
 
 
@@ -185,30 +185,26 @@ static MACHINE_START( g80v )
  *
  *************************************/
 
-static offs_t decrypt_offset(address_space *space, offs_t offset)
+offs_t segag80v_state::decrypt_offset(address_space &space, offs_t offset)
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
-
 	/* ignore anything but accesses via opcode $32 (LD $(XXYY),A) */
-	offs_t pc = cpu_get_previouspc(&space->device());
-	if ((UINT16)pc == 0xffff || space->read_byte(pc) != 0x32)
+	offs_t pc = space.device().safe_pcbase();
+	if ((UINT16)pc == 0xffff || space.read_byte(pc) != 0x32)
 		return offset;
 
 	/* fetch the low byte of the address and munge it */
-	return (offset & 0xff00) | (*state->m_decrypt)(pc, space->read_byte(pc + 1));
+	return (offset & 0xff00) | (*m_decrypt)(pc, space.read_byte(pc + 1));
 }
 
-static WRITE8_HANDLER( mainram_w )
+WRITE8_MEMBER(segag80v_state::mainram_w)
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
-	state->m_mainram[decrypt_offset(space, offset)] = data;
+	m_mainram[decrypt_offset(space, offset)] = data;
 }
 
-static WRITE8_DEVICE_HANDLER( usb_ram_w ) { sega_usb_ram_w(device, decrypt_offset(device->machine().device("maincpu")->memory().space(AS_PROGRAM), offset), data); }
-static WRITE8_HANDLER( vectorram_w )
+WRITE8_MEMBER(segag80v_state::usb_ram_w){ m_usb->ram_w(space, decrypt_offset(m_maincpu->space(AS_PROGRAM), offset), data); }
+WRITE8_MEMBER(segag80v_state::vectorram_w)
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
-	state->m_vectorram[decrypt_offset(space, offset)] = data;
+	m_vectorram[decrypt_offset(space, offset)] = data;
 }
 
 
@@ -219,26 +215,26 @@ static WRITE8_HANDLER( vectorram_w )
  *
  *************************************/
 
-INLINE UINT8 demangle(UINT8 d7d6, UINT8 d5d4, UINT8 d3d2, UINT8 d1d0)
+inline UINT8 segag80v_state::demangle(UINT8 d7d6, UINT8 d5d4, UINT8 d3d2, UINT8 d1d0)
 {
 	return ((d7d6 << 7) & 0x80) | ((d7d6 << 2) & 0x40) |
-		   ((d5d4 << 5) & 0x20) | ((d5d4 << 0) & 0x10) |
-		   ((d3d2 << 3) & 0x08) | ((d3d2 >> 2) & 0x04) |
-		   ((d1d0 << 1) & 0x02) | ((d1d0 >> 4) & 0x01);
+			((d5d4 << 5) & 0x20) | ((d5d4 << 0) & 0x10) |
+			((d3d2 << 3) & 0x08) | ((d3d2 >> 2) & 0x04) |
+			((d1d0 << 1) & 0x02) | ((d1d0 >> 4) & 0x01);
 }
 
 
-static READ8_HANDLER( mangled_ports_r )
+READ8_MEMBER(segag80v_state::mangled_ports_r)
 {
 	/* The input ports are odd. Neighboring lines are read via a mux chip  */
 	/* one bit at a time. This means that one bank of DIP switches will be */
 	/* read as two bits from each of 4 ports. For this reason, the input   */
 	/* ports have been organized logically, and are demangled at runtime.  */
 	/* 4 input ports each provide 8 bits of information. */
-	UINT8 d7d6 = input_port_read(space->machine(), "D7D6");
-	UINT8 d5d4 = input_port_read(space->machine(), "D5D4");
-	UINT8 d3d2 = input_port_read(space->machine(), "D3D2");
-	UINT8 d1d0 = input_port_read(space->machine(), "D1D0");
+	UINT8 d7d6 = ioport("D7D6")->read();
+	UINT8 d5d4 = ioport("D5D4")->read();
+	UINT8 d3d2 = ioport("D3D2")->read();
+	UINT8 d1d0 = ioport("D1D0")->read();
 	int shift = offset & 3;
 	return demangle(d7d6 >> shift, d5d4 >> shift, d3d2 >> shift, d1d0 >> shift);
 }
@@ -251,20 +247,18 @@ static READ8_HANDLER( mangled_ports_r )
  *
  *************************************/
 
-static WRITE8_HANDLER( spinner_select_w )
+WRITE8_MEMBER(segag80v_state::spinner_select_w)
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
-	state->m_spinner_select = data;
+	m_spinner_select = data;
 }
 
 
-static READ8_HANDLER( spinner_input_r )
+READ8_MEMBER(segag80v_state::spinner_input_r)
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
 	INT8 delta;
 
-	if (state->m_spinner_select & 1)
-		return input_port_read(space->machine(), "FC");
+	if (m_spinner_select & 1)
+		return ioport("FC")->read();
 
 /*
  * The values returned are always increasing.  That is, regardless of whether
@@ -274,13 +268,13 @@ static READ8_HANDLER( spinner_input_r )
  */
 
 	/* I'm sure this can be further simplified ;-) BW */
-	delta = input_port_read(space->machine(), "SPINNER");
+	delta = ioport("SPINNER")->read();
 	if (delta != 0)
 	{
-		state->m_spinner_sign = (delta >> 7) & 1;
-		state->m_spinner_count += abs(delta);
+		m_spinner_sign = (delta >> 7) & 1;
+		m_spinner_count += abs(delta);
 	}
-	return ~((state->m_spinner_count << 1) | state->m_spinner_sign);
+	return ~((m_spinner_count << 1) | m_spinner_sign);
 }
 
 
@@ -291,30 +285,29 @@ static READ8_HANDLER( spinner_input_r )
  *
  *************************************/
 
-static CUSTOM_INPUT( elim4_joint_coin_r )
+CUSTOM_INPUT_MEMBER(segag80v_state::elim4_joint_coin_r)
 {
-	return (input_port_read(field.machine(), "COINS") & 0xf) != 0xf;
+	return (ioport("COINS")->read() & 0xf) != 0xf;
 }
 
 
-static READ8_HANDLER( elim4_input_r )
+READ8_MEMBER(segag80v_state::elim4_input_r)
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
 	UINT8 result = 0;
 
 	/* bit 3 enables demux */
-	if (state->m_spinner_select & 8)
+	if (m_spinner_select & 8)
 	{
 		/* Demux bit 0-2. Only 6 and 7 are connected */
-		switch (state->m_spinner_select & 7)
+		switch (m_spinner_select & 7)
 		{
 			case 6:
 				/* player 3 & 4 controls */
-				result = input_port_read(space->machine(), "FC");
+				result = ioport("FC")->read();
 				break;
 			case 7:
 				/* the 4 coin inputs */
-				result = input_port_read(space->machine(), "COINS");
+				result = ioport("COINS")->read();
 				break;
 		}
 	}
@@ -331,20 +324,18 @@ static READ8_HANDLER( elim4_input_r )
  *
  *************************************/
 
-static WRITE8_HANDLER( multiply_w )
+WRITE8_MEMBER(segag80v_state::multiply_w)
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
-	state->m_mult_data[offset] = data;
+	m_mult_data[offset] = data;
 	if (offset == 1)
-		state->m_mult_result = state->m_mult_data[0] * state->m_mult_data[1];
+		m_mult_result = m_mult_data[0] * m_mult_data[1];
 }
 
 
-static READ8_HANDLER( multiply_r )
+READ8_MEMBER(segag80v_state::multiply_r)
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
-	UINT8 result = state->m_mult_result;
-	state->m_mult_result >>= 8;
+	UINT8 result = m_mult_result;
+	m_mult_result >>= 8;
 	return result;
 }
 
@@ -356,19 +347,19 @@ static READ8_HANDLER( multiply_r )
  *
  *************************************/
 
-static WRITE8_HANDLER( coin_count_w )
+WRITE8_MEMBER(segag80v_state::coin_count_w)
 {
-	coin_counter_w(space->machine(), 0, (data >> 7) & 1);
-	coin_counter_w(space->machine(), 1, (data >> 6) & 1);
+	coin_counter_w(machine(), 0, (data >> 7) & 1);
+	coin_counter_w(machine(), 1, (data >> 6) & 1);
 }
 
 
-static WRITE8_HANDLER( unknown_w )
+WRITE8_MEMBER(segag80v_state::unknown_w)
 {
 	/* writing an 0x04 here enables interrupts */
 	/* some games write 0x00/0x01 here as well */
 	if (data != 0x00 && data != 0x01 && data != 0x04)
-		mame_printf_debug("%04X:unknown_w = %02X\n", cpu_get_pc(&space->device()), data);
+		mame_printf_debug("%04X:unknown_w = %02X\n", space.device().safe_pc(), data);
 }
 
 
@@ -380,16 +371,16 @@ static WRITE8_HANDLER( unknown_w )
  *************************************/
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_ROM		/* CPU board ROM */
-	AM_RANGE(0x0800, 0xbfff) AM_ROM		/* PROM board ROM area */
-	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(mainram_w) AM_BASE_MEMBER(segag80v_state, m_mainram)
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(vectorram_w) AM_BASE_MEMBER(segag80v_state, m_vectorram) AM_SIZE_MEMBER(segag80v_state, m_vectorram_size)
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8, segag80v_state )
+	AM_RANGE(0x0000, 0x07ff) AM_ROM     /* CPU board ROM */
+	AM_RANGE(0x0800, 0xbfff) AM_ROM     /* PROM board ROM area */
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(mainram_w) AM_SHARE("mainram")
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(vectorram_w) AM_SHARE("vectorram")
 ADDRESS_MAP_END
 
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, AS_IO, 8, segag80v_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0xbc, 0xbc) /* AM_READ ??? */
 	AM_RANGE(0xbd, 0xbe) AM_WRITE(multiply_w)
@@ -411,83 +402,83 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( g80v_generic )
 	PORT_START("D7D6")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_IMPULSE(3)	/* P1.5 */
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )					/* n/c */
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )					/* n/c */
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNUSED )					/* n/c */
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_IMPULSE(3)	/* P1.8 */
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.13 */
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.14 */
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )					/* n/c */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_IMPULSE(3)  /* P1.5 */
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )                 /* n/c */
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )                 /* n/c */
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNUSED )                 /* n/c */
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_IMPULSE(3)  /* P1.8 */
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.13 */
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.14 */
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )                 /* n/c */
 
 	PORT_START("D5D4")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SERVICE1 )				/* P1.10 */
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START1 )					/* P1.15 */
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.16 */
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.17 */
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.18 */
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START2 )					/* P1.19 */
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.20 */
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.21 */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SERVICE1 )               /* P1.10 */
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START1 )                 /* P1.15 */
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.16 */
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.17 */
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.18 */
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START2 )                 /* P1.19 */
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.20 */
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.21 */
 
 	PORT_START("D3D2")
-	PORT_DIPUNKNOWN_DIPLOC( 0x01, 0x01, "SW1:8" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x02, 0x02, "SW1:7" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "SW1:6" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x08, "SW1:5" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x01, "SW1:4" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x20, 0x02, "SW1:3" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x40, 0x04, "SW1:2" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x80, 0x08, "SW1:1" )
+	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW1:8" )
+	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW1:7" )
+	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW1:6" )
+	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "SW1:5" )
+	PORT_DIPUNUSED_DIPLOC( 0x10, 0x01, "SW1:4" )
+	PORT_DIPUNUSED_DIPLOC( 0x20, 0x02, "SW1:3" )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x04, "SW1:2" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x08, "SW1:1" )
 
 	PORT_START("D1D0")
 	PORT_DIPNAME( 0x0f, 0x03, DEF_STR( Coin_A )) PORT_DIPLOCATION("SW2:8,7,6,5")
-	PORT_DIPSETTING(	0x00, DEF_STR( 4C_1C ))
-	PORT_DIPSETTING(	0x01, DEF_STR( 3C_1C ))
-	PORT_DIPSETTING(	0x09, "2 Coins/1 Credit 5/3 6/4" )
-	PORT_DIPSETTING(	0x0a, "2 Coins/1 Credit 4/3" )
-	PORT_DIPSETTING(	0x02, DEF_STR( 2C_1C ))
-	PORT_DIPSETTING(	0x03, DEF_STR( 1C_1C ))
-	PORT_DIPSETTING(	0x0b, "1 Coin/1 Credit 5/6" )
-	PORT_DIPSETTING(	0x0c, "1 Coin/1 Credit 4/5" )
-	PORT_DIPSETTING(	0x0d, "1 Coin/1 Credit 2/3" )
-	PORT_DIPSETTING(	0x04, DEF_STR( 1C_2C ))
-	PORT_DIPSETTING(	0x0f, "1 Coin/2 Credits 4/9" )
-	PORT_DIPSETTING(	0x0e, "1 Coin/2 Credits 5/11" )
-	PORT_DIPSETTING(	0x05, DEF_STR( 1C_3C ))
-	PORT_DIPSETTING(	0x06, DEF_STR( 1C_4C ))
-	PORT_DIPSETTING(	0x07, DEF_STR( 1C_5C ))
-	PORT_DIPSETTING(	0x08, DEF_STR( 1C_6C ))
+	PORT_DIPSETTING(    0x00, DEF_STR( 4C_1C ))
+	PORT_DIPSETTING(    0x01, DEF_STR( 3C_1C ))
+	PORT_DIPSETTING(    0x09, "2 Coins/1 Credit 5/3 6/4" )
+	PORT_DIPSETTING(    0x0a, "2 Coins/1 Credit 4/3" )
+	PORT_DIPSETTING(    0x02, DEF_STR( 2C_1C ))
+	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ))
+	PORT_DIPSETTING(    0x0b, "1 Coin/1 Credit 5/6" )
+	PORT_DIPSETTING(    0x0c, "1 Coin/1 Credit 4/5" )
+	PORT_DIPSETTING(    0x0d, "1 Coin/1 Credit 2/3" )
+	PORT_DIPSETTING(    0x04, DEF_STR( 1C_2C ))
+	PORT_DIPSETTING(    0x0f, "1 Coin/2 Credits 4/9" )
+	PORT_DIPSETTING(    0x0e, "1 Coin/2 Credits 5/11" )
+	PORT_DIPSETTING(    0x05, DEF_STR( 1C_3C ))
+	PORT_DIPSETTING(    0x06, DEF_STR( 1C_4C ))
+	PORT_DIPSETTING(    0x07, DEF_STR( 1C_5C ))
+	PORT_DIPSETTING(    0x08, DEF_STR( 1C_6C ))
 	PORT_DIPNAME( 0xf0, 0x30, DEF_STR( Coin_B )) PORT_DIPLOCATION("SW2:4,3,2,1")
-	PORT_DIPSETTING(	0x00, DEF_STR( 4C_1C ))
-	PORT_DIPSETTING(	0x10, DEF_STR( 3C_1C ))
-	PORT_DIPSETTING(	0x90, "2 Coins/1 Credit 5/3 6/4" )
-	PORT_DIPSETTING(	0xa0, "2 Coins/1 Credit 4/3" )
-	PORT_DIPSETTING(	0x20, DEF_STR( 2C_1C ))
-	PORT_DIPSETTING(	0x30, DEF_STR( 1C_1C ))
-	PORT_DIPSETTING(	0xb0, "1 Coin/1 Credit 5/6" )
-	PORT_DIPSETTING(	0xc0, "1 Coin/1 Credit 4/5" )
-	PORT_DIPSETTING(	0xd0, "1 Coin/1 Credit 2/3" )
-	PORT_DIPSETTING(	0x40, DEF_STR( 1C_2C ))
-	PORT_DIPSETTING(	0xf0, "1 Coin/2 Credits 4/9" )
-	PORT_DIPSETTING(	0xe0, "1 Coin/2 Credits 5/11" )
-	PORT_DIPSETTING(	0x50, DEF_STR( 1C_3C ))
-	PORT_DIPSETTING(	0x60, DEF_STR( 1C_4C ))
-	PORT_DIPSETTING(	0x70, DEF_STR( 1C_5C ))
-	PORT_DIPSETTING(	0x80, DEF_STR( 1C_6C ))
+	PORT_DIPSETTING(    0x00, DEF_STR( 4C_1C ))
+	PORT_DIPSETTING(    0x10, DEF_STR( 3C_1C ))
+	PORT_DIPSETTING(    0x90, "2 Coins/1 Credit 5/3 6/4" )
+	PORT_DIPSETTING(    0xa0, "2 Coins/1 Credit 4/3" )
+	PORT_DIPSETTING(    0x20, DEF_STR( 2C_1C ))
+	PORT_DIPSETTING(    0x30, DEF_STR( 1C_1C ))
+	PORT_DIPSETTING(    0xb0, "1 Coin/1 Credit 5/6" )
+	PORT_DIPSETTING(    0xc0, "1 Coin/1 Credit 4/5" )
+	PORT_DIPSETTING(    0xd0, "1 Coin/1 Credit 2/3" )
+	PORT_DIPSETTING(    0x40, DEF_STR( 1C_2C ))
+	PORT_DIPSETTING(    0xf0, "1 Coin/2 Credits 4/9" )
+	PORT_DIPSETTING(    0xe0, "1 Coin/2 Credits 5/11" )
+	PORT_DIPSETTING(    0x50, DEF_STR( 1C_3C ))
+	PORT_DIPSETTING(    0x60, DEF_STR( 1C_4C ))
+	PORT_DIPSETTING(    0x70, DEF_STR( 1C_5C ))
+	PORT_DIPSETTING(    0x80, DEF_STR( 1C_6C ))
 
 	PORT_START("FC")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNUSED )				/* P1.23 */
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_UNUSED )				/* P1.24 */
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_UNUSED )				/* P1.25 */
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNUSED )				/* P1.26 */
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_UNUSED )				/* P1.27 */
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNUSED )				/* P1.28 */
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNUSED )				/* P1.29 */
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNUSED )				/* P1.30 */
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNUSED )                /* P1.23 */
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_UNUSED )                /* P1.24 */
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_UNUSED )                /* P1.25 */
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNUSED )                /* P1.26 */
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_UNUSED )                /* P1.27 */
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNUSED )                /* P1.28 */
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNUSED )                /* P1.29 */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNUSED )                /* P1.30 */
 
 	PORT_START("SERVICESW")
-	PORT_SERVICE_NO_TOGGLE( 0x01, IP_ACTIVE_HIGH ) PORT_CHANGED(service_switch, 0)
+	PORT_SERVICE_NO_TOGGLE( 0x01, IP_ACTIVE_HIGH ) PORT_CHANGED_MEMBER(DEVICE_SELF, segag80v_state,service_switch, 0)
 INPUT_PORTS_END
 
 
@@ -513,24 +504,24 @@ static INPUT_PORTS_START( elim2 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_PLAYER(2)
 
 	PORT_MODIFY("D3D2")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))		PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(	0x01, DEF_STR( Upright ))		// This switch is not documented in the manual
-	PORT_DIPSETTING(	0x00, DEF_STR( Cocktail ))
-	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW1:7" )		// Unused according to manual
-	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ))			PORT_DIPLOCATION("SW1:6,5")
-	PORT_DIPSETTING(	0x04, "3" )
-	PORT_DIPSETTING(	0x08, "4" )
-	PORT_DIPSETTING(	0x0c, "5" )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ))	PORT_DIPLOCATION("SW1:4,3")
-	PORT_DIPSETTING(	0x00, DEF_STR( Easy ))			// This option is not documented in the manual
-	PORT_DIPSETTING(	0x10, DEF_STR( Medium ))
-	PORT_DIPSETTING(	0x20, DEF_STR( Hard ))
-	PORT_DIPSETTING(	0x30, DEF_STR( Hardest ))
-	PORT_DIPNAME( 0xc0, 0x40, DEF_STR( Bonus_Life ))	PORT_DIPLOCATION("SW1:2,1")
-	PORT_DIPSETTING(	0xc0, DEF_STR( None ))
-	PORT_DIPSETTING(	0x80, "10000" )
-	PORT_DIPSETTING(	0x40, "20000" )
-	PORT_DIPSETTING(	0x00, "30000" )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))       PORT_DIPLOCATION("SW1:8")
+	PORT_DIPSETTING(    0x01, DEF_STR( Upright ))       // This switch is not documented in the manual
+	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ))
+	//"SW1:7" unused                                    // Unused according to manual
+	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ))         PORT_DIPLOCATION("SW1:6,5")
+	PORT_DIPSETTING(    0x04, "3" )
+	PORT_DIPSETTING(    0x08, "4" )
+	PORT_DIPSETTING(    0x0c, "5" )
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ))    PORT_DIPLOCATION("SW1:4,3")
+	PORT_DIPSETTING(    0x00, DEF_STR( Easy ))          // This option is not documented in the manual
+	PORT_DIPSETTING(    0x10, DEF_STR( Medium ))
+	PORT_DIPSETTING(    0x20, DEF_STR( Hard ))
+	PORT_DIPSETTING(    0x30, DEF_STR( Hardest ))
+	PORT_DIPNAME( 0xc0, 0x40, DEF_STR( Bonus_Life ))    PORT_DIPLOCATION("SW1:2,1")
+	PORT_DIPSETTING(    0xc0, DEF_STR( None ))
+	PORT_DIPSETTING(    0x80, "10000" )
+	PORT_DIPSETTING(    0x40, "20000" )
+	PORT_DIPSETTING(    0x00, "30000" )
 
 	PORT_MODIFY("FC")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(2)
@@ -562,7 +553,7 @@ static INPUT_PORTS_START( elim4 )
 	PORT_INCLUDE( g80v_generic )
 
 	PORT_MODIFY("D7D6")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_CUSTOM(elim4_joint_coin_r, NULL)	/* combination of all four coin inputs */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_CUSTOM_MEMBER(DEVICE_SELF, segag80v_state,elim4_joint_coin_r, NULL)   /* combination of all four coin inputs */
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 
@@ -576,40 +567,40 @@ static INPUT_PORTS_START( elim4 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )
 
 	PORT_MODIFY("D3D2")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))		PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(	0x01, DEF_STR( Upright ))		// This switch is not documented in the manual
-	PORT_DIPSETTING(	0x00, DEF_STR( Cocktail ))
-	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW1:7" )		// This switch is not documented in the manual
-	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ))			PORT_DIPLOCATION("SW1:6,5")
-	PORT_DIPSETTING(	0x04, "3" )
-	PORT_DIPSETTING(	0x08, "4" )
-	PORT_DIPSETTING(	0x0c, "5" )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ))	PORT_DIPLOCATION("SW1:4,3")
-	PORT_DIPSETTING(	0x00, DEF_STR( Easy ))			// This option is not documented in the manual
-	PORT_DIPSETTING(	0x10, DEF_STR( Medium ))
-	PORT_DIPSETTING(	0x20, DEF_STR( Hard ))
-	PORT_DIPSETTING(	0x30, DEF_STR( Hardest ))
-	PORT_DIPNAME( 0xc0, 0x40, DEF_STR( Bonus_Life ))	PORT_DIPLOCATION("SW1:2,1")
-	PORT_DIPSETTING(	0xc0, DEF_STR( None ))
-	PORT_DIPSETTING(	0x80, "10000" )
-	PORT_DIPSETTING(	0x40, "20000" )
-	PORT_DIPSETTING(	0x00, "30000" )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))       PORT_DIPLOCATION("SW1:8")
+	PORT_DIPSETTING(    0x01, DEF_STR( Upright ))       // This switch is not documented in the manual
+	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ))
+	//"SW1:7" unused                                    // This switch is not documented in the manual
+	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ))         PORT_DIPLOCATION("SW1:6,5")
+	PORT_DIPSETTING(    0x04, "3" )
+	PORT_DIPSETTING(    0x08, "4" )
+	PORT_DIPSETTING(    0x0c, "5" )
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ))    PORT_DIPLOCATION("SW1:4,3")
+	PORT_DIPSETTING(    0x00, DEF_STR( Easy ))          // This option is not documented in the manual
+	PORT_DIPSETTING(    0x10, DEF_STR( Medium ))
+	PORT_DIPSETTING(    0x20, DEF_STR( Hard ))
+	PORT_DIPSETTING(    0x30, DEF_STR( Hardest ))
+	PORT_DIPNAME( 0xc0, 0x40, DEF_STR( Bonus_Life ))    PORT_DIPLOCATION("SW1:2,1")
+	PORT_DIPSETTING(    0xc0, DEF_STR( None ))
+	PORT_DIPSETTING(    0x80, "10000" )
+	PORT_DIPSETTING(    0x40, "20000" )
+	PORT_DIPSETTING(    0x00, "30000" )
 
 	PORT_MODIFY("D1D0")
-	PORT_DIPUNKNOWN_DIPLOC( 0x01, 0x01, "SW2:8" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x02, 0x02, "SW2:7" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "SW2:6" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x08, "SW2:5" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x10, "SW2:4" )
-	PORT_DIPNAME( 0xe0, 0x00, DEF_STR( Coin_A ))		PORT_DIPLOCATION("SW2:3,2,1")
-	PORT_DIPSETTING(	0xe0, DEF_STR( 8C_1C ))
-	PORT_DIPSETTING(	0xc0, DEF_STR( 7C_1C ))
-	PORT_DIPSETTING(	0xa0, DEF_STR( 6C_1C ))
-	PORT_DIPSETTING(	0x80, DEF_STR( 5C_1C ))
-	PORT_DIPSETTING(	0x60, DEF_STR( 4C_1C ))
-	PORT_DIPSETTING(	0x40, DEF_STR( 3C_1C ))
-	PORT_DIPSETTING(	0x20, DEF_STR( 2C_1C ))
-	PORT_DIPSETTING(	0x00, DEF_STR( 1C_1C ))
+	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW2:8" )
+	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW2:7" )
+	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW2:6" )
+	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "SW2:5" )
+	PORT_DIPUNUSED_DIPLOC( 0x10, 0x10, "SW2:4" )
+	PORT_DIPNAME( 0xe0, 0x00, DEF_STR( Coin_A ))        PORT_DIPLOCATION("SW2:3,2,1")
+	PORT_DIPSETTING(    0xe0, DEF_STR( 8C_1C ))
+	PORT_DIPSETTING(    0xc0, DEF_STR( 7C_1C ))
+	PORT_DIPSETTING(    0xa0, DEF_STR( 6C_1C ))
+	PORT_DIPSETTING(    0x80, DEF_STR( 5C_1C ))
+	PORT_DIPSETTING(    0x60, DEF_STR( 4C_1C ))
+	PORT_DIPSETTING(    0x40, DEF_STR( 3C_1C ))
+	PORT_DIPSETTING(    0x20, DEF_STR( 2C_1C ))
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ))
 
 	PORT_MODIFY("FC")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(4)
@@ -642,27 +633,27 @@ static INPUT_PORTS_START( spacfury )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON2 )
 
 	PORT_MODIFY("D3D2")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))		PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(	0x01, DEF_STR( Upright ))
-	PORT_DIPSETTING(	0x00, DEF_STR( Cocktail ))
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ))	PORT_DIPLOCATION("SW1:7")
-	PORT_DIPSETTING(	0x02, DEF_STR( Off ))
-	PORT_DIPSETTING(	0x00, DEF_STR( On ))
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ))			PORT_DIPLOCATION("SW1:6,5")
-	PORT_DIPSETTING(	0x00, "2" )
-	PORT_DIPSETTING(	0x04, "3" )
-	PORT_DIPSETTING(	0x08, "4" )
-	PORT_DIPSETTING(	0x0c, "5" )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ))	PORT_DIPLOCATION("SW1:4,3")
-	PORT_DIPSETTING(	0x00, DEF_STR( Easy ))
-	PORT_DIPSETTING(	0x10, DEF_STR( Medium ))
-	PORT_DIPSETTING(	0x20, DEF_STR( Hard ))
-	PORT_DIPSETTING(	0x30, DEF_STR( Hardest ))
-	PORT_DIPNAME( 0xc0, 0x80, DEF_STR( Bonus_Life ))	PORT_DIPLOCATION("SW1:2,1")
-	PORT_DIPSETTING(	0x00, "10000" )
-	PORT_DIPSETTING(	0x40, "20000" )
-	PORT_DIPSETTING(	0x80, "30000" )
-	PORT_DIPSETTING(	0xc0, "40000" )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))       PORT_DIPLOCATION("SW1:8")
+	PORT_DIPSETTING(    0x01, DEF_STR( Upright ))
+	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ))
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ))   PORT_DIPLOCATION("SW1:7")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ))
+	PORT_DIPSETTING(    0x00, DEF_STR( On ))
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ))         PORT_DIPLOCATION("SW1:6,5")
+	PORT_DIPSETTING(    0x00, "2" )
+	PORT_DIPSETTING(    0x04, "3" )
+	PORT_DIPSETTING(    0x08, "4" )
+	PORT_DIPSETTING(    0x0c, "5" )
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ))    PORT_DIPLOCATION("SW1:4,3")
+	PORT_DIPSETTING(    0x00, DEF_STR( Easy ))
+	PORT_DIPSETTING(    0x10, DEF_STR( Medium ))
+	PORT_DIPSETTING(    0x20, DEF_STR( Hard ))
+	PORT_DIPSETTING(    0x30, DEF_STR( Hardest ))
+	PORT_DIPNAME( 0xc0, 0x80, DEF_STR( Bonus_Life ))    PORT_DIPLOCATION("SW1:2,1")
+	PORT_DIPSETTING(    0x00, "10000" )
+	PORT_DIPSETTING(    0x40, "20000" )
+	PORT_DIPSETTING(    0x80, "30000" )
+	PORT_DIPSETTING(    0xc0, "40000" )
 
 	PORT_MODIFY("FC")
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(2)
@@ -676,31 +667,31 @@ static INPUT_PORTS_START( zektor )
 	PORT_INCLUDE( g80v_generic )
 
 	PORT_MODIFY("D3D2")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))		PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(	0x01, DEF_STR( Upright ))
-	PORT_DIPSETTING(	0x00, DEF_STR( Cocktail ))
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ))	PORT_DIPLOCATION("SW1:7")
-	PORT_DIPSETTING(	0x02, DEF_STR( Off ))
-	PORT_DIPSETTING(	0x00, DEF_STR( On ))
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ))			PORT_DIPLOCATION("SW1:6,5")
-	PORT_DIPSETTING(	0x00, "2" )
-	PORT_DIPSETTING(	0x04, "3" )
-	PORT_DIPSETTING(	0x08, "4" )
-	PORT_DIPSETTING(	0x0c, "5" )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ))	PORT_DIPLOCATION("SW1:4,3")
-	PORT_DIPSETTING(	0x00, DEF_STR( Easy ))
-	PORT_DIPSETTING(	0x10, DEF_STR( Medium ))
-	PORT_DIPSETTING(	0x20, DEF_STR( Hard ))
-	PORT_DIPSETTING(	0x30, DEF_STR( Hardest ))
-	PORT_DIPNAME( 0xc0, 0x80, DEF_STR( Bonus_Life ))	PORT_DIPLOCATION("SW1:2,1")
-	PORT_DIPSETTING(	0x00, DEF_STR( None ))			// These switches are not documented in the manual
-	PORT_DIPSETTING(	0xc0, "10000" )
-	PORT_DIPSETTING(	0x80, "20000" )
-	PORT_DIPSETTING(	0x40, "30000" )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))       PORT_DIPLOCATION("SW1:8")
+	PORT_DIPSETTING(    0x01, DEF_STR( Upright ))
+	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ))
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ))   PORT_DIPLOCATION("SW1:7")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ))
+	PORT_DIPSETTING(    0x00, DEF_STR( On ))
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ))         PORT_DIPLOCATION("SW1:6,5")
+	PORT_DIPSETTING(    0x00, "2" )
+	PORT_DIPSETTING(    0x04, "3" )
+	PORT_DIPSETTING(    0x08, "4" )
+	PORT_DIPSETTING(    0x0c, "5" )
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ))    PORT_DIPLOCATION("SW1:4,3")
+	PORT_DIPSETTING(    0x00, DEF_STR( Easy ))
+	PORT_DIPSETTING(    0x10, DEF_STR( Medium ))
+	PORT_DIPSETTING(    0x20, DEF_STR( Hard ))
+	PORT_DIPSETTING(    0x30, DEF_STR( Hardest ))
+	PORT_DIPNAME( 0xc0, 0x80, DEF_STR( Bonus_Life ))    PORT_DIPLOCATION("SW1:2,1")
+	PORT_DIPSETTING(    0x00, DEF_STR( None ))          // These switches are not documented in the manual
+	PORT_DIPSETTING(    0xc0, "10000" )
+	PORT_DIPSETTING(    0x80, "20000" )
+	PORT_DIPSETTING(    0x40, "30000" )
 
 	PORT_MODIFY("D5D4")
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.15 */
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.19 */
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.15 */
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.19 */
 
 	PORT_MODIFY("FC")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_START1 )
@@ -717,31 +708,31 @@ static INPUT_PORTS_START( tacscan )
 	PORT_INCLUDE( g80v_generic )
 
 	PORT_MODIFY("D3D2")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))		PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(	0x01, DEF_STR( Upright ))
-	PORT_DIPSETTING(	0x00, DEF_STR( Cocktail ))
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ))	PORT_DIPLOCATION("SW1:7")
-	PORT_DIPSETTING(	0x02, DEF_STR( Off ))			// This switch isn't documented in the manual
-	PORT_DIPSETTING(	0x00, DEF_STR( On ))
-	PORT_DIPNAME( 0x0c, 0x0c, "Number of Ships" )		PORT_DIPLOCATION("SW1:6,5")
-	PORT_DIPSETTING(	0x00, "2" )
-	PORT_DIPSETTING(	0x04, "4" )
-	PORT_DIPSETTING(	0x08, "6" )
-	PORT_DIPSETTING(	0x0c, "8" )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ))	PORT_DIPLOCATION("SW1:4,3")
-	PORT_DIPSETTING(	0x00, DEF_STR( Easy ))
-	PORT_DIPSETTING(	0x10, DEF_STR( Normal ))
-	PORT_DIPSETTING(	0x20, DEF_STR( Hard ))			// This option isn't documented in the manual
-	PORT_DIPSETTING(	0x30, DEF_STR( Very_Hard ))
-	PORT_DIPNAME( 0xc0, 0x80, DEF_STR( Bonus_Life ))	PORT_DIPLOCATION("SW1:2,1")
-	PORT_DIPSETTING(	0x00, DEF_STR( None ))
-	PORT_DIPSETTING(	0xc0, "10000" )
-	PORT_DIPSETTING(	0x80, "20000" )
-	PORT_DIPSETTING(	0x40, "30000" )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))       PORT_DIPLOCATION("SW1:8")
+	PORT_DIPSETTING(    0x01, DEF_STR( Upright ))
+	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ))
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ))   PORT_DIPLOCATION("SW1:7")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ))           // This switch isn't documented in the manual
+	PORT_DIPSETTING(    0x00, DEF_STR( On ))
+	PORT_DIPNAME( 0x0c, 0x0c, "Number of Ships" )       PORT_DIPLOCATION("SW1:6,5")
+	PORT_DIPSETTING(    0x00, "2" )
+	PORT_DIPSETTING(    0x04, "4" )
+	PORT_DIPSETTING(    0x08, "6" )
+	PORT_DIPSETTING(    0x0c, "8" )
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ))    PORT_DIPLOCATION("SW1:4,3")
+	PORT_DIPSETTING(    0x00, DEF_STR( Easy ))
+	PORT_DIPSETTING(    0x10, DEF_STR( Normal ))
+	PORT_DIPSETTING(    0x20, DEF_STR( Hard ))          // This option isn't documented in the manual
+	PORT_DIPSETTING(    0x30, DEF_STR( Very_Hard ))
+	PORT_DIPNAME( 0xc0, 0x80, DEF_STR( Bonus_Life ))    PORT_DIPLOCATION("SW1:2,1")
+	PORT_DIPSETTING(    0x00, DEF_STR( None ))
+	PORT_DIPSETTING(    0xc0, "10000" )
+	PORT_DIPSETTING(    0x80, "20000" )
+	PORT_DIPSETTING(    0x40, "30000" )
 
 	PORT_MODIFY("D5D4")
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.15 */
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.19 */
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.15 */
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.19 */
 
 	PORT_MODIFY("FC")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_START1 )
@@ -758,31 +749,31 @@ static INPUT_PORTS_START( startrek )
 	PORT_INCLUDE( g80v_generic )
 
 	PORT_MODIFY("D3D2")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))		PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(	0x01, DEF_STR( Upright ))		// This switch isn't documented in the manual
-	PORT_DIPSETTING(	0x00, DEF_STR( Cocktail ))
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ))	PORT_DIPLOCATION("SW1:7")
-	PORT_DIPSETTING(	0x02, DEF_STR( Off ))
-	PORT_DIPSETTING(	0x00, DEF_STR( On ))
-	PORT_DIPNAME( 0x0c, 0x0c, "Photon Torpedoes" )		PORT_DIPLOCATION("SW1:6,5")
-	PORT_DIPSETTING(	0x00, "1" )
-	PORT_DIPSETTING(	0x04, "2" )
-	PORT_DIPSETTING(	0x08, "3" )
-	PORT_DIPSETTING(	0x0c, "4" )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ))	PORT_DIPLOCATION("SW1:4,3")
-	PORT_DIPSETTING(	0x00, DEF_STR( Easy ))
-	PORT_DIPSETTING(	0x10, DEF_STR( Medium ))
-	PORT_DIPSETTING(	0x20, DEF_STR( Hard ))
-	PORT_DIPSETTING(	0x30, "Tournament" )
-	PORT_DIPNAME( 0xc0, 0x80, DEF_STR( Bonus_Life ))	PORT_DIPLOCATION("SW1:2,1")
-	PORT_DIPSETTING(	0x00, "10000" )
-	PORT_DIPSETTING(	0x40, "20000" )
-	PORT_DIPSETTING(	0x80, "30000" )
-	PORT_DIPSETTING(	0xc0, "40000" )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))       PORT_DIPLOCATION("SW1:8")
+	PORT_DIPSETTING(    0x01, DEF_STR( Upright ))       // This switch isn't documented in the manual
+	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ))
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ))   PORT_DIPLOCATION("SW1:7")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ))
+	PORT_DIPSETTING(    0x00, DEF_STR( On ))
+	PORT_DIPNAME( 0x0c, 0x0c, "Photon Torpedoes" )      PORT_DIPLOCATION("SW1:6,5")
+	PORT_DIPSETTING(    0x00, "1" )
+	PORT_DIPSETTING(    0x04, "2" )
+	PORT_DIPSETTING(    0x08, "3" )
+	PORT_DIPSETTING(    0x0c, "4" )
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ))    PORT_DIPLOCATION("SW1:4,3")
+	PORT_DIPSETTING(    0x00, DEF_STR( Easy ))
+	PORT_DIPSETTING(    0x10, DEF_STR( Medium ))
+	PORT_DIPSETTING(    0x20, DEF_STR( Hard ))
+	PORT_DIPSETTING(    0x30, "Tournament" )
+	PORT_DIPNAME( 0xc0, 0x80, DEF_STR( Bonus_Life ))    PORT_DIPLOCATION("SW1:2,1")
+	PORT_DIPSETTING(    0x00, "10000" )
+	PORT_DIPSETTING(    0x40, "20000" )
+	PORT_DIPSETTING(    0x80, "30000" )
+	PORT_DIPSETTING(    0xc0, "40000" )
 
 	PORT_MODIFY("D5D4")
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.15 */
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.19 */
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.15 */
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNUSED )                 /* P1.19 */
 
 
 	PORT_MODIFY("FC")
@@ -808,24 +799,24 @@ INPUT_PORTS_END
 static const char *const elim_sample_names[] =
 {
 	"*elim2",
-	"elim1.wav",
-	"elim2.wav",
-	"elim3.wav",
-	"elim4.wav",
-	"elim5.wav",
-	"elim6.wav",
-	"elim7.wav",
-	"elim8.wav",
-	"elim9.wav",
-	"elim10.wav",
-	"elim11.wav",
-	"elim12.wav",
-	0	/* end of array */
+	"elim1",
+	"elim2",
+	"elim3",
+	"elim4",
+	"elim5",
+	"elim6",
+	"elim7",
+	"elim8",
+	"elim9",
+	"elim10",
+	"elim11",
+	"elim12",
+	0   /* end of array */
 };
 
 static const samples_interface elim2_samples_interface =
 {
-	8,	/* 8 channels */
+	8,  /* 8 channels */
 	elim_sample_names
 };
 
@@ -841,23 +832,23 @@ static const char *const spacfury_sample_names[] =
 {
 	"*spacfury",
 	/* Sound samples */
-	"sfury1.wav",
-	"sfury2.wav",
-	"sfury3.wav",
-	"sfury4.wav",
-	"sfury5.wav",
-	"sfury6.wav",
-	"sfury7.wav",
-	"sfury8.wav",
-	"sfury9.wav",
-	"sfury10.wav",
-	0	/* end of array */
+	"sfury1",
+	"sfury2",
+	"sfury3",
+	"sfury4",
+	"sfury5",
+	"sfury6",
+	"sfury7",
+	"sfury8",
+	"sfury9",
+	"sfury10",
+	0   /* end of array */
 };
 
 
 static const samples_interface spacfury_samples_interface =
 {
-	8,	/* 8 channels */
+	8,  /* 8 channels */
 	spacfury_sample_names
 };
 
@@ -871,17 +862,17 @@ static const samples_interface spacfury_samples_interface =
 static const char *const zektor_sample_names[] =
 {
 	"*zektor",
-	"elim1.wav",  /*  0 fireball */
-	"elim2.wav",  /*  1 bounce */
-	"elim3.wav",  /*  2 Skitter */
-	"elim4.wav",  /*  3 Eliminator */
-	"elim5.wav",  /*  4 Electron */
-	"elim6.wav",  /*  5 fire */
-	"elim7.wav",  /*  6 thrust */
-	"elim8.wav",  /*  7 Electron */
-	"elim9.wav",  /*  8 small explosion */
-	"elim10.wav", /*  9 med explosion */
-	"elim11.wav", /* 10 big explosion */
+	"elim1",  /*  0 fireball */
+	"elim2",  /*  1 bounce */
+	"elim3",  /*  2 Skitter */
+	"elim4",  /*  3 Eliminator */
+	"elim5",  /*  4 Electron */
+	"elim6",  /*  5 fire */
+	"elim7",  /*  6 thrust */
+	"elim8",  /*  7 Electron */
+	"elim9",  /*  8 small explosion */
+	"elim10", /*  9 med explosion */
+	"elim11", /* 10 big explosion */
 	0
 };
 
@@ -906,18 +897,18 @@ static MACHINE_CONFIG_START( g80v_base, segag80v_state )
 	MCFG_CPU_ADD("maincpu", Z80, CPU_CLOCK/2)
 	MCFG_CPU_PROGRAM_MAP(main_map)
 	MCFG_CPU_IO_MAP(main_portmap)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", segag80v_state,  irq0_line_hold)
 
-	MCFG_MACHINE_START(g80v)
 
 	/* video hardware */
+
 	MCFG_SCREEN_ADD("screen", VECTOR)
 	MCFG_SCREEN_REFRESH_RATE(40)
 	MCFG_SCREEN_SIZE(400, 300)
 	MCFG_SCREEN_VISIBLE_AREA(512, 1536, 640-32, 1408+32)
-	MCFG_SCREEN_UPDATE(segag80v)
+	MCFG_SCREEN_UPDATE_DRIVER(segag80v_state, screen_update_segag80v)
 
-	MCFG_VIDEO_START(segag80v)
+	MCFG_VECTOR_ADD("vector")
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
@@ -927,8 +918,7 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_DERIVED( elim2, g80v_base )
 
 	/* custom sound board */
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(elim2_samples_interface)
+	MCFG_SAMPLES_ADD("samples", elim2_samples_interface)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 
@@ -936,8 +926,7 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_DERIVED( spacfury, g80v_base )
 
 	/* custom sound board */
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(spacfury_samples_interface)
+	MCFG_SAMPLES_ADD("samples", spacfury_samples_interface)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
 	/* speech board */
@@ -948,8 +937,7 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_DERIVED( zektor, g80v_base )
 
 	/* custom sound board */
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(zektor_samples_interface)
+	MCFG_SAMPLES_ADD("samples", zektor_samples_interface)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
 	MCFG_SOUND_ADD("aysnd", AY8910, CPU_CLOCK/2/2)
@@ -963,7 +951,7 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_DERIVED( tacscan, g80v_base )
 
 	/* universal sound board */
-	MCFG_FRAGMENT_ADD(sega_universal_sound_board)
+	MCFG_SEGAUSB_ADD("usbsnd")
 MACHINE_CONFIG_END
 
 
@@ -973,7 +961,7 @@ static MACHINE_CONFIG_DERIVED( startrek, g80v_base )
 	MCFG_FRAGMENT_ADD(sega_speech_board)
 
 	/* universal sound board */
-	MCFG_FRAGMENT_ADD(sega_universal_sound_board)
+	MCFG_SEGAUSB_ADD("usbsnd")
 MACHINE_CONFIG_END
 
 
@@ -1002,8 +990,8 @@ ROM_START( elim2 )
 	ROM_LOAD( "1345.prom-u13", 0x6800, 0x0800, CRC(40597a92) SHA1(ee1ae2b424c38b40d2cbeda4aba3328e6d3f9c81) )
 
 	ROM_REGION( 0x0420, "proms", 0 )
-	ROM_LOAD( "s-c.xyt-u39",   0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )	/* sine table */
-	ROM_LOAD( "pr-82.cpu-u15", 0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )	/* CPU board addressing */
+	ROM_LOAD( "s-c.xyt-u39",   0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )   /* sine table */
+	ROM_LOAD( "pr-82.cpu-u15", 0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )   /* CPU board addressing */
 ROM_END
 
 ROM_START( elim2a )
@@ -1024,8 +1012,8 @@ ROM_START( elim2a )
 	ROM_LOAD( "1170a.prom-u13", 0x6800, 0x0800, CRC(8cdacd35) SHA1(f24f8a74cb4b8452ddbd42e61d3b0366bbee7f98) )
 
 	ROM_REGION( 0x0420, "proms", 0 )
-	ROM_LOAD( "s-c.xyt-u39",    0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )	/* sine table */
-	ROM_LOAD( "pr-82.cpu-u15",  0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )	/* CPU board addressing */
+	ROM_LOAD( "s-c.xyt-u39",    0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )  /* sine table */
+	ROM_LOAD( "pr-82.cpu-u15",  0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )  /* CPU board addressing */
 ROM_END
 
 ROM_START( elim2c )
@@ -1046,8 +1034,8 @@ ROM_START( elim2c )
 	ROM_LOAD( "1212.prom-u13", 0x6800, 0x0800, CRC(152cf376) SHA1(56c3141598b8bac81e85b1fc7052fdd19cd95609) )
 
 	ROM_REGION( 0x0420, "proms", 0 )
-	ROM_LOAD( "s-c.xyt-u39",   0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )	/* sine table */
-	ROM_LOAD( "pr-82.cpu-u15", 0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )	/* CPU board addressing */
+	ROM_LOAD( "s-c.xyt-u39",   0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )   /* sine table */
+	ROM_LOAD( "pr-82.cpu-u15", 0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )   /* CPU board addressing */
 ROM_END
 
 ROM_START( elim4 )
@@ -1069,8 +1057,8 @@ ROM_START( elim4 )
 	ROM_LOAD( "1360.prom-u14", 0x7000, 0x0800, CRC(96d48238) SHA1(76a7b49081cd2d0dd1976077aa66b6d5ae5b2b43) )
 
 	ROM_REGION( 0x0420, "proms", 0 )
-	ROM_LOAD( "s-c.xyt-u39",   0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )	/* sine table */
-	ROM_LOAD( "pr-82.cpu-u15", 0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )	/* CPU board addressing */
+	ROM_LOAD( "s-c.xyt-u39",   0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )   /* sine table */
+	ROM_LOAD( "pr-82.cpu-u15", 0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )   /* CPU board addressing */
 ROM_END
 
 ROM_START( elim4p )
@@ -1092,8 +1080,8 @@ ROM_START( elim4p )
 	ROM_LOAD( "swe.prom-u14",  0x7000, 0x0800, CRC(ec4cc343) SHA1(00e107eaf530ce6bec2afffd7d7bedd7763cfb17) )
 
 	ROM_REGION( 0x0420, "proms", 0 )
-	ROM_LOAD( "s-c.xyt-u39",   0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )	/* sine table */
-	ROM_LOAD( "pr-82.cpu-u15", 0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )	/* CPU board addressing */
+	ROM_LOAD( "s-c.xyt-u39",   0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )   /* sine table */
+	ROM_LOAD( "pr-82.cpu-u15", 0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )   /* CPU board addressing */
 ROM_END
 
 
@@ -1119,9 +1107,9 @@ ROM_START( spacfury ) /* Revision C */
 	ROM_LOAD( "972c.speech-u4",  0x2000, 0x1000, CRC(fad9346d) SHA1(784e5ab0fb00235cfd733c502baf23960923504f) )
 
 	ROM_REGION( 0x0440, "proms", 0 )
-	ROM_LOAD( "s-c.xyt-u39",     0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )	/* sine table */
-	ROM_LOAD( "pr-82.cpu-u15",   0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )	/* CPU board addressing */
-	ROM_LOAD( "6331.speech-u30", 0x0420, 0x0020, CRC(adcb81d0) SHA1(74b0efc7e8362b0c98e54a6107981cff656d87e1) )	/* speech board addressing */
+	ROM_LOAD( "s-c.xyt-u39",     0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) ) /* sine table */
+	ROM_LOAD( "pr-82.cpu-u15",   0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) ) /* CPU board addressing */
+	ROM_LOAD( "6331.speech-u30", 0x0420, 0x0020, CRC(adcb81d0) SHA1(74b0efc7e8362b0c98e54a6107981cff656d87e1) ) /* speech board addressing */
 ROM_END
 
 ROM_START( spacfurya ) /* Revision A */
@@ -1146,9 +1134,9 @@ ROM_START( spacfurya ) /* Revision A */
 	ROM_LOAD( "972.speech-u4",   0x2000, 0x1000, CRC(8b3da539) SHA1(3a0c4af96a2116fc668a340534582776b2018663) )
 
 	ROM_REGION( 0x0440, "proms", 0 )
-	ROM_LOAD( "s-c.xyt-u39",     0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )	/* sine table */
-	ROM_LOAD( "pr-82.cpu-u15",   0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )	/* CPU board addressing */
-	ROM_LOAD( "6331.speech-u30", 0x0420, 0x0020, CRC(adcb81d0) SHA1(74b0efc7e8362b0c98e54a6107981cff656d87e1) )	/* speech board addressing */
+	ROM_LOAD( "s-c.xyt-u39",     0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) ) /* sine table */
+	ROM_LOAD( "pr-82.cpu-u15",   0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) ) /* CPU board addressing */
+	ROM_LOAD( "6331.speech-u30", 0x0420, 0x0020, CRC(adcb81d0) SHA1(74b0efc7e8362b0c98e54a6107981cff656d87e1) ) /* speech board addressing */
 ROM_END
 
 ROM_START( spacfuryb ) /* Revision B */
@@ -1173,9 +1161,9 @@ ROM_START( spacfuryb ) /* Revision B */
 	ROM_LOAD( "972.speech-u4",   0x2000, 0x1000, CRC(8b3da539) SHA1(3a0c4af96a2116fc668a340534582776b2018663) )
 
 	ROM_REGION( 0x0440, "proms", 0 )
-	ROM_LOAD( "s-c.xyt-u39",     0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )	/* sine table */
-	ROM_LOAD( "pr-82.cpu-u15",   0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )	/* CPU board addressing */
-	ROM_LOAD( "6331.speech-u30", 0x0420, 0x0020, CRC(adcb81d0) SHA1(74b0efc7e8362b0c98e54a6107981cff656d87e1) )	/* speech board addressing */
+	ROM_LOAD( "s-c.xyt-u39",     0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) ) /* sine table */
+	ROM_LOAD( "pr-82.cpu-u15",   0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) ) /* CPU board addressing */
+	ROM_LOAD( "6331.speech-u30", 0x0420, 0x0020, CRC(adcb81d0) SHA1(74b0efc7e8362b0c98e54a6107981cff656d87e1) ) /* speech board addressing */
 ROM_END
 
 
@@ -1213,9 +1201,9 @@ ROM_START( zektor )
 	ROM_LOAD( "1610.speech-u4",  0x2000, 0x1000, CRC(2915c7bd) SHA1(3ed98747b5237aa1b3bab6866292370dc2c7655a) )
 
 	ROM_REGION( 0x0440, "proms", 0 )
-	ROM_LOAD( "s-c.xyt-u39",     0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )	/* sine table */
-	ROM_LOAD( "pr-82.cpu-u15",   0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )	/* CPU board addressing */
-	ROM_LOAD( "6331.speech-u30", 0x0420, 0x0020, CRC(adcb81d0) SHA1(74b0efc7e8362b0c98e54a6107981cff656d87e1) )	/* speech board addressing */
+	ROM_LOAD( "s-c.xyt-u39",     0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) ) /* sine table */
+	ROM_LOAD( "pr-82.cpu-u15",   0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) ) /* CPU board addressing */
+	ROM_LOAD( "6331.speech-u30", 0x0420, 0x0020, CRC(adcb81d0) SHA1(74b0efc7e8362b0c98e54a6107981cff656d87e1) ) /* speech board addressing */
 ROM_END
 
 
@@ -1245,8 +1233,8 @@ ROM_START( tacscan )
 	ROM_LOAD( "1710a.prom-u21", 0xa800, 0x0800, CRC(6203be22) SHA1(89731c7c88d0125a11368d707f566eb53c783266) )
 
 	ROM_REGION( 0x0420, "proms", 0 )
-	ROM_LOAD( "s-c.xyt-u39",    0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )	/* sine table */
-	ROM_LOAD( "pr-82.cpu-u15",  0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )	/* CPU board addressing */
+	ROM_LOAD( "s-c.xyt-u39",    0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )  /* sine table */
+	ROM_LOAD( "pr-82.cpu-u15",  0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )  /* CPU board addressing */
 ROM_END
 
 
@@ -1285,9 +1273,9 @@ ROM_START( startrek )
 	ROM_LOAD( "1872.speech-u5",  0x1000, 0x1000, CRC(ebb5c3a9) SHA1(533b6f0499b311f561cf7aba14a7f48ca7c47321) )
 
 	ROM_REGION( 0x0440, "proms", 0 )
-	ROM_LOAD( "s-c.xyt-u39",     0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) )	/* sine table */
-	ROM_LOAD( "pr-82.cpu-u15",   0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) )	/* CPU board addressing */
-	ROM_LOAD( "6331.speech-u30", 0x0420, 0x0020, CRC(adcb81d0) SHA1(74b0efc7e8362b0c98e54a6107981cff656d87e1) )	/* speech board addressing */
+	ROM_LOAD( "s-c.xyt-u39",     0x0000, 0x0400, CRC(56484d19) SHA1(61f43126fdcfc230638ed47085ae037a098e6781) ) /* sine table */
+	ROM_LOAD( "pr-82.cpu-u15",   0x0400, 0x0020, CRC(c609b79e) SHA1(49dbcbb607079a182d7eb396c0da097166ea91c9) ) /* CPU board addressing */
+	ROM_LOAD( "6331.speech-u30", 0x0420, 0x0020, CRC(adcb81d0) SHA1(74b0efc7e8362b0c98e54a6107981cff656d87e1) ) /* speech board addressing */
 ROM_END
 
 
@@ -1298,120 +1286,110 @@ ROM_END
  *
  *************************************/
 
-static DRIVER_INIT( elim2 )
+DRIVER_INIT_MEMBER(segag80v_state,elim2)
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	address_space &iospace = m_maincpu->space(AS_IO);
 
 	/* configure security */
-	state->m_decrypt = segag80_security(70);
+	m_decrypt = segag80_security(70);
 
 	/* configure sound */
-	state->m_usb = NULL;
-	iospace->install_legacy_write_handler(0x3e, 0x3e, FUNC(elim1_sh_w));
-	iospace->install_legacy_write_handler(0x3f, 0x3f, FUNC(elim2_sh_w));
+	iospace.install_write_handler(0x3e, 0x3e, write8_delegate(FUNC(segag80v_state::elim1_sh_w),this));
+	iospace.install_write_handler(0x3f, 0x3f, write8_delegate(FUNC(segag80v_state::elim2_sh_w),this));
 }
 
 
-static DRIVER_INIT( elim4 )
+DRIVER_INIT_MEMBER(segag80v_state,elim4)
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	address_space &iospace = m_maincpu->space(AS_IO);
 
 	/* configure security */
-	state->m_decrypt = segag80_security(76);
+	m_decrypt = segag80_security(76);
 
 	/* configure sound */
-	state->m_usb = NULL;
-	iospace->install_legacy_write_handler(0x3e, 0x3e, FUNC(elim1_sh_w));
-	iospace->install_legacy_write_handler(0x3f, 0x3f, FUNC(elim2_sh_w));
+	iospace.install_write_handler(0x3e, 0x3e, write8_delegate(FUNC(segag80v_state::elim1_sh_w),this));
+	iospace.install_write_handler(0x3f, 0x3f, write8_delegate(FUNC(segag80v_state::elim2_sh_w),this));
 
 	/* configure inputs */
-	iospace->install_legacy_write_handler(0xf8, 0xf8, FUNC(spinner_select_w));
-	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(elim4_input_r));
+	iospace.install_write_handler(0xf8, 0xf8, write8_delegate(FUNC(segag80v_state::spinner_select_w),this));
+	iospace.install_read_handler(0xfc, 0xfc, read8_delegate(FUNC(segag80v_state::elim4_input_r),this));
 }
 
 
-static DRIVER_INIT( spacfury )
+DRIVER_INIT_MEMBER(segag80v_state,spacfury)
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	address_space &iospace = m_maincpu->space(AS_IO);
 
 	/* configure security */
-	state->m_decrypt = segag80_security(64);
+	m_decrypt = segag80_security(64);
 
 	/* configure sound */
-	state->m_usb = NULL;
-	iospace->install_legacy_write_handler(*machine.device("segaspeech"), 0x38, 0x38, FUNC(sega_speech_data_w));
-	iospace->install_legacy_write_handler(*machine.device("segaspeech"), 0x3b, 0x3b, FUNC(sega_speech_control_w));
-	iospace->install_legacy_write_handler(0x3e, 0x3e, FUNC(spacfury1_sh_w));
-	iospace->install_legacy_write_handler(0x3f, 0x3f, FUNC(spacfury2_sh_w));
+	iospace.install_write_handler(0x38, 0x38, write8_delegate(FUNC(speech_sound_device::data_w), (speech_sound_device*)m_speech));
+	iospace.install_write_handler(0x3b, 0x3b, write8_delegate(FUNC(speech_sound_device::control_w), (speech_sound_device*)m_speech));
+	iospace.install_write_handler(0x3e, 0x3e, write8_delegate(FUNC(segag80v_state::spacfury1_sh_w),this));
+	iospace.install_write_handler(0x3f, 0x3f, write8_delegate(FUNC(segag80v_state::spacfury2_sh_w),this));
 }
 
 
-static DRIVER_INIT( zektor )
+DRIVER_INIT_MEMBER(segag80v_state,zektor)
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
-	device_t *ay = machine.device("aysnd");
+	address_space &iospace = m_maincpu->space(AS_IO);
+	ay8910_device *ay8910 = machine().device<ay8910_device>("aysnd");
 
 	/* configure security */
-	state->m_decrypt = segag80_security(82);
+	m_decrypt = segag80_security(82);
 
 	/* configure sound */
-	state->m_usb = NULL;
-	iospace->install_legacy_write_handler(*machine.device("segaspeech"), 0x38, 0x38, FUNC(sega_speech_data_w));
-	iospace->install_legacy_write_handler(*machine.device("segaspeech"), 0x3b, 0x3b, FUNC(sega_speech_control_w));
-	iospace->install_legacy_write_handler(*ay, 0x3c, 0x3d, FUNC(ay8910_address_data_w));
-	iospace->install_legacy_write_handler(0x3e, 0x3e, FUNC(zektor1_sh_w));
-	iospace->install_legacy_write_handler(0x3f, 0x3f, FUNC(zektor2_sh_w));
+	iospace.install_write_handler(0x38, 0x38, write8_delegate(FUNC(speech_sound_device::data_w), (speech_sound_device*)m_speech));
+	iospace.install_write_handler(0x3b, 0x3b, write8_delegate(FUNC(speech_sound_device::control_w), (speech_sound_device*)m_speech));
+	iospace.install_write_handler(0x3c, 0x3d, write8_delegate(FUNC(ay8910_device::address_data_w), ay8910));
+	iospace.install_write_handler(0x3e, 0x3e, write8_delegate(FUNC(segag80v_state::zektor1_sh_w),this));
+	iospace.install_write_handler(0x3f, 0x3f, write8_delegate(FUNC(segag80v_state::zektor2_sh_w),this));
 
 	/* configure inputs */
-	iospace->install_legacy_write_handler(0xf8, 0xf8, FUNC(spinner_select_w));
-	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(spinner_input_r));
+	iospace.install_write_handler(0xf8, 0xf8, write8_delegate(FUNC(segag80v_state::spinner_select_w),this));
+	iospace.install_read_handler(0xfc, 0xfc, read8_delegate(FUNC(segag80v_state::spinner_input_r),this));
 }
 
 
-static DRIVER_INIT( tacscan )
+DRIVER_INIT_MEMBER(segag80v_state,tacscan)
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
-	address_space *pgmspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	address_space &pgmspace = m_maincpu->space(AS_PROGRAM);
+	address_space &iospace = m_maincpu->space(AS_IO);
 
 	/* configure security */
-	state->m_decrypt = segag80_security(76);
+	m_decrypt = segag80_security(76);
 
 	/* configure sound */
-	state->m_usb = machine.device("usbsnd");
-	iospace->install_legacy_readwrite_handler(*state->m_usb, 0x3f, 0x3f, FUNC(sega_usb_status_r), FUNC(sega_usb_data_w));
-	pgmspace->install_legacy_readwrite_handler(*state->m_usb, 0xd000, 0xdfff, FUNC(sega_usb_ram_r), FUNC(usb_ram_w));
+	iospace.install_readwrite_handler(0x3f, 0x3f, read8_delegate(FUNC(usb_sound_device::status_r), (usb_sound_device*)m_usb), write8_delegate(FUNC(usb_sound_device::data_w), (usb_sound_device*)m_usb));
+	pgmspace.install_read_handler(0xd000, 0xdfff, read8_delegate(FUNC(usb_sound_device::ram_r), (usb_sound_device*)m_usb));
+	pgmspace.install_write_handler(0xd000, 0xdfff, write8_delegate(FUNC(segag80v_state::usb_ram_w),this));
 
 	/* configure inputs */
-	iospace->install_legacy_write_handler(0xf8, 0xf8, FUNC(spinner_select_w));
-	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(spinner_input_r));
+	iospace.install_write_handler(0xf8, 0xf8, write8_delegate(FUNC(segag80v_state::spinner_select_w),this));
+	iospace.install_read_handler(0xfc, 0xfc, read8_delegate(FUNC(segag80v_state::spinner_input_r),this));
 }
 
 
-static DRIVER_INIT( startrek )
+DRIVER_INIT_MEMBER(segag80v_state,startrek)
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
-	address_space *pgmspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	address_space &pgmspace = m_maincpu->space(AS_PROGRAM);
+	address_space &iospace = m_maincpu->space(AS_IO);
 
 	/* configure security */
-	state->m_decrypt = segag80_security(64);
+	m_decrypt = segag80_security(64);
 
 	/* configure sound */
-	state->m_usb = machine.device("usbsnd");
-	iospace->install_legacy_write_handler(*machine.device("segaspeech"), 0x38, 0x38, FUNC(sega_speech_data_w));
-	iospace->install_legacy_write_handler(*machine.device("segaspeech"), 0x3b, 0x3b, FUNC(sega_speech_control_w));
+	iospace.install_write_handler(0x38, 0x38, write8_delegate(FUNC(speech_sound_device::data_w), (speech_sound_device*)m_speech));
+	iospace.install_write_handler(0x3b, 0x3b, write8_delegate(FUNC(speech_sound_device::control_w), (speech_sound_device*)m_speech));
 
-	iospace->install_legacy_readwrite_handler(*state->m_usb, 0x3f, 0x3f, FUNC(sega_usb_status_r), FUNC(sega_usb_data_w));
-	pgmspace->install_legacy_readwrite_handler(*state->m_usb, 0xd000, 0xdfff, FUNC(sega_usb_ram_r), FUNC(usb_ram_w));
+	iospace.install_readwrite_handler(0x3f, 0x3f, read8_delegate(FUNC(usb_sound_device::status_r), (usb_sound_device*)m_usb), write8_delegate(FUNC(usb_sound_device::data_w), (usb_sound_device*)m_usb));
+	pgmspace.install_read_handler(0xd000, 0xdfff, read8_delegate(FUNC(usb_sound_device::ram_r), (usb_sound_device*)m_usb));
+	pgmspace.install_write_handler(0xd000, 0xdfff, write8_delegate(FUNC(segag80v_state::usb_ram_w),this));
 
 	/* configure inputs */
-	iospace->install_legacy_write_handler(0xf8, 0xf8, FUNC(spinner_select_w));
-	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(spinner_input_r));
+	iospace.install_write_handler(0xf8, 0xf8, write8_delegate(FUNC(segag80v_state::spinner_select_w),this));
+	iospace.install_read_handler(0xfc, 0xfc, read8_delegate(FUNC(segag80v_state::spinner_input_r),this));
 }
 
 
@@ -1422,14 +1400,15 @@ static DRIVER_INIT( startrek )
  *
  *************************************/
 
-GAME( 1981, elim2,	  0,        elim2,    elim2,    elim2,    ORIENTATION_FLIP_Y,   "Gremlin", "Eliminator (2 Players, set 1)", GAME_IMPERFECT_SOUND )
-GAME( 1981, elim2a,   elim2,    elim2,    elim2,    elim2,    ORIENTATION_FLIP_Y,   "Gremlin", "Eliminator (2 Players, set 2)", GAME_IMPERFECT_SOUND )
-GAME( 1981, elim2c,	  elim2,	elim2,	  elim2c,	elim2,	  ORIENTATION_FLIP_Y,   "Gremlin", "Eliminator (2 Players, cocktail)", GAME_IMPERFECT_SOUND )
-GAME( 1981, elim4,	  elim2,    elim2,    elim4,    elim4,    ORIENTATION_FLIP_Y,   "Gremlin", "Eliminator (4 Players)", GAME_IMPERFECT_SOUND )
-GAME( 1981, elim4p,	  elim2,	elim2,	  elim4,	elim4,	  ORIENTATION_FLIP_Y,   "Gremlin", "Eliminator (4 Players, prototype)", GAME_IMPERFECT_SOUND )
-GAME( 1981, spacfury, 0,        spacfury, spacfury, spacfury, ORIENTATION_FLIP_Y,   "Sega", "Space Fury (revision C)", GAME_IMPERFECT_SOUND )
-GAME( 1981, spacfurya,spacfury, spacfury, spacfury, spacfury, ORIENTATION_FLIP_Y,   "Sega", "Space Fury (revision A)", GAME_IMPERFECT_SOUND )
-GAME( 1981, spacfuryb,spacfury, spacfury, spacfury, spacfury, ORIENTATION_FLIP_Y,   "Sega", "Space Fury (revision B)", GAME_IMPERFECT_SOUND )
-GAME( 1982, zektor,   0,        zektor,   zektor,   zektor,   ORIENTATION_FLIP_Y,   "Sega", "Zektor (revision B)", GAME_IMPERFECT_SOUND )
-GAME( 1982, tacscan,  0,        tacscan,  tacscan,  tacscan,  ORIENTATION_FLIP_X ^ ROT270, "Sega", "Tac/Scan", GAME_IMPERFECT_SOUND )
-GAME( 1982, startrek, 0,        startrek, startrek, startrek, ORIENTATION_FLIP_Y,   "Sega", "Star Trek", GAME_IMPERFECT_SOUND )
+//    YEAR, NAME,      PARENT,   MACHINE,  INPUT,    INIT,     MONITOR,                     COMPANY,FULLNAME,FLAGS
+GAME( 1981, elim2,     0,        elim2,    elim2, segag80v_state,    elim2,    ORIENTATION_FLIP_Y,          "Gremlin", "Eliminator (2 Players, set 1)", GAME_IMPERFECT_SOUND )
+GAME( 1981, elim2a,    elim2,    elim2,    elim2, segag80v_state,    elim2,    ORIENTATION_FLIP_Y,          "Gremlin", "Eliminator (2 Players, set 2)", GAME_IMPERFECT_SOUND )
+GAME( 1981, elim2c,    elim2,    elim2,    elim2c, segag80v_state,   elim2,    ORIENTATION_FLIP_Y,          "Gremlin", "Eliminator (2 Players, cocktail)", GAME_IMPERFECT_SOUND )
+GAME( 1981, elim4,     elim2,    elim2,    elim4, segag80v_state,    elim4,    ORIENTATION_FLIP_Y,          "Gremlin", "Eliminator (4 Players)", GAME_IMPERFECT_SOUND )
+GAME( 1981, elim4p,    elim2,    elim2,    elim4, segag80v_state,    elim4,    ORIENTATION_FLIP_Y,          "Gremlin", "Eliminator (4 Players, prototype)", GAME_IMPERFECT_SOUND )
+GAME( 1981, spacfury,  0,        spacfury, spacfury, segag80v_state, spacfury, ORIENTATION_FLIP_Y,          "Sega", "Space Fury (revision C)", GAME_IMPERFECT_SOUND )
+GAME( 1981, spacfurya, spacfury, spacfury, spacfury, segag80v_state, spacfury, ORIENTATION_FLIP_Y,          "Sega", "Space Fury (revision A)", GAME_IMPERFECT_SOUND )
+GAME( 1981, spacfuryb, spacfury, spacfury, spacfury, segag80v_state, spacfury, ORIENTATION_FLIP_Y,          "Sega", "Space Fury (revision B)", GAME_IMPERFECT_SOUND )
+GAME( 1982, zektor,    0,        zektor,   zektor, segag80v_state,   zektor,   ORIENTATION_FLIP_Y,          "Sega", "Zektor (revision B)", GAME_IMPERFECT_SOUND )
+GAME( 1982, tacscan,   0,        tacscan,  tacscan, segag80v_state,  tacscan,  ORIENTATION_FLIP_X ^ ROT270, "Sega", "Tac/Scan", GAME_IMPERFECT_SOUND )
+GAME( 1982, startrek,  0,        startrek, startrek, segag80v_state, startrek, ORIENTATION_FLIP_Y,          "Sega", "Star Trek", GAME_IMPERFECT_SOUND )

@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     RCA CDP1862 COS/MOS Color Generator Controller emulation
@@ -35,7 +37,7 @@
 //  MACROS / CONSTANTS
 //**************************************************************************
 
-#define CPD1862_CLOCK	XTAL_7_15909MHz
+#define CPD1862_CLOCK   XTAL_7_15909MHz
 
 
 
@@ -43,13 +45,18 @@
 //  INTERFACE CONFIGURATION MACROS
 //**************************************************************************
 
-#define MCFG_CDP1862_ADD(_tag, _clock, _config) \
+#define MCFG_CDP1862_ADD(_tag, _screen_tag, _clock, _rd, _bd, _gd) \
 	MCFG_DEVICE_ADD(_tag, CDP1862, _clock) \
-	MCFG_DEVICE_CONFIG(_config)
+	MCFG_VIDEO_SET_SCREEN(_screen_tag) \
+	downcast<cdp1862_device *>(device)->set_rd_callback(DEVCB2_##_rd); \
+	downcast<cdp1862_device *>(device)->set_bd_callback(DEVCB2_##_bd); \
+	downcast<cdp1862_device *>(device)->set_gd_callback(DEVCB2_##_gd);
 
+#define MCFG_CDP1862_LUMINANCE(_r, _b, _g, _bkg) \
+	downcast<cdp1862_device *>(device)->set_luminance_resistors(_r, _b, _g, _bkg);
 
-#define CDP1862_INTERFACE(name) \
-	const cdp1862_interface (name) =
+#define MCFG_CDP1862_CHROMINANCE(_r, _b, _g, _bkg) \
+	downcast<cdp1862_device *>(device)->set_chrominance_resistors(_r, _b, _g, _bkg);
 
 
 
@@ -57,63 +64,54 @@
 //  TYPE DEFINITIONS
 //**************************************************************************
 
-
-// ======================> cdp1862_interface
-
-struct cdp1862_interface
-{
-	const char *m_screen_tag;
-
-	devcb_read_line				m_in_rd_cb;
-	devcb_read_line				m_in_bd_cb;
-	devcb_read_line				m_in_gd_cb;
-
-	double m_lum_r;				// red luminance resistor value
-	double m_lum_b;				// blue luminance resistor value
-	double m_lum_g;				// green luminance resistor value
-	double m_lum_bkg;			// background luminance resistor value
-
-	double m_chr_r;				// red chrominance resistor value
-	double m_chr_b;				// blue chrominance resistor value
-	double m_chr_g;				// green chrominance resistor value
-	double m_chr_bkg;			// background chrominance resistor value
-};
-
-
-
 // ======================> cdp1862_device
 
-class cdp1862_device :	public device_t,
-                        public cdp1862_interface
+class cdp1862_device :  public device_t,
+						public device_video_interface
 {
 public:
-    // construction/destruction
-    cdp1862_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	// construction/destruction
+	cdp1862_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
-    DECLARE_WRITE8_MEMBER( dma_w );
+	template<class _rd> void set_rd_callback(_rd rd) { m_read_rd.set_callback(rd); }
+	template<class _bd> void set_bd_callback(_bd bd) { m_read_bd.set_callback(bd); }
+	template<class _gd> void set_gd_callback(_gd gd) { m_read_gd.set_callback(gd); }
+	void set_luminance_resistors(double r, double b, double g, double bkg) { m_lum_r = r; m_lum_b = b; m_lum_g = g; m_lum_bkg = bkg; }
+	void set_chrominance_resistors(double r, double b, double g, double bkg) { m_chr_r = r; m_chr_b = b; m_chr_g = g; m_chr_bkg = bkg; }
+
+	DECLARE_WRITE8_MEMBER( dma_w );
 	DECLARE_WRITE_LINE_MEMBER( bkg_w );
 	DECLARE_WRITE_LINE_MEMBER( con_w );
 
-	void update_screen(bitmap_t *bitmap, const rectangle *cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect);
 
 protected:
-    // device-level overrides
-	virtual void device_config_complete();
-    virtual void device_start();
-    virtual void device_reset();
+	// device-level overrides
+	virtual void device_start();
+	virtual void device_reset();
 
 private:
 	inline void initialize_palette();
 
-	devcb_resolved_read_line	m_in_rd_func;
-	devcb_resolved_read_line	m_in_bd_func;
-	devcb_resolved_read_line	m_in_gd_func;
+	devcb2_read_line m_read_rd;
+	devcb2_read_line m_read_bd;
+	devcb2_read_line m_read_gd;
 
-	screen_device *m_screen;		// screen
-	bitmap_t *m_bitmap;				// bitmap
+	bitmap_rgb32 m_bitmap;          // bitmap
 
-	int m_bgcolor;					// background color
-	int m_con;						// color on
+	double m_lum_r;             // red luminance resistor value
+	double m_lum_b;             // blue luminance resistor value
+	double m_lum_g;             // green luminance resistor value
+	double m_lum_bkg;           // background luminance resistor value
+
+	double m_chr_r;             // red chrominance resistor value
+	double m_chr_b;             // blue chrominance resistor value
+	double m_chr_g;             // green chrominance resistor value
+	double m_chr_bkg;           // background chrominance resistor value
+
+	rgb_t m_palette[16];
+	int m_bgcolor;                  // background color
+	int m_con;                      // color on
 };
 
 

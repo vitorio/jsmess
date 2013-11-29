@@ -176,18 +176,56 @@ Notes:
 
 */
 
+/* Notes added 2012-05-11 [Robbbert]
+    General
+    - Added F1 key to toggle the sound on 'sb2m600b', to silence the awful screech.
+    - Added F3 key to simulate the RESET / BREAK key on the real keyboard.
+    - These machines only uses uppercase input. Shift-Lock must be on at all times.
+    - At boot you get a screen DCWM or similar:
+      D = boot from floppy
+      C = Cold boot & start BASIC
+      W = Warm boot (don't use after turning on the machine) jump to 0000.
+      M = Monitor (only options are to read/modify memory, Go, Load a tape).
+    - The corrupt error messages in Basic are normal and are documented in the user
+      manual. It's not a bug.
+
+    Compukit UK101
+    - The Monitor ROM that had always been there is for a 32x32 screen. I assume it
+      was the prototype referred to in the first Practical Electronics construction
+      article. Also, the keyboard doesn't work in Basic.
+    - I found a working rom in another emulator, this runs fine on the 64x16 screen.
+    - But, the proper rom that came with the kit needs to be found.
+    - The proper rom (and the prototype) allow you to boot from floppy, but this is
+      not normally fitted. It appears that it would work the same as in the other
+      systems in this driver.
+
+*/
+
+/* Notes added 2013-01-20
+      Added a modified basic rom, which fixes the garbage collection problem.
+      Try the following program with -bios 0 and -bios 1. It will work only
+      with bios 1. You can copy/paste this code, but make sure you include the
+      trailing blank line.
+
+10 DIM A$(3)
+RUN
+PRINT FRE(0)
+
+*/
+
+
 #include "includes/osi.h"
 
 /* Sound */
 
 static const discrete_dac_r1_ladder osi600_dac =
 {
-	4,			// size of ladder
+	4,          // size of ladder
 	{ 180, 180, 180, 180, 0, 0, 0, 0 }, // R68, R69, R70, R71
-	5,			// 5V
-	RES_K(1),	// R67
-	0,			// no rGnd
-	0			// no cFilter
+	5,          // 5V
+	RES_K(1),   // R67
+	0,          // no rGnd
+	0           // no cFilter
 };
 
 static DISCRETE_SOUND_START( osi600_discrete_interface )
@@ -202,12 +240,12 @@ DISCRETE_SOUND_END
 
 static const discrete_dac_r1_ladder osi600c_dac =
 {
-	8,			// size of ladder
+	8,          // size of ladder
 	{ RES_K(68), RES_K(33), RES_K(16), RES_K(8.2), RES_K(3.9), RES_K(2), RES_K(1), 510 }, // R73, R71, R70, R67, R68, R69, R75, R74
-	5,			// 5V
-	510,		// R86
-	0,			// no rGnd
-	CAP_U(33)	// C63
+	5,          // 5V
+	510,        // R86
+	0,          // no rGnd
+	CAP_U(33)   // C63
 };
 
 static DISCRETE_SOUND_START( osi600c_discrete_interface )
@@ -223,15 +261,27 @@ DISCRETE_SOUND_END
 
 READ8_MEMBER( sb2m600_state::keyboard_r )
 {
-	static const char *const keynames[] = { "ROW0", "ROW1", "ROW2", "ROW3", "ROW4", "ROW5", "ROW6", "ROW7" };
+	if (m_io_reset->read())
+		m_maincpu->reset();
 
 	UINT8 data = 0xff;
-	int bit;
 
-	for (bit = 0; bit < 8; bit++)
-	{
-		if (!BIT(m_keylatch, bit)) data &= input_port_read(machine(), keynames[bit]);
-	}
+	if (!BIT(m_keylatch, 0))
+		data &= m_io_row0->read();
+	if (!BIT(m_keylatch, 1))
+		data &= m_io_row1->read();
+	if (!BIT(m_keylatch, 2))
+		data &= m_io_row2->read();
+	if (!BIT(m_keylatch, 3))
+		data &= m_io_row3->read();
+	if (!BIT(m_keylatch, 4))
+		data &= m_io_row4->read();
+	if (!BIT(m_keylatch, 5))
+		data &= m_io_row5->read();
+	if (!BIT(m_keylatch, 6))
+		data &= m_io_row6->read();
+	if (!BIT(m_keylatch, 7))
+		data &= m_io_row7->read();
 
 	return data;
 }
@@ -240,7 +290,8 @@ WRITE8_MEMBER( sb2m600_state::keyboard_w )
 {
 	m_keylatch = data;
 
-	discrete_sound_w(m_discrete, NODE_01, (data >> 2) & 0x0f);
+	if (m_io_sound->read())
+		discrete_sound_w(m_discrete, space, NODE_01, (data >> 2) & 0x0f);
 }
 
 WRITE8_MEMBER( uk101_state::keyboard_w )
@@ -252,48 +303,48 @@ WRITE8_MEMBER( sb2m600_state::ctrl_w )
 {
 	/*
 
-        bit     signal          description
+	    bit     signal          description
 
-        0       _32             screen size (0=32x32, 1=64x16)
-        1       COLOR EN        color enable
-        2       BK0
-        3       BK1
-        4       DAC DISABLE     DAC sound enable
-        5
-        6
-        7
+	    0       _32             screen size (0=32x32, 1=64x16)
+	    1       COLOR EN        color enable
+	    2       BK0
+	    3       BK1
+	    4       DAC DISABLE     DAC sound enable
+	    5
+	    6
+	    7
 
-    */
+	*/
 
 	m_32 = BIT(data, 0);
 	m_coloren = BIT(data, 1);
 
-	discrete_sound_w(m_discrete, NODE_10, BIT(data, 4));
+	discrete_sound_w(m_discrete, space, NODE_10, BIT(data, 4));
 }
 
 WRITE8_MEMBER( c1p_state::osi630_ctrl_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       AC control enable
-        1       tone generator enable
-        2       modem select (0 = printer, 1 = modem)
-        3
-        4
-        5
-        6
-        7
+	    0       AC control enable
+	    1       tone generator enable
+	    2       modem select (0 = printer, 1 = modem)
+	    3
+	    4
+	    5
+	    6
+	    7
 
-    */
+	*/
 
-	beep_set_state(m_beep, BIT(data, 1));
+	m_beep->set_state(BIT(data, 1));
 }
 
 WRITE8_MEMBER( c1p_state::osi630_sound_w )
 {
-	if (data) beep_set_frequency(m_beep, 49152 / data);
+	if (data) m_beep->set_frequency(49152 / data);
 }
 
 /* Disk Drive */
@@ -332,30 +383,27 @@ WRITE8_MEMBER( c1p_state::osi630_sound_w )
     C011 ACIAIO         DISK CONTROLLER ACIA I/O PORT
 */
 
-static WRITE_LINE_DEVICE_HANDLER(osi470_index_callback)
+WRITE_LINE_MEMBER(sb2m600_state::osi470_index_callback)
 {
-	sb2m600_state *driver_state = device->machine().driver_data<sb2m600_state>();
-
-	driver_state->m_fdc_index = state;
+	m_fdc_index = state;
 }
 
 READ8_MEMBER( c1pmf_state::osi470_pia_pa_r )
 {
-
 	/*
 
-        bit     description
+	    bit     description
 
-        0       _READY DRIVE 1
-        1       _TRACK 00
-        2       _FAULT
-        3       _SECTOR
-        4       _READY DRIVE 2
-        5       _WRITE PROTECT
-        6
-        7       _INDEX
+	    0       _READY DRIVE 1
+	    1       _TRACK 00
+	    2       _FAULT
+	    3       _SECTOR
+	    4       _READY DRIVE 2
+	    5       _WRITE PROTECT
+	    6
+	    7       _INDEX
 
-    */
+	*/
 
 	return (m_fdc_index << 7);
 }
@@ -364,36 +412,36 @@ WRITE8_MEMBER( c1pmf_state::osi470_pia_pa_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0
-        1
-        2
-        3
-        4
-        5
-        6       drive select
-        7
+	    0
+	    1
+	    2
+	    3
+	    4
+	    5
+	    6       drive select
+	    7
 
-    */
+	*/
 }
 
 WRITE8_MEMBER( c1pmf_state::osi470_pia_pb_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       _WRITE ENABLE
-        1       _ERASE ENABLE
-        2       _STEP IN
-        3       _STEP
-        4       _FAULT RESET
-        5       side select
-        6       _LOW CURRENT
-        7       _HEAD LOAD
+	    0       _WRITE ENABLE
+	    1       _ERASE ENABLE
+	    2       _STEP IN
+	    3       _STEP
+	    4       _FAULT RESET
+	    5       side select
+	    6       _LOW CURRENT
+	    7       _HEAD LOAD
 
-    */
+	*/
 }
 
 WRITE_LINE_MEMBER( c1pmf_state::osi470_pia_cb2_w )
@@ -437,7 +485,7 @@ static const pia6821_interface pia_dummy_intf =
 static ADDRESS_MAP_START( osi600_mem, AS_PROGRAM, 8, sb2m600_state )
 	AM_RANGE(0x0000, 0x1fff) AM_RAMBANK("bank1")
 	AM_RANGE(0xa000, 0xbfff) AM_ROM
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE(m_video_ram)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_SHARE("video_ram")
 	AM_RANGE(0xdf00, 0xdf00) AM_READWRITE(keyboard_r, keyboard_w)
 	AM_RANGE(0xf000, 0xf000) AM_DEVREADWRITE("acia_0", acia6850_device, status_read, control_write)
 	AM_RANGE(0xf001, 0xf001) AM_DEVREADWRITE("acia_0", acia6850_device, data_read, data_write)
@@ -447,8 +495,9 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( uk101_mem, AS_PROGRAM, 8, uk101_state )
 	AM_RANGE(0x0000, 0x1fff) AM_RAMBANK("bank1")
 	AM_RANGE(0xa000, 0xbfff) AM_ROM
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE(m_video_ram)
-	AM_RANGE(0xdf00, 0xdf00) AM_MIRROR(0x03ff) AM_READ_BASE(sb2m600_state, keyboard_r) AM_WRITE(keyboard_w)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_SHARE("video_ram")
+	AM_RANGE(0xd400, 0xd7ff) AM_NOP  // bios sets this to spaces at boot
+	AM_RANGE(0xdc00, 0xdfff) AM_READ(keyboard_r) AM_WRITE(keyboard_w)
 	AM_RANGE(0xf000, 0xf000) AM_MIRROR(0x00fe) AM_DEVREADWRITE("acia_0", acia6850_device, status_read, control_write)
 	AM_RANGE(0xf001, 0xf001) AM_MIRROR(0x00fe) AM_DEVREADWRITE("acia_0", acia6850_device, data_read, data_write)
 	AM_RANGE(0xf800, 0xffff) AM_ROM
@@ -460,10 +509,10 @@ static ADDRESS_MAP_START( c1p_mem, AS_PROGRAM, 8, c1p_state )
 	AM_RANGE(0xc704, 0xc707) AM_DEVREADWRITE("pia_1", pia6821_device, read, write)
 	AM_RANGE(0xc708, 0xc70b) AM_DEVREADWRITE("pia_2", pia6821_device, read, write)
 	AM_RANGE(0xc70c, 0xc70f) AM_DEVREADWRITE("pia_3", pia6821_device, read, write)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE(m_video_ram)
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM AM_BASE(m_color_ram)
-	AM_RANGE(0xd800, 0xd800) AM_WRITE_BASE(sb2m600_state, ctrl_w)
-	AM_RANGE(0xdf00, 0xdf00) AM_READWRITE_BASE(sb2m600_state, keyboard_r, keyboard_w)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_SHARE("video_ram")
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM AM_SHARE("color_ram")
+	AM_RANGE(0xd800, 0xd800) AM_WRITE(ctrl_w)
+	AM_RANGE(0xdf00, 0xdf00) AM_READWRITE(keyboard_r, keyboard_w)
 	AM_RANGE(0xf000, 0xf000) AM_DEVREADWRITE("acia_0", acia6850_device, status_read, control_write)
 	AM_RANGE(0xf001, 0xf001) AM_DEVREADWRITE("acia_0", acia6850_device, data_read, data_write)
 	AM_RANGE(0xf7c0, 0xf7c0) AM_WRITE(osi630_sound_w)
@@ -480,14 +529,14 @@ static ADDRESS_MAP_START( c1pmf_mem, AS_PROGRAM, 8, c1pmf_state )
 	AM_RANGE(0xc704, 0xc707) AM_DEVREADWRITE("pia_1", pia6821_device, read, write)
 	AM_RANGE(0xc708, 0xc70b) AM_DEVREADWRITE("pia_2", pia6821_device, read, write)
 	AM_RANGE(0xc70c, 0xc70f) AM_DEVREADWRITE("pia_3", pia6821_device, read, write)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE(m_video_ram)
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM AM_BASE(m_color_ram)
-	AM_RANGE(0xd800, 0xd800) AM_WRITE_BASE(sb2m600_state, ctrl_w)
-	AM_RANGE(0xdf00, 0xdf00) AM_READWRITE_BASE(sb2m600_state, keyboard_r, keyboard_w)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_SHARE("video_ram")
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM AM_SHARE("color_ram")
+	AM_RANGE(0xd800, 0xd800) AM_WRITE(ctrl_w)
+	AM_RANGE(0xdf00, 0xdf00) AM_READWRITE(keyboard_r, keyboard_w)
 	AM_RANGE(0xf000, 0xf000) AM_DEVREADWRITE("acia_0", acia6850_device, status_read, control_write)
 	AM_RANGE(0xf001, 0xf001) AM_DEVREADWRITE("acia_0", acia6850_device, data_read, data_write)
-	AM_RANGE(0xf7c0, 0xf7c0) AM_WRITE_BASE(c1p_state, osi630_sound_w)
-	AM_RANGE(0xf7e0, 0xf7e0) AM_WRITE_BASE(c1p_state, osi630_ctrl_w)
+	AM_RANGE(0xf7c0, 0xf7c0) AM_WRITE(osi630_sound_w)
+	AM_RANGE(0xf7e0, 0xf7e0) AM_WRITE(osi630_ctrl_w)
 	AM_RANGE(0xf800, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -573,6 +622,12 @@ static INPUT_PORTS_START( osi600 )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_CODE(KEYCODE_3) PORT_CHAR('3') PORT_CHAR('#')
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_CODE(KEYCODE_2) PORT_CHAR('2') PORT_CHAR('\"')
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_KEYBOARD) PORT_CODE(KEYCODE_1) PORT_CHAR('1') PORT_CHAR('!')
+
+	PORT_START("Sound")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_CODE(KEYCODE_F1) PORT_TOGGLE
+
+	PORT_START("Reset")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("RESET") PORT_CODE(KEYCODE_F3) PORT_CHAR(UCHAR_MAMEKEY(F3))
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( uk101 )
@@ -625,8 +680,8 @@ static ACIA6850_INTERFACE( uk101_acia_intf )
 
 static ACIA6850_INTERFACE( osi470_acia_intf )
 {
-	0,				// clocked in from the floppy drive
-	XTAL_4MHz/8,	// 250 kHz
+	0,              // clocked in from the floppy drive
+	XTAL_4MHz/8,    // 250 kHz
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -637,46 +692,46 @@ static ACIA6850_INTERFACE( osi470_acia_intf )
 
 void sb2m600_state::machine_start()
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
+	address_space &program = m_maincpu->space(AS_PROGRAM);
 
 	/* configure RAM banking */
-	memory_configure_bank(machine(), "bank1", 0, 1, machine().region(M6502_TAG)->base(), 0);
-	memory_set_bank(machine(), "bank1", 0);
+	membank("bank1")->configure_entry(0, memregion(M6502_TAG)->base());
+	membank("bank1")->set_entry(0);
 
-	switch (ram_get_size(m_ram))
+	switch (m_ram->size())
 	{
 	case 4*1024:
-		program->install_readwrite_bank(0x0000, 0x0fff, "bank1");
-		program->unmap_readwrite(0x1000, 0x1fff);
+		program.install_readwrite_bank(0x0000, 0x0fff, "bank1");
+		program.unmap_readwrite(0x1000, 0x1fff);
 		break;
 
 	case 8*1024:
-		program->install_readwrite_bank(0x0000, 0x1fff, "bank1");
+		program.install_readwrite_bank(0x0000, 0x1fff, "bank1");
 		break;
 	}
 
 	/* register for state saving */
 	save_item(NAME(m_keylatch));
-	save_pointer(NAME(m_video_ram), OSI600_VIDEORAM_SIZE);
+	save_pointer(NAME(m_video_ram.target()), OSI600_VIDEORAM_SIZE);
 }
 
 void c1p_state::machine_start()
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
+	address_space &program = m_maincpu->space(AS_PROGRAM);
 
 	/* configure RAM banking */
-	memory_configure_bank(machine(), "bank1", 0, 1, machine().region(M6502_TAG)->base(), 0);
-	memory_set_bank(machine(), "bank1", 0);
+	membank("bank1")->configure_entry(0, memregion(M6502_TAG)->base());
+	membank("bank1")->set_entry(0);
 
-	switch (ram_get_size(m_ram))
+	switch (m_ram->size())
 	{
 	case 8*1024:
-		program->install_readwrite_bank(0x0000, 0x1fff, "bank1");
-		program->unmap_readwrite(0x2000, 0x4fff);
+		program.install_readwrite_bank(0x0000, 0x1fff, "bank1");
+		program.unmap_readwrite(0x2000, 0x4fff);
 		break;
 
 	case 20*1024:
-		program->install_readwrite_bank(0x0000, 0x4fff, "bank1");
+		program.install_readwrite_bank(0x0000, 0x4fff, "bank1");
 		break;
 	}
 
@@ -684,8 +739,8 @@ void c1p_state::machine_start()
 	save_item(NAME(m_keylatch));
 	save_item(NAME(m_32));
 	save_item(NAME(m_coloren));
-	save_pointer(NAME(m_video_ram), OSI600_VIDEORAM_SIZE);
-	save_pointer(NAME(m_color_ram), OSI630_COLORRAM_SIZE);
+	save_pointer(NAME(m_video_ram.target()), OSI600_VIDEORAM_SIZE);
+	save_pointer(NAME(m_color_ram.target()), OSI630_COLORRAM_SIZE);
 }
 
 void c1pmf_state::machine_start()
@@ -693,24 +748,24 @@ void c1pmf_state::machine_start()
 	c1p_state::machine_start();
 }
 
-static FLOPPY_OPTIONS_START(osi)
-	FLOPPY_OPTION(osi, "img", "OSI disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
+static LEGACY_FLOPPY_OPTIONS_START(osi)
+	LEGACY_FLOPPY_OPTION(osi, "img", "OSI disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
 		HEADS([1])
 		TRACKS([36])
 		SECTORS([10])
 		SECTOR_LENGTH([256])
 		FIRST_SECTOR_ID([0]))
-FLOPPY_OPTIONS_END
+LEGACY_FLOPPY_OPTIONS_END
 
 static const floppy_interface osi_floppy_interface =
 {
-	DEVCB_LINE(osi470_index_callback),
+	DEVCB_DRIVER_LINE_MEMBER(sb2m600_state,osi470_index_callback),
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
 	FLOPPY_STANDARD_5_25_SSDD_40,
-	FLOPPY_OPTIONS_NAME(osi),
+	LEGACY_FLOPPY_OPTIONS_NAME(osi),
 	NULL,
 	NULL
 };
@@ -718,15 +773,15 @@ static const floppy_interface osi_floppy_interface =
 /* F4 Character Displayer */
 static const gfx_layout osi_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	256,					/* 256 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	256,                    /* 256 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( osi )
@@ -748,13 +803,13 @@ static MACHINE_CONFIG_START( osi600, sb2m600_state )
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 	MCFG_SOUND_ADD(DISCRETE_TAG, DISCRETE, 0)
 	MCFG_SOUND_CONFIG_DISCRETE(osi600_discrete_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	/* cassette ACIA */
 	MCFG_ACIA6850_ADD("acia_0", osi600_acia_intf)
 
 	/* cassette */
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, default_cassette_interface)
+	MCFG_CASSETTE_ADD("cassette", default_cassette_interface)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -775,7 +830,7 @@ static MACHINE_CONFIG_START( uk101, uk101_state )
 	MCFG_ACIA6850_ADD("acia_0", uk101_acia_intf)
 
 	/* cassette */
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, default_cassette_interface)
+	MCFG_CASSETTE_ADD("cassette", default_cassette_interface)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -796,9 +851,9 @@ static MACHINE_CONFIG_START( c1p, c1p_state )
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 	MCFG_SOUND_ADD(DISCRETE_TAG, DISCRETE, 0)
 	MCFG_SOUND_CONFIG_DISCRETE(osi600c_discrete_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
-	MCFG_SOUND_ADD(BEEPER_TAG, BEEP, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("beeper", BEEP, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MCFG_PIA6821_ADD( "pia_1", pia_dummy_intf )
 	MCFG_PIA6821_ADD( "pia_2", pia_dummy_intf )
@@ -808,7 +863,7 @@ static MACHINE_CONFIG_START( c1p, c1p_state )
 	MCFG_ACIA6850_ADD("acia_0", osi600_acia_intf)
 
 	/* cassette */
-	MCFG_CASSETTE_ADD(CASSETTE_TAG, default_cassette_interface)
+	MCFG_CASSETTE_ADD("cassette", default_cassette_interface)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -825,7 +880,7 @@ static MACHINE_CONFIG_DERIVED_CLASS( c1pmf, c1p, c1pmf_state )
 	/* floppy ACIA */
 	MCFG_ACIA6850_ADD("acia_1", osi470_acia_intf)
 
-	MCFG_FLOPPY_DRIVE_ADD(FLOPPY_0, osi_floppy_interface)
+	MCFG_LEGACY_FLOPPY_DRIVE_ADD(FLOPPY_0, osi_floppy_interface)
 
 	/* internal ram */
 	MCFG_RAM_MODIFY(RAM_TAG)
@@ -834,18 +889,28 @@ MACHINE_CONFIG_END
 
 /* ROMs */
 
+
+
 ROM_START( sb2m600b )
 	ROM_REGION( 0x10000, M6502_TAG, 0 )
 	ROM_LOAD( "basus01.u9",  0xa000, 0x0800, CRC(f4f5dec0) SHA1(b41bf24b4470b6e969d32fe48d604637276f846e) )
 	ROM_LOAD( "basus02.u10", 0xa800, 0x0800, CRC(0039ef6a) SHA1(1397f0dc170c16c8e0c7d02e63099e986e86385b) )
-	ROM_LOAD( "basus03.u11", 0xb000, 0x0800, CRC(ca25f8c1) SHA1(f5e8ee93a5e0656657d0cc60ef44e8a24b8b0a80) )
 	ROM_LOAD( "basus04.u12", 0xb800, 0x0800, CRC(8ee6030e) SHA1(71f210163e4268cba2dd78a97c4d8f5dcebf980e) )
-	ROM_LOAD( "monde01.u13", 0xf800, 0x0800, CRC(95a44d2e) SHA1(4a0241c4015b94c436d0f0f58b3dd9d5207cd847) )
+	ROM_LOAD( "monde01.u13", 0xf800, 0x0800, CRC(95a44d2e) SHA1(4a0241c4015b94c436d0f0f58b3dd9d5207cd847) ) // also known as syn600.rom
+	ROM_SYSTEM_BIOS(0, "original", "Original")
+	ROMX_LOAD("basus03.u11", 0xb000, 0x0800, CRC(ca25f8c1) SHA1(f5e8ee93a5e0656657d0cc60ef44e8a24b8b0a80), ROM_BIOS(1) )
+	ROM_SYSTEM_BIOS(1, "fixed", "Fixed")
+	ROMX_LOAD( "basic3.rom", 0xb000, 0x0800, CRC(ac37d575) SHA1(11407eb24d1ba7afb889b7677c987e8be1a61aab), ROM_BIOS(2) )
 
-	ROM_REGION( 0x800, "chargen",0)
+	ROM_REGION( 0x0800, "chargen",0)
 	ROM_LOAD( "chgsup2.u41", 0x0000, 0x0800, CRC(735f5e0a) SHA1(87c6271497c5b00a974d905766e91bb965180594) )
+
+	ROM_REGION( 0x0800, "user1",0)
+	// Another bios rom
+	ROM_LOAD( "c2 c4 synmon.rom", 0x0000, 0x0800, CRC(03cdbcc5) SHA1(5426ae14522ef485b6089472011db0ae1d192630) )
 ROM_END
 
+// same roms are used in Challenger 2P and 4P
 #define rom_c1p rom_sb2m600b
 #define rom_c1pmf rom_sb2m600b
 
@@ -855,7 +920,10 @@ ROM_START( uk101 )
 	ROM_LOAD( "basus02.ic10",  0xa800, 0x0800, CRC(0039ef6a) SHA1(1397f0dc170c16c8e0c7d02e63099e986e86385b) )
 	ROM_LOAD( "basuk03.ic11",  0xb000, 0x0800, CRC(0d011242) SHA1(54bd33522a5d1991086eeeff3a4f73c026be45b6) )
 	ROM_LOAD( "basuk04.ic12",  0xb800, 0x0800, CRC(667223e8) SHA1(dca78be4b98317413376d69119942d692e39575a) )
-	ROM_LOAD( "monuk02.ic13",  0xf800, 0x0800, CRC(04ac5822) SHA1(2bbbcd0ca18103fd68afcf64a7483653b925d83e) )
+	// This monitor came from another emulator and works well on the 64x16 screen
+	ROM_LOAD( "monuk02.ic13",  0xf800, 0x0800, CRC(e5b7028d) SHA1(74f0934014fdf83d33c8d3579e562b53c0683270) )
+	// This monitor is for a 32x32 screen, and could be the prototype referred to in Practical Electronics
+	//ROM_LOAD( "monuk02.ic13",  0xf800, 0x0800, CRC(04ac5822) SHA1(2bbbcd0ca18103fd68afcf64a7483653b925d83e) )
 
 	ROM_REGION( 0x800, "chargen", 0 )
 	ROM_LOAD( "chguk101.ic41", 0x0000, 0x0800, CRC(fce2c84a) SHA1(baa66a7a48e4d62282671ef53abfaf450b888b70) )
@@ -863,24 +931,30 @@ ROM_END
 
 /* Driver Initialization */
 
-static TIMER_CALLBACK( setup_beep )
+void sb2m600_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	device_t *speaker = machine.device(BEEPER_TAG);
-	beep_set_state(speaker, 0);
-	beep_set_frequency(speaker, 300);
+	switch (id)
+	{
+	case TIMER_SETUP_BEEP:
+		m_beeper->set_state(0);
+		m_beeper->set_frequency(300);
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in sb2m600_state::device_timer");
+	}
 }
 
-static DRIVER_INIT( c1p )
+DRIVER_INIT_MEMBER(c1p_state,c1p)
 {
-	machine.scheduler().timer_set(attotime::zero, FUNC(setup_beep));
+	timer_set(attotime::zero, TIMER_SETUP_BEEP);
 }
 
 
 /* System Drivers */
 
-//    YEAR  NAME        PARENT  COMPAT  MACHINE   INPUT      INIT   COMPANY            FULLNAME
-COMP( 1978, sb2m600b,	0,		0,		osi600,   osi600,    0,		"Ohio Scientific", "Superboard II Model 600 (Rev. B)", GAME_NOT_WORKING)
-//COMP( 1980, sb2m600c, 0,          0,      osi600c,  osi600,    0,     "Ohio Scientific", "Superboard II Model 600 (Rev. C)", GAME_NOT_WORKING)
-COMP( 1980, c1p,	sb2m600b,	0,		c1p,	  osi600,    c1p,	"Ohio Scientific", "Challenger 1P Series 2", GAME_NOT_WORKING)
-COMP( 1980, c1pmf,	sb2m600b,	0,		c1pmf,	  osi600,    c1p,	"Ohio Scientific", "Challenger 1P MF Series 2", GAME_NOT_WORKING)
-COMP( 1979, uk101,	sb2m600b,	0,		uk101,	  uk101,     0, 	"Compukit",        "UK101", GAME_NOT_WORKING | GAME_NO_SOUND)
+//    YEAR  NAME      PARENT    COMPAT    MACHINE   INPUT      INIT   COMPANY            FULLNAME
+COMP( 1978, sb2m600b, 0,        0,        osi600,   osi600, driver_device,    0,   "Ohio Scientific", "Superboard II Model 600 (Rev. B)", GAME_NOT_WORKING)
+//COMP( 1980, sb2m600c, 0,        0,        osi600c,  osi600, driver_device,    0,   "Ohio Scientific", "Superboard II Model 600 (Rev. C)", GAME_NOT_WORKING)
+COMP( 1980, c1p,      sb2m600b, 0,        c1p,      osi600, c1p_state,    c1p, "Ohio Scientific", "Challenger 1P Series 2", GAME_NOT_WORKING)
+COMP( 1980, c1pmf,    sb2m600b, 0,        c1pmf,    osi600, c1p_state,    c1p, "Ohio Scientific", "Challenger 1P MF Series 2", GAME_NOT_WORKING)
+COMP( 1979, uk101,    sb2m600b, 0,        uk101,    uk101, driver_device,     0,   "Compukit",        "UK101", GAME_NOT_WORKING | GAME_NO_SOUND_HW)

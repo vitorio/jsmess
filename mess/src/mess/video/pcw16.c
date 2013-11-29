@@ -13,58 +13,58 @@ static const unsigned short pcw16_colour_table[PCW16_NUM_COLOURS] =
 
 static const rgb_t pcw16_palette[PCW16_NUM_COLOURS] =
 {
-	MAKE_RGB(0x080, 0x080, 0x080),	/* light grey */
-	MAKE_RGB(0x080, 0x080, 0x080),	/* light grey */
-	MAKE_RGB(0x000, 0x080, 0x080),	/* magenta */
-	MAKE_RGB(0x000, 0x080, 0x080),	/* magenta */
-	MAKE_RGB(0x080, 0x080, 0x080),	/* light grey */
-	MAKE_RGB(0x080, 0x080, 0x080),	/* light grey */
-	MAKE_RGB(0x0ff, 0x080, 0x080),	/* pastel green */
-	MAKE_RGB(0x0ff, 0x080, 0x080),	/* pastel green */
-	MAKE_RGB(0x000, 0x000, 0x080),	/* blue */
-	MAKE_RGB(0x000, 0x000, 0x000),	/* black */
-	MAKE_RGB(0x000, 0x080, 0x0ff),	/* mauve */
-	MAKE_RGB(0x000, 0x000, 0x0ff),	/* bright blue */
-	MAKE_RGB(0x000, 0x080, 0x000),	/* red */
-	MAKE_RGB(0x000, 0x0ff, 0x000),	/* bright red */
-	MAKE_RGB(0x000, 0x0ff, 0x080),	/* purple */
-	MAKE_RGB(0x000, 0x0ff, 0x0ff),	/* bright magenta */
-	MAKE_RGB(0x0ff, 0x000, 0x080),	/* sea green */
-	MAKE_RGB(0x0ff, 0x000, 0x0ff),	/* bright green */
-	MAKE_RGB(0x0ff, 0x080, 0x0ff),	/* pastel cyan */
-	MAKE_RGB(0x0ff, 0x000, 0x0ff),	/* bright cyan */
-	MAKE_RGB(0x0ff, 0x080, 0x000),	/* lime green */
-	MAKE_RGB(0x0ff, 0x0ff, 0x000),	/* bright yellow */
-	MAKE_RGB(0x0ff, 0x0ff, 0x080),	/* pastel yellow */
-	MAKE_RGB(0x0ff, 0x0ff, 0x0ff),	/* bright white */
-	MAKE_RGB(0x080, 0x000, 0x080),	/* cyan */
-	MAKE_RGB(0x080, 0x000, 0x000),	/* green */
-	MAKE_RGB(0x080, 0x080, 0x0ff),	/* pastel blue */
-	MAKE_RGB(0x080, 0x000, 0x0ff),	/* sky blue */
-	MAKE_RGB(0x080, 0x080, 0x000),	/* yellow */
-	MAKE_RGB(0x080, 0x0ff, 0x000),	/* orange */
-	MAKE_RGB(0x080, 0x0ff, 0x080),	/* pink */
-	MAKE_RGB(0x080, 0x0ff, 0x0ff),	/* pastel magenta */
+	MAKE_RGB(0x080, 0x080, 0x080),  /* light grey */
+	MAKE_RGB(0x080, 0x080, 0x080),  /* light grey */
+	MAKE_RGB(0x000, 0x080, 0x080),  /* magenta */
+	MAKE_RGB(0x000, 0x080, 0x080),  /* magenta */
+	MAKE_RGB(0x080, 0x080, 0x080),  /* light grey */
+	MAKE_RGB(0x080, 0x080, 0x080),  /* light grey */
+	MAKE_RGB(0x0ff, 0x080, 0x080),  /* pastel green */
+	MAKE_RGB(0x0ff, 0x080, 0x080),  /* pastel green */
+	MAKE_RGB(0x000, 0x000, 0x080),  /* blue */
+	MAKE_RGB(0x000, 0x000, 0x000),  /* black */
+	MAKE_RGB(0x000, 0x080, 0x0ff),  /* mauve */
+	MAKE_RGB(0x000, 0x000, 0x0ff),  /* bright blue */
+	MAKE_RGB(0x000, 0x080, 0x000),  /* red */
+	MAKE_RGB(0x000, 0x0ff, 0x000),  /* bright red */
+	MAKE_RGB(0x000, 0x0ff, 0x080),  /* purple */
+	MAKE_RGB(0x000, 0x0ff, 0x0ff),  /* bright magenta */
+	MAKE_RGB(0x0ff, 0x000, 0x080),  /* sea green */
+	MAKE_RGB(0x0ff, 0x000, 0x0ff),  /* bright green */
+	MAKE_RGB(0x0ff, 0x080, 0x0ff),  /* pastel cyan */
+	MAKE_RGB(0x0ff, 0x000, 0x0ff),  /* bright cyan */
+	MAKE_RGB(0x0ff, 0x080, 0x000),  /* lime green */
+	MAKE_RGB(0x0ff, 0x0ff, 0x000),  /* bright yellow */
+	MAKE_RGB(0x0ff, 0x0ff, 0x080),  /* pastel yellow */
+	MAKE_RGB(0x0ff, 0x0ff, 0x0ff),  /* bright white */
+	MAKE_RGB(0x080, 0x000, 0x080),  /* cyan */
+	MAKE_RGB(0x080, 0x000, 0x000),  /* green */
+	MAKE_RGB(0x080, 0x080, 0x0ff),  /* pastel blue */
+	MAKE_RGB(0x080, 0x000, 0x0ff),  /* sky blue */
+	MAKE_RGB(0x080, 0x080, 0x000),  /* yellow */
+	MAKE_RGB(0x080, 0x0ff, 0x000),  /* orange */
+	MAKE_RGB(0x080, 0x0ff, 0x080),  /* pink */
+	MAKE_RGB(0x080, 0x0ff, 0x0ff),  /* pastel magenta */
 };
 
 
-INLINE void pcw16_plot_pixel(bitmap_t *bitmap, int x, int y, UINT32 color)
+inline void pcw16_state::pcw16_plot_pixel(bitmap_ind16 &bitmap, int x, int y, UINT32 color)
 {
-	*BITMAP_ADDR16(bitmap, y, x) = (UINT16)color;
+	bitmap.pix16(y, x) = (UINT16)color;
 }
 
 /* Initialise the palette */
-PALETTE_INIT( pcw16 )
+void pcw16_state::palette_init()
 {
-	palette_set_colors(machine, 0, pcw16_palette, ARRAY_LENGTH(pcw16_palette));
+	palette_set_colors(machine(), 0, pcw16_palette, ARRAY_LENGTH(pcw16_palette));
 }
 
-VIDEO_START( pcw16 )
+void pcw16_state::video_start()
 {
 }
 
 /* 640, 1 bit per pixel */
-static void pcw16_vh_decode_mode0(pcw16_state *state, bitmap_t *bitmap, int x, int y, unsigned char byte)
+void pcw16_state::pcw16_vh_decode_mode0(bitmap_ind16 &bitmap, int x, int y, unsigned char byte)
 {
 	int b;
 	int local_byte;
@@ -73,8 +73,8 @@ static void pcw16_vh_decode_mode0(pcw16_state *state, bitmap_t *bitmap, int x, i
 
 	local_byte = byte;
 
-	cols[0] = state->m_colour_palette[0];
-	cols[1] = state->m_colour_palette[1];
+	cols[0] = m_colour_palette[0];
+	cols[1] = m_colour_palette[1];
 
 	px = x;
 	for (b=0; b<8; b++)
@@ -87,7 +87,7 @@ static void pcw16_vh_decode_mode0(pcw16_state *state, bitmap_t *bitmap, int x, i
 }
 
 /* 320, 2 bits per pixel */
-static void pcw16_vh_decode_mode1(pcw16_state *state, bitmap_t *bitmap, int x, int y, unsigned char byte)
+void pcw16_state::pcw16_vh_decode_mode1(bitmap_ind16 &bitmap, int x, int y, unsigned char byte)
 {
 	int b;
 	int px;
@@ -96,7 +96,7 @@ static void pcw16_vh_decode_mode1(pcw16_state *state, bitmap_t *bitmap, int x, i
 
 	for (b=0; b<3; b++)
 	{
-		cols[b] = state->m_colour_palette[b];
+		cols[b] = m_colour_palette[b];
 	}
 
 	local_byte = byte;
@@ -118,15 +118,15 @@ static void pcw16_vh_decode_mode1(pcw16_state *state, bitmap_t *bitmap, int x, i
 }
 
 /* 160, 4 bits per pixel */
-static void pcw16_vh_decode_mode2(pcw16_state *state, bitmap_t *bitmap, int x, int y, unsigned char byte)
+void pcw16_state::pcw16_vh_decode_mode2(bitmap_ind16 &bitmap, int x, int y, unsigned char byte)
 {
 	int px;
 	int b;
 	int local_byte;
 	int cols[2];
 
-	cols[0] = state->m_colour_palette[0];
-	cols[1] = state->m_colour_palette[1];
+	cols[0] = m_colour_palette[0];
+	cols[1] = m_colour_palette[1];
 	local_byte = byte;
 
 	px = x;
@@ -150,68 +150,54 @@ static void pcw16_vh_decode_mode2(pcw16_state *state, bitmap_t *bitmap, int x, i
 }
 
 /***************************************************************************
-  Draw the game screen in the given bitmap_t.
+  Draw the game screen in the given bitmap_ind16.
   Do NOT call osd_update_display() from this function,
   it will be called by the main emulation engine.
 ***************************************************************************/
-SCREEN_UPDATE( pcw16 )
+UINT32 pcw16_state::screen_update_pcw16(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	pcw16_state *state = screen->machine().driver_data<pcw16_state>();
-	UINT8 *ram = ram_get_ptr(screen->machine().device(RAM_TAG));
-	unsigned char *pScanLine = (unsigned char *)ram + 0x0fc00;	//0x03c00;  //0x020FC00;
+	UINT8 *ram = m_ram->pointer();
+	unsigned char *pScanLine = (unsigned char *)ram + 0x0fc00;  //0x03c00;  //0x020FC00;
 
 	int y;
 	int x;
 
 	int border_colour;
 
-	border_colour = state->m_video_control & 31;
+	border_colour = m_video_control & 31;
 
 	/* reverse video? */
-	if (state->m_video_control & (1<<7))
+	if (m_video_control & (1<<7))
 	{
 		/* colour 0 and colour 1 need to be inverted? - what happens in mode 1 and 2 - ignored? or is bit 1 toggled,
-        or is whole lot toggled? */
+		or is whole lot toggled? */
 
 		/* force border to be colour 1 */
-		border_colour = state->m_colour_palette[1];
+		border_colour = m_colour_palette[1];
 	}
 
-	if ((state->m_video_control & (1<<6))==0)
+	if ((m_video_control & (1<<6))==0)
 	{
 		/* blank */
-		rectangle rect;
-
-		rect.min_x = 0;
-		rect.min_y = 0;
-		rect.max_x = PCW16_SCREEN_WIDTH;
-		rect.max_y = PCW16_SCREEN_HEIGHT;
-
-		bitmap_fill(bitmap, &rect, border_colour);
+		rectangle rect(0, PCW16_SCREEN_WIDTH, 0, PCW16_SCREEN_HEIGHT);
+		bitmap.fill(border_colour, rect);
 	}
 	else
 	{
 		/* no blank */
 
-		rectangle rect;
 
 		/* render top border */
-		rect.min_x = 0;
-		rect.min_y = 0;
-		rect.max_x = PCW16_SCREEN_WIDTH;
-		rect.max_y = PCW16_BORDER_HEIGHT;
-		bitmap_fill(bitmap, &rect, border_colour);
+		rectangle rect(0, PCW16_SCREEN_WIDTH, 0, PCW16_BORDER_HEIGHT);
+		bitmap.fill(border_colour, rect);
 
 		/* render bottom border */
-		rect.min_x = 0;
-		rect.min_y = PCW16_BORDER_HEIGHT + PCW16_DISPLAY_HEIGHT;
-		rect.max_x = PCW16_SCREEN_WIDTH;
-		rect.max_y = rect.min_y + PCW16_BORDER_HEIGHT;
-		bitmap_fill(bitmap, &rect, border_colour);
+		rect.set(0, PCW16_SCREEN_WIDTH, PCW16_BORDER_HEIGHT + PCW16_DISPLAY_HEIGHT, PCW16_BORDER_HEIGHT + PCW16_DISPLAY_HEIGHT + PCW16_BORDER_HEIGHT);
+		bitmap.fill(border_colour, rect);
 
 		/* render border on either side of display */
-		plot_box(bitmap, 0,											PCW16_BORDER_HEIGHT, 8, PCW16_DISPLAY_HEIGHT, border_colour);
-		plot_box(bitmap, PCW16_DISPLAY_WIDTH + PCW16_BORDER_WIDTH,	PCW16_BORDER_HEIGHT, 8, PCW16_DISPLAY_HEIGHT, border_colour);
+		bitmap.plot_box(0,                                          PCW16_BORDER_HEIGHT, 8, PCW16_DISPLAY_HEIGHT, border_colour);
+		bitmap.plot_box(PCW16_DISPLAY_WIDTH + PCW16_BORDER_WIDTH,   PCW16_BORDER_HEIGHT, 8, PCW16_DISPLAY_HEIGHT, border_colour);
 
 		/* render display */
 		for (y=0; y<PCW16_DISPLAY_HEIGHT; y++)
@@ -247,20 +233,20 @@ SCREEN_UPDATE( pcw16 )
 				{
 					case 0:
 					{
-						pcw16_vh_decode_mode0(state, bitmap, x, y+PCW16_BORDER_HEIGHT, byte);
+						pcw16_vh_decode_mode0(bitmap, x, y+PCW16_BORDER_HEIGHT, byte);
 					}
 					break;
 
 					case 1:
 					{
-						pcw16_vh_decode_mode1(state, bitmap, x, y+PCW16_BORDER_HEIGHT, byte);
+						pcw16_vh_decode_mode1(bitmap, x, y+PCW16_BORDER_HEIGHT, byte);
 					}
 					break;
 
 					case 3:
 					case 2:
 					{
-						pcw16_vh_decode_mode2(state, bitmap, x, y+PCW16_BORDER_HEIGHT, byte);
+						pcw16_vh_decode_mode2(bitmap, x, y+PCW16_BORDER_HEIGHT, byte);
 					}
 					break;
 				}

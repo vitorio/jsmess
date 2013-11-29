@@ -139,13 +139,12 @@
 #include "unicode.h"
 #include "fat.h"
 
-#define FAT_DIRENT_SIZE			32
-#define FAT_SECLEN				512
+#define FAT_DIRENT_SIZE         32
+#define FAT_SECLEN              512
 
 #define LOG(x)
 
-typedef struct _fat_partition_info fat_partition_info;
-struct _fat_partition_info
+struct fat_partition_info
 {
 	UINT32 fat_bits;
 	UINT32 sectors_per_cluster;
@@ -158,8 +157,7 @@ struct _fat_partition_info
 	UINT32 total_clusters;
 };
 
-typedef struct _fat_file fat_file;
-struct _fat_file
+struct fat_file
 {
 	unsigned int root : 1;
 	unsigned int directory : 1;
@@ -174,8 +172,7 @@ struct _fat_file
 	UINT32 dirent_sector_offset;
 };
 
-typedef struct _fat_dirent fat_dirent;
-struct _fat_dirent
+struct fat_dirent
 {
 	char long_filename[512];
 	char short_filename[13];
@@ -189,16 +186,14 @@ struct _fat_dirent
 	time_t lastmodified_time;
 };
 
-typedef struct _fat_freeentry_info fat_freeentry_info;
-struct _fat_freeentry_info
+struct fat_freeentry_info
 {
 	UINT32 required_size;
 	UINT32 candidate_position;
 	UINT32 position;
 };
 
-typedef struct _fat_mediatype fat_mediatype;
-struct _fat_mediatype
+struct fat_mediatype
 {
 	UINT8 media_descriptor;
 	UINT8 heads;
@@ -206,12 +201,12 @@ struct _fat_mediatype
 	UINT8 sectors;
 };
 
-typedef enum
+enum creation_policy_t
 {
 	CREATE_NONE,
 	CREATE_FILE,
 	CREATE_DIR
-} creation_policy_t;
+};
 
 
 
@@ -412,15 +407,15 @@ static imgtoolerr_t fat_partition_open(imgtool_partition *partition, UINT64 firs
 		//has_extended_bios_param_block = FALSE;
 	}
 
-	info->fat_bits				= fat_bits;
-	sector_size					= pick_integer_le(header, 11, 2);
-	info->sectors_per_cluster	= pick_integer_le(header, 13, 1);
-	info->reserved_sectors		= pick_integer_le(header, 14, 2);
-	info->fat_count				= pick_integer_le(header, 16, 1);
-	info->root_entries			= pick_integer_le(header, 17, 2);
-	total_sectors_l				= pick_integer_le(header, 19, 2);
-	info->sectors_per_fat		= pick_integer_le(header, 22, 2);
-	total_sectors_h				= pick_integer_le(header, 32, 4);
+	info->fat_bits              = fat_bits;
+	sector_size                 = pick_integer_le(header, 11, 2);
+	info->sectors_per_cluster   = pick_integer_le(header, 13, 1);
+	info->reserved_sectors      = pick_integer_le(header, 14, 2);
+	info->fat_count             = pick_integer_le(header, 16, 1);
+	info->root_entries          = pick_integer_le(header, 17, 2);
+	total_sectors_l             = pick_integer_le(header, 19, 2);
+	info->sectors_per_fat       = pick_integer_le(header, 22, 2);
+	total_sectors_h             = pick_integer_le(header, 32, 4);
 
 	if (info->sectors_per_cluster == 0)
 		return IMGTOOLERR_CORRUPTIMAGE;
@@ -544,21 +539,21 @@ static imgtoolerr_t fat_partition_create(imgtool_image *image, UINT64 first_bloc
 	/* store boot code */
 	boot_sector_offset = sizeof(header) - sizeof(boot_sector_code);
 	if (boot_sector_offset < 62)
-		return IMGTOOLERR_UNEXPECTED;	/* sanity check */
+		return IMGTOOLERR_UNEXPECTED;   /* sanity check */
 	if (boot_sector_offset > 510)
-		return IMGTOOLERR_UNEXPECTED;	/* sanity check */
+		return IMGTOOLERR_UNEXPECTED;   /* sanity check */
 	memcpy(&header[boot_sector_offset], boot_sector_code, sizeof(boot_sector_code));
 
 	/* specify jump instruction */
 	if (boot_sector_offset <= 129)
 	{
-		header[0] = 0xEB;									 /* JMP rel8 */
-		header[1] = (UINT8) (boot_sector_offset - 2);		 /* (offset) */
-		header[2] = 0x90;									 /* NOP */
+		header[0] = 0xEB;                                    /* JMP rel8 */
+		header[1] = (UINT8) (boot_sector_offset - 2);        /* (offset) */
+		header[2] = 0x90;                                    /* NOP */
 	}
 	else
 	{
-		header[0] = 0xE9;									 /* JMP rel16 */
+		header[0] = 0xE9;                                    /* JMP rel16 */
 		header[1] = (UINT8) ((boot_sector_offset - 2) >> 0); /* (offset) */
 		header[2] = (UINT8) ((boot_sector_offset - 2) >> 8); /* (offset) */
 	}
@@ -708,7 +703,7 @@ static UINT32 fat_get_fat_entry(imgtool_partition *partition, const UINT8 *fat_t
 		if (i == 0)
 			last_entry = (UINT32) entry;
 		else if (last_entry != (UINT32) entry)
-			return 1;	/* if the FATs disagree; mark this as reserved */
+			return 1;   /* if the FATs disagree; mark this as reserved */
 	}
 
 	/* normalize special clusters */
@@ -880,12 +875,13 @@ static imgtoolerr_t fat_readwrite_file(imgtool_partition *partition, fat_file *f
 	void *buffer, size_t buffer_len, size_t *bytes_read, int read_or_write)
 {
 	imgtoolerr_t err;
-	const fat_partition_info *disk_info;
+//  const fat_partition_info *disk_info;
 	UINT32 sector_index;
 	int offset;
 	size_t len;
 
-	disk_info = fat_get_partition_info(partition);
+//  disk_info =
+		fat_get_partition_info(partition);
 	if (bytes_read)
 		*bytes_read = 0;
 	if (!file->directory)
@@ -1248,12 +1244,12 @@ static time_t fat_crack_time(UINT32 fat_time)
 	time(&now);
 	t = *localtime(&now);
 
-	t.tm_sec	= ((fat_time >>  0) & 0x001F) * 2;
-	t.tm_min	= ((fat_time >>  5) & 0x003F);
-	t.tm_hour	= ((fat_time >> 11) & 0x001F);
-	t.tm_mday	= ((fat_time >> 16) & 0x001F);
-	t.tm_mon	= ((fat_time >> 21) & 0x000F);
-	t.tm_year	= ((fat_time >> 25) & 0x007F) + 1980 - 1900;
+	t.tm_sec    = ((fat_time >>  0) & 0x001F) * 2;
+	t.tm_min    = ((fat_time >>  5) & 0x003F);
+	t.tm_hour   = ((fat_time >> 11) & 0x001F);
+	t.tm_mday   = ((fat_time >> 16) & 0x001F);
+	t.tm_mon    = ((fat_time >> 21) & 0x000F);
+	t.tm_year   = ((fat_time >> 25) & 0x007F) + 1980 - 1900;
 
 	return mktime(&t);
 }
@@ -1267,12 +1263,12 @@ static UINT32 fat_setup_time(time_t ansi_time)
 
 	t = *localtime(&ansi_time);
 
-	result |= (((UINT32) (t.tm_sec / 2))			& 0x001F) <<  0;
-	result |= (((UINT32) t.tm_min)					& 0x003F) <<  5;
-	result |= (((UINT32) t.tm_hour)					& 0x001F) << 11;
-	result |= (((UINT32) t.tm_mday)					& 0x001F) << 16;
-	result |= (((UINT32) t.tm_mon)					& 0x000F) << 21;
-	result |= (((UINT32) (t.tm_year + 1900 - 1980))	& 0x007F) << 25;
+	result |= (((UINT32) (t.tm_sec / 2))            & 0x001F) <<  0;
+	result |= (((UINT32) t.tm_min)                  & 0x003F) <<  5;
+	result |= (((UINT32) t.tm_hour)                 & 0x001F) << 11;
+	result |= (((UINT32) t.tm_mday)                 & 0x001F) << 16;
+	result |= (((UINT32) t.tm_mon)                  & 0x000F) << 21;
+	result |= (((UINT32) (t.tm_year + 1900 - 1980)) & 0x007F) << 25;
 
 	return result;
 }
@@ -1300,15 +1296,15 @@ static imgtoolerr_t fat_read_dirent(imgtool_partition *partition, fat_file *file
 	//disk_info = fat_get_partition_info(partition);
 
 	/* The first eight bytes of a FAT directory entry is a blank padded name
-     *
-     * The first byte can be special:
-     *  0x00 - entry is available and no further entry is used
-     *  0x05 - first character is actually 0xe5
-     *  0x2E - dot entry; either '.' or '..'
-     *  0xE5 - entry has been erased and is available
-     *
-     * Byte 11 is the attributes; and 0x0F denotes a LFN entry
-     */
+	 *
+	 * The first byte can be special:
+	 *  0x00 - entry is available and no further entry is used
+	 *  0x05 - first character is actually 0xe5
+	 *  0x2E - dot entry; either '.' or '..'
+	 *  0xE5 - entry has been erased and is available
+	 *
+	 * Byte 11 is the attributes; and 0x0F denotes a LFN entry
+	 */
 	do
 	{
 		entry_index = file->index;
@@ -1387,24 +1383,24 @@ static imgtoolerr_t fat_read_dirent(imgtool_partition *partition, fat_file *file
 	}
 
 	/* other attributes */
-	ent->filesize				= pick_integer_le(entry, 28, 4);
-	ent->directory				= (entry[11] & 0x10) ? 1 : 0;
-	ent->first_cluster			= pick_integer_le(entry, 26, 2);
-	ent->dirent_sector_index	= entry_sector_index;
-	ent->dirent_sector_offset	= entry_sector_offset;
-	ent->creation_time			= fat_crack_time(pick_integer_le(entry, 14, 4));
-	ent->lastmodified_time		= fat_crack_time(pick_integer_le(entry, 22, 4));
+	ent->filesize               = pick_integer_le(entry, 28, 4);
+	ent->directory              = (entry[11] & 0x10) ? 1 : 0;
+	ent->first_cluster          = pick_integer_le(entry, 26, 2);
+	ent->dirent_sector_index    = entry_sector_index;
+	ent->dirent_sector_offset   = entry_sector_offset;
+	ent->creation_time          = fat_crack_time(pick_integer_le(entry, 14, 4));
+	ent->lastmodified_time      = fat_crack_time(pick_integer_le(entry, 22, 4));
 	return IMGTOOLERR_SUCCESS;
 }
 
 
 
-typedef enum
+enum sfn_disposition_t
 {
-	SFN_SUFFICIENT,	/* name fully representable in short file name */
-	SFN_DERIVATIVE,	/* name not fully representable in short file name, but no need to tildize */
-	SFN_MANGLED		/* name not representable in short file name; must tildize */
-} sfn_disposition_t;
+	SFN_SUFFICIENT, /* name fully representable in short file name */
+	SFN_DERIVATIVE, /* name not fully representable in short file name, but no need to tildize */
+	SFN_MANGLED     /* name not representable in short file name; must tildize */
+};
 
 static imgtoolerr_t fat_construct_dirent(const char *filename, creation_policy_t create,
 	UINT8 **entry, size_t *entry_len)
@@ -1463,7 +1459,7 @@ static imgtoolerr_t fat_construct_dirent(const char *filename, creation_policy_t
 		else if (strchr(".!#$%^()-@^_`{}~", (char) ch))
 			short_char = (char) ch;
 		else
-			short_char = '\0';	/* illegal SFN char */
+			short_char = '\0';  /* illegal SFN char */
 		cannonical_short_char = fat_cannonicalize_sfn_char((char) ch);
 		if (!short_char || (short_char != cannonical_short_char))
 		{
@@ -1563,7 +1559,7 @@ static imgtoolerr_t fat_construct_dirent(const char *filename, creation_policy_t
 		/* the short filename suffices; remove the LFN stuff */
 		memcpy(created_entry, created_entry + created_entry_len - FAT_DIRENT_SIZE, FAT_DIRENT_SIZE);
 		created_entry_len = FAT_DIRENT_SIZE;
-		if (created_entry) free(created_entry);
+		free(created_entry);
 		new_created_entry = (UINT8 *) malloc(created_entry_len);
 		if (!new_created_entry)
 		{
@@ -1657,7 +1653,7 @@ static void fat_bump_dirent(imgtool_partition *partition, UINT8 *entry, size_t e
 	}
 
 	/* since we changed the short file name, we need to recalc the checksums
-     * in the LFN entries */
+	 * in the LFN entries */
 	fat_calc_dirent_lfnchecksum(entry, entry_len);
 }
 
@@ -2084,30 +2080,30 @@ void fat_get_info(const imgtool_class *imgclass, UINT32 state, union imgtoolinfo
 	switch(state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case IMGTOOLINFO_INT_INITIAL_PATH_SEPARATOR:		info->i = 1; break;
-		case IMGTOOLINFO_INT_OPEN_IS_STRICT:				info->i = 1; break;
-		case IMGTOOLINFO_INT_SUPPORTS_CREATION_TIME:		info->i = 1; break;
-		case IMGTOOLINFO_INT_SUPPORTS_LASTMODIFIED_TIME:	info->i = 1; break;
-		case IMGTOOLINFO_INT_SUPPORTS_BOOTBLOCK:			info->i = 1; break;
-		case IMGTOOLINFO_INT_PATH_SEPARATOR:				info->i = '\\'; break;
-		case IMGTOOLINFO_INT_ALTERNATE_PATH_SEPARATOR:		info->i = '/'; break;
-		case IMGTOOLINFO_INT_PARTITION_EXTRA_BYTES:			info->i = sizeof(fat_partition_info); break;
-		case IMGTOOLINFO_INT_DIRECTORY_EXTRA_BYTES:			info->i = sizeof(fat_file); break;
+		case IMGTOOLINFO_INT_INITIAL_PATH_SEPARATOR:        info->i = 1; break;
+		case IMGTOOLINFO_INT_OPEN_IS_STRICT:                info->i = 1; break;
+		case IMGTOOLINFO_INT_SUPPORTS_CREATION_TIME:        info->i = 1; break;
+		case IMGTOOLINFO_INT_SUPPORTS_LASTMODIFIED_TIME:    info->i = 1; break;
+		case IMGTOOLINFO_INT_SUPPORTS_BOOTBLOCK:            info->i = 1; break;
+		case IMGTOOLINFO_INT_PATH_SEPARATOR:                info->i = '\\'; break;
+		case IMGTOOLINFO_INT_ALTERNATE_PATH_SEPARATOR:      info->i = '/'; break;
+		case IMGTOOLINFO_INT_PARTITION_EXTRA_BYTES:         info->i = sizeof(fat_partition_info); break;
+		case IMGTOOLINFO_INT_DIRECTORY_EXTRA_BYTES:         info->i = sizeof(fat_file); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case IMGTOOLINFO_STR_FILE:							strcpy(info->s = imgtool_temp_str(), __FILE__); break;
-		case IMGTOOLINFO_STR_EOLN:							strcpy(info->s = imgtool_temp_str(), "\r\n"); break;
+		case IMGTOOLINFO_STR_FILE:                          strcpy(info->s = imgtool_temp_str(), __FILE__); break;
+		case IMGTOOLINFO_STR_EOLN:                          strcpy(info->s = imgtool_temp_str(), "\r\n"); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case IMGTOOLINFO_PTR_CREATE_PARTITION:				info->create_partition = fat_partition_create; break;
-		case IMGTOOLINFO_PTR_OPEN_PARTITION:				info->open_partition = fat_partition_open; break;
-		case IMGTOOLINFO_PTR_BEGIN_ENUM:					info->begin_enum = fat_partition_beginenum; break;
-		case IMGTOOLINFO_PTR_NEXT_ENUM:						info->next_enum = fat_partition_nextenum; break;
-		case IMGTOOLINFO_PTR_READ_FILE:						info->read_file = fat_partition_readfile; break;
-		case IMGTOOLINFO_PTR_WRITE_FILE:					info->write_file = fat_partition_writefile; break;
-		case IMGTOOLINFO_PTR_DELETE_FILE:					info->delete_file = fat_partition_deletefile; break;
-		case IMGTOOLINFO_PTR_FREE_SPACE:					info->free_space = fat_partition_freespace; break;
-		case IMGTOOLINFO_PTR_CREATE_DIR:					info->create_dir = fat_partition_createdir; break;
-		case IMGTOOLINFO_PTR_DELETE_DIR:					info->delete_dir = fat_partition_deletedir; break;
+		case IMGTOOLINFO_PTR_CREATE_PARTITION:              info->create_partition = fat_partition_create; break;
+		case IMGTOOLINFO_PTR_OPEN_PARTITION:                info->open_partition = fat_partition_open; break;
+		case IMGTOOLINFO_PTR_BEGIN_ENUM:                    info->begin_enum = fat_partition_beginenum; break;
+		case IMGTOOLINFO_PTR_NEXT_ENUM:                     info->next_enum = fat_partition_nextenum; break;
+		case IMGTOOLINFO_PTR_READ_FILE:                     info->read_file = fat_partition_readfile; break;
+		case IMGTOOLINFO_PTR_WRITE_FILE:                    info->write_file = fat_partition_writefile; break;
+		case IMGTOOLINFO_PTR_DELETE_FILE:                   info->delete_file = fat_partition_deletefile; break;
+		case IMGTOOLINFO_PTR_FREE_SPACE:                    info->free_space = fat_partition_freespace; break;
+		case IMGTOOLINFO_PTR_CREATE_DIR:                    info->create_dir = fat_partition_createdir; break;
+		case IMGTOOLINFO_PTR_DELETE_DIR:                    info->delete_dir = fat_partition_deletedir; break;
 	}
 }

@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     makelist.c
 
     Create and sort the driver list.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -44,9 +15,12 @@
 
 
 #define MAX_DRIVERS 65536
+#define MAX_IGNORE  512
 
 static const char *drivlist[MAX_DRIVERS];
 static int drivcount;
+static const char *ignorelst[MAX_IGNORE];
+static int ignorecount;
 
 
 //-------------------------------------------------
@@ -61,6 +35,20 @@ int sort_callback(const void *elem1, const void *elem2)
 	return strcmp(*item1, *item2);
 }
 
+//-------------------------------------------------
+//  isignored - return info if item is in ignore
+//  list or not
+//-------------------------------------------------
+
+bool isignored(const char *drivname)
+{
+	if (ignorecount>0) {
+		for(int i=0;i<ignorecount;i++) {
+			if (strcmp(ignorelst[i],drivname)==0) return true;
+		}
+	}
+	return false;
+}
 
 //-------------------------------------------------
 //  parse_file - parse a single file, may be
@@ -143,6 +131,21 @@ int parse_file(const char *srcfile)
 			parse_file(filename);
 			continue;
 		}
+		if (c == '!')
+		{
+			char drivname[256];
+			drivname[0] = 0;
+			for (int pos = 0; srcptr < endptr && pos < ARRAY_LENGTH(drivname) - 1 && !isspace(*srcptr); pos++)
+			{
+				drivname[pos] = *srcptr++;
+				drivname[pos+1] = 0;
+			}
+			fprintf(stderr, "Place driver '%s' to ignore list\n", drivname);
+			char *name = (char *)malloc(strlen(drivname) + 1);
+			strcpy(name, drivname);
+			ignorelst[ignorecount++] = name;
+			continue;
+		}
 
 		// otherwise treat as a driver name
 		char drivname[32];
@@ -164,10 +167,16 @@ int parse_file(const char *srcfile)
 		}
 
 		// add it to the list
-		char *name = (char *)malloc(strlen(drivname) + 1);
-		strcpy(name, drivname);
-		drivlist[drivcount++] = name;
+		if(!isignored(drivname))
+		{
+			char *name = (char *)malloc(strlen(drivname) + 1);
+			strcpy(name, drivname);
+			drivlist[drivcount++] = name;
+		}
 	}
+
+	osd_free(buffer);
+
 	return 0;
 }
 
@@ -193,11 +202,9 @@ int main(int argc, char *argv[])
 
 	// parse the root file, exit early upon failure
 	drivcount = 0;
+	ignorecount = 0;
 	if (parse_file(srcfile))
 		return 1;
-
-	// add a reference to the ___empty driver
-	drivlist[drivcount++] = "___empty";
 
 	// output a count
 	if (drivcount == 0)
@@ -207,11 +214,15 @@ int main(int argc, char *argv[])
 	}
 	fprintf(stderr, "%d drivers found\n", drivcount);
 
+	// add a reference to the ___empty driver
+	drivlist[drivcount++] = "___empty";
+
 	// sort the list
 	qsort(drivlist, drivcount, sizeof(*drivlist), sort_callback);
 
 	// start with a header
 	printf("#include \"emu.h\"\n\n");
+	printf("#include \"drivenum.h\"\n\n");
 
 	// output the list of externs first
 	for (int index = 0; index < drivcount; index++)

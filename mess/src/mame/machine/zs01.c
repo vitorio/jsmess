@@ -9,7 +9,6 @@
 
 #include "emu.h"
 #include "machine/zs01.h"
-#include "machine/ds2401.h"
 
 #define VERBOSE_LEVEL 0
 
@@ -36,7 +35,7 @@ void zs01_device::static_set_ds2401_tag(device_t &device, const char *ds2401_tag
 }
 
 zs01_device::zs01_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_secure_serial_flash(mconfig, ZS01, "ZS01", tag, owner, clock)
+	: device_secure_serial_flash(mconfig, ZS01, "ZS01", tag, owner, clock, "zs01", __FILE__)
 {
 }
 
@@ -53,6 +52,12 @@ void zs01_device::device_start()
 	save_item(NAME(response_to_reset));
 	save_item(NAME(command_key));
 	save_item(NAME(data_key));
+
+	m_ds2401 = siblingdevice<ds2401_device>(ds2401_tag);
+	if( m_ds2401 == NULL )
+	{
+		logerror( "ds2401 '%s' not found\n", ds2401_tag );
+	}
 }
 
 void zs01_device::device_reset()
@@ -75,9 +80,9 @@ void zs01_device::nvram_default()
 		// Ensure the size is correct though
 		if(m_region->bytes() != SIZE_RESPONSE_TO_RESET+SIZE_KEY+SIZE_KEY+SIZE_DATA)
 			logerror("zs01 %s: Wrong region length for initialization data, expected 0x%x, got 0x%x\n",
-					 tag(),
-					 SIZE_RESPONSE_TO_RESET+SIZE_KEY+SIZE_KEY+SIZE_DATA,
-					 m_region->bytes());
+						tag(),
+						SIZE_RESPONSE_TO_RESET+SIZE_KEY+SIZE_KEY+SIZE_DATA,
+						m_region->bytes());
 		else {
 			UINT8 *rb = m_region->base();
 			int offset = 0;
@@ -412,9 +417,9 @@ void zs01_device::scl_1()
 								switch(write_buffer[1]) {
 								case 0xfd: {
 									/* TODO: use read/write to talk to the ds2401, which will require a timer. */
-									ds2401_device *ds2401 = machine().device<ds2401_device>(ds2401_tag);
-									for(int i = 0; i < SIZE_DATA_BUFFER; i++)
-										read_buffer[2+i] = ds2401->direct_read(SIZE_DATA_BUFFER-i-1);
+									if( m_ds2401 != NULL )
+										for(int i = 0; i < SIZE_DATA_BUFFER; i++)
+											read_buffer[2+i] = m_ds2401->direct_read(SIZE_DATA_BUFFER-i-1);
 									break;
 								}
 								default:
@@ -432,11 +437,11 @@ void zs01_device::scl_1()
 						}
 
 						verboselog(1, "<- status: %02x%02x\n",
-								   read_buffer[0], read_buffer[1]);
+									read_buffer[0], read_buffer[1]);
 
 						verboselog(1, "<- data: %02x%02x%02x%02x%02x%02x%02x%02x\n",
-								   read_buffer[2], read_buffer[3], read_buffer[4], read_buffer[5],
-								   read_buffer[6], read_buffer[7], read_buffer[8], read_buffer[9]);
+									read_buffer[2], read_buffer[3], read_buffer[4], read_buffer[5],
+									read_buffer[6], read_buffer[7], read_buffer[8], read_buffer[9]);
 
 						crc = do_crc(read_buffer, 10);
 						read_buffer[10] = crc >> 8;

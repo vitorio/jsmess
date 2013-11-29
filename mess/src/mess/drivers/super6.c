@@ -1,11 +1,5 @@
-/*
-
-    ADC Super Six SBC
-
-    Skeleton driver
-
-*/
-
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /*
 
     TODO:
@@ -30,15 +24,15 @@
 
 void super6_state::bankswitch()
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
-	UINT8 *ram = ram_get_ptr(m_ram);
-	UINT8 *rom = machine().region(Z80_TAG)->base();
+	address_space &program = m_maincpu->space(AS_PROGRAM);
+	UINT8 *ram = m_ram->pointer();
+	UINT8 *rom = m_rom->base();
 
 	// power on jump
-	if (!BIT(m_bank0, 6)) {	program->install_rom(0x0000, 0x07ff, 0, 0xf800, rom); return; }
+	if (!BIT(m_bank0, 6)) { program.install_rom(0x0000, 0x07ff, 0, 0xf800, rom); return; }
 
 	// first 64KB of memory
-	program->install_ram(0x0000, 0xffff, ram);
+	program.install_ram(0x0000, 0xffff, ram);
 
 	// second 64KB of memory
 	int map = (m_bank1 >> 4) & 0x07;
@@ -46,49 +40,49 @@ void super6_state::bankswitch()
 	switch (map)
 	{
 	case 0:
-		if (BIT(m_bank1, 0)) program->install_ram(0x0000, 0x3fff, ram + 0x10000);
-		if (BIT(m_bank1, 1)) program->install_ram(0x4000, 0x7fff, ram + 0x14000);
-		if (BIT(m_bank1, 2)) program->install_ram(0x8000, 0xbfff, ram + 0x18000);
-		if (BIT(m_bank1, 3)) program->install_ram(0xc000, 0xffff, ram + 0x1c000);
+		if (BIT(m_bank1, 0)) program.install_ram(0x0000, 0x3fff, ram + 0x10000);
+		if (BIT(m_bank1, 1)) program.install_ram(0x4000, 0x7fff, ram + 0x14000);
+		if (BIT(m_bank1, 2)) program.install_ram(0x8000, 0xbfff, ram + 0x18000);
+		if (BIT(m_bank1, 3)) program.install_ram(0xc000, 0xffff, ram + 0x1c000);
 		break;
 
 	case 1:
-		if (BIT(m_bank1, 0)) program->install_ram(0x0000, 0x3fff, ram + 0x10000);
-		if (BIT(m_bank1, 1)) program->install_ram(0x4000, 0x7fff, ram + 0x14000);
-		if (BIT(m_bank1, 2)) program->install_ram(0x8000, 0xbfff, ram + 0x18000);
-		if (BIT(m_bank1, 3)) program->install_ram(0xc000, 0xffff, ram + 0x0000);
+		if (BIT(m_bank1, 0)) program.install_ram(0x0000, 0x3fff, ram + 0x10000);
+		if (BIT(m_bank1, 1)) program.install_ram(0x4000, 0x7fff, ram + 0x14000);
+		if (BIT(m_bank1, 2)) program.install_ram(0x8000, 0xbfff, ram + 0x18000);
+		if (BIT(m_bank1, 3)) program.install_ram(0xc000, 0xffff, ram + 0x0000);
 		break;
 
 	case 2:
-		if (BIT(m_bank1, 0)) program->install_ram(0x0000, 0x3fff, ram + 0x10000);
-		if (BIT(m_bank1, 1)) program->install_ram(0x4000, 0x7fff, ram + 0x14000);
-		if (BIT(m_bank1, 2)) program->install_ram(0x8000, 0xbfff, ram + 0x4000);
-		if (BIT(m_bank1, 3)) program->install_ram(0xc000, 0xffff, ram + 0x1c000);
+		if (BIT(m_bank1, 0)) program.install_ram(0x0000, 0x3fff, ram + 0x10000);
+		if (BIT(m_bank1, 1)) program.install_ram(0x4000, 0x7fff, ram + 0x14000);
+		if (BIT(m_bank1, 2)) program.install_ram(0x8000, 0xbfff, ram + 0x4000);
+		if (BIT(m_bank1, 3)) program.install_ram(0xc000, 0xffff, ram + 0x1c000);
 		break;
 
 	case 3:
-		if (BIT(m_bank1, 0)) program->install_ram(0x0000, 0x3fff, ram + 0x10000);
-		if (BIT(m_bank1, 1)) program->install_ram(0x4000, 0x7fff, ram + 0x14000);
-		if (BIT(m_bank1, 2)) program->install_ram(0x8000, 0xbfff, ram + 0x0000);
-		if (BIT(m_bank1, 3)) program->install_ram(0xc000, 0xffff, ram + 0x4000);
+		if (BIT(m_bank1, 0)) program.install_ram(0x0000, 0x3fff, ram + 0x10000);
+		if (BIT(m_bank1, 1)) program.install_ram(0x4000, 0x7fff, ram + 0x14000);
+		if (BIT(m_bank1, 2)) program.install_ram(0x8000, 0xbfff, ram + 0x0000);
+		if (BIT(m_bank1, 3)) program.install_ram(0xc000, 0xffff, ram + 0x4000);
 		break;
 
 	case 4:
-		if (BIT(m_bank1, 0)) program->install_ram(0x0000, 0x3fff, ram + 0xc000);
-		if (BIT(m_bank1, 1)) program->install_ram(0x4000, 0x7fff, ram + 0x14000);
-		if (BIT(m_bank1, 2)) program->install_ram(0x8000, 0xbfff, ram + 0x18000);
-		if (BIT(m_bank1, 3)) program->install_ram(0xc000, 0xffff, ram + 0x1c000);
+		if (BIT(m_bank1, 0)) program.install_ram(0x0000, 0x3fff, ram + 0xc000);
+		if (BIT(m_bank1, 1)) program.install_ram(0x4000, 0x7fff, ram + 0x14000);
+		if (BIT(m_bank1, 2)) program.install_ram(0x8000, 0xbfff, ram + 0x18000);
+		if (BIT(m_bank1, 3)) program.install_ram(0xc000, 0xffff, ram + 0x1c000);
 		break;
 	}
 
 	// bank 0 overrides
-	if (BIT(m_bank0, 0)) program->install_ram(0x0000, 0x3fff, ram + 0x0000);
-	if (BIT(m_bank0, 1)) program->install_ram(0x4000, 0x7fff, ram + 0x4000);
-	if (BIT(m_bank0, 2)) program->install_ram(0x8000, 0xbfff, ram + 0x8000);
-	if (BIT(m_bank0, 3)) program->install_ram(0xc000, 0xffff, ram + 0xc000);
+	if (BIT(m_bank0, 0)) program.install_ram(0x0000, 0x3fff, ram + 0x0000);
+	if (BIT(m_bank0, 1)) program.install_ram(0x4000, 0x7fff, ram + 0x4000);
+	if (BIT(m_bank0, 2)) program.install_ram(0x8000, 0xbfff, ram + 0x8000);
+	if (BIT(m_bank0, 3)) program.install_ram(0xc000, 0xffff, ram + 0xc000);
 
 	// PROM enabled
-	if (!BIT(m_bank0, 5)) program->install_rom(0xf000, 0xf7ff, 0, 0x800, rom);
+	if (!BIT(m_bank0, 5)) program.install_rom(0xf000, 0xf7ff, 0, 0x800, rom);
 }
 
 
@@ -100,18 +94,18 @@ WRITE8_MEMBER( super6_state::s100_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       A16
-        1       A17
-        2       A18
-        3       A19
-        4       A20
-        5       A21
-        6       A22
-        7       A23
+	    0       A16
+	    1       A17
+	    2       A18
+	    3       A19
+	    4       A20
+	    5       A21
+	    6       A22
+	    7       A23
 
-    */
+	*/
 
 	m_s100 = data;
 }
@@ -125,18 +119,18 @@ WRITE8_MEMBER( super6_state::bank0_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       memory bank 0 (0000-3fff)
-        1       memory bank 1 (4000-7fff)
-        2       memory bank 2 (8000-bfff)
-        3       memory bank 3 (c000-ffff)
-        4
-        5       PROM enabled (0=enabled, 1=disabled)
-        6       power on jump reset
-        7       parity check enable
+	    0       memory bank 0 (0000-3fff)
+	    1       memory bank 1 (4000-7fff)
+	    2       memory bank 2 (8000-bfff)
+	    3       memory bank 3 (c000-ffff)
+	    4
+	    5       PROM enabled (0=enabled, 1=disabled)
+	    6       power on jump reset
+	    7       parity check enable
 
-    */
+	*/
 
 	m_bank0 = data;
 
@@ -152,18 +146,18 @@ WRITE8_MEMBER( super6_state::bank1_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       memory bank 4
-        1       memory bank 5
-        2       memory bank 6
-        3       memory bank 7
-        4       map select 0
-        5       map select 1
-        6       map select 2
-        7
+	    0       memory bank 4
+	    1       memory bank 5
+	    2       memory bank 6
+	    3       memory bank 7
+	    4       map select 0
+	    5       map select 1
+	    6       map select 2
+	    7
 
-    */
+	*/
 
 	m_bank1 = data;
 
@@ -184,22 +178,23 @@ READ8_MEMBER( super6_state::fdc_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0
-        1
-        2
-        3
-        4
-        5
-        6
-        7       FDC INTRQ
+	    0
+	    1
+	    2
+	    3
+	    4
+	    5
+	    6
+	    7       FDC INTRQ
 
-    */
+	*/
 
-	// TODO reading this port should halt the CPU until an INTRQ or DRQ from the FDC
+	fatalerror("Z80 WAIT not supported by MAME core\n");
+	m_maincpu->set_input_line(Z80_INPUT_LINE_WAIT, ASSERT_LINE);
 
-	return !wd17xx_intrq_r(m_fdc) << 7;
+	return !m_fdc->intrq_r() << 7;
 }
 
 
@@ -211,29 +206,33 @@ WRITE8_MEMBER( super6_state::fdc_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       disk drive select 0
-        1       disk drive select 1
-        2       head select (0=head 1, 1=head 2)
-        3       disk density (0=single, 1=double)
-        4       size select (0=8", 1=5.25")
-        5
-        6
-        7
+	    0       disk drive select 0
+	    1       disk drive select 1
+	    2       head select (0=head 1, 1=head 2)
+	    3       disk density (0=single, 1=double)
+	    4       size select (0=8", 1=5.25")
+	    5
+	    6
+	    7
 
-    */
+	*/
 
 	// disk drive select
-	wd17xx_set_drive(m_fdc, data & 0x03);
-	floppy_mon_w(m_floppy0, 0);
-	floppy_mon_w(m_floppy1, 0);
+	floppy_image_device *m_floppy = NULL;
+
+	if (BIT(data, 0)) m_floppy = m_floppy0->get_device();
+	if (BIT(data, 1)) m_floppy = m_floppy1->get_device();
+
+	m_fdc->set_floppy(m_floppy);
+	if (m_floppy) m_floppy->mon_w(0);
 
 	// head select
-	wd17xx_set_side(m_fdc, BIT(data, 2));
+	if (m_floppy) m_floppy->ss_w(BIT(data, 2));
 
 	// disk density
-	wd17xx_dden_w(m_fdc, !BIT(data, 3));
+	m_fdc->dden_w(!BIT(data, 3));
 }
 
 
@@ -245,21 +244,21 @@ WRITE8_MEMBER( super6_state::baud_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       SIO channel A baud bit A
-        1       SIO channel A baud bit B
-        2       SIO channel A baud bit C
-        3       SIO channel A baud bit D
-        4       SIO channel B baud bit A
-        5       SIO channel B baud bit B
-        6       SIO channel B baud bit C
-        7       SIO channel B baud bit D
+	    0       SIO channel A baud bit A
+	    1       SIO channel A baud bit B
+	    2       SIO channel A baud bit C
+	    3       SIO channel A baud bit D
+	    4       SIO channel B baud bit A
+	    5       SIO channel B baud bit B
+	    6       SIO channel B baud bit C
+	    7       SIO channel B baud bit D
 
-    */
+	*/
 
-	m_brg->str_w(space, 0, data & 0x0f);
-	m_brg->stt_w(space, 0, data >> 4);
+	m_brg->str_w(data & 0x0f);
+	m_brg->stt_w(data >> 4);
 }
 
 
@@ -282,10 +281,10 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( super6_io, AS_IO, 8, super6_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE_LEGACY(Z80DART_TAG, z80dart_ba_cd_r, z80dart_ba_cd_w)
-	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE_LEGACY(Z80PIO_TAG, z80pio_cd_ba_r, z80pio_cd_ba_w)
-	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE_LEGACY(Z80CTC_TAG, z80ctc_r, z80ctc_w)
-	AM_RANGE(0x0c, 0x0f) AM_DEVREADWRITE_LEGACY(WD2793_TAG, wd17xx_r, wd17xx_w)
+	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE(Z80DART_TAG, z80dart_device, ba_cd_r, ba_cd_w)
+	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE(Z80PIO_TAG, z80pio_device, read, write)
+	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE(Z80CTC_TAG, z80ctc_device, read, write)
+	AM_RANGE(0x0c, 0x0f) AM_DEVREADWRITE(WD2793_TAG, wd2793_t, read, write)
 	AM_RANGE(0x10, 0x10) AM_MIRROR(0x03) AM_DEVREADWRITE_LEGACY(Z80DMA_TAG, z80dma_r, z80dma_w)
 	AM_RANGE(0x14, 0x14) AM_READWRITE(fdc_r, fdc_w)
 	AM_RANGE(0x15, 0x15) AM_READ_PORT("J7") AM_WRITE(s100_w)
@@ -308,7 +307,7 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( super6 )
 	PORT_START("J7")
-	PORT_DIPNAME( 0x0f, 0x0e, "SIO Channel A Baud Rate" ) PORT_DIPLOCATION("J7:1,2,3,4")
+	PORT_DIPNAME( 0x0f, 0x0f, "SIO Channel A Baud Rate" ) PORT_DIPLOCATION("J7:1,2,3,4")
 	PORT_DIPSETTING(    0x00, "50" )
 	PORT_DIPSETTING(    0x01, "75" )
 	PORT_DIPSETTING(    0x02, "110" )
@@ -349,17 +348,14 @@ INPUT_PORTS_END
 //  Z80CTC_INTERFACE( ctc_intf )
 //-------------------------------------------------
 
-static TIMER_DEVICE_CALLBACK( ctc_tick )
+TIMER_DEVICE_CALLBACK_MEMBER( super6_state::ctc_tick )
 {
-	super6_state *state = timer.machine().driver_data<super6_state>();
-
-	z80ctc_trg0_w(state->m_ctc, 1);
-	z80ctc_trg0_w(state->m_ctc, 0);
+	m_ctc->trg0(1);
+	m_ctc->trg0(0);
 }
 
 static Z80CTC_INTERFACE( ctc_intf )
 {
-	0,
 	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0),
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -375,17 +371,17 @@ static Z80DART_INTERFACE( dart_intf )
 {
 	0, 0, 0, 0,
 
-	DEVCB_DEVICE_LINE(TERMINAL_TAG, terminal_serial_r),
-	DEVCB_DEVICE_LINE(TERMINAL_TAG, terminal_serial_w),
-	DEVCB_NULL,
-	DEVCB_NULL,
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, serial_port_device, rx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, serial_port_device, tx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, rs232_port_device, dtr_w),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, rs232_port_device, rts_w),
 	DEVCB_NULL,
 	DEVCB_NULL,
 
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, serial_port_device, rx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, serial_port_device, tx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, rs232_port_device, dtr_w),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, rs232_port_device, rts_w),
 	DEVCB_NULL,
 	DEVCB_NULL,
 
@@ -397,18 +393,39 @@ static Z80DART_INTERFACE( dart_intf )
 //  Z80DMA_INTERFACE( dma_intf )
 //-------------------------------------------------
 
-static UINT8 memory_read_byte(address_space *space, offs_t address) { return space->read_byte(address); }
-static void memory_write_byte(address_space *space, offs_t address, UINT8 data) { space->write_byte(address, data); }
+READ8_MEMBER(super6_state::memory_read_byte)
+{
+	address_space& prog_space = m_maincpu->space(AS_PROGRAM);
+	return prog_space.read_byte(offset);
+}
+
+WRITE8_MEMBER(super6_state::memory_write_byte)
+{
+	address_space& prog_space = m_maincpu->space(AS_PROGRAM);
+	return prog_space.write_byte(offset, data);
+}
+
+READ8_MEMBER(super6_state::io_read_byte)
+{
+	address_space& prog_space = m_maincpu->space(AS_IO);
+	return prog_space.read_byte(offset);
+}
+
+WRITE8_MEMBER(super6_state::io_write_byte)
+{
+	address_space& prog_space = m_maincpu->space(AS_IO);
+	return prog_space.write_byte(offset, data);
+}
 
 static Z80DMA_INTERFACE( dma_intf )
 {
 	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_HALT),
-	DEVCB_DEVICE_LINE(Z80CTC_TAG, z80ctc_trg2_w),
+	DEVCB_DEVICE_LINE_MEMBER(Z80CTC_TAG, z80ctc_device, trg2),
 	DEVCB_NULL,
-	DEVCB_MEMORY_HANDLER(Z80_TAG, PROGRAM, memory_read_byte),
-	DEVCB_MEMORY_HANDLER(Z80_TAG, PROGRAM, memory_write_byte),
-	DEVCB_MEMORY_HANDLER(Z80_TAG, IO, memory_read_byte),
-	DEVCB_MEMORY_HANDLER(Z80_TAG, IO, memory_write_byte)
+	DEVCB_DRIVER_MEMBER(super6_state, memory_read_byte),
+	DEVCB_DRIVER_MEMBER(super6_state, memory_write_byte),
+	DEVCB_DRIVER_MEMBER(super6_state, io_read_byte),
+	DEVCB_DRIVER_MEMBER(super6_state, io_write_byte),
 };
 
 
@@ -434,65 +451,34 @@ static Z80PIO_INTERFACE( pio_intf )
 
 WRITE_LINE_MEMBER( super6_state::fr_w )
 {
-	z80dart_rxca_w(m_dart, state);
-	z80dart_txca_w(m_dart, state);
+	m_dart->rxca_w(state);
+	m_dart->txca_w(state);
 
-	z80ctc_trg1_w(m_ctc, state);
+	m_ctc->trg1(state);
 }
 
-static COM8116_INTERFACE( brg_intf )
+
+//-------------------------------------------------
+//  floppy_format_type floppy_formats
+//-------------------------------------------------
+
+static SLOT_INTERFACE_START( super6_floppies )
+	SLOT_INTERFACE( "525dd", FLOPPY_525_DD )
+SLOT_INTERFACE_END
+
+void super6_state::fdc_intrq_w(bool state)
 {
-	DEVCB_NULL,
-	DEVCB_DRIVER_LINE_MEMBER(super6_state, fr_w),
-	DEVCB_DEVICE_LINE(Z80DART_TAG, z80dart_rxtxcb_w),
-	{ 6336, 4224, 2880, 2355, 2112, 1056, 528, 264, 176, 158, 132, 88, 66, 44, 33, 16 }, // from WD1943-00 datasheet
-	{ 6336, 4224, 2880, 2355, 2112, 1056, 528, 264, 176, 158, 132, 88, 66, 44, 33, 16 },
-};
+	if (state) m_maincpu->set_input_line(Z80_INPUT_LINE_WAIT, CLEAR_LINE);
 
-
-//-------------------------------------------------
-//  floppy_interface super6_floppy_interface
-//-------------------------------------------------
-
-static const floppy_interface super6_floppy_interface =
-{
-    DEVCB_NULL,
-    DEVCB_NULL,
-    DEVCB_NULL,
-    DEVCB_NULL,
-    DEVCB_NULL,
-    FLOPPY_STANDARD_5_25_DSHD,
-    FLOPPY_OPTIONS_NAME(default),
-    "floppy_5_25",
-	NULL
-};
-
-
-//-------------------------------------------------
-//  wd17xx_interface fdc_intf
-//-------------------------------------------------
-
-WRITE_LINE_MEMBER( super6_state::intrq_w )
-{
-	// TODO allow CPU to continue reading port 14
-
-	z80ctc_trg3_w(m_ctc, !state);
+	m_ctc->trg3(!state);
 }
 
-WRITE_LINE_MEMBER( super6_state::drq_w )
+void super6_state::fdc_drq_w(bool state)
 {
-	// TODO allow CPU to continue reading port 14
+	if (state) m_maincpu->set_input_line(Z80_INPUT_LINE_WAIT, CLEAR_LINE);
 
 	m_dma->rdy_w(state);
 }
-
-static const wd17xx_interface fdc_intf =
-{
-	DEVCB_NULL,
-	DEVCB_DRIVER_LINE_MEMBER(super6_state, intrq_w),
-	DEVCB_DRIVER_LINE_MEMBER(super6_state, drq_w),
-	{ FLOPPY_0, FLOPPY_1, NULL, NULL }
-};
 
 
 //-------------------------------------------------
@@ -509,17 +495,35 @@ static const z80_daisy_config super6_daisy_chain[] =
 
 
 //-------------------------------------------------
-//  GENERIC_TERMINAL_INTERFACE( terminal_intf )
+//  rs232_port_interface rs232a_intf
 //-------------------------------------------------
 
-static WRITE8_DEVICE_HANDLER( dummy_w )
-{
-	// handled in Z80DART_INTERFACE
-}
+static DEVICE_INPUT_DEFAULTS_START( terminal )
+	DEVICE_INPUT_DEFAULTS( "TERM_FRAME", 0x0f, 0x08 ) // 19200
+	DEVICE_INPUT_DEFAULTS( "TERM_FRAME", 0x30, 0x00 ) // 8N1
+DEVICE_INPUT_DEFAULTS_END
 
-static GENERIC_TERMINAL_INTERFACE( terminal_intf )
+static const rs232_port_interface rs232a_intf =
 {
-	DEVCB_HANDLER(dummy_w)
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
+};
+
+
+//-------------------------------------------------
+//  rs232_port_interface rs232b_intf
+//-------------------------------------------------
+
+static const rs232_port_interface rs232b_intf =
+{
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
 };
 
 
@@ -534,6 +538,10 @@ static GENERIC_TERMINAL_INTERFACE( terminal_intf )
 
 void super6_state::machine_start()
 {
+	// floppy callbacks
+	m_fdc->setup_intrq_cb(wd2793_t::line_cb(FUNC(super6_state::fdc_intrq_w), this));
+	m_fdc->setup_drq_cb(wd2793_t::line_cb(FUNC(super6_state::fdc_drq_w), this));
+
 	// state saving
 	save_item(NAME(m_s100));
 	save_item(NAME(m_bank0));
@@ -541,15 +549,16 @@ void super6_state::machine_start()
 }
 
 
-//-------------------------------------------------
-//  MACHINE_RESET( super6 )
-//-------------------------------------------------
-
 void super6_state::machine_reset()
 {
 	m_bank0 = m_bank1 = 0;
 
 	bankswitch();
+
+	UINT8 baud = m_j7->read();
+
+	m_brg->str_w(baud & 0x0f);
+	m_brg->stt_w((baud >> 4) & 0x07);
 }
 
 
@@ -569,19 +578,19 @@ static MACHINE_CONFIG_START( super6, super6_state )
 	MCFG_CPU_IO_MAP(super6_io)
 	MCFG_CPU_CONFIG(super6_daisy_chain)
 
-	// video hardware
-	MCFG_FRAGMENT_ADD(generic_terminal)
-
 	// devices
 	MCFG_Z80CTC_ADD(Z80CTC_TAG, XTAL_24MHz/4, ctc_intf)
-	MCFG_TIMER_ADD_PERIODIC("ctc", ctc_tick, attotime::from_hz(XTAL_24MHz/16))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("ctc", super6_state, ctc_tick, attotime::from_hz(XTAL_24MHz/16))
 	MCFG_Z80DART_ADD(Z80DART_TAG, XTAL_24MHz/4, dart_intf)
 	MCFG_Z80DMA_ADD(Z80DMA_TAG, XTAL_24MHz/6, dma_intf)
 	MCFG_Z80PIO_ADD(Z80PIO_TAG, XTAL_24MHz/4, pio_intf)
-	MCFG_WD2793_ADD(WD2793_TAG, fdc_intf)
-	MCFG_COM8116_ADD(BR1945_TAG, XTAL_5_0688MHz, brg_intf)
-	MCFG_FLOPPY_2_DRIVES_ADD(super6_floppy_interface)
-	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
+	MCFG_WD2793x_ADD(WD2793_TAG, 1000000)
+	MCFG_COM8116_ADD(BR1945_TAG, XTAL_5_0688MHz, NULL, WRITELINE(super6_state, fr_w), DEVWRITELINE(Z80DART_TAG, z80dart_device, rxtxcb_w))
+	MCFG_FLOPPY_DRIVE_ADD(WD2793_TAG":0", super6_floppies, "525dd", floppy_image_device::default_floppy_formats)
+	MCFG_FLOPPY_DRIVE_ADD(WD2793_TAG":1", super6_floppies, NULL,    floppy_image_device::default_floppy_formats)
+	MCFG_RS232_PORT_ADD(RS232_A_TAG, rs232b_intf, default_rs232_devices, "serial_terminal")
+	MCFG_DEVICE_CARD_DEVICE_INPUT_DEFAULTS("serial_terminal", terminal)
+	MCFG_RS232_PORT_ADD(RS232_B_TAG, rs232a_intf, default_rs232_devices, NULL)
 
 	// internal ram
 	MCFG_RAM_ADD(RAM_TAG)
@@ -603,7 +612,11 @@ MACHINE_CONFIG_END
 
 ROM_START( super6 )
 	ROM_REGION( 0x800, Z80_TAG, 0 )
-	ROM_LOAD( "digitex monitor 1.2a 6oct1983.u29", 0x000, 0x800, CRC(a4c33ce4) SHA1(46dde43ea51d295f2b3202c2d0e1883bde1a8da7) )
+	ROM_DEFAULT_BIOS( "v36" )
+	ROM_SYSTEM_BIOS( 0, "v36", "ADC S6 v3.6" )
+	ROMX_LOAD( "adcs6_v3.6.u29", 0x000, 0x800, CRC(386fd22a) SHA1(9c177990aa180ab93be9c4641e92ae934627e661), ROM_BIOS(1) )
+	ROM_SYSTEM_BIOS( 1, "v12", "Digitex Monitor v1.2a" )
+	ROMX_LOAD( "digitex monitor 1.2a 6oct1983.u29", 0x000, 0x800, CRC(a4c33ce4) SHA1(46dde43ea51d295f2b3202c2d0e1883bde1a8da7), ROM_BIOS(2) )
 
 	ROM_REGION( 0x800, "plds", 0 )
 	ROM_LOAD( "pal16l8.u16", 0x000, 0x800, NO_DUMP )
@@ -617,4 +630,4 @@ ROM_END
 //**************************************************************************
 
 //    YEAR  NAME     PARENT  COMPAT  MACHINE  INPUT    INIT    COMPANY                          FULLNAME        FLAGS
-COMP( 1983, super6,  0,      0,      super6,  super6,  0,      "Advanced Digital Corporation",	"Super Six",	GAME_NOT_WORKING | GAME_NO_SOUND_HW )
+COMP( 1983, super6,  0,      0,      super6,  super6, driver_device,  0,      "Advanced Digital Corporation",   "Super Six",    GAME_NOT_WORKING | GAME_NO_SOUND_HW )

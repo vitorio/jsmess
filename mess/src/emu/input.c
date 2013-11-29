@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     input.c
 
     Handle input from the user.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ****************************************************************************
 
@@ -48,7 +19,6 @@
 
 #include "emu.h"
 #include "emuopts.h"
-#include "profiler.h"
 
 
 
@@ -57,7 +27,7 @@
 //**************************************************************************
 
 // invalid memory value for axis polling
-const INT32 INVALID_AXIS_VALUE		= 0x7fffffff;
+const INT32 INVALID_AXIS_VALUE      = 0x7fffffff;
 
 // additional expanded input codes for sequences
 const input_code input_seq::end_code(DEVICE_CLASS_INTERNAL, 0, ITEM_CLASS_INVALID, ITEM_MODIFIER_NONE, ITEM_ID_SEQ_END);
@@ -108,17 +78,17 @@ public:
 
 protected:
 	// internal state
-	input_device &			m_device;				// reference to our owning device
-	astring					m_name;					// string name of item
-	void *					m_internal;				// internal callback pointer
-	input_item_id			m_itemid;				// originally specified item id
-	input_item_class		m_itemclass;			// class of the item
-	item_get_state_func		m_getstate;				// get state callback
-	astring					m_token;				// tokenized name for non-standard items
+	input_device &          m_device;               // reference to our owning device
+	astring                 m_name;                 // string name of item
+	void *                  m_internal;             // internal callback pointer
+	input_item_id           m_itemid;               // originally specified item id
+	input_item_class        m_itemclass;            // class of the item
+	item_get_state_func     m_getstate;             // get state callback
+	astring                 m_token;                // tokenized name for non-standard items
 
 	// live state
-	INT32					m_current;				// current raw value
-	INT32					m_memory;				// "memory" value, to remember where we started during polling
+	INT32                   m_current;              // current raw value
+	INT32                   m_memory;               // "memory" value, to remember where we started during polling
 };
 
 
@@ -142,8 +112,8 @@ public:
 
 private:
 	// internal state
-	INT32					m_steadykey;			// the live steadykey state
-	INT32					m_oldkey;				// old live state
+	INT32                   m_steadykey;            // the live steadykey state
+	INT32                   m_oldkey;               // old live state
 };
 
 
@@ -200,8 +170,8 @@ struct code_string_table
 		return NULL;
 	}
 
-	UINT32					m_code;
-	const char *			m_string;
+	UINT32                  m_code;
+	const char *            m_string;
 };
 
 
@@ -402,6 +372,22 @@ static const code_string_table itemid_token_table[] =
 	{ ITEM_ID_BUTTON14,      "BUTTON14" },
 	{ ITEM_ID_BUTTON15,      "BUTTON15" },
 	{ ITEM_ID_BUTTON16,      "BUTTON16" },
+	{ ITEM_ID_BUTTON17,      "BUTTON17" },
+	{ ITEM_ID_BUTTON18,      "BUTTON18" },
+	{ ITEM_ID_BUTTON19,      "BUTTON19" },
+	{ ITEM_ID_BUTTON20,      "BUTTON20" },
+	{ ITEM_ID_BUTTON21,      "BUTTON21" },
+	{ ITEM_ID_BUTTON22,      "BUTTON22" },
+	{ ITEM_ID_BUTTON23,      "BUTTON23" },
+	{ ITEM_ID_BUTTON24,      "BUTTON24" },
+	{ ITEM_ID_BUTTON25,      "BUTTON25" },
+	{ ITEM_ID_BUTTON26,      "BUTTON26" },
+	{ ITEM_ID_BUTTON27,      "BUTTON27" },
+	{ ITEM_ID_BUTTON28,      "BUTTON28" },
+	{ ITEM_ID_BUTTON29,      "BUTTON29" },
+	{ ITEM_ID_BUTTON30,      "BUTTON30" },
+	{ ITEM_ID_BUTTON31,      "BUTTON31" },
+	{ ITEM_ID_BUTTON32,      "BUTTON32" },
 	{ ITEM_ID_START,         "START" },
 	{ ITEM_ID_SELECT,        "SELECT" },
 
@@ -427,8 +413,8 @@ static const code_string_table itemid_token_table[] =
 	{ ITEM_ID_ADD_SWITCH1,   "ADDSW1" },
 	{ ITEM_ID_ADD_SWITCH2,   "ADDSW2" },
 	{ ITEM_ID_ADD_SWITCH3,   "ADDSW3" },
-	{ ITEM_ID_ADD_SWITCH4,	 "ADDSW4" },
-	{ ITEM_ID_ADD_SWITCH5,	 "ADDSW5" },
+	{ ITEM_ID_ADD_SWITCH4,   "ADDSW4" },
+	{ ITEM_ID_ADD_SWITCH5,   "ADDSW5" },
 	{ ITEM_ID_ADD_SWITCH6,   "ADDSW6" },
 	{ ITEM_ID_ADD_SWITCH7,   "ADDSW7" },
 	{ ITEM_ID_ADD_SWITCH8,   "ADDSW8" },
@@ -483,9 +469,9 @@ static const code_string_table itemid_token_table[] =
 //**************************************************************************
 
 // standard joystick mappings
-const char			joystick_map_8way[] = "7778...4445";
-const char			joystick_map_4way_sticky[] = "s8.4s8.44s8.4445";
-const char			joystick_map_4way_diagonal[] = "4444s8888..444458888.444555888.ss5.222555666.222256666.2222s6666.2222s6666";
+const char          joystick_map_8way[] = "7778...4445";
+const char          joystick_map_4way_sticky[] = "s8.4s8.44s8.4445";
+const char          joystick_map_4way_diagonal[] = "4444s8888..444458888.444555888.ss5.222555666.222256666.2222s6666.2222s6666";
 
 
 
@@ -601,17 +587,17 @@ const char *joystick_map::to_string(astring &string) const
 		for (int colnum = 0; colnum < 9; colnum++)
 			switch (m_map[rownum][colnum])
 			{
-				case JOYSTICK_MAP_UP | JOYSTICK_MAP_LEFT:	string.catprintf("7");	break;
-				case JOYSTICK_MAP_UP:						string.catprintf("8");	break;
-				case JOYSTICK_MAP_UP | JOYSTICK_MAP_RIGHT:	string.catprintf("9");	break;
-				case JOYSTICK_MAP_LEFT:						string.catprintf("4");	break;
-				case JOYSTICK_MAP_NEUTRAL:					string.catprintf("5");	break;
-				case JOYSTICK_MAP_RIGHT:					string.catprintf("6");	break;
-				case JOYSTICK_MAP_DOWN | JOYSTICK_MAP_LEFT:	string.catprintf("1");	break;
-				case JOYSTICK_MAP_DOWN:						string.catprintf("2");	break;
-				case JOYSTICK_MAP_DOWN | JOYSTICK_MAP_RIGHT:string.catprintf("3");	break;
-				case JOYSTICK_MAP_STICKY:					string.catprintf("s");	break;
-				default:									string.catprintf("?");	break;
+				case JOYSTICK_MAP_UP | JOYSTICK_MAP_LEFT:   string.catprintf("7");  break;
+				case JOYSTICK_MAP_UP:                       string.catprintf("8");  break;
+				case JOYSTICK_MAP_UP | JOYSTICK_MAP_RIGHT:  string.catprintf("9");  break;
+				case JOYSTICK_MAP_LEFT:                     string.catprintf("4");  break;
+				case JOYSTICK_MAP_NEUTRAL:                  string.catprintf("5");  break;
+				case JOYSTICK_MAP_RIGHT:                    string.catprintf("6");  break;
+				case JOYSTICK_MAP_DOWN | JOYSTICK_MAP_LEFT: string.catprintf("1");  break;
+				case JOYSTICK_MAP_DOWN:                     string.catprintf("2");  break;
+				case JOYSTICK_MAP_DOWN | JOYSTICK_MAP_RIGHT:string.catprintf("3");  break;
+				case JOYSTICK_MAP_STICKY:                   string.catprintf("s");  break;
+				default:                                    string.catprintf("?");  break;
 			}
 
 		string.catprintf("\n");
@@ -853,14 +839,14 @@ void input_seq::replace(input_code oldcode, input_code newcode)
 
 input_device::input_device(input_class &_class, int devindex, const char *name, void *internal)
 	: m_class(_class),
-	  m_name(name),
-	  m_devindex(devindex),
-	  m_maxitem(input_item_id(0)),
-	  m_internal(internal),
-	  m_joystick_deadzone((INT32)(_class.manager().machine().options().joystick_deadzone() * INPUT_ABSOLUTE_MAX)),
-	  m_joystick_saturation((INT32)(_class.manager().machine().options().joystick_saturation() * INPUT_ABSOLUTE_MAX)),
-	  m_steadykey_enabled(_class.manager().machine().options().steadykey()),
-	  m_lightgun_reload_button(_class.manager().machine().options().offscreen_reload())
+		m_name(name),
+		m_devindex(devindex),
+		m_maxitem(input_item_id(0)),
+		m_internal(internal),
+		m_joystick_deadzone((INT32)(_class.manager().machine().options().joystick_deadzone() * INPUT_ABSOLUTE_MAX)),
+		m_joystick_saturation((INT32)(_class.manager().machine().options().joystick_saturation() * INPUT_ABSOLUTE_MAX)),
+		m_steadykey_enabled(_class.manager().machine().options().steadykey()),
+		m_lightgun_reload_button(_class.manager().machine().options().offscreen_reload())
 {
 	// reset the items
 	memset(m_item, 0, sizeof(m_item));
@@ -1015,10 +1001,10 @@ void input_device::apply_steadykey() const
 
 input_class::input_class(input_manager &manager, input_device_class devclass, bool enabled, bool multi)
 	: m_manager(manager),
-	  m_devclass(devclass),
-	  m_maxindex(0),
-	  m_enabled(enabled),
-	  m_multi(multi)
+		m_devclass(devclass),
+		m_maxindex(0),
+		m_enabled(enabled),
+		m_multi(multi)
 {
 	memset(m_device, 0, sizeof(m_device));
 
@@ -1108,12 +1094,12 @@ void input_class::frame_callback()
 
 input_manager::input_manager(running_machine &machine)
 	: m_machine(machine),
-	  m_keyboard_class(*this, DEVICE_CLASS_KEYBOARD, true, machine.options().multi_keyboard()),
-	  m_mouse_class(*this, DEVICE_CLASS_MOUSE, machine.options().mouse(), machine.options().multi_mouse()),
-	  m_joystick_class(*this, DEVICE_CLASS_JOYSTICK, machine.options().joystick(), true),
-	  m_lightgun_class(*this, DEVICE_CLASS_LIGHTGUN, machine.options().lightgun(), true),
-	  m_poll_seq_last_ticks(0),
-	  m_poll_seq_class(ITEM_CLASS_SWITCH)
+		m_keyboard_class(*this, DEVICE_CLASS_KEYBOARD, true, machine.options().multi_keyboard()),
+		m_mouse_class(*this, DEVICE_CLASS_MOUSE, machine.options().mouse(), machine.options().multi_mouse()),
+		m_joystick_class(*this, DEVICE_CLASS_JOYSTICK, machine.options().joystick(), true),
+		m_lightgun_class(*this, DEVICE_CLASS_LIGHTGUN, machine.options().lightgun(), true),
+		m_poll_seq_last_ticks(0),
+		m_poll_seq_class(ITEM_CLASS_SWITCH)
 {
 	// reset code memory
 	reset_memory();
@@ -1299,7 +1285,7 @@ input_code input_manager::poll_switches()
 						if (code_pressed_once(code))
 							return code;
 						else
-						    continue;
+							continue;
 					}
 
 					// skip if there is not enough axis movement
@@ -1394,13 +1380,13 @@ bool input_manager::code_check_axis(input_device_item &item, input_code code)
 	if (item.memory() == INVALID_AXIS_VALUE)
 		return false;
 
-    // ignore min/max for lightguns
-    // so the selection will not be affected by a gun going out of range
+	// ignore min/max for lightguns
+	// so the selection will not be affected by a gun going out of range
 	INT32 curval = code_value(code);
-    if (code.device_class() == DEVICE_CLASS_LIGHTGUN &&
+	if (code.device_class() == DEVICE_CLASS_LIGHTGUN &&
 		(code.item_id() == ITEM_ID_XAXIS || code.item_id() == ITEM_ID_YAXIS) &&
 		(curval == INPUT_ABSOLUTE_MAX || curval == INPUT_ABSOLUTE_MIN))
-        return false;
+		return false;
 
 	// compute the diff against memory
 	INT32 diff = curval - item.memory();
@@ -1420,7 +1406,7 @@ bool input_manager::code_check_axis(input_device_item &item, input_code code)
 		item.set_memory(INVALID_AXIS_VALUE);
 		return true;
 	}
-    return false;
+	return false;
 }
 
 
@@ -1951,10 +1937,10 @@ bool input_manager::seq_poll()
 				// increment the modifier, wrapping back to none
 				switch (lastcode.item_modifier())
 				{
-					case ITEM_MODIFIER_NONE:	newcode.set_item_modifier(ITEM_MODIFIER_POS);	break;
-					case ITEM_MODIFIER_POS:		newcode.set_item_modifier(ITEM_MODIFIER_NEG);	break;
+					case ITEM_MODIFIER_NONE:    newcode.set_item_modifier(ITEM_MODIFIER_POS);   break;
+					case ITEM_MODIFIER_POS:     newcode.set_item_modifier(ITEM_MODIFIER_NEG);   break;
 					default:
-					case ITEM_MODIFIER_NEG:		newcode.set_item_modifier(ITEM_MODIFIER_NONE);	break;
+					case ITEM_MODIFIER_NEG:     newcode.set_item_modifier(ITEM_MODIFIER_NONE);  break;
 				}
 
 				// back up over the previous code so we can re-append
@@ -2003,7 +1989,7 @@ const char *input_manager::seq_name(astring &string, const input_seq &seq) const
 	{
 		// if this is a code item which is not valid, don't copy it and remove any preceding ORs/NOTs
 		input_code code = seq[codenum];
-		if (!code.internal() && strlen(code_name(codestr, code)) == 0)
+		if (!code.internal() && *(code_name(codestr, code)) == 0)
 		{
 			while (clean_index > 0 && clean_codes[clean_index - 1].internal())
 				clean_index--;
@@ -2165,13 +2151,13 @@ bool input_manager::set_global_joystick_map(const char *mapstring)
 
 input_device_item::input_device_item(input_device &device, const char *name, void *internal, input_item_id itemid, item_get_state_func getstate, input_item_class itemclass)
 	: m_device(device),
-	  m_name(name),
-	  m_internal(internal),
-	  m_itemid(itemid),
-	  m_itemclass(itemclass),
-	  m_getstate(getstate),
-	  m_current(0),
-	  m_memory(0)
+		m_name(name),
+		m_internal(internal),
+		m_itemid(itemid),
+		m_itemclass(itemclass),
+		m_getstate(getstate),
+		m_current(0),
+		m_memory(0)
 {
 	// use a standard token name for know item IDs
 	if (itemid <= ITEM_ID_MAXIMUM && (*itemid_token_table)[itemid] != NULL)
@@ -2179,7 +2165,7 @@ input_device_item::input_device_item(input_device &device, const char *name, voi
 
 	// otherwise, create a tokenized name
 	else
-		m_token.cpy(name).toupper().delchr(' ').delchr('_');
+		m_token.cpy(name).makeupper().delchr(' ').delchr('_');
 }
 
 
@@ -2194,8 +2180,8 @@ input_device_item::input_device_item(input_device &device, const char *name, voi
 
 input_device_switch_item::input_device_switch_item(input_device &device, const char *name, void *internal, input_item_id itemid, item_get_state_func getstate)
 	: input_device_item(device, name, internal, itemid, getstate, ITEM_CLASS_SWITCH),
-	  m_steadykey(0),
-	  m_oldkey(0)
+		m_steadykey(0),
+		m_oldkey(0)
 {
 }
 

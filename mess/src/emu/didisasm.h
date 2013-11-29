@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     didisasm.h
 
     Device disassembly interfaces.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -52,12 +23,12 @@
 //**************************************************************************
 
 // Disassembler constants
-const UINT32 DASMFLAG_SUPPORTED		= 0x80000000;	// are disassembly flags supported?
-const UINT32 DASMFLAG_STEP_OUT		= 0x40000000;	// this instruction should be the end of a step out sequence
-const UINT32 DASMFLAG_STEP_OVER		= 0x20000000;	// this instruction should be stepped over by setting a breakpoint afterwards
-const UINT32 DASMFLAG_OVERINSTMASK	= 0x18000000;	// number of extra instructions to skip when stepping over
-const UINT32 DASMFLAG_OVERINSTSHIFT	= 27;			// bits to shift after masking to get the value
-const UINT32 DASMFLAG_LENGTHMASK	= 0x0000ffff;	// the low 16-bits contain the actual length
+const UINT32 DASMFLAG_SUPPORTED     = 0x80000000;   // are disassembly flags supported?
+const UINT32 DASMFLAG_STEP_OUT      = 0x40000000;   // this instruction should be the end of a step out sequence
+const UINT32 DASMFLAG_STEP_OVER     = 0x20000000;   // this instruction should be stepped over by setting a breakpoint afterwards
+const UINT32 DASMFLAG_OVERINSTMASK  = 0x18000000;   // number of extra instructions to skip when stepping over
+const UINT32 DASMFLAG_OVERINSTSHIFT = 27;           // bits to shift after masking to get the value
+const UINT32 DASMFLAG_LENGTHMASK    = 0x0000ffff;   // the low 16-bits contain the actual length
 
 
 
@@ -65,7 +36,7 @@ const UINT32 DASMFLAG_LENGTHMASK	= 0x0000ffff;	// the low 16-bits contain the ac
 //  MACROS
 //**************************************************************************
 
-#define DASMFLAG_STEP_OVER_EXTRA(x)			((x) << DASMFLAG_OVERINSTSHIFT)
+#define DASMFLAG_STEP_OVER_EXTRA(x)         ((x) << DASMFLAG_OVERINSTSHIFT)
 
 
 
@@ -98,5 +69,8 @@ protected:
 	virtual offs_t disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options) = 0;
 };
 
+// iterator
+typedef device_interface_iterator<device_disasm_interface> disasm_interface_iterator;
 
-#endif	/* __DIDISASM_H__ */
+
+#endif  /* __DIDISASM_H__ */

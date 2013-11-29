@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Miodrag Milanovic, Robbbert
 /***************************************************************************
 
         PC/M by Miodrag Milanovic
@@ -46,27 +48,21 @@
         - Add NMI generator
         - Find out if there really is any floppy-disk feature - the schematic
           has no mention of it.
-        - Check the screen - it only uses the first 16 lines.
         - Add the 6 LEDs.
-        - Replace the terminal keyboard with an inbuilt one.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "machine/z80ctc.h"
 #include "machine/z80pio.h"
-#include "machine/z80sio.h"
+#include "machine/z80dart.h"
 #include "cpu/z80/z80.h"
 #include "cpu/z80/z80daisy.h"
 #include "imagedev/cassette.h"
 #include "sound/speaker.h"
 #include "sound/wave.h"
-#include "machine/terminal.h"
+#include "machine/k7659kb.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define VIDEO_START_MEMBER(name) void name::video_start()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
 class pcm_state : public driver_device
 {
@@ -74,44 +70,44 @@ public:
 	pcm_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
 	m_maincpu(*this, "maincpu"),
-	m_terminal(*this, TERMINAL_TAG),
 	m_pio_s(*this, "z80pio_s"),
 	m_pio_u(*this, "z80pio_u"),
 	m_sio(*this, "z80sio"),
 	m_ctc_s(*this, "z80ctc_s"),
 	m_ctc_u(*this, "z80ctc_u"),
-	m_speaker(*this, SPEAKER_TAG),
-	m_cass(*this, CASSETTE_TAG)
-	{ }
+	m_speaker(*this, "speaker"),
+	m_cass(*this, "cassette"),
+	m_p_videoram(*this, "videoram"){ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_terminal;
-	required_device<device_t> m_pio_s;
-	required_device<device_t> m_pio_u;
-	required_device<device_t> m_sio;
-	required_device<device_t> m_ctc_s;
-	required_device<device_t> m_ctc_u;
-	required_device<device_t> m_speaker;
+	required_device<z80pio_device> m_pio_s;
+	required_device<z80pio_device> m_pio_u;
+	required_device<z80sio0_device> m_sio;
+	required_device<z80ctc_device> m_ctc_s;
+	required_device<z80ctc_device> m_ctc_u;
+	required_device<speaker_sound_device> m_speaker;
 	required_device<cassette_image_device> m_cass;
-	DECLARE_READ8_MEMBER( pcm_84_r );
 	DECLARE_READ8_MEMBER( pcm_85_r );
 	DECLARE_WRITE_LINE_MEMBER( pcm_82_w );
 	DECLARE_WRITE8_MEMBER( pcm_85_w );
-	DECLARE_WRITE8_MEMBER( kbd_put );
 	UINT8 *m_p_chargen;
-	UINT8 *m_p_videoram;
-	UINT8 m_term_data;
-	UINT8 m_step;
-	UINT8 m_85;
+	bool m_cone;
+	required_shared_ptr<UINT8> m_p_videoram;
 	virtual void machine_reset();
 	virtual void video_start();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+private:
+	UINT8 m_85;
 };
 
 
 WRITE_LINE_MEMBER( pcm_state::pcm_82_w )
 {
-	speaker_level_w(m_speaker, state);
+	if (state)
+	{
+		m_cone ^= 1;
+		m_speaker->level_w(m_cone);
+	}
 }
 
 
@@ -134,16 +130,6 @@ B7 Load data
 There is also a HALT LED, connected directly to the processor.
 */
 
-READ8_MEMBER( pcm_state::pcm_84_r )
-{
-	UINT8 ret = m_term_data;
-	if (m_step < 2)
-	{
-		ret |= 0x80;
-		m_step++;
-	}
-	return ret;
-}
 
 READ8_MEMBER( pcm_state::pcm_85_r )
 {
@@ -172,17 +158,17 @@ static ADDRESS_MAP_START(pcm_mem, AS_PROGRAM, 8, pcm_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE( 0x0000, 0x1fff ) AM_ROM  // ROM
 	AM_RANGE( 0x2000, 0xf7ff ) AM_RAM  // RAM
-	AM_RANGE( 0xf800, 0xffff ) AM_RAM AM_BASE(m_p_videoram) // Video RAM
+	AM_RANGE( 0xf800, 0xffff ) AM_RAM AM_SHARE("videoram") // Video RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START(pcm_io, AS_IO, 8, pcm_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x80, 0x83) AM_DEVREADWRITE_LEGACY("z80ctc_s", z80ctc_r, z80ctc_w) // system CTC
-	AM_RANGE(0x84, 0x87) AM_DEVREADWRITE_LEGACY("z80pio_s", z80pio_cd_ba_r, z80pio_cd_ba_w) // system PIO
-	AM_RANGE(0x88, 0x8B) AM_DEVREADWRITE_LEGACY("z80sio", z80sio_cd_ba_r, z80sio_cd_ba_w) // SIO
-	AM_RANGE(0x8C, 0x8F) AM_DEVREADWRITE_LEGACY("z80ctc_u", z80ctc_r, z80ctc_w) // user CTC
-	AM_RANGE(0x90, 0x93) AM_DEVREADWRITE_LEGACY("z80pio_u", z80pio_cd_ba_r, z80pio_cd_ba_w) // user PIO
+	AM_RANGE(0x80, 0x83) AM_DEVREADWRITE("z80ctc_s", z80ctc_device, read, write) // system CTC
+	AM_RANGE(0x84, 0x87) AM_DEVREADWRITE("z80pio_s", z80pio_device, read, write) // system PIO
+	AM_RANGE(0x88, 0x8B) AM_DEVREADWRITE("z80sio", z80sio0_device, cd_ba_r, cd_ba_w) // SIO
+	AM_RANGE(0x8C, 0x8F) AM_DEVREADWRITE("z80ctc_u", z80ctc_device, read, write) // user CTC
+	AM_RANGE(0x90, 0x93) AM_DEVREADWRITE("z80pio_u", z80pio_device, read, write) // user PIO
 	//AM_RANGE(0x94, 0x97) // bank select
 	//AM_RANGE(0x98, 0x9B) // NMI generator
 	//AM_RANGE(0x9C, 0x9F) // io ports available to the user
@@ -193,40 +179,29 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( pcm )
 INPUT_PORTS_END
 
-WRITE8_MEMBER( pcm_state::kbd_put )
-{
-	m_term_data = data;
-	m_step = 0;
-}
-
-static GENERIC_TERMINAL_INTERFACE( terminal_intf )
-{
-	DEVCB_DRIVER_MEMBER(pcm_state, kbd_put)
-};
-
-MACHINE_RESET_MEMBER(pcm_state)
+void pcm_state::machine_reset()
 {
 }
 
-VIDEO_START_MEMBER( pcm_state )
+void pcm_state::video_start()
 {
-	m_p_chargen = machine().region("chargen")->base();
+	m_p_chargen = memregion("chargen")->base();
 }
 
-SCREEN_UPDATE_MEMBER( pcm_state )
+UINT32 pcm_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	UINT8 y,ra,chr,gfx;
 	UINT16 sy=0,ma=0x400,x;
 
-	for (y = 0; y < 32; y++)
+	for (y = 0; y < 16; y++)
 	{
 		for (ra = 0; ra < 8; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(&bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma + 64; x++)
 			{
-				chr = m_p_videoram[x & 0x7ff];
+				chr = m_p_videoram[x];
 
 				gfx = m_p_chargen[(chr<<3) | ra];
 
@@ -246,65 +221,73 @@ SCREEN_UPDATE_MEMBER( pcm_state )
 }
 
 
-// someone please check this
 static const z80_daisy_config pcm_daisy_chain[] =
 {
-	{ "z80ctc_s" },		/* System ctc */
-	{ "z80pio_s" },		/* System pio */
-	{ "z80sio" },		/* sio */
-	{ "z80pio_u" },		/* User pio */
-	{ "z80ctc_u" },		/* User ctc */
+	{ "z80ctc_s" },     /* System ctc */
+	{ "z80pio_s" },     /* System pio */
+	{ "z80sio" },       /* sio */
+	{ "z80pio_u" },     /* User pio */
+	{ "z80ctc_u" },     /* User ctc */
 	{ NULL }
 };
 
-static Z80CTC_INTERFACE( ctc_u_intf )
+static Z80CTC_INTERFACE( ctc_u_intf ) // all pins go to expansion socket
 {
-	0,				/* timer disablers */
 	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0), // interrupt callback
-	DEVCB_NULL,			/* ZC/TO0 callback */
-	DEVCB_NULL,			/* ZC/TO1 callback */
-	DEVCB_NULL			/* ZC/TO2 callback */
+	DEVCB_NULL,         /* ZC/TO0 callback */
+	DEVCB_NULL,         /* ZC/TO1 callback */
+	DEVCB_NULL          /* ZC/TO2 callback */
 };
 
 static Z80CTC_INTERFACE( ctc_s_intf )
 {
-	0,				/* timer disablers */
 	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0), // interrupt callback
-	DEVCB_NULL,			/* ZC/TO0 callback - SIO channel A clock */
-	DEVCB_NULL,			/* ZC/TO1 callback - SIO channel B clock */
+	DEVCB_NULL,         /* ZC/TO0 callback - SIO channel A clock */
+	DEVCB_NULL,         /* ZC/TO1 callback - SIO channel B clock */
 	DEVCB_DRIVER_LINE_MEMBER(pcm_state, pcm_82_w) /* ZC/TO2 callback - speaker */
 };
 
-static Z80PIO_INTERFACE( pio_u_intf )
+static Z80PIO_INTERFACE( pio_u_intf ) // all pins go to expansion socket
 {
 	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0), // interrupt callback
-	DEVCB_NULL,			/* read port A */
-	DEVCB_NULL,			/* write port A */
-	DEVCB_NULL,			/* portA ready active callback */
-	DEVCB_NULL,			/* read port B */
-	DEVCB_NULL,			/* write port B */
-	DEVCB_NULL			/* portB ready active callback */
+	DEVCB_NULL,         /* read port A */
+	DEVCB_NULL,         /* write port A */
+	DEVCB_NULL,         /* portA ready active callback */
+	DEVCB_NULL,         /* read port B */
+	DEVCB_NULL,         /* write port B */
+	DEVCB_NULL          /* portB ready active callback */
 };
 
 static Z80PIO_INTERFACE( pio_s_intf )
 {
 	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0), // interrupt callback
-	DEVCB_DRIVER_MEMBER(pcm_state, pcm_84_r),			/* read port A */
-	DEVCB_NULL,			/* write port A */
-	DEVCB_NULL,			/* portA ready active callback */
-	DEVCB_DRIVER_MEMBER(pcm_state, pcm_85_r),			/* read port B */
-	DEVCB_DRIVER_MEMBER(pcm_state, pcm_85_w),			/* write port B */
-	DEVCB_NULL			/* portB ready active callback */
+	DEVCB_DEVICE_MEMBER(K7659_KEYBOARD_TAG, k7659_keyboard_device, read),           /* read port A */
+	DEVCB_NULL,         /* write port A */
+	DEVCB_NULL,         /* portA ready active callback */
+	DEVCB_DRIVER_MEMBER(pcm_state, pcm_85_r),           /* read port B */
+	DEVCB_DRIVER_MEMBER(pcm_state, pcm_85_w),           /* write port B */
+	DEVCB_NULL          /* portB ready active callback */
 };
 
-static const z80sio_interface sio_intf =
+static Z80SIO_INTERFACE( sio_intf )
 {
-	0, //DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0), // interrupt callback
-	0,			/* DTR changed handler */
-	0,			/* RTS changed handler */
-	0,			/* BREAK changed handler */
-	0,			/* transmit handler - which channel is this for? */
-	0			/* receive handler - which channel is this for? */
+	0, 0, 0, 0,
+
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+
+	DEVCB_NULL
 };
 
 
@@ -312,15 +295,15 @@ static const z80sio_interface sio_intf =
 /* F4 Character Displayer */
 static const gfx_layout pcm_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	256,					/* 256 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	256,                    /* 256 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( pcm )
@@ -338,28 +321,28 @@ static MACHINE_CONFIG_START( pcm, pcm_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0, 64*8-1, 0, 32*8-1)
+	MCFG_SCREEN_UPDATE_DRIVER(pcm_state, screen_update)
+	MCFG_SCREEN_SIZE(64*8, 16*8)
+	MCFG_SCREEN_VISIBLE_AREA(0, 64*8-1, 0, 16*8-1)
 	MCFG_GFXDECODE(pcm)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
 	/* Sound */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	/* Devices */
-	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, default_cassette_interface )
+	MCFG_K7659_KEYBOARD_ADD()
+	MCFG_CASSETTE_ADD( "cassette", default_cassette_interface )
 	MCFG_Z80PIO_ADD( "z80pio_u", XTAL_10MHz /4, pio_u_intf )
 	MCFG_Z80PIO_ADD( "z80pio_s", XTAL_10MHz /4, pio_s_intf )
-	MCFG_Z80SIO_ADD( "z80sio", 4800, sio_intf ) // clocks come from the system ctc
-	MCFG_Z80CTC_ADD( "z80ctc_u", 1379310.344828, ctc_u_intf ) // numbers need to be corrected
-	MCFG_Z80CTC_ADD( "z80ctc_s", 1379310.344828, ctc_s_intf ) // numbers need to be corrected
+	MCFG_Z80SIO0_ADD( "z80sio", 4800, sio_intf ) // clocks come from the system ctc
+	MCFG_Z80CTC_ADD( "z80ctc_u", XTAL_10MHz /4, ctc_u_intf )
+	MCFG_Z80CTC_ADD( "z80ctc_s", XTAL_10MHz /4, ctc_s_intf )
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -383,13 +366,9 @@ ROM_START( pcm )
 
 	ROM_REGION(0x0800, "chargen",0)
 	ROM_LOAD( "charrom.d113", 0x0000, 0x0800, CRC(5684b3c3) SHA1(418054aa70a0fd120611e32059eb2051d3b82b5a))
-
-	ROM_REGION(0x0800, "k7659",0) // keyboard encoder
-	ROM_LOAD ("k7659n.d8", 0x0000, 0x0800, CRC(7454bf0a) SHA1(b97e7df93778fa371b96b6f4fb1a5b1c8b89d7ba) )
 ROM_END
 
 /* Driver */
 
-/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1988, pcm,	 0,       0,	 pcm,		pcm,	 0, 	 "Mugler/Mathes",   "PC/M", 0)
-
+/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY        FULLNAME       FLAGS */
+COMP( 1988, pcm,    0,      0,       pcm,       pcm, driver_device,      0,  "Mugler/Mathes",  "PC/M", 0)

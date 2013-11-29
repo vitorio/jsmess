@@ -19,9 +19,9 @@
 */
 static MACHINE_CONFIG_FRAGMENT( game_blaster_config )
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("saa1099.1", SAA1099, 4772720)
+	MCFG_SAA1099_ADD("saa1099.1", 4772720)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-	MCFG_SOUND_ADD("saa1099.2", SAA1099, 4772720)
+	MCFG_SAA1099_ADD("saa1099.2", 4772720)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_CONFIG_END
 
@@ -34,8 +34,8 @@ static WRITE8_DEVICE_HANDLER( saa1099_16_w )
 {
 	switch(offset)
 	{
-		case 0 : saa1099_control_w( device, offset, data ); break;
-		case 1 : saa1099_data_w( device, offset, data ); break;
+		case 0 : dynamic_cast<saa1099_device*>(device)->saa1099_control_w( space, offset, data ); break;
+		case 1 : dynamic_cast<saa1099_device*>(device)->saa1099_data_w( space, offset, data ); break;
 	}
 }
 
@@ -64,9 +64,8 @@ machine_config_constructor isa8_gblaster_device::device_mconfig_additions() cons
 //-------------------------------------------------
 
 isa8_gblaster_device::isa8_gblaster_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock) :
-        device_t(mconfig, ISA8_GAME_BLASTER, "ISA8_GAME_BLASTER", tag, owner, clock),
-		device_isa8_card_interface(mconfig, *this),
-		device_slot_card_interface(mconfig, *this)
+		device_t(mconfig, ISA8_GAME_BLASTER, "Game Blaster Sound Card", tag, owner, clock, "isa_gblaster", __FILE__),
+		device_isa8_card_interface(mconfig, *this)
 {
 }
 
@@ -76,7 +75,7 @@ isa8_gblaster_device::isa8_gblaster_device(const machine_config &mconfig, const 
 
 void isa8_gblaster_device::device_start()
 {
-	m_isa = machine().device<isa8_device>("mb:isa");
+	set_isa_device();
 	m_isa->install_device(subdevice("saa1099.1"), 0x0220, 0x0221, 0, 0, FUNC(saa1099_16_r), FUNC(saa1099_16_w) );
 	m_isa->install_device(subdevice("saa1099.2"), 0x0222, 0x0223, 0, 0, FUNC(saa1099_16_r), FUNC(saa1099_16_w) );
 }

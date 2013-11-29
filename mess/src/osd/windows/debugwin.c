@@ -1,41 +1,8 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 //============================================================
 //
 //  debugwin.c - Win32 debug window handling
-//
-//============================================================
-//
-//  Copyright Aaron Giles
-//  All rights reserved.
-//
-//  Redistribution and use in source and binary forms, with or
-//  without modification, are permitted provided that the
-//  following conditions are met:
-//
-//    * Redistributions of source code must retain the above
-//      copyright notice, this list of conditions and the
-//      following disclaimer.
-//    * Redistributions in binary form must reproduce the
-//      above copyright notice, this list of conditions and
-//      the following disclaimer in the documentation and/or
-//      other materials provided with the distribution.
-//    * Neither the name 'MAME' nor the names of its
-//      contributors may be used to endorse or promote
-//      products derived from this software without specific
-//      prior written permission.
-//
-//  THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND
-//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-//  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
-//  FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
-//  EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-//  DAMAGE (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-//  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-//  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-//  ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-//  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-//  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-//  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //============================================================
 
@@ -78,35 +45,35 @@
 //  PARAMETERS
 //============================================================
 
-#define MAX_VIEWS				4
-#define EDGE_WIDTH				3
-#define MAX_EDIT_STRING			256
-#define HISTORY_LENGTH			20
-#define MAX_OTHER_WND			4
+#define MAX_VIEWS               4
+#define EDGE_WIDTH              3
+#define MAX_EDIT_STRING         256
+#define HISTORY_LENGTH          20
+#define MAX_OTHER_WND           4
 
 // debugger window styles
-#define DEBUG_WINDOW_STYLE		(WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN) & (~WS_MINIMIZEBOX & ~WS_MAXIMIZEBOX)
-#define DEBUG_WINDOW_STYLE_EX	0
+#define DEBUG_WINDOW_STYLE      (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN) & (~WS_MINIMIZEBOX & ~WS_MAXIMIZEBOX)
+#define DEBUG_WINDOW_STYLE_EX   0
 
 // debugger view styles
-#define DEBUG_VIEW_STYLE		WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN
-#define DEBUG_VIEW_STYLE_EX		0
+#define DEBUG_VIEW_STYLE        WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN
+#define DEBUG_VIEW_STYLE_EX     0
 
 // edit box styles
-#define EDIT_BOX_STYLE			WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL
-#define EDIT_BOX_STYLE_EX		0
+#define EDIT_BOX_STYLE          WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL
+#define EDIT_BOX_STYLE_EX       0
 
 // combo box styles
-#define COMBO_BOX_STYLE			WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL
-#define COMBO_BOX_STYLE_EX		0
+#define COMBO_BOX_STYLE         WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL
+#define COMBO_BOX_STYLE_EX      0
 
 // horizontal scroll bar styles
-#define HSCROLL_STYLE			WS_CHILD | WS_VISIBLE | SBS_HORZ
-#define HSCROLL_STYLE_EX		0
+#define HSCROLL_STYLE           WS_CHILD | WS_VISIBLE | SBS_HORZ
+#define HSCROLL_STYLE_EX        0
 
 // vertical scroll bar styles
-#define VSCROLL_STYLE			WS_CHILD | WS_VISIBLE | SBS_VERT
-#define VSCROLL_STYLE_EX		0
+#define VSCROLL_STYLE           WS_CHILD | WS_VISIBLE | SBS_VERT
+#define VSCROLL_STYLE_EX        0
 
 
 enum
@@ -151,17 +118,17 @@ enum
 //  TYPES
 //============================================================
 
-typedef struct _debugview_info debugview_info;
+struct debugview_info;
 class debugwin_info;
 
 
-struct _debugview_info
+struct debugview_info
 {
-	debugwin_info *			owner;
-	debug_view *			view;
-	HWND					wnd;
-	HWND					hscroll;
-	HWND					vscroll;
+	debugwin_info *         owner;
+	debug_view *            view;
+	HWND                    wnd;
+	HWND                    hscroll;
+	HWND                    vscroll;
 };
 
 
@@ -173,34 +140,34 @@ public:
 
 	running_machine &machine() const { return m_machine; }
 
-	debugwin_info *			next;
-	HWND					wnd;
-	HWND					focuswnd;
-	WNDPROC					handler;
+	debugwin_info *         next;
+	HWND                    wnd;
+	HWND                    focuswnd;
+	WNDPROC                 handler;
 
-	UINT32					minwidth, maxwidth;
-	UINT32					minheight, maxheight;
-	void					(*recompute_children)(debugwin_info *);
-	void					(*update_menu)(debugwin_info *);
+	UINT32                  minwidth, maxwidth;
+	UINT32                  minheight, maxheight;
+	void                    (*recompute_children)(debugwin_info *);
+	void                    (*update_menu)(debugwin_info *);
 
-	int						(*handle_command)(debugwin_info *, WPARAM, LPARAM);
-	int						(*handle_key)(debugwin_info *, WPARAM, LPARAM);
-	UINT16					ignore_char_lparam;
+	int                     (*handle_command)(debugwin_info *, WPARAM, LPARAM);
+	int                     (*handle_key)(debugwin_info *, WPARAM, LPARAM);
+	UINT16                  ignore_char_lparam;
 
-	debugview_info			view[MAX_VIEWS];
+	debugview_info          view[MAX_VIEWS];
 
-	HWND					editwnd;
-	char					edit_defstr[256];
-	void					(*process_string)(debugwin_info *, const char *);
-	WNDPROC 				original_editproc;
-	TCHAR					history[HISTORY_LENGTH][MAX_EDIT_STRING];
-	int						history_count;
-	int						last_history;
+	HWND                    editwnd;
+	char                    edit_defstr[256];
+	void                    (*process_string)(debugwin_info *, const char *);
+	WNDPROC                 original_editproc;
+	TCHAR                   history[HISTORY_LENGTH][MAX_EDIT_STRING];
+	int                     history_count;
+	int                     last_history;
 
-	HWND					otherwnd[MAX_OTHER_WND];
+	HWND                    otherwnd[MAX_OTHER_WND];
 
 private:
-	running_machine &		m_machine;
+	running_machine &       m_machine;
 };
 
 
@@ -335,7 +302,7 @@ void windows_osd_interface::wait_for_debugger(device_t &device, bool firststop)
 
 static int debugwin_seq_pressed(running_machine &machine)
 {
-	const input_seq &seq = input_type_seq(machine, IPT_UI_DEBUG_BREAK, 0, SEQ_TYPE_STANDARD);
+	const input_seq &seq = machine.ioport().type_seq(IPT_UI_DEBUG_BREAK);
 	int result = FALSE;
 	int invert = FALSE;
 	int first = TRUE;
@@ -393,7 +360,7 @@ static int debugwin_seq_pressed(running_machine &machine)
 //  debugwin_init_windows
 //============================================================
 
-void debugwin_init_windows(running_machine &machine)
+void windows_osd_interface::init_debugger()
 {
 	static int class_registered;
 
@@ -403,28 +370,28 @@ void debugwin_init_windows(running_machine &machine)
 		WNDCLASS wc = { 0 };
 
 		// initialize the description of the window class
-		wc.lpszClassName	= TEXT("MAMEDebugWindow");
-		wc.hInstance		= GetModuleHandle(NULL);
-		wc.lpfnWndProc		= debugwin_window_proc;
-		wc.hCursor			= LoadCursor(NULL, IDC_ARROW);
-		wc.hIcon			= LoadIcon(NULL, IDI_APPLICATION);
-		wc.lpszMenuName		= NULL;
-		wc.hbrBackground	= NULL;
-		wc.style			= 0;
-		wc.cbClsExtra		= 0;
-		wc.cbWndExtra		= 0;
+		wc.lpszClassName    = TEXT("MAMEDebugWindow");
+		wc.hInstance        = GetModuleHandle(NULL);
+		wc.lpfnWndProc      = debugwin_window_proc;
+		wc.hCursor          = LoadCursor(NULL, IDC_ARROW);
+		wc.hIcon            = LoadIcon(wc.hInstance, MAKEINTRESOURCE(2));
+		wc.lpszMenuName     = NULL;
+		wc.hbrBackground    = NULL;
+		wc.style            = 0;
+		wc.cbClsExtra       = 0;
+		wc.cbWndExtra       = 0;
 
 		// register the class; fail if we can't
 		if (!RegisterClass(&wc))
-			fatalerror("Unable to register debug window class");
+			fatalerror("Unable to register debug window class\n");
 
 		// initialize the description of the view class
-		wc.lpszClassName	= TEXT("MAMEDebugView");
-		wc.lpfnWndProc		= debugwin_view_proc;
+		wc.lpszClassName    = TEXT("MAMEDebugView");
+		wc.lpfnWndProc      = debugwin_view_proc;
 
 		// register the class; fail if we can't
 		if (!RegisterClass(&wc))
-			fatalerror("Unable to register debug view class");
+			fatalerror("Unable to register debug view class\n");
 
 		class_registered = TRUE;
 	}
@@ -439,24 +406,19 @@ void debugwin_init_windows(running_machine &machine)
 
 		if (temp_dc != NULL)
 		{
-			windows_options &options = downcast<windows_options &>(machine.options());
+			windows_options &options = downcast<windows_options &>(machine().options());
 			int size = options.debugger_font_size();
 			TCHAR *t_face;
 
 			// create a standard font
 			t_face = tstring_from_utf8(options.debugger_font());
 			debug_font = CreateFont(-MulDiv(size, GetDeviceCaps(temp_dc, LOGPIXELSY), 72), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE,
-						ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE, t_face);
+						ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FIXED_PITCH, t_face);
 			osd_free(t_face);
+			t_face = NULL;
 
-			// fall back to Lucida Console 8
 			if (debug_font == NULL)
-			{
-				debug_font = CreateFont(-MulDiv(8, GetDeviceCaps(temp_dc, LOGPIXELSY), 72), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE,
-							ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE, TEXT("Lucida Console"));
-				if (debug_font == NULL)
-					fatalerror("Unable to create debug font");
-			}
+				fatalerror("Unable to create debugger font\n");
 
 			// get the metrics
 			old_font = SelectObject(temp_dc, debug_font);
@@ -474,6 +436,9 @@ void debugwin_init_windows(running_machine &machine)
 	// get other metrics
 	hscroll_height = GetSystemMetrics(SM_CYHSCROLL);
 	vscroll_width = GetSystemMetrics(SM_CXVSCROLL);
+
+	// ensure we get called on the way out
+	machine().add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(debugwin_destroy_windows), &machine()));
 }
 
 
@@ -482,7 +447,7 @@ void debugwin_init_windows(running_machine &machine)
 //  debugwin_destroy_windows
 //============================================================
 
-void debugwin_destroy_windows(void)
+void debugwin_destroy_windows(running_machine &machine)
 {
 	// loop over windows and free them
 	while (window_list != NULL)
@@ -493,21 +458,6 @@ void debugwin_destroy_windows(void)
 	}
 
 	main_console = NULL;
-}
-
-
-
-//============================================================
-//  debugwin_show
-//============================================================
-
-void debugwin_show(int type)
-{
-	debugwin_info *info;
-
-	// loop over windows and show/hide them
-	for (info = window_list; info != NULL; info = info->next)
-		ShowWindow(info->wnd, type);
 }
 
 
@@ -2399,7 +2349,6 @@ enum
 
 static void image_update_menu(debugwin_info *info)
 {
-	device_image_interface *img = NULL;
 	UINT32 cnt = 0;
 	HMENU devicesmenu;
 
@@ -2407,7 +2356,8 @@ static void image_update_menu(debugwin_info *info)
 
 	// create the image menu
 	devicesmenu = CreatePopupMenu();
-	for (bool gotone = info->machine().devicelist().first(img); gotone; gotone = img->next(img))
+	image_interface_iterator iter(info->machine().root_device());
+	for (device_image_interface *img = iter.first(); img != NULL; img = iter.next())
 	{
 		astring temp;
 		UINT flags_for_exists;
@@ -2428,8 +2378,8 @@ static void image_update_menu(debugwin_info *info)
 		AppendMenu(devicesubmenu, MF_STRING, new_item + DEVOPTION_OPEN, TEXT("Mount..."));
 
 		/*if (img->is_creatable())
-            AppendMenu(devicesubmenu, MF_STRING, new_item + DEVOPTION_CREATE, TEXT("Create..."));
-        */
+		    AppendMenu(devicesubmenu, MF_STRING, new_item + DEVOPTION_CREATE, TEXT("Create..."));
+		*/
 		AppendMenu(devicesubmenu, flags_for_exists, new_item + DEVOPTION_CLOSE, TEXT("Unmount"));
 
 		if (img->device().type() == CASSETTE)
@@ -2437,9 +2387,9 @@ static void image_update_menu(debugwin_info *info)
 			cassette_state state;
 			state = (cassette_state)(img->exists() ? (dynamic_cast<cassette_image_device*>(&img->device())->get_state() & CASSETTE_MASK_UISTATE) : CASSETTE_STOPPED);
 			AppendMenu(devicesubmenu, MF_SEPARATOR, 0, NULL);
-			AppendMenu(devicesubmenu, flags_for_exists	| ((state == CASSETTE_STOPPED)	? MF_CHECKED : 0), new_item + DEVOPTION_CASSETTE_STOPPAUSE, TEXT("Pause/Stop"));
-			AppendMenu(devicesubmenu, flags_for_exists	| ((state == CASSETTE_PLAY) ? MF_CHECKED : 0), new_item + DEVOPTION_CASSETTE_PLAY, TEXT("Play"));
-			AppendMenu(devicesubmenu, flags_for_writing | ((state == CASSETTE_RECORD)	? MF_CHECKED : 0), new_item + DEVOPTION_CASSETTE_RECORD, TEXT("Record"));
+			AppendMenu(devicesubmenu, flags_for_exists  | ((state == CASSETTE_STOPPED)  ? MF_CHECKED : 0), new_item + DEVOPTION_CASSETTE_STOPPAUSE, TEXT("Pause/Stop"));
+			AppendMenu(devicesubmenu, flags_for_exists  | ((state == CASSETTE_PLAY) ? MF_CHECKED : 0), new_item + DEVOPTION_CASSETTE_PLAY, TEXT("Play"));
+			AppendMenu(devicesubmenu, flags_for_writing | ((state == CASSETTE_RECORD)   ? MF_CHECKED : 0), new_item + DEVOPTION_CASSETTE_RECORD, TEXT("Record"));
 			AppendMenu(devicesubmenu, flags_for_exists, new_item + DEVOPTION_CASSETTE_REWIND, TEXT("Rewind"));
 			AppendMenu(devicesubmenu, flags_for_exists, new_item + DEVOPTION_CASSETTE_FASTFORWARD, TEXT("Fast Forward"));
 		}
@@ -2465,7 +2415,6 @@ void console_create_window(running_machine &machine)
 	RECT bounds, work_bounds;
 	HMENU optionsmenu;
 	UINT32 conchars;
-	device_image_interface *img = NULL;
 
 	// create the window
 	info = debugwin_window_create(machine, "Debug", NULL);
@@ -2492,9 +2441,12 @@ void console_create_window(running_machine &machine)
 	AppendMenu(GetMenu(info->wnd), MF_ENABLED | MF_POPUP, (UINT_PTR)optionsmenu, TEXT("Options"));
 
 	// Add image menu only if image devices exist
-	if (info->machine().devicelist().first(img))	{
-		info->update_menu = image_update_menu;
-		image_update_menu(info);
+	{
+		image_interface_iterator iter(machine.root_device());
+		if (iter.first() != NULL) {
+			info->update_menu = image_update_menu;
+			image_update_menu(info);
+		}
 	}
 
 	// set the handlers
@@ -2600,15 +2552,15 @@ cleanup:
 static void console_recompute_children(debugwin_info *info)
 {
 	RECT parent, regrect, disrect, conrect, editrect;
-	UINT32 regchars, dischars, conchars;
+	UINT32 regchars;//, dischars, conchars;
 
 	// get the parent's dimensions
 	GetClientRect(info->wnd, &parent);
 
 	// get the total width of all three children
-	dischars = info->view[0].view->total_size().x;
+	//dischars = info->view[0].view->total_size().x;
 	regchars = main_console_regwidth;
-	conchars = info->view[2].view->total_size().x;
+	//conchars = info->view[2].view->total_size().x;
 
 	// registers always get their desired width, and span the entire height
 	regrect.top = parent.top + EDGE_WIDTH;
@@ -2888,13 +2840,8 @@ static int global_handle_command(debugwin_info *info, WPARAM wparam, LPARAM lpar
 		}
 		if (LOWORD(wparam) >= ID_DEVICE_OPTIONS) {
 			UINT32 devid = (LOWORD(wparam) - ID_DEVICE_OPTIONS) / DEVOPTION_MAX;
-			device_image_interface *img = NULL;
-			UINT32 cnt = 0;
-			for (bool gotone = info->machine().devicelist().first(img); gotone; gotone = img->next(img))
-			{
-				if (cnt==devid) break;
-				cnt++;
-			}
+			image_interface_iterator iter(info->machine().root_device());
+			device_image_interface *img = iter.byindex(devid);
 			if (img!=NULL) {
 				switch ((LOWORD(wparam) - ID_DEVICE_OPTIONS) % DEVOPTION_MAX)
 				{
@@ -2949,7 +2896,6 @@ static int global_handle_command(debugwin_info *info, WPARAM wparam, LPARAM lpar
 							cassette_image_device* cassette = dynamic_cast<cassette_image_device*>(&img->device());
 							switch ((LOWORD(wparam) - ID_DEVICE_OPTIONS) % DEVOPTION_MAX)
 							{
-
 								case DEVOPTION_CASSETTE_STOPPAUSE:
 														cassette->change_state(CASSETTE_STOPPED, CASSETTE_MASK_UISTATE);
 														return 1;

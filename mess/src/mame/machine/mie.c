@@ -1,4 +1,3 @@
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "mie.h"
@@ -51,7 +50,7 @@ static MACHINE_CONFIG_FRAGMENT( mie )
 MACHINE_CONFIG_END
 
 ROM_START( mie )
-	ROM_REGION( 0x800, "mie", ROMREGION_LOADBYNAME )
+	ROM_REGION( 0x800, "mie", 0 )
 	ROM_LOAD( "315-6146.bin", 0x000, 0x800, CRC(9b197e35) SHA1(864d14d58732dd4e2ee538ccc71fa8df7013ba06))
 ROM_END
 
@@ -78,31 +77,25 @@ machine_config_constructor mie_device::device_mconfig_additions() const
 }
 
 mie_jvs_device::mie_jvs_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: jvs_host(mconfig, MIE_JVS, "MIE-JVS", tag, owner, clock)
+	: jvs_host(mconfig, MIE_JVS, "MIE-JVS", tag, owner, clock, "mie_jvs", __FILE__)
 {
 }
 
 mie_device::mie_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: maple_device(mconfig, MIE, "MIE", tag, owner, clock)
+	: maple_device(mconfig, MIE, "MIE", tag, owner, clock, "mie", __FILE__)
 {
-	m_shortname = "mie";
 	memset(gpio_name, 0, sizeof(gpio_name));
 	jvs_name = 0;
 	cpu = 0;
 	jvs = 0;
 }
 
-IRQ_CALLBACK(mie_device::irq_callback_1)
-{
-	return downcast<mie_device *>(device->owner())->irq_callback();
-}
-
 void mie_device::device_start()
 {
 	maple_device::device_start();
-	cpu = downcast<z80_device *>(subdevice("mie"));
+	cpu = subdevice<z80_device>("mie");
 	timer = timer_alloc(0);
-	cpu->set_irq_callback(irq_callback_1);
+	cpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(mie_device::irq_callback),this));
 	jvs = machine().device<mie_jvs_device>(jvs_name);
 
 	save_item(NAME(gpiodir));
@@ -140,7 +133,7 @@ WRITE8_MEMBER(mie_device::control_w)
 	control = (control & ~(255 << shift)) | (data << shift);
 
 	if((!(prev_control & CTRL_TXB) && (control & CTRL_TXB)) ||
-	   (!(prev_control & CTRL_CTXB) && (control & CTRL_CTXB))) {
+		(!(prev_control & CTRL_CTXB) && (control & CTRL_CTXB))) {
 		control &= ~(CTRL_TFB|CTRL_RXB|CTRL_RFB|CTRL_BFOV|CTRL_EMP);
 		reply_size = lreg+1;
 		if(reply_size > TBUF_SIZE)
@@ -203,7 +196,7 @@ READ8_MEMBER(mie_device::read_78xx)
 READ8_MEMBER(mie_device::gpio_r)
 {
 	if(gpiodir & (1 << offset))
-		return gpio_name[offset] ? input_port_read(machine(), gpio_name[offset]) : 0xff;
+		return gpio_name[offset] ? ioport(gpio_name[offset])->read() : 0xff;
 	else
 		return gpio_val[offset];
 }
@@ -212,7 +205,7 @@ WRITE8_MEMBER(mie_device::gpio_w)
 {
 	gpio_val[offset] = data;
 	if(!(gpiodir & (1 << offset)) && gpio_name[offset])
-		input_port_write(machine(), gpio_name[offset], data, 0xff);
+		ioport(gpio_name[offset])->write(data, 0xff);
 }
 
 READ8_MEMBER(mie_device::gpiodir_r)
@@ -271,7 +264,7 @@ void mie_device::recalc_irq()
 	cpu->set_input_line(0, irq_enable & irq_pending & 0x7f ? ASSERT_LINE : CLEAR_LINE);
 }
 
-int mie_device::irq_callback()
+IRQ_CALLBACK_MEMBER(mie_device::irq_callback)
 {
 	if(!(irq_enable & irq_pending & 0x7f))
 		throw emu_fatalerror("MIE irq callback called with enable=%02x, pending=%02x", irq_enable, irq_pending);
@@ -362,4 +355,6 @@ READ8_MEMBER(mie_device::jvs_sense_r)
 	return 0x8c | (jvs->get_address_set_line() ? 2 : 0) | (jvs->get_presence_line() ? 0 : 1);
 }
 
-
+void mie_device::maple_reset()
+{
+}

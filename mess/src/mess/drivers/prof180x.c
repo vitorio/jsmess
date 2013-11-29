@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /***************************************************************************
 
     PROF-180X
@@ -20,34 +22,60 @@
 
 */
 
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/ram.h"
-#include "machine/ctronics.h"
+#include "bus/centronics/ctronics.h"
 #include "machine/upd765.h"
 #include "includes/prof180x.h"
 
-void prof180x_state::bankswitch()
+UINT32 prof180x_state::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-	switch ((m_mm1 << 1) | m_mm0)
+	return 0;
+}
+
+
+READ8_MEMBER( prof180x_state::read )
+{
+	UINT8 data = 0;
+
+	if (offset < 0x40000)
 	{
-	case 0:
-		// bank0_r = EPROM, bank0_w = RAM, bank1 = RAM
-		break;
+	}
+	else
+	{
+	}
+/*
+    switch ((m_mm1 << 1) | m_mm0)
+    {
+    case 0:
+        // bank0_r = EPROM, bank0_w = RAM, bank1 = RAM
+        break;
 
-	case 1:
-		// bank0_r = RAM, bank0_w = RAM, bank1 = RAM
-		break;
+    case 1:
+        // bank0_r = RAM, bank0_w = RAM, bank1 = RAM
+        break;
 
-	case 2:
-		// bank0_r = UNMAP, bank0_w = UNMAP, bank1 = RAM
-		break;
+    case 2:
+        // bank0_r = UNMAP, bank0_w = UNMAP, bank1 = RAM
+        break;
 
-	case 3:
-		// bank0_r = RAM, bank0_w = RAM, bank1 = UNMAP
-		break;
+    case 3:
+        // bank0_r = RAM, bank0_w = RAM, bank1 = UNMAP
+        break;
+    }
+*/
+	return data;
+}
+
+WRITE8_MEMBER( prof180x_state::write )
+{
+	if (offset < 0x40000)
+	{
+	}
+	else
+	{
 	}
 }
 
@@ -67,23 +95,21 @@ void prof180x_state::ls259_w(int flag, int value)
 		m_c2 = value;
 		break;
 
-	case 3:	// MINI
+	case 3: // MINI
 		break;
 
 	case 4: // MM0
 		m_mm0 = value;
-		bankswitch();
 		break;
 
-	case 5:	// RTC
+	case 5: // RTC
 		break;
 
-	case 6:	// PEPS
+	case 6: // PEPS
 		break;
 
-	case 7:	// MM1
+	case 7: // MM1
 		m_mm1 = value;
-		bankswitch();
 		break;
 	}
 }
@@ -92,18 +118,18 @@ WRITE8_MEMBER( prof180x_state::flr_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       VAL
-        1       FLG0
-        2       FLG1
-        3       FLG2
-        4
-        5
-        6
-        7
+	    0       VAL
+	    1       FLG0
+	    2       FLG1
+	    3       FLG2
+	    4
+	    5
+	    6
+	    7
 
-    */
+	*/
 
 	int val = BIT(data, 0);
 	int flg = (data >> 1) & 0x07;
@@ -115,18 +141,18 @@ READ8_MEMBER( prof180x_state::status0_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       BUSY
-        1
-        2
-        3
-        4       B-E
-        5       IDX
-        6
-        7       MOT
+	    0       BUSY
+	    1
+	    2
+	    3
+	    4       B-E
+	    5       IDX
+	    6
+	    7       MOT
 
-    */
+	*/
 
 	return 0;
 }
@@ -135,18 +161,18 @@ READ8_MEMBER( prof180x_state::status1_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       FREE
-        1
-        2
-        3
-        4       J18
-        5       J19
-        6
-        7       TDO
+	    0       FREE
+	    1
+	    2
+	    3
+	    4       J18
+	    5       J19
+	    6
+	    7       TDO
 
-    */
+	*/
 
 	return 0;
 }
@@ -159,17 +185,15 @@ READ8_MEMBER( prof180x_state::status_r )
 /* Address Maps */
 
 static ADDRESS_MAP_START( prof180x_mem, AS_PROGRAM, 8, prof180x_state )
-	AM_RANGE(0x00000, 0x3ffff) AM_READ_BANK("bank0_r") AM_WRITE_BANK("bank0_w")
-	AM_RANGE(0x40000, 0x7ffff) AM_RAMBANK("bank1")
+	AM_RANGE(0x00000, 0x7ffff) AM_READWRITE(read, write)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( prof180x_io , AS_IO, 8, prof180x_state )
 	AM_RANGE(0x08, 0x08) AM_MIRROR(0xff00) AM_WRITE(flr_w)
 	AM_RANGE(0x09, 0x09) AM_MASK(0xff00) AM_READ(status_r)
-	AM_RANGE(0x0a, 0x0a) AM_MIRROR(0xff00) AM_DEVREADWRITE_LEGACY(FDC9268_TAG, upd765_dack_r, upd765_dack_w)
-	AM_RANGE(0x0b, 0x0b) AM_MIRROR(0xff00) AM_DEVWRITE_LEGACY(CENTRONICS_TAG, centronics_data_w)
-	AM_RANGE(0x0c, 0x0c) AM_MIRROR(0xff00) AM_DEVREAD_LEGACY(FDC9268_TAG, upd765_status_r)
-	AM_RANGE(0x0d, 0x0d) AM_MIRROR(0xff00) AM_DEVREADWRITE_LEGACY(FDC9268_TAG, upd765_data_r, upd765_data_w)
+	AM_RANGE(0x0a, 0x0a) AM_MIRROR(0xff00) AM_DEVREADWRITE(FDC9268_TAG, upd765a_device, mdma_r, mdma_w)
+	AM_RANGE(0x0b, 0x0b) AM_MIRROR(0xff00) AM_DEVWRITE(CENTRONICS_TAG, centronics_device, write)
+	AM_RANGE(0x0c, 0x0d) AM_MIRROR(0xff00) AM_DEVICE(FDC9268_TAG, upd765a_device, map)
 ADDRESS_MAP_END
 
 /* Input ports */
@@ -179,30 +203,12 @@ INPUT_PORTS_END
 
 /* Video */
 
-static const struct upd765_interface fdc_intf =
-{
-	DEVCB_NULL,
-	DEVCB_NULL, // DEVCB_CPU_INPUT_LINE(HD64180_TAG, INPUT_LINE_DREQ1)
-	NULL,
-	UPD765_RDY_PIN_CONNECTED,
-	{ FLOPPY_0, FLOPPY_1, NULL, NULL }
-};
-
-static const floppy_interface prof180x_floppy_interface =
-{
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	FLOPPY_STANDARD_5_25_DSHD,
-	FLOPPY_OPTIONS_NAME(default),
-	NULL,
-	NULL
-};
+static SLOT_INTERFACE_START( prof180x_floppies )
+	SLOT_INTERFACE( "35dd", FLOPPY_35_DD )
+SLOT_INTERFACE_END
 
 /*
-static RTC8583_INTERFCE( rtc_intf )
+static RTC8583_INTERFACE( rtc_intf )
 {
     DEVCB_CPU_INPUT_LINE(HD64180_TAG, INPUT_LINE_INT2)
 };
@@ -211,11 +217,11 @@ static RTC8583_INTERFCE( rtc_intf )
 void prof180x_state::machine_start()
 {
 	// register for state saving
-	state_save_register_global(machine(), m_c0);
-	state_save_register_global(machine(), m_c1);
-	state_save_register_global(machine(), m_c2);
-	state_save_register_global(machine(), m_mm0);
-	state_save_register_global(machine(), m_mm1);
+	save_item(NAME(m_c0));
+	save_item(NAME(m_c1));
+	save_item(NAME(m_c2));
+	save_item(NAME(m_mm0));
+	save_item(NAME(m_mm1));
 }
 
 void prof180x_state::machine_reset()
@@ -227,31 +233,36 @@ void prof180x_state::machine_reset()
 }
 
 static MACHINE_CONFIG_START( prof180x, prof180x_state )
-    /* basic machine hardware */
-    MCFG_CPU_ADD(HD64180_TAG, Z80, XTAL_9_216MHz) // HD64180
-    MCFG_CPU_PROGRAM_MAP(prof180x_mem)
-    MCFG_CPU_IO_MAP(prof180x_io)
+	/* basic machine hardware */
+	MCFG_CPU_ADD(HD64180_TAG, Z80, XTAL_9_216MHz)
+	MCFG_CPU_PROGRAM_MAP(prof180x_mem)
+	MCFG_CPU_IO_MAP(prof180x_io)
 
-    /* video hardware */
-    MCFG_SCREEN_ADD(SCREEN_TAG, RASTER)
-    MCFG_SCREEN_REFRESH_RATE(50)
-    MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-    MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-    MCFG_SCREEN_SIZE(640, 480)
-    MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
-    MCFG_PALETTE_LENGTH(2)
-    MCFG_PALETTE_INIT(black_and_white)
+	/* video hardware */
+	MCFG_SCREEN_ADD(SCREEN_TAG, RASTER)
+	MCFG_SCREEN_UPDATE_DRIVER(prof180x_state, screen_update)
+	MCFG_SCREEN_REFRESH_RATE(50)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
+	MCFG_SCREEN_SIZE(640, 480)
+	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
 
 	/* devices */
-	MCFG_FLOPPY_4_DRIVES_ADD(prof180x_floppy_interface)
-	MCFG_UPD765A_ADD(FDC9268_TAG, fdc_intf)
+	MCFG_UPD765A_ADD(FDC9268_TAG, false, true)
+	MCFG_FLOPPY_DRIVE_ADD(FDC9268_TAG ":0", prof180x_floppies, "35dd", floppy_image_device::default_floppy_formats)
+	MCFG_FLOPPY_DRIVE_ADD(FDC9268_TAG ":1", prof180x_floppies, "35dd", floppy_image_device::default_floppy_formats)
+	MCFG_FLOPPY_DRIVE_ADD(FDC9268_TAG ":2", prof180x_floppies, "35dd", floppy_image_device::default_floppy_formats)
+	MCFG_FLOPPY_DRIVE_ADD(FDC9268_TAG ":3", prof180x_floppies, "35dd", floppy_image_device::default_floppy_formats)
+
 	//MCFG_RTC8583_ADD(MK3835_TAG, rtc_intf)
-	MCFG_CENTRONICS_ADD(CENTRONICS_TAG, standard_centronics)
+	MCFG_CENTRONICS_PRINTER_ADD(CENTRONICS_TAG, standard_centronics)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
 	MCFG_RAM_DEFAULT_SIZE("128K")
 	MCFG_RAM_EXTRA_OPTIONS("256K,512K")
+
+	/* software lists */
+	MCFG_SOFTWARE_LIST_ADD("flop_list", "prof180")
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -312,5 +323,5 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1986, prof180x,  0,       0,	prof180x,	prof180x,	 0,  "Conitec Datensysteme",   "PROF-180X",		GAME_NOT_WORKING | GAME_NO_SOUND )
-COMP( 1992, prof181x,  prof180x,0,	prof180x,	prof180x,	 0,  "Conitec Datensysteme",   "PROF-181X",		GAME_NOT_WORKING | GAME_NO_SOUND )
+COMP( 1986, prof180x,  0,       0,  prof180x,   prof180x, driver_device,     0,  "Conitec Datensysteme",   "PROF-180X",     GAME_NOT_WORKING | GAME_NO_SOUND )
+COMP( 1992, prof181x,  prof180x,0,  prof180x,   prof180x, driver_device,     0,  "Conitec Datensysteme",   "PROF-181X",     GAME_NOT_WORKING | GAME_NO_SOUND )

@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
     Univac Terminals
@@ -12,14 +14,10 @@
     mainframes or applications.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define VIDEO_START_MEMBER(name) void name::video_start()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
 class univac_state : public driver_device
 {
@@ -38,7 +36,7 @@ public:
 	UINT8 m_framecnt;
 	virtual void machine_reset();
 	virtual void video_start();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 };
 
 
@@ -50,13 +48,13 @@ WRITE8_MEMBER( univac_state::uts20_43_w )
 
 READ8_MEMBER( univac_state::uts20_vram_r )
 {
-	UINT8 *RAM = machine().region("maincpu")->base();
+	UINT8 *RAM = memregion("maincpu")->base();
 	return RAM[offset | ((m_screen_num) ? 0xe000 : 0xc000)];
 }
 
 WRITE8_MEMBER( univac_state::uts20_vram_w )
 {
-	UINT8 *RAM = machine().region("maincpu")->base();
+	UINT8 *RAM = memregion("maincpu")->base();
 	RAM[offset | ((m_screen_num) ? 0xe000 : 0xc000)] = data;
 }
 
@@ -80,21 +78,21 @@ static INPUT_PORTS_START( uts20 )
 INPUT_PORTS_END
 
 
-MACHINE_RESET_MEMBER(univac_state)
+void univac_state::machine_reset()
 {
 	m_screen_num = 0;
 }
 
-VIDEO_START_MEMBER(univac_state)
+void univac_state::video_start()
 {
-	m_p_chargen = machine().region("chargen")->base();
+	m_p_chargen = memregion("chargen")->base();
 }
 
-SCREEN_UPDATE_MEMBER(univac_state)
+UINT32 univac_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	UINT8 y,ra,chr,gfx;
 	UINT16 sy=0,ma=0,x;
-	UINT8 *videoram = machine().region("maincpu")->base()+((m_screen_num) ? 0xe000 : 0xc000);
+	UINT8 *videoram = memregion("maincpu")->base()+((m_screen_num) ? 0xe000 : 0xc000);
 
 	m_framecnt++;
 
@@ -102,7 +100,7 @@ SCREEN_UPDATE_MEMBER(univac_state)
 	{
 		for (ra = 0; ra < 10; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(&bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma + 80; x++)
 			{
@@ -147,11 +145,11 @@ static MACHINE_CONFIG_START( uts20, univac_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(univac_state, screen_update)
 	MCFG_SCREEN_SIZE(640, 250)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 249)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 MACHINE_CONFIG_END
 
 
@@ -172,4 +170,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT     COMPANY   FULLNAME       FLAGS */
-COMP( 198?, uts20,  0,       0, 	uts20,	uts20,	 0,		 "Sperry Univac",   "UTS-20", GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 198?, uts20,  0,       0,     uts20,  uts20, driver_device,    0,      "Sperry Univac",   "UTS-20", GAME_NOT_WORKING | GAME_NO_SOUND)

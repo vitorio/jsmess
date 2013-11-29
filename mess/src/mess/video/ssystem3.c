@@ -5,25 +5,23 @@
 #include "emu.h"
 #include "includes/ssystem3.h"
 
-void ssystem3_lcd_reset(running_machine &machine)
+void ssystem3_state::ssystem3_lcd_reset()
 {
-	ssystem3_state *state = machine.driver_data<ssystem3_state>();
-	state->m_lcd.count=0; state->m_lcd.clock=1;
+	m_lcd.count=0; m_lcd.clock=1;
 }
 
-void ssystem3_lcd_write(running_machine &machine, int clock, int data)
+void ssystem3_state::ssystem3_lcd_write(int clock, int data)
 {
-	ssystem3_state *state = machine.driver_data<ssystem3_state>();
-	if (clock&&!state->m_lcd.clock) {
-		state->m_lcd.data[state->m_lcd.count/8]&=~(1<<(state->m_lcd.count&7));
-		if (data) state->m_lcd.data[state->m_lcd.count/8]|=1<<(state->m_lcd.count&7);
-		if (state->m_lcd.count+1==40) {
-			logerror("%.4x lcd %02x%02x%02x%02x%02x\n",(int)cpu_get_pc(machine.device("maincpu")),
-				state->m_lcd.data[0], state->m_lcd.data[1], state->m_lcd.data[2], state->m_lcd.data[3], state->m_lcd.data[4]);
+	if (clock&&!m_lcd.clock) {
+		m_lcd.data[m_lcd.count/8]&=~(1<<(m_lcd.count&7));
+		if (data) m_lcd.data[m_lcd.count/8]|=1<<(m_lcd.count&7);
+		if (m_lcd.count+1==40) {
+			logerror("%.4x lcd %02x%02x%02x%02x%02x\n",(int)machine().device("maincpu")->safe_pc(),
+				m_lcd.data[0], m_lcd.data[1], m_lcd.data[2], m_lcd.data[3], m_lcd.data[4]);
 		}
-		state->m_lcd.count=(state->m_lcd.count+1)%40;
+		m_lcd.count=(m_lcd.count+1)%40;
 	}
-	state->m_lcd.clock=clock;
+	m_lcd.clock=clock;
 }
 
 
@@ -36,21 +34,20 @@ static const unsigned char ssystem3_palette[] =
 };
 
 
-PALETTE_INIT( ssystem3 )
+void ssystem3_state::palette_init()
 {
 	int i;
 
 	for ( i = 0; i < sizeof(ssystem3_palette) / 3; i++ ) {
-		palette_set_color_rgb(machine, i, ssystem3_palette[i*3], ssystem3_palette[i*3+1], ssystem3_palette[i*3+2]);
+		palette_set_color_rgb(machine(), i, ssystem3_palette[i*3], ssystem3_palette[i*3+1], ssystem3_palette[i*3+2]);
 	}
 }
 
 
-VIDEO_START( ssystem3 )
+void ssystem3_state::video_start()
 {
-	ssystem3_state *state = machine.driver_data<ssystem3_state>();
 	// artwork seams to need this
-	state->m_videoram = auto_alloc_array(machine, UINT8, 6 * 2 + 24);
+	m_videoram = auto_alloc_array(machine(), UINT8, 6 * 2 + 24);
 }
 
 
@@ -66,8 +63,8 @@ static const char led[]={
 	" ffff        bbbb\r"
 	" ffff        bbbb\r"
 	" fff          bbb\r"
-        " f   gggggggg   b\r"
-        "   gggggggggggg\r"
+		" f   gggggggg   b\r"
+		"   gggggggggggg\r"
 	"   gggggggggggg\r"
 	" e   gggggggg   c\r"
 	" eee          ccc\r"
@@ -79,11 +76,11 @@ static const char led[]={
 	"eeee        cccc\r"
 	"eee  dddddd  ccc\r"
 	"ee  dddddddd  cc\r"
-        "e  dddddddddd  c\r"
-        "  dddddddddddd"
+		"e  dddddddddd  c\r"
+		"  dddddddddddd"
 };
 
-static void ssystem3_draw_7segment(bitmap_t *bitmap,int value, int x, int y)
+void ssystem3_state::ssystem3_draw_7segment(bitmap_ind16 &bitmap,int value, int x, int y)
 {
 	int i, xi, yi, mask, color;
 
@@ -105,7 +102,7 @@ static void ssystem3_draw_7segment(bitmap_t *bitmap,int value, int x, int y)
 
 		if (mask!=0) {
 			color=(value&mask)?1:0;
-			*BITMAP_ADDR16(bitmap, y+yi, x+xi) = color;
+			bitmap.pix16(y+yi, x+xi) = color;
 		}
 		if (led[i]!='\r') xi++;
 		else { yi++, xi=0; }
@@ -162,14 +159,14 @@ static const char single_led[]=
 " 55555555   55555555          000000   000000   00   00   00  00         000000      00     00  00    00   0000000"
 ;
 
-static void ssystem3_draw_led(bitmap_t *bitmap,INT16 color, int x, int y, int ch)
+void ssystem3_state::ssystem3_draw_led(bitmap_ind16 &bitmap,INT16 color, int x, int y, int ch)
 {
 	int j, xi=0;
 	for (j=0; single_led[j]; j++) {
 		switch (single_led[j]) {
 		default:
 			if (ch==single_led[j]) {
-				*BITMAP_ADDR16(bitmap, y, x+xi) = color;
+				bitmap.pix16(y, x+xi) = color;
 			}
 			xi++;
 			break;
@@ -184,29 +181,28 @@ static void ssystem3_draw_led(bitmap_t *bitmap,INT16 color, int x, int y, int ch
 	}
 }
 
-SCREEN_UPDATE( ssystem3 )
+UINT32 ssystem3_state::screen_update_ssystem3(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	ssystem3_state *state = screen->machine().driver_data<ssystem3_state>();
 	int i;
 
 	for (i=0; i<4; i++) {
-		ssystem3_draw_7segment(bitmap, state->m_lcd.data[1+i], ssystem3_led_pos[i].x, ssystem3_led_pos[i].y);
+		ssystem3_draw_7segment(bitmap, m_lcd.data[1+i], ssystem3_led_pos[i].x, ssystem3_led_pos[i].y);
 	}
 
-	ssystem3_draw_led(bitmap, state->m_lcd.data[0]&1?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '0'); //?
-	ssystem3_draw_led(bitmap, state->m_lcd.data[0]&2?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '5');
-	ssystem3_draw_led(bitmap, state->m_lcd.data[0]&4?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '7');
-	ssystem3_draw_led(bitmap, state->m_lcd.data[0]&8?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, 'b');
-	ssystem3_draw_led(bitmap, state->m_lcd.data[0]&0x10?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '9');
-	ssystem3_draw_led(bitmap, state->m_lcd.data[0]&0x20?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '8');
-	ssystem3_draw_led(bitmap, state->m_lcd.data[0]&0x40?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, 'c');
-	ssystem3_draw_led(bitmap, state->m_lcd.data[0]&0x80?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '6');
-	ssystem3_draw_led(bitmap, state->m_lcd.data[1]&1?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '2');
-	ssystem3_draw_led(bitmap, state->m_lcd.data[2]&1?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '1'); //?
-	ssystem3_draw_led(bitmap, state->m_lcd.data[3]&1?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '3');
-	ssystem3_draw_led(bitmap, state->m_lcd.data[4]&1?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '4');
+	ssystem3_draw_led(bitmap, m_lcd.data[0]&1?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '0'); //?
+	ssystem3_draw_led(bitmap, m_lcd.data[0]&2?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '5');
+	ssystem3_draw_led(bitmap, m_lcd.data[0]&4?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '7');
+	ssystem3_draw_led(bitmap, m_lcd.data[0]&8?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, 'b');
+	ssystem3_draw_led(bitmap, m_lcd.data[0]&0x10?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '9');
+	ssystem3_draw_led(bitmap, m_lcd.data[0]&0x20?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '8');
+	ssystem3_draw_led(bitmap, m_lcd.data[0]&0x40?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, 'c');
+	ssystem3_draw_led(bitmap, m_lcd.data[0]&0x80?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '6');
+	ssystem3_draw_led(bitmap, m_lcd.data[1]&1?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '2');
+	ssystem3_draw_led(bitmap, m_lcd.data[2]&1?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '1'); //?
+	ssystem3_draw_led(bitmap, m_lcd.data[3]&1?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '3');
+	ssystem3_draw_led(bitmap, m_lcd.data[4]&1?1:0, ssystem3_led_pos[4].x, ssystem3_led_pos[4].y, '4');
 
-	if (input_port_read(screen->machine(), "Configuration")&1) { // playfield(optional device)
+	if (ioport("Configuration")->read()&1) { // playfield(optional device)
 		static const int lcd_signs_on[]={
 			0, // empty
 			1, // bauer
@@ -223,7 +219,7 @@ SCREEN_UPDATE( ssystem3 )
 				int figure, black;
 				int xp=263+x*22;
 				int yp=55+(y^7)*28;
-				ssystem3_playfield_getfigure(screen->machine(), x, y, &figure, &black);
+				ssystem3_playfield_getfigure(x, y, &figure, &black);
 				ssystem3_draw_led(bitmap, lcd_signs_on[figure]&1?1:0, xp, yp, '6');
 				ssystem3_draw_led(bitmap, lcd_signs_on[figure]&2?1:0, xp, yp, '8');
 				ssystem3_draw_led(bitmap, lcd_signs_on[figure]&4?1:0, xp, yp, '9');

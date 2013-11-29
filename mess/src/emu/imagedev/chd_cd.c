@@ -11,42 +11,8 @@
 #include "chd_cd.h"
 
 
-static const char *const error_strings[] =
-{
-	"no error",
-	"no drive interface",
-	"out of memory",
-	"invalid file",
-	"invalid parameter",
-	"invalid data",
-	"file not found",
-	"requires parent",
-	"file not writeable",
-	"read error",
-	"write error",
-	"codec error",
-	"invalid parent",
-	"hunk out of range",
-	"decompression error",
-	"compression error",
-	"can't create file",
-	"can't verify file"
-	"operation not supported",
-	"can't find metadata",
-	"invalid metadata size",
-	"unsupported CHD version"
-};
-
-static const char *chd_get_error_string(int chderr)
-{
-	if ((chderr < 0 ) || (chderr >= ARRAY_LENGTH(error_strings)))
-		return NULL;
-	return error_strings[chderr];
-}
-
-
 static OPTION_GUIDE_START(cd_option_guide)
-	OPTION_INT('K', "hunksize",			"Hunk Bytes")
+	OPTION_INT('K', "hunksize",         "Hunk Bytes")
 OPTION_GUIDE_END
 
 static const char cd_option_spec[] = "K512/1024/2048/[4096]";
@@ -59,12 +25,16 @@ const device_type CDROM = &device_creator<cdrom_image_device>;
 //-------------------------------------------------
 
 cdrom_image_device::cdrom_image_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, CDROM, "Cdrom", tag, owner, clock),
-	  device_image_interface(mconfig, *this)
+	: device_t(mconfig, CDROM, "Cdrom", tag, owner, clock, "cdrom_image", __FILE__),
+		device_image_interface(mconfig, *this)
 {
-
 }
 
+cdrom_image_device::cdrom_image_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source)
+	: device_t(mconfig, type, name,  tag, owner, clock, shortname, source),
+		device_image_interface(mconfig, *this)
+{
+}
 //-------------------------------------------------
 //  cdrom_image_device - destructor
 //-------------------------------------------------
@@ -89,17 +59,19 @@ void cdrom_image_device::device_config_complete()
 	// or initialize to defaults if none provided
 	else
 	{
-    	memset(&m_interface, 0, sizeof(m_interface));
+		memset(&m_interface, 0, sizeof(m_interface));
 		memset(&m_device_displayinfo, 0, sizeof(m_device_displayinfo));
 	}
 
+	m_extension_list = "chd,cue,toc,nrg,gdi,iso,cdr";
+
 	image_device_format *format = global_alloc_clear(image_device_format);;
-	format->m_index 	  = 0;
+	format->m_index       = 0;
 	format->m_name        = "chdcd";
-	format->m_description = "CHD CD-ROM drive";
-	format->m_extensions  = "chd";
+	format->m_description = "CD-ROM drive";
+	format->m_extensions  = m_extension_list;
 	format->m_optspec     = cd_option_spec;
-	format->m_next		  = NULL;
+	format->m_next        = NULL;
 
 	m_formatlist = format;
 
@@ -118,36 +90,63 @@ const option_guide *cdrom_image_device::create_option_guide() const
 
 void cdrom_image_device::device_start()
 {
-	m_cdrom_handle = NULL;
+	// try to locate the CHD from a DISK_REGION
+	chd_file *chd = get_disk_handle( machine(), owner()->tag() );
+	if( chd != NULL )
+	{
+		m_cdrom_handle = cdrom_open( chd );
+	}
+	else
+	{
+		m_cdrom_handle = NULL;
+	}
+}
+
+void cdrom_image_device::device_stop()
+{
+	if (m_cdrom_handle)
+		cdrom_close(m_cdrom_handle);
+	if( m_self_chd.opened() )
+		m_self_chd.close();
 }
 
 bool cdrom_image_device::call_load()
 {
-	chd_error	err = (chd_error)0;
-	chd_file	*chd = NULL;
+	chd_error   err = (chd_error)0;
+	chd_file    *chd = NULL;
 	astring tempstring;
+
+	if (m_cdrom_handle)
+		cdrom_close(m_cdrom_handle);
 
 	if (software_entry() == NULL)
 	{
-		err = chd_open_file( image_core_file(), CHD_OPEN_READ, NULL, &chd );	/* CDs are never writeable */
-		if ( err )
-			goto error;
+		if (strstr(m_image_name,".chd") && is_loaded()) {
+			err = m_self_chd.open( *image_core_file() );    /* CDs are never writeable */
+			if ( err )
+				goto error;
+			chd = &m_self_chd;
+		}
 	} else {
 		chd  = get_disk_handle(device().machine(), device().subtag(tempstring,"cdrom"));
 	}
 
 	/* open the CHD file */
-	m_cdrom_handle = cdrom_open( chd );
+	if (chd) {
+		m_cdrom_handle = cdrom_open( chd );
+	} else {
+		m_cdrom_handle = cdrom_open( m_image_name );
+	}
 	if ( ! m_cdrom_handle )
 		goto error;
 
 	return IMAGE_INIT_PASS;
 
 error:
-	if ( chd )
-		chd_close( chd );
+	if ( chd && chd == &m_self_chd )
+		m_self_chd.close( );
 	if ( err )
-		seterror( IMAGE_ERROR_UNSPECIFIED, chd_get_error_string( err ) );
+		seterror( IMAGE_ERROR_UNSPECIFIED, chd_file::error_string( err ) );
 	return IMAGE_INIT_FAIL;
 }
 
@@ -156,4 +155,6 @@ void cdrom_image_device::call_unload()
 	assert(m_cdrom_handle);
 	cdrom_close(m_cdrom_handle);
 	m_cdrom_handle = NULL;
+	if( m_self_chd.opened() )
+		m_self_chd.close();
 }

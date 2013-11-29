@@ -2,6 +2,9 @@
 
 <!-- 2007-10-21: Initial version.  [Dirk Best] -->
 
+<!-- license: MAME, GPL-2.0+ -->
+<!-- copyright-holders: Dirk Best -->
+
 <mamelayout version="2">
 
 	<element name="digit" defstate="0">
@@ -17,7 +20,7 @@
 		</rect>
 	</element>
 
-	<view name="LEDs only">
+	<view name="Default Layout">
 
 		<!-- Background -->
 		<backdrop element="background">
@@ -25,7 +28,7 @@
 		</backdrop>
 
 		<!-- LEDs -->
-		<bezel name="digit1" element="digit">
+		<bezel name="digit256" element="digit">
 			<bounds left="10" top="10" right="44" bottom="59" />
 		</bezel>
 		<bezel name="digit2" element="digit">
@@ -49,7 +52,7 @@
 		<bezel name="digit128" element="digit">
 			<bounds left="318" top="10" right="352" bottom="59" />
 		</bezel>
-		<bezel name="digit256" element="digit">
+		<bezel name="digit1" element="digit">
 			<bounds left="362" top="10" right="396" bottom="59" />
 		</bezel>
 

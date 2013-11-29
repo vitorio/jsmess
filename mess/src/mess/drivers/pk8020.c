@@ -1,6 +1,7 @@
 /***************************************************************************
 
         PK-8020 driver by Miodrag Milanovic
+            based on work of Sergey Erokhin from pk8020.narod.ru
 
         18/07/2008 Preliminary driver.
 
@@ -17,10 +18,10 @@
 #include "machine/ram.h"
 
 /* Address maps */
-static ADDRESS_MAP_START(pk8020_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(pk8020_mem, AS_PROGRAM, 8, pk8020_state )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pk8020_io , AS_IO, 8)
+static ADDRESS_MAP_START( pk8020_io , AS_IO, 8, pk8020_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	ADDRESS_MAP_UNMAP_HIGH
 ADDRESS_MAP_END
@@ -149,14 +150,14 @@ static const cassette_interface pk8020_cassette_interface =
 	NULL
 };
 
-static FLOPPY_OPTIONS_START(pk8020)
-	FLOPPY_OPTION(pk8020, "kdi", "PK8020 disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
+static LEGACY_FLOPPY_OPTIONS_START(pk8020)
+	LEGACY_FLOPPY_OPTION(pk8020, "kdi", "PK8020 disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
 		HEADS([2])
 		TRACKS([80])
 		SECTORS([5])
 		SECTOR_LENGTH([1024])
 		FIRST_SECTOR_ID([1]))
-FLOPPY_OPTIONS_END
+LEGACY_FLOPPY_OPTIONS_END
 
 static const floppy_interface pk8020_floppy_interface =
 {
@@ -166,8 +167,8 @@ static const floppy_interface pk8020_floppy_interface =
 	DEVCB_NULL,
 	DEVCB_NULL,
 	FLOPPY_STANDARD_5_25_DSHD,
-	FLOPPY_OPTIONS_NAME(pk8020),
-	NULL,
+	LEGACY_FLOPPY_OPTIONS_NAME(pk8020),
+	"floppy_5_25",
 	NULL
 };
 
@@ -182,15 +183,15 @@ static const wd17xx_interface pk8020_wd17xx_interface =
 /* F4 Character Displayer */
 static const gfx_layout pk8020_charlayout =
 {
-	8, 16,					/* 8 x 16 characters */
-	512,					/* 512 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 16,                  /* 8 x 16 characters */
+	512,                    /* 512 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8, 8*8, 9*8, 10*8, 11*8, 12*8, 13*8, 14*8, 15*8 },
-	8*16					/* every char takes 16 bytes */
+	8*16                    /* every char takes 16 bytes */
 };
 
 static GFXDECODE_START( pk8020 )
@@ -204,49 +205,46 @@ static MACHINE_CONFIG_START( pk8020, pk8020_state )
 	MCFG_CPU_ADD("maincpu", I8080, XTAL_20MHz / 8)
 	MCFG_CPU_PROGRAM_MAP(pk8020_mem)
 	MCFG_CPU_IO_MAP(pk8020_io)
-	MCFG_CPU_VBLANK_INT("screen", pk8020_interrupt)
+	MCFG_CPU_VBLANK_INT_DRIVER("screen", pk8020_state,  pk8020_interrupt)
 
-	MCFG_MACHINE_RESET( pk8020 )
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(512, 256)
 	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
-	MCFG_SCREEN_UPDATE(pk8020)
+	MCFG_SCREEN_UPDATE_DRIVER(pk8020_state, screen_update_pk8020)
 
 	MCFG_GFXDECODE(pk8020)
 	MCFG_PALETTE_LENGTH(16)
-	MCFG_PALETTE_INIT(pk8020)
 
-	MCFG_VIDEO_START(pk8020)
 
 	MCFG_I8255_ADD( "ppi8255_1", pk8020_ppi8255_interface_1 )
 	MCFG_I8255_ADD( "ppi8255_2", pk8020_ppi8255_interface_2 )
 	MCFG_I8255_ADD( "ppi8255_3", pk8020_ppi8255_interface_3 )
 	MCFG_PIT8253_ADD( "pit8253", pk8020_pit8253_intf )
-	MCFG_PIC8259_ADD( "pic8259", pk8020_pic8259_config )
-	MCFG_MSM8251_ADD( "rs232", default_msm8251_interface)
-	MCFG_MSM8251_ADD( "lan", default_msm8251_interface)
+	MCFG_PIC8259_ADD( "pic8259", WRITELINE(pk8020_state,pk8020_pic_set_int_line), VCC, NULL )
+	MCFG_I8251_ADD( "rs232", default_i8251_interface)
+	MCFG_I8251_ADD( "lan", default_i8251_interface)
 
 	MCFG_FD1793_ADD( "wd1793", pk8020_wd17xx_interface )
 
 	/* audio hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD(SPEAKER_TAG, SPEAKER_SOUND, 0)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-	MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, pk8020_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", pk8020_cassette_interface )
 
-	MCFG_FLOPPY_4_DRIVES_ADD(pk8020_floppy_interface)
+	MCFG_LEGACY_FLOPPY_4_DRIVES_ADD(pk8020_floppy_interface)
+	MCFG_SOFTWARE_LIST_ADD("flop_list","korvet_flop")
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
-	MCFG_RAM_DEFAULT_SIZE("258K")	//64 + 4*48 + 2
+	MCFG_RAM_DEFAULT_SIZE("258K")   //64 + 4*48 + 2
 	MCFG_RAM_DEFAULT_VALUE(0x00)
 MACHINE_CONFIG_END
 
@@ -284,10 +282,19 @@ ROM_START( kontur )
 	ROM_LOAD( "kontur.fnt", 0x0000, 0x2000, CRC(14d33790) SHA1(6d5fcb214805c5fc44ef98a97219158ff7826ac0))
 ROM_END
 
+ROM_START( bk8t )
+	ROM_REGION( 0x16000, "maincpu", ROMREGION_ERASEFF )
+	ROM_LOAD( "kor1.bin", 0x10000, 0x2000, CRC(f1e16ddc) SHA1(e3a10c9ce3f333928eb0d5f9b84e159e41fae6ca))
+	ROM_LOAD( "kor2.bin", 0x12000, 0x2000, CRC(d4431d97) SHA1(08f79785846369d410a4183f0d60b856d6d70199))
+	ROM_LOAD( "kor3.bin", 0x14000, 0x2000, CRC(74781903) SHA1(caaa638afe80eb83fc30b07dd6d1e40b66ddc6d1))
+	ROM_REGION( 0x2000, "gfx1", 0 )
+	ROM_LOAD( "kor4.bin", 0x0000,  0x2000, CRC(d164bada) SHA1(c334e50fd31b1f42c7668b89772487971a6875cb))
+ROM_END
 
 /* Driver */
 
-/*    YEAR  NAME    PARENT  COMPAT  MACHINE     INPUT       INIT     COMPANY                  FULLNAME   FLAGS */
-COMP( 1987, korvet,  0, 	 0,	pk8020, 	pk8020, 	0,       "<unknown>", "PK8020 Korvet",	 0)
-COMP( 1987, neiva,   korvet,	 0,	pk8020, 	pk8020, 	0,       "<unknown>", "PK8020 Neiva",	 0)
-COMP( 1987, kontur,  korvet,	 0,	pk8020, 	pk8020, 	0,       "<unknown>", "PK8020 Kontur",	 0)
+/*    YEAR  NAME     PARENT  COMPAT  MACHINE     INPUT                  INIT    COMPANY      FULLNAME   FLAGS */
+COMP( 1987, korvet,  0,      0,      pk8020,     pk8020, driver_device, 0,      "<unknown>", "PK8020 Korvet",    0)
+COMP( 1987, neiva,   korvet, 0,      pk8020,     pk8020, driver_device, 0,      "<unknown>", "PK8020 Neiva",     0)
+COMP( 1987, kontur,  korvet, 0,      pk8020,     pk8020, driver_device, 0,      "<unknown>", "PK8020 Kontur",    0)
+COMP( 1987, bk8t,    korvet, 0,      pk8020,     pk8020, driver_device, 0,      "<unknown>", "BK-8T",    0)

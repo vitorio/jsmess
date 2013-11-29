@@ -5,21 +5,7 @@
 *************************************************************************/
 
 #include "emu.h"
-#include "machine/74148.h"
-#include "machine/pit8253.h"
-#include "audio/exidy440.h"
 #include "includes/vertigo.h"
-
-
-/*************************************
- *
- *  Prototypes
- *
- *************************************/
-
-static WRITE_LINE_DEVICE_HANDLER( v_irq4_w );
-static WRITE_LINE_DEVICE_HANDLER( v_irq3_w );
-
 
 
 /*************************************
@@ -37,17 +23,17 @@ static WRITE_LINE_DEVICE_HANDLER( v_irq3_w );
 /* Result of the last ADC channel sampled */
 
 /* 8254 timer config */
-const struct pit8253_config vertigo_pit8254_config =
+const struct pit8253_interface vertigo_pit8254_config =
 {
 	{
 		{
 			240000,
 			DEVCB_NULL,
-			DEVCB_LINE(v_irq4_w)
+			DEVCB_DRIVER_LINE_MEMBER(vertigo_state,v_irq4_w)
 		}, {
 			240000,
 			DEVCB_NULL,
-			DEVCB_LINE(v_irq3_w)
+			DEVCB_DRIVER_LINE_MEMBER(vertigo_state,v_irq3_w)
 		}, {
 			240000,
 			DEVCB_NULL,
@@ -70,38 +56,36 @@ void vertigo_update_irq(device_t *device)
 {
 	vertigo_state *state = device->machine().driver_data<vertigo_state>();
 	if (state->m_irq_state < 7)
-		cputag_set_input_line(device->machine(), "maincpu", state->m_irq_state ^ 7, CLEAR_LINE);
+		state->m_maincpu->set_input_line(state->m_irq_state ^ 7, CLEAR_LINE);
 
-	state->m_irq_state = ttl74148_output_r(device);
+	state->m_irq_state = state->m_ttl74148->output_r();
 
 	if (state->m_irq_state < 7)
-		cputag_set_input_line(device->machine(), "maincpu", state->m_irq_state ^ 7, ASSERT_LINE);
+		state->m_maincpu->set_input_line(state->m_irq_state ^ 7, ASSERT_LINE);
 }
 
 
-static void update_irq_encoder(running_machine &machine, int line, int state)
+void vertigo_state::update_irq_encoder(int line, int state)
 {
-	vertigo_state *drvstate = machine.driver_data<vertigo_state>();
-	ttl74148_input_line_w(drvstate->m_ttl74148, line, !state);
-	ttl74148_update(drvstate->m_ttl74148);
+	m_ttl74148->input_line_w(line, !state);
+	m_ttl74148->update();
 }
 
 
-static WRITE_LINE_DEVICE_HANDLER( v_irq4_w )
+WRITE_LINE_MEMBER(vertigo_state::v_irq4_w)
 {
-	vertigo_state *drvstate = device->machine().driver_data<vertigo_state>();
-	update_irq_encoder(device->machine(), INPUT_LINE_IRQ4, state);
-	vertigo_vproc(device->machine(), device->machine().device<cpu_device>("maincpu")->attotime_to_cycles(device->machine().time() - drvstate->m_irq4_time), state);
-	drvstate->m_irq4_time = device->machine().time();
+	update_irq_encoder(INPUT_LINE_IRQ4, state);
+	vertigo_vproc(m_maincpu->attotime_to_cycles(machine().time() - m_irq4_time), state);
+	m_irq4_time = machine().time();
 }
 
 
-static WRITE_LINE_DEVICE_HANDLER( v_irq3_w )
+WRITE_LINE_MEMBER(vertigo_state::v_irq3_w)
 {
 	if (state)
-		cputag_set_input_line(device->machine(), "audiocpu", INPUT_LINE_IRQ0, ASSERT_LINE);
+		m_audiocpu->set_input_line(INPUT_LINE_IRQ0, ASSERT_LINE);
 
-	update_irq_encoder(device->machine(), INPUT_LINE_IRQ3, state);
+	update_irq_encoder(INPUT_LINE_IRQ3, state);
 }
 
 
@@ -112,41 +96,39 @@ static WRITE_LINE_DEVICE_HANDLER( v_irq3_w )
  *
  *************************************/
 
-READ16_HANDLER( vertigo_io_convert )
+READ16_MEMBER(vertigo_state::vertigo_io_convert)
 {
-	vertigo_state *state = space->machine().driver_data<vertigo_state>();
 	static const char *const adcnames[] = { "P1X", "P1Y", "PADDLE" };
 
 	if (offset > 2)
-		state->m_adc_result = 0;
+		m_adc_result = 0;
 	else
-		state->m_adc_result = input_port_read(space->machine(), adcnames[offset]);
+		m_adc_result = ioport(adcnames[offset])->read();
 
-	update_irq_encoder(space->machine(), INPUT_LINE_IRQ2, ASSERT_LINE);
+	update_irq_encoder(INPUT_LINE_IRQ2, ASSERT_LINE);
 	return 0;
 }
 
 
-READ16_HANDLER( vertigo_io_adc )
+READ16_MEMBER(vertigo_state::vertigo_io_adc)
 {
-	vertigo_state *state = space->machine().driver_data<vertigo_state>();
-	update_irq_encoder(space->machine(), INPUT_LINE_IRQ2, CLEAR_LINE);
-	return state->m_adc_result;
+	update_irq_encoder(INPUT_LINE_IRQ2, CLEAR_LINE);
+	return m_adc_result;
 }
 
 
-READ16_HANDLER( vertigo_coin_r )
+READ16_MEMBER(vertigo_state::vertigo_coin_r)
 {
-	update_irq_encoder(space->machine(), INPUT_LINE_IRQ6, CLEAR_LINE);
-	return (input_port_read(space->machine(), "COIN"));
+	update_irq_encoder(INPUT_LINE_IRQ6, CLEAR_LINE);
+	return (ioport("COIN")->read());
 }
 
 
-INTERRUPT_GEN( vertigo_interrupt )
+INTERRUPT_GEN_MEMBER(vertigo_state::vertigo_interrupt)
 {
 	/* Coin inputs cause IRQ6 */
-	if ((input_port_read(device->machine(), "COIN") & 0x7) < 0x7)
-		update_irq_encoder(device->machine(), INPUT_LINE_IRQ6, ASSERT_LINE);
+	if ((ioport("COIN")->read() & 0x7) < 0x7)
+		update_irq_encoder(INPUT_LINE_IRQ6, ASSERT_LINE);
 }
 
 
@@ -157,40 +139,38 @@ INTERRUPT_GEN( vertigo_interrupt )
  *
  *************************************/
 
-WRITE16_HANDLER( vertigo_wsot_w )
+WRITE16_MEMBER(vertigo_state::vertigo_wsot_w)
 {
 	/* Reset sound cpu */
 	if ((data & 2) == 0)
-		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
+		m_audiocpu->set_input_line(INPUT_LINE_RESET, ASSERT_LINE);
 	else
-		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, CLEAR_LINE);
+		m_audiocpu->set_input_line(INPUT_LINE_RESET, CLEAR_LINE);
 }
 
 
-static TIMER_CALLBACK( sound_command_w )
+TIMER_CALLBACK_MEMBER(vertigo_state::sound_command_w)
 {
-	vertigo_state *state = machine.driver_data<vertigo_state>();
-	exidy440_sound_command(state->m_custom, param);
+	m_custom->exidy440_sound_command(param);
 
 	/* It is important that the sound cpu ACKs the sound command
-       quickly. Otherwise the main CPU gives up with sound. Boosting
-       the interleave for a while helps. */
+	   quickly. Otherwise the main CPU gives up with sound. Boosting
+	   the interleave for a while helps. */
 
-	machine.scheduler().boost_interleave(attotime::zero, attotime::from_usec(100));
+	machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(100));
 }
 
 
-WRITE16_HANDLER( vertigo_audio_w )
+WRITE16_MEMBER(vertigo_state::vertigo_audio_w)
 {
 	if (ACCESSING_BITS_0_7)
-		space->machine().scheduler().synchronize(FUNC(sound_command_w), data & 0xff);
+		machine().scheduler().synchronize(timer_expired_delegate(FUNC(vertigo_state::sound_command_w),this), data & 0xff);
 }
 
 
-READ16_HANDLER( vertigo_sio_r )
+READ16_MEMBER(vertigo_state::vertigo_sio_r)
 {
-	vertigo_state *state = space->machine().driver_data<vertigo_state>();
-	return exidy440_sound_command_ack(state->m_custom) ? 0xfc : 0xfd;
+	return m_custom->exidy440_sound_command_ack() ? 0xfc : 0xfd;
 }
 
 
@@ -201,35 +181,29 @@ READ16_HANDLER( vertigo_sio_r )
  *
  *************************************/
 
-MACHINE_START( vertigo )
+void vertigo_state::machine_start()
 {
-	vertigo_state *state = machine.driver_data<vertigo_state>();
+	save_item(NAME(m_irq_state));
+	save_item(NAME(m_adc_result));
+	save_item(NAME(m_irq4_time));
 
-	state->m_custom = machine.device("custom");
-	state->m_ttl74148 = machine.device("74148");
-
-	state_save_register_global(machine, state->m_irq_state);
-	state_save_register_global(machine, state->m_adc_result);
-	state_save_register_global(machine, state->m_irq4_time);
-
-	vertigo_vproc_init(machine);
+	vertigo_vproc_init();
 }
 
-MACHINE_RESET( vertigo )
+void vertigo_state::machine_reset()
 {
-	vertigo_state *state = machine.driver_data<vertigo_state>();
 	int i;
 
-	ttl74148_enable_input_w(state->m_ttl74148, 0);
+	m_ttl74148->enable_input_w(0);
 
 	for (i = 0; i < 8; i++)
-		ttl74148_input_line_w(state->m_ttl74148, i, 1);
+		m_ttl74148->input_line_w(i, 1);
 
-	ttl74148_update(state->m_ttl74148);
-	vertigo_vproc_reset(machine);
+	m_ttl74148->update();
+	vertigo_vproc_reset();
 
-	state->m_irq4_time = machine.time();
-	state->m_irq_state = 7;
+	m_irq4_time = machine().time();
+	m_irq_state = 7;
 }
 
 
@@ -240,7 +214,7 @@ MACHINE_RESET( vertigo )
  *
  *************************************/
 
-WRITE16_HANDLER( vertigo_motor_w )
+WRITE16_MEMBER(vertigo_state::vertigo_motor_w)
 {
 	/* Motor controller interface. Not emulated. */
 }

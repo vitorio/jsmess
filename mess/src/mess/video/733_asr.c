@@ -22,6 +22,7 @@
 
 #include "emu.h"
 #include "733_asr.h"
+#include "devlegcy.h"
 
 enum
 {
@@ -34,15 +35,7 @@ enum
 	asr_scroll_step = 8
 };
 
-static const rectangle asr_scroll_clear_window =
-{
-	asr_window_offset_x,									/* min_x */
-	asr_window_offset_x+asr_window_width-1,					/* max_x */
-	asr_window_offset_y+asr_window_height-asr_scroll_step,	/* min_y */
-	asr_window_offset_y+asr_window_height-1					/* max_y */
-};
-
-typedef struct
+struct asr_t
 {
 #if 0
 	UINT8 OutQueue[ASROutQueueSize];
@@ -65,8 +58,8 @@ typedef struct
 
 	void (*int_callback)(running_machine &, int state);
 
-	bitmap_t *bitmap;
-} asr_t;
+	bitmap_ind16 *bitmap;
+};
 
 enum
 {
@@ -88,8 +81,8 @@ enum
 static const gfx_layout fontlayout =
 {
 	6, 8,           /* 6*8 characters */
-	/*96*/128,				/* 96 characters */
-	1,				/* 1 bit per pixel */
+	/*96*/128,              /* 96 characters */
+	1,              /* 1 bit per pixel */
 	{ 0 },
 	{ 0, 1, 2, 3, 4, 5, 6, 7 }, /* straightforward layout */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
@@ -100,10 +93,10 @@ GFXDECODE_START( asr733 )
 	GFXDECODE_ENTRY( asr733_chr_region, 0, fontlayout, 0, 1 )
 GFXDECODE_END
 
-PALETTE_INIT( asr733 )
+PALETTE_INIT_MEMBER(asr733_device, asr733)
 {
-	palette_set_color(machine,0,RGB_WHITE); /* white */
-	palette_set_color(machine,1,RGB_BLACK); /* black */
+	palette_set_color(machine(),0,RGB_WHITE); /* white */
+	palette_set_color(machine(),1,RGB_BLACK); /* black */
 }
 
 /*
@@ -114,7 +107,7 @@ void asr733_init(running_machine &machine)
 	UINT8 *dst;
 
 	static const unsigned char fontdata6x8[asrfontdata_size] =
-	{	/* ASCII characters */
+	{   /* ASCII characters */
 		0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x20,0x20,0x20,0x20,0x20,0x00,0x20,0x00,
 		0x50,0x50,0x50,0x00,0x00,0x00,0x00,0x00,0x00,0x50,0xf8,0x50,0xf8,0x50,0x00,0x00,
 		0x20,0x70,0xc0,0x70,0x18,0xf0,0x20,0x00,0x40,0xa4,0x48,0x10,0x20,0x48,0x94,0x08,
@@ -165,7 +158,7 @@ void asr733_init(running_machine &machine)
 		0x00,0x68,0xb0,0x00,0x00,0x00,0x00,0x00,0x20,0x50,0x20,0x50,0xa8,0x50,0x00,0x00
 	};
 
-	dst = machine.region(asr733_chr_region)->base();
+	dst = machine.root_device().memregion(asr733_chr_region)->base();
 
 	memcpy(dst, fontdata6x8, asrfontdata_size);
 }
@@ -175,7 +168,7 @@ INLINE asr_t *get_safe_token(device_t *device)
 	assert(device != NULL);
 	assert(device->type() == ASR733);
 
-	return (asr_t *)downcast<legacy_device_base *>(device)->token();
+	return (asr_t *)downcast<asr733_device *>(device)->token();
 }
 
 static DEVICE_START( asr733 )
@@ -188,9 +181,9 @@ static DEVICE_START( asr733 )
 	const rectangle &visarea = screen->visible_area();
 
 	asr->last_key_pressed = 0x80;
-	asr->bitmap = auto_bitmap_alloc(device->machine(), width, height, BITMAP_FORMAT_INDEXED16);
+	asr->bitmap = auto_bitmap_ind16_alloc(device->machine(), width, height);
 
-	bitmap_fill(asr->bitmap, &visarea, 0);
+	asr->bitmap->fill(0, visarea);
 
 	asr->int_callback = params->int_callback;
 }
@@ -198,7 +191,7 @@ static DEVICE_START( asr733 )
 static void asr_field_interrupt(device_t *device)
 {
 	asr_t *asr = get_safe_token(device);
-	if ((asr->mode & AM_enint_mask) && (asr->new_status_flag))	/* right??? */
+	if ((asr->mode & AM_enint_mask) && (asr->new_status_flag))  /* right??? */
 	{
 		asr->status |= AS_int_mask;
 		if (asr->int_callback)
@@ -224,34 +217,50 @@ static DEVICE_RESET( asr733 )
 	asr_field_interrupt(device);
 }
 
-DEVICE_GET_INFO( asr733 )
+const device_type ASR733 = &device_creator<asr733_device>;
+
+asr733_device::asr733_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, ASR733, "733 ASR", tag, owner, clock, "asr733", __FILE__)
 {
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(asr_t);					break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(asr733);		break;
-		case DEVINFO_FCT_RESET:							info->reset = DEVICE_RESET_NAME(asr733);		break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "733 ASR");					break;
-		case DEVINFO_STR_FAMILY:						strcpy(info->s, "733 ASR Video");					break;
-		case DEVINFO_STR_VERSION:						strcpy(info->s, "1.0");							break;
-		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);						break;
-		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright MESS Team");			break;
-	}
+	m_token = global_alloc_clear(asr_t);
 }
 
-DEFINE_LEGACY_DEVICE(ASR733, asr733);
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void asr733_device::device_config_complete()
+{
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void asr733_device::device_start()
+{
+	DEVICE_START_NAME( asr733 )(this);
+}
+
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void asr733_device::device_reset()
+{
+	DEVICE_RESET_NAME( asr733 )(this);
+}
+
+
 
 /* write a single char on screen */
 static void asr_draw_char(device_t *device, int character, int x, int y, int color)
 {
 	asr_t *asr = get_safe_token(device);
 
-	drawgfx_opaque(asr->bitmap, NULL, device->machine().gfx[0], character-32, color, 0, 0,
+	drawgfx_opaque(*asr->bitmap, asr->bitmap->cliprect(), device->machine().gfx[0], character-32, color, 0, 0,
 				x+1, y);
 }
 
@@ -263,11 +272,17 @@ static void asr_linefeed(device_t *device)
 
 	for (y=asr_window_offset_y; y<asr_window_offset_y+asr_window_height-asr_scroll_step; y++)
 	{
-		extract_scanline8(asr->bitmap, asr_window_offset_x, y+asr_scroll_step, asr_window_width, buf);
-		draw_scanline8(asr->bitmap, asr_window_offset_x, y, asr_window_width, buf, device->machine().pens);
+		extract_scanline8(*asr->bitmap, asr_window_offset_x, y+asr_scroll_step, asr_window_width, buf);
+		draw_scanline8(*asr->bitmap, asr_window_offset_x, y, asr_window_width, buf, device->machine().pens);
 	}
 
-	bitmap_fill(asr->bitmap, &asr_scroll_clear_window, 0);
+	const rectangle asr_scroll_clear_window(
+		asr_window_offset_x,                                    /* min_x */
+		asr_window_offset_x+asr_window_width-1,                 /* max_x */
+		asr_window_offset_y+asr_window_height-asr_scroll_step,  /* min_y */
+		asr_window_offset_y+asr_window_height-1                 /* max_y */
+	);
+	asr->bitmap->fill(0, asr_scroll_clear_window);
 }
 
 static void asr_transmit(device_t *device, UINT8 data)
@@ -336,7 +351,7 @@ static void asr_transmit(device_t *device, UINT8 data)
 	}
 
 	asr->status |= AS_wrq_mask;
-	asr->new_status_flag = 1;	/* right??? */
+	asr->new_status_flag = 1;   /* right??? */
 	asr_field_interrupt(device);
 }
 
@@ -351,7 +366,7 @@ static void asr_receive_callback(int dummy)
 	asr->OutQueueLen--;
 
 	asr->status |= AS_rrq_mask;
-	asr->new_status_flag = 1;	/* right??? */
+	asr->new_status_flag = 1;   /* right??? */
 	asr_field_interrupt(device);
 }
 #endif
@@ -419,17 +434,17 @@ WRITE8_DEVICE_HANDLER( asr733_cru_w )
 			asr->xmit_buf |= 1 << offset;
 		else
 			asr->xmit_buf &= ~ (1 << offset);
-		if ((offset == 7) && (asr->mode & AM_dtr_mask) && (asr->mode & AM_rts_mask))	/* right??? */
+		if ((offset == 7) && (asr->mode & AM_dtr_mask) && (asr->mode & AM_rts_mask))    /* right??? */
 			asr_transmit(device, asr->xmit_buf);
 		break;
 
-	case 8:		/* not used */
+	case 8:     /* not used */
 		break;
 
-	case 9:		/* data terminal ready (set to 1) */
-	case 10:	/* request to send (set to 1) */
-	case 14:	/* enable interrupts, 1 to enable interrupts */
-	case 15:	/* diagnostic mode, 0 for normal mode */
+	case 9:     /* data terminal ready (set to 1) */
+	case 10:    /* request to send (set to 1) */
+	case 14:    /* enable interrupts, 1 to enable interrupts */
+	case 15:    /* diagnostic mode, 0 for normal mode */
 		if (data)
 			asr->mode |= 1 << (offset - 8);
 		else
@@ -438,13 +453,13 @@ WRITE8_DEVICE_HANDLER( asr733_cru_w )
 			asr_field_interrupt(device);
 		break;
 
-	case 11:	/* clear write request (write any value to execute) */
-	case 12:	/* clear read request (write any value to execute) */
+	case 11:    /* clear write request (write any value to execute) */
+	case 12:    /* clear read request (write any value to execute) */
 		asr->status &= ~ (1 << (offset - 8));
 		asr_field_interrupt(device);
 		break;
 
-	case 13:	/* clear new status flag - whatever it means (write any value to execute) */
+	case 13:    /* clear new status flag - whatever it means (write any value to execute) */
 		asr->new_status_flag = 0;
 		asr_field_interrupt(device);
 		break;
@@ -454,16 +469,16 @@ WRITE8_DEVICE_HANDLER( asr733_cru_w )
 /*
     Video refresh
 */
-void asr733_refresh(device_t *device, bitmap_t *bitmap, int x, int y)
+void asr733_refresh(device_t *device, bitmap_ind16 &bitmap, int x, int y)
 {
 	asr_t *asr = get_safe_token(device);
-	copybitmap(bitmap, asr->bitmap, 0, 0, x, y, NULL);
+	copybitmap(bitmap, *asr->bitmap, 0, 0, x, y, asr->bitmap->cliprect());
 }
 
 
 static const unsigned char key_translate[3][51] =
 {
-	{	/* unshifted */
+	{   /* unshifted */
 		'1',
 		'2',
 		'3',
@@ -520,7 +535,7 @@ static const unsigned char key_translate[3][51] =
 
 		' '
 	},
-	{	/* shifted */
+	{   /* shifted */
 		'!',
 		'"',
 		'#',
@@ -577,7 +592,7 @@ static const unsigned char key_translate[3][51] =
 
 		' '
 	},
-	{	/* control */
+	{   /* control */
 		'1',
 		'2',
 		'3',
@@ -644,17 +659,18 @@ static const unsigned char key_translate[3][51] =
 void asr733_keyboard(device_t *device)
 {
 	asr_t *asr = get_safe_token(device);
-	typedef enum
+	enum modifier_state_t
 	{
 		/* key modifier states */
 		unshifted = 0, shift, control,
 		/* special value to stop repeat if the modifier state changes */
 		special_debounce = -1
-	} modifier_state_t;
+	} ;
 
 	enum { repeat_delay = 5 /* approx. 1/10s */ };
 
-	UINT16 key_buf[6];
+	//UINT16 key_buf[6];
+	UINT16 key_buf[4];
 	int i, j;
 	modifier_state_t modifier_state;
 	int repeat_mode;
@@ -666,7 +682,7 @@ void asr733_keyboard(device_t *device)
 	/* for (i = 0; i < 6; i++) */
 	for (i = 0; i < 4; i++)
 	{
-		key_buf[i] = input_port_read(device->machine(), keynames[i]);
+		key_buf[i] = device->machine().root_device().ioport(keynames[i])->read();
 	}
 
 	/* process key modifiers */
@@ -698,13 +714,13 @@ void asr733_keyboard(device_t *device)
 			if ((repeat_mode) && (++asr->repeat_timer == repeat_delay))
 			{
 				if (asr->status & AS_rrq_mask)
-				{	/* keyboard buffer full */
+				{   /* keyboard buffer full */
 					asr->repeat_timer--;
 				}
 				else
-				{	/* repeat current key */
+				{   /* repeat current key */
 					asr->status |= AS_rrq_mask;
-					asr->new_status_flag = 1;	/* right??? */
+					asr->new_status_flag = 1;   /* right??? */
 					asr_field_interrupt(device);
 					asr->repeat_timer = 0;
 				}
@@ -721,12 +737,13 @@ void asr733_keyboard(device_t *device)
 		asr->last_key_pressed = 0x80;
 
 		if (asr->status & AS_rrq_mask)
-		{	/* keyboard buffer full */
+		{   /* keyboard buffer full */
 			/* do nothing */
 		}
 		else
 		{
-			for (i=0; i<6; i++)
+			//for (i=0; i<6; i++)
+			for (i=0; i<4; i++)
 			{
 				for (j=0; j<16; j++)
 				{
@@ -737,7 +754,7 @@ void asr733_keyboard(device_t *device)
 
 						asr->recv_buf = (int)key_translate[modifier_state][asr->last_key_pressed];
 						asr->status |= AS_rrq_mask;
-						asr->new_status_flag = 1;	/* right??? */
+						asr->new_status_flag = 1;   /* right??? */
 						asr_field_interrupt(device);
 						return;
 					}
@@ -745,4 +762,18 @@ void asr733_keyboard(device_t *device)
 			}
 		}
 	}
+}
+
+static MACHINE_CONFIG_FRAGMENT( asr733 )
+	MCFG_PALETTE_INIT_OVERRIDE(asr733_device, asr733)
+MACHINE_CONFIG_END
+
+//-------------------------------------------------
+//  machine_config_additions - return a pointer to
+//  the device's machine fragment
+//-------------------------------------------------
+
+machine_config_constructor asr733_device::device_mconfig_additions() const
+{
+	return MACHINE_CONFIG_NAME( asr733 );
 }

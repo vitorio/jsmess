@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     asap.c
@@ -6,37 +8,6 @@
     ASAP = Atari Simplified Architecture Processor
 
     Special thanks to Mike Albaugh for clarification on a couple of fine points.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -49,19 +20,19 @@
 //  CONSTANTS
 //**************************************************************************
 
-const UINT32 PS_CFLAG			= 0x00000001;
-const UINT32 PS_VFLAG			= 0x00000002;
-const UINT32 PS_ZFLAG			= 0x00000004;
-const UINT32 PS_NFLAG			= 0x00000008;
-const UINT32 PS_IFLAG			= 0x00000010;
-const UINT32 PS_PFLAG			= 0x00000020;
+const UINT32 PS_CFLAG           = 0x00000001;
+const UINT32 PS_VFLAG           = 0x00000002;
+const UINT32 PS_ZFLAG           = 0x00000004;
+const UINT32 PS_NFLAG           = 0x00000008;
+const UINT32 PS_IFLAG           = 0x00000010;
+const UINT32 PS_PFLAG           = 0x00000020;
 
-const int EXCEPTION_RESET		= 0;
-const int EXCEPTION_TRAP0		= 1;
-const int EXCEPTION_TRAPF		= 2;
-const int EXCEPTION_INTERRUPT	= 3;
+const int EXCEPTION_RESET       = 0;
+const int EXCEPTION_TRAP0       = 1;
+const int EXCEPTION_TRAPF       = 2;
+const int EXCEPTION_INTERRUPT   = 3;
 
-const int REGBASE				= 0xffe0;
+const int REGBASE               = 0xffe0;
 
 
 
@@ -69,25 +40,25 @@ const int REGBASE				= 0xffe0;
 //  MACROS
 //**************************************************************************
 
-#define SET_C_ADD(a,b)			(m_cflag = (UINT32)(b) > (UINT32)(~(a)))
-#define SET_C_SUB(a,b)			(m_cflag = (UINT32)(b) <= (UINT32)(a))
-#define SET_V_ADD(r,a,b)		(m_vflag = ~((a) ^ (b)) & ((a) ^ (r)))
-#define SET_V_SUB(r,a,b)		(m_vflag =  ((a) ^ (b)) & ((a) ^ (r)))
-#define SET_ZN(r)				(m_znflag = (r))
-#define SET_ZNCV_ADD(r,a,b)		SET_ZN(r); SET_C_ADD(a,b); SET_V_ADD(r,a,b)
-#define SET_ZNCV_SUB(r,a,b)		SET_ZN(r); SET_C_SUB(a,b); SET_V_SUB(r,a,b)
+#define SET_C_ADD(a,b)          (m_cflag = (UINT32)(b) > (UINT32)(~(a)))
+#define SET_C_SUB(a,b)          (m_cflag = (UINT32)(b) <= (UINT32)(a))
+#define SET_V_ADD(r,a,b)        (m_vflag = ~((a) ^ (b)) & ((a) ^ (r)))
+#define SET_V_SUB(r,a,b)        (m_vflag =  ((a) ^ (b)) & ((a) ^ (r)))
+#define SET_ZN(r)               (m_znflag = (r))
+#define SET_ZNCV_ADD(r,a,b)     SET_ZN(r); SET_C_ADD(a,b); SET_V_ADD(r,a,b)
+#define SET_ZNCV_SUB(r,a,b)     SET_ZN(r); SET_C_SUB(a,b); SET_V_SUB(r,a,b)
 
-#define SET_VFLAG(val)			(m_vflag = (val) << 31)
-#define SET_CFLAG(val)			(m_cflag = (val))
+#define SET_VFLAG(val)          (m_vflag = (val) << 31)
+#define SET_CFLAG(val)          (m_cflag = (val))
 
-#define GET_FLAGS()				(m_cflag | \
-								 ((m_vflag >> 30) & PS_VFLAG) | \
-								 ((m_znflag == 0) << 2) | \
-								 ((m_znflag >> 28) & PS_NFLAG) | \
-								 (m_iflag << 4) | \
-								 (m_pflag << 5))
+#define GET_FLAGS()             (m_cflag | \
+									((m_vflag >> 30) & PS_VFLAG) | \
+									((m_znflag == 0) << 2) | \
+									((m_znflag >> 28) & PS_NFLAG) | \
+									(m_iflag << 4) | \
+									(m_pflag << 5))
 
-#define SET_FLAGS(v)			do { \
+#define SET_FLAGS(v)            do { \
 									m_cflag = (v) & PS_CFLAG; \
 									m_vflag = ((v) & PS_VFLAG) << 30; \
 									m_znflag = ((v) & PS_ZFLAG) ? 0 : ((v) & PS_NFLAG) ? -1 : 1; \
@@ -95,12 +66,12 @@ const int REGBASE				= 0xffe0;
 									m_pflag = ((v) & PS_PFLAG) >> 5; \
 								} while (0);
 
-#define OPCODE					(m_op >> 27)
-#define DSTREG					((m_op >> 22) & 31)
-#define DSTVAL					m_src2val[REGBASE + DSTREG]
-#define SRC1REG					((m_op >> 16) & 31)
-#define SRC1VAL					m_src2val[REGBASE + SRC1REG]
-#define SRC2VAL					m_src2val[m_op & 0xffff]
+#define OPCODE                  (m_op >> 27)
+#define DSTREG                  ((m_op >> 22) & 31)
+#define DSTVAL                  m_src2val[REGBASE + DSTREG]
+#define SRC1REG                 ((m_op >> 16) & 31)
+#define SRC1VAL                 m_src2val[REGBASE + SRC1REG]
+#define SRC2VAL                 m_src2val[m_op & 0xffff]
 
 
 
@@ -110,38 +81,38 @@ const int REGBASE				= 0xffe0;
 
 const asap_device::ophandler asap_device::s_opcodetable[32][4] =
 {
-	{	&asap_device::trap0,	&asap_device::trap0,	&asap_device::trap0,	&asap_device::trap0		},
-	{	&asap_device::noop,		&asap_device::noop,		&asap_device::noop,		&asap_device::noop		},
-	{	&asap_device::bsr,		&asap_device::bsr_0,	&asap_device::bsr,		&asap_device::bsr_0		},
-	{	&asap_device::lea,		&asap_device::noop,		&asap_device::lea_c,	&asap_device::lea_c0	},
-	{	&asap_device::leah,		&asap_device::noop,		&asap_device::leah_c,	&asap_device::leah_c0	},
-	{	&asap_device::subr,		&asap_device::noop,		&asap_device::subr_c,	&asap_device::subr_c0	},
-	{	&asap_device::xor_,		&asap_device::noop,		&asap_device::xor_c,	&asap_device::xor_c0	},
-	{	&asap_device::xorn,		&asap_device::noop,		&asap_device::xorn_c,	&asap_device::xorn_c0	},
-	{	&asap_device::add,		&asap_device::noop,		&asap_device::add_c,	&asap_device::add_c0	},
-	{	&asap_device::sub,		&asap_device::noop,		&asap_device::sub_c,	&asap_device::sub_c0	},
-	{	&asap_device::addc,		&asap_device::noop,		&asap_device::addc_c,	&asap_device::addc_c0	},
-	{	&asap_device::subc,		&asap_device::noop,		&asap_device::subc_c,	&asap_device::subc_c0	},
-	{	&asap_device::and_,		&asap_device::noop,		&asap_device::and_c,	&asap_device::and_c0	},
-	{	&asap_device::andn,		&asap_device::noop,		&asap_device::andn_c,	&asap_device::andn_c0	},
-	{	&asap_device::or_,		&asap_device::noop,		&asap_device::or_c,		&asap_device::or_c0		},
-	{	&asap_device::orn,		&asap_device::noop,		&asap_device::orn_c,	&asap_device::orn_c0	},
-	{	&asap_device::ld,		&asap_device::ld_0,		&asap_device::ld_c,		&asap_device::ld_c0		},
-	{	&asap_device::ldh,		&asap_device::ldh_0,	&asap_device::ldh_c,	&asap_device::ldh_c0	},
-	{	&asap_device::lduh,		&asap_device::lduh_0,	&asap_device::lduh_c,	&asap_device::lduh_c0	},
-	{	&asap_device::sth,		&asap_device::sth_0,	&asap_device::sth_c,	&asap_device::sth_c0	},
-	{	&asap_device::st,		&asap_device::st_0,		&asap_device::st_c,		&asap_device::st_c0		},
-	{	&asap_device::ldb,		&asap_device::ldb_0,	&asap_device::ldb_c,	&asap_device::ldb_c0	},
-	{	&asap_device::ldub,		&asap_device::ldub_0,	&asap_device::ldub_c,	&asap_device::ldub_c0	},
-	{	&asap_device::stb,		&asap_device::stb_0,	&asap_device::stb_c,	&asap_device::stb_c0	},
-	{	&asap_device::ashr,		&asap_device::noop,		&asap_device::ashr_c,	&asap_device::ashr_c0	},
-	{	&asap_device::lshr,		&asap_device::noop,		&asap_device::lshr_c,	&asap_device::lshr_c0	},
-	{	&asap_device::ashl,		&asap_device::noop,		&asap_device::ashl_c,	&asap_device::ashl_c0	},
-	{	&asap_device::rotl,		&asap_device::noop,		&asap_device::rotl_c,	&asap_device::rotl_c0	},
-	{	&asap_device::getps,	&asap_device::noop,		&asap_device::getps,	&asap_device::noop		},
-	{	&asap_device::putps,	&asap_device::putps,	&asap_device::putps,	&asap_device::putps		},
-	{	&asap_device::jsr,		&asap_device::jsr_0,	&asap_device::jsr_c,	&asap_device::jsr_c0	},
-	{	&asap_device::trapf,	&asap_device::trapf,	&asap_device::trapf,	&asap_device::trapf		}
+	{   &asap_device::trap0,    &asap_device::trap0,    &asap_device::trap0,    &asap_device::trap0     },
+	{   &asap_device::noop,     &asap_device::noop,     &asap_device::noop,     &asap_device::noop      },
+	{   &asap_device::bsr,      &asap_device::bsr_0,    &asap_device::bsr,      &asap_device::bsr_0     },
+	{   &asap_device::lea,      &asap_device::noop,     &asap_device::lea_c,    &asap_device::lea_c0    },
+	{   &asap_device::leah,     &asap_device::noop,     &asap_device::leah_c,   &asap_device::leah_c0   },
+	{   &asap_device::subr,     &asap_device::noop,     &asap_device::subr_c,   &asap_device::subr_c0   },
+	{   &asap_device::xor_,     &asap_device::noop,     &asap_device::xor_c,    &asap_device::xor_c0    },
+	{   &asap_device::xorn,     &asap_device::noop,     &asap_device::xorn_c,   &asap_device::xorn_c0   },
+	{   &asap_device::add,      &asap_device::noop,     &asap_device::add_c,    &asap_device::add_c0    },
+	{   &asap_device::sub,      &asap_device::noop,     &asap_device::sub_c,    &asap_device::sub_c0    },
+	{   &asap_device::addc,     &asap_device::noop,     &asap_device::addc_c,   &asap_device::addc_c0   },
+	{   &asap_device::subc,     &asap_device::noop,     &asap_device::subc_c,   &asap_device::subc_c0   },
+	{   &asap_device::and_,     &asap_device::noop,     &asap_device::and_c,    &asap_device::and_c0    },
+	{   &asap_device::andn,     &asap_device::noop,     &asap_device::andn_c,   &asap_device::andn_c0   },
+	{   &asap_device::or_,      &asap_device::noop,     &asap_device::or_c,     &asap_device::or_c0     },
+	{   &asap_device::orn,      &asap_device::noop,     &asap_device::orn_c,    &asap_device::orn_c0    },
+	{   &asap_device::ld,       &asap_device::ld_0,     &asap_device::ld_c,     &asap_device::ld_c0     },
+	{   &asap_device::ldh,      &asap_device::ldh_0,    &asap_device::ldh_c,    &asap_device::ldh_c0    },
+	{   &asap_device::lduh,     &asap_device::lduh_0,   &asap_device::lduh_c,   &asap_device::lduh_c0   },
+	{   &asap_device::sth,      &asap_device::sth_0,    &asap_device::sth_c,    &asap_device::sth_c0    },
+	{   &asap_device::st,       &asap_device::st_0,     &asap_device::st_c,     &asap_device::st_c0     },
+	{   &asap_device::ldb,      &asap_device::ldb_0,    &asap_device::ldb_c,    &asap_device::ldb_c0    },
+	{   &asap_device::ldub,     &asap_device::ldub_0,   &asap_device::ldub_c,   &asap_device::ldub_c0   },
+	{   &asap_device::stb,      &asap_device::stb_0,    &asap_device::stb_c,    &asap_device::stb_c0    },
+	{   &asap_device::ashr,     &asap_device::noop,     &asap_device::ashr_c,   &asap_device::ashr_c0   },
+	{   &asap_device::lshr,     &asap_device::noop,     &asap_device::lshr_c,   &asap_device::lshr_c0   },
+	{   &asap_device::ashl,     &asap_device::noop,     &asap_device::ashl_c,   &asap_device::ashl_c0   },
+	{   &asap_device::rotl,     &asap_device::noop,     &asap_device::rotl_c,   &asap_device::rotl_c0   },
+	{   &asap_device::getps,    &asap_device::noop,     &asap_device::getps,    &asap_device::noop      },
+	{   &asap_device::putps,    &asap_device::putps,    &asap_device::putps,    &asap_device::putps     },
+	{   &asap_device::jsr,      &asap_device::jsr_0,    &asap_device::jsr_c,    &asap_device::jsr_c0    },
+	{   &asap_device::trapf,    &asap_device::trapf,    &asap_device::trapf,    &asap_device::trapf     }
 };
 
 const asap_device::ophandler asap_device::s_conditiontable[16] =
@@ -166,22 +137,22 @@ const device_type ASAP = &device_creator<asap_device>;
 //-------------------------------------------------
 
 asap_device::asap_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: cpu_device(mconfig, ASAP, "ASAP", tag, owner, clock),
-	  m_program_config("program", ENDIANNESS_LITTLE, 32, 32),
-	  m_pc(0),
-	  m_pflag(0),
-	  m_iflag(0),
-	  m_cflag(0),
-	  m_vflag(0),
-	  m_znflag(0),
-	  m_flagsio(0),
-	  m_op(0),
-	  m_ppc(0),
-	  m_nextpc(0),
-	  m_irq_state(0),
-	  m_icount(0),
-	  m_program(NULL),
-	  m_direct(NULL)
+	: cpu_device(mconfig, ASAP, "ASAP", tag, owner, clock, "asap", __FILE__),
+		m_program_config("program", ENDIANNESS_LITTLE, 32, 32),
+		m_pc(0),
+		m_pflag(0),
+		m_iflag(0),
+		m_cflag(0),
+		m_vflag(0),
+		m_znflag(0),
+		m_flagsio(0),
+		m_op(0),
+		m_ppc(0),
+		m_nextpc(0),
+		m_irq_state(0),
+		m_icount(0),
+		m_program(NULL),
+		m_direct(NULL)
 {
 	// initialize the src2val table to contain immediates for low values
 	for (int i = 0; i < REGBASE; i++)
@@ -211,7 +182,7 @@ asap_device::asap_device(const machine_config &mconfig, const char *tag, device_
 void asap_device::device_start()
 {
 	// get our address spaces
-	m_program = space(AS_PROGRAM);
+	m_program = &space(AS_PROGRAM);
 	m_direct = &m_program->direct();
 
 	// register our state for the debugger
@@ -357,7 +328,7 @@ UINT32 asap_device::disasm_max_opcode_bytes() const
 offs_t asap_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options)
 {
 	extern CPU_DISASSEMBLE( asap );
-	return CPU_DISASSEMBLE_NAME(asap)(NULL, buffer, pc, oprom, opram, 0);
+	return CPU_DISASSEMBLE_NAME(asap)(this, buffer, pc, oprom, opram, options);
 }
 
 

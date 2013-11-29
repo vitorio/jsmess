@@ -136,14 +136,17 @@
     2011-Apr-01 Curt Coder
     - Set complete command delay to 16 usec (DD) / 32 usec (SD) and removed
       the external delay setting hack.
-	  
-	2011-Jun-24 Curt Coder
-	- Added device types for all known variants, and enforced inverted DAL lines.
+
+    2011-Jun-24 Curt Coder
+    - Added device types for all known variants, and enforced inverted DAL lines.
+
+    2011-Sep-18 Curt Coder
+    - Connected Side Select Output for variants that support it.
 
     TODO:
         - What happens if a track is read that doesn't have any id's on it?
          (e.g. unformatted disc)
-		- Rewrite into a C++ device
+        - Rewrite into a C++ device
 
 ***************************************************************************/
 
@@ -152,130 +155,131 @@
 #include "formats/imageutl.h"
 #include "machine/wd17xx.h"
 #include "imagedev/flopdrv.h"
+#include "devlegcy.h"
 
 /***************************************************************************
     CONSTANTS
 ***************************************************************************/
 
-#define VERBOSE			0	/* General logging */
-#define VERBOSE_DATA	0	/* Logging of each byte during read and write */
+#define VERBOSE         0   /* General logging */
+#define VERBOSE_DATA    0   /* Logging of each byte during read and write */
 
-#define DELAY_ERROR		3
-#define DELAY_NOTREADY	1
-#define DELAY_DATADONE	3
+#define DELAY_ERROR     3
+#define DELAY_NOTREADY  1
+#define DELAY_DATADONE  3
 
-#define TYPE_I			1
-#define TYPE_II 		2
-#define TYPE_III		3
-#define TYPE_IV 		4
+#define TYPE_I          1
+#define TYPE_II         2
+#define TYPE_III        3
+#define TYPE_IV         4
 
 #define FDC_STEP_RATE   0x03    /* Type I additional flags */
-#define FDC_STEP_VERIFY 0x04	/* verify track number */
-#define FDC_STEP_HDLOAD 0x08	/* load head */
-#define FDC_STEP_UPDATE 0x10	/* update track register */
+#define FDC_STEP_VERIFY 0x04    /* verify track number */
+#define FDC_STEP_HDLOAD 0x08    /* load head */
+#define FDC_STEP_UPDATE 0x10    /* update track register */
 
-#define FDC_RESTORE 	0x00	/* Type I commands */
-#define FDC_SEEK		0x10
-#define FDC_STEP		0x20
-#define FDC_STEP_IN 	0x40
-#define FDC_STEP_OUT	0x60
+#define FDC_RESTORE     0x00    /* Type I commands */
+#define FDC_SEEK        0x10
+#define FDC_STEP        0x20
+#define FDC_STEP_IN     0x40
+#define FDC_STEP_OUT    0x60
 
-#define FDC_MASK_TYPE_I 		(FDC_STEP_HDLOAD|FDC_STEP_VERIFY|FDC_STEP_RATE)
+#define FDC_MASK_TYPE_I         (FDC_STEP_HDLOAD|FDC_STEP_VERIFY|FDC_STEP_RATE)
 
 /* Type I commands status */
-#define STA_1_BUSY		0x01	/* controller is busy */
-#define STA_1_IPL		0x02	/* index pulse */
-#define STA_1_TRACK0	0x04	/* track 0 detected */
-#define STA_1_CRC_ERR	0x08	/* CRC error */
-#define STA_1_SEEK_ERR	0x10	/* seek error */
-#define STA_1_HD_LOADED 0x20	/* head loaded */
-#define STA_1_WRITE_PRO 0x40	/* floppy is write protected */
-#define STA_1_NOT_READY 0x80	/* drive not ready */
-#define STA_1_MOTOR_ON	0x80	/* status of the Motor On output (WD1770 and WD1772 only) */
+#define STA_1_BUSY      0x01    /* controller is busy */
+#define STA_1_IPL       0x02    /* index pulse */
+#define STA_1_TRACK0    0x04    /* track 0 detected */
+#define STA_1_CRC_ERR   0x08    /* CRC error */
+#define STA_1_SEEK_ERR  0x10    /* seek error */
+#define STA_1_HD_LOADED 0x20    /* head loaded */
+#define STA_1_WRITE_PRO 0x40    /* floppy is write protected */
+#define STA_1_NOT_READY 0x80    /* drive not ready */
+#define STA_1_MOTOR_ON  0x80    /* status of the Motor On output (WD1770 and WD1772 only) */
 
 /* Type II and III additional flags */
-#define FDC_DELETED_AM	0x01	/* read/write deleted address mark */
-#define FDC_SIDE_CMP_T	0x02	/* side compare track data */
-#define FDC_15MS_DELAY	0x04	/* delay 15ms before command */
-#define FDC_SIDE_CMP_S	0x08	/* side compare sector data */
-#define FDC_MULTI_REC	0x10	/* only for type II commands */
+#define FDC_DELETED_AM  0x01    /* read/write deleted address mark */
+#define FDC_SIDE_CMP_T  0x02    /* side compare track data */
+#define FDC_15MS_DELAY  0x04    /* delay 15ms before command */
+#define FDC_SIDE_CMP_S  0x08    /* side compare sector data */
+#define FDC_MULTI_REC   0x10    /* only for type II commands */
 
 /* Type II commands */
-#define FDC_READ_SEC	0x80	/* read sector */
-#define FDC_WRITE_SEC	0xA0	/* write sector */
+#define FDC_READ_SEC    0x80    /* read sector */
+#define FDC_WRITE_SEC   0xA0    /* write sector */
 
-#define FDC_MASK_TYPE_II		(FDC_MULTI_REC|FDC_SIDE_CMP_S|FDC_15MS_DELAY|FDC_SIDE_CMP_T|FDC_DELETED_AM)
+#define FDC_MASK_TYPE_II        (FDC_MULTI_REC|FDC_SIDE_CMP_S|FDC_15MS_DELAY|FDC_SIDE_CMP_T|FDC_DELETED_AM)
 
 /* Type II commands status */
-#define STA_2_BUSY		0x01
-#define STA_2_DRQ		0x02
-#define STA_2_LOST_DAT	0x04
-#define STA_2_CRC_ERR	0x08
+#define STA_2_BUSY      0x01
+#define STA_2_DRQ       0x02
+#define STA_2_LOST_DAT  0x04
+#define STA_2_CRC_ERR   0x08
 #define STA_2_REC_N_FND 0x10
-#define STA_2_REC_TYPE	0x20
+#define STA_2_REC_TYPE  0x20
 #define STA_2_WRITE_PRO 0x40
 #define STA_2_NOT_READY 0x80
 
-#define FDC_MASK_TYPE_III		(FDC_SIDE_CMP_S|FDC_15MS_DELAY|FDC_SIDE_CMP_T|FDC_DELETED_AM)
+#define FDC_MASK_TYPE_III       (FDC_SIDE_CMP_S|FDC_15MS_DELAY|FDC_SIDE_CMP_T|FDC_DELETED_AM)
 
 /* Type III commands */
-#define FDC_READ_DAM	0xc0	/* read data address mark */
-#define FDC_READ_TRK	0xe0	/* read track */
-#define FDC_WRITE_TRK	0xf0	/* write track (format) */
+#define FDC_READ_DAM    0xc0    /* read data address mark */
+#define FDC_READ_TRK    0xe0    /* read track */
+#define FDC_WRITE_TRK   0xf0    /* write track (format) */
 
 /* Type IV additional flags */
-#define FDC_IM0 		0x01	/* interrupt mode 0 */
-#define FDC_IM1 		0x02	/* interrupt mode 1 */
-#define FDC_IM2 		0x04	/* interrupt mode 2 */
-#define FDC_IM3 		0x08	/* interrupt mode 3 */
+#define FDC_IM0         0x01    /* interrupt mode 0 */
+#define FDC_IM1         0x02    /* interrupt mode 1 */
+#define FDC_IM2         0x04    /* interrupt mode 2 */
+#define FDC_IM3         0x08    /* interrupt mode 3 */
 
-#define FDC_MASK_TYPE_IV		(FDC_IM3|FDC_IM2|FDC_IM1|FDC_IM0)
+#define FDC_MASK_TYPE_IV        (FDC_IM3|FDC_IM2|FDC_IM1|FDC_IM0)
 
 /* Type IV commands */
-#define FDC_FORCE_INT	0xd0	/* force interrupt */
+#define FDC_FORCE_INT   0xd0    /* force interrupt */
 
 /* structure describing a double density track */
-#define TRKSIZE_DD		6144
+#define TRKSIZE_DD      6144
 #if 0
 static const UINT8 track_DD[][2] = {
-	{16, 0x4e}, 	/* 16 * 4E (track lead in)               */
-	{ 8, 0x00}, 	/*  8 * 00 (pre DAM)                     */
-	{ 3, 0xf5}, 	/*  3 * F5 (clear CRC)                   */
+	{16, 0x4e},     /* 16 * 4E (track lead in)               */
+	{ 8, 0x00},     /*  8 * 00 (pre DAM)                     */
+	{ 3, 0xf5},     /*  3 * F5 (clear CRC)                   */
 
-	{ 1, 0xfe}, 	/* *** sector *** FE (DAM)               */
-	{ 1, 0x80}, 	/*  4 bytes track,head,sector,seclen     */
-	{ 1, 0xf7}, 	/*  1 * F7 (CRC)                         */
-	{22, 0x4e}, 	/* 22 * 4E (sector lead in)              */
-	{12, 0x00}, 	/* 12 * 00 (pre AM)                      */
-	{ 3, 0xf5}, 	/*  3 * F5 (clear CRC)                   */
-	{ 1, 0xfb}, 	/*  1 * FB (AM)                          */
-	{ 1, 0x81}, 	/*  x bytes sector data                  */
-	{ 1, 0xf7}, 	/*  1 * F7 (CRC)                         */
-	{16, 0x4e}, 	/* 16 * 4E (sector lead out)             */
-	{ 8, 0x00}, 	/*  8 * 00 (post sector)                 */
-	{ 0, 0x00}, 	/* end of data                           */
+	{ 1, 0xfe},     /* *** sector *** FE (DAM)               */
+	{ 1, 0x80},     /*  4 bytes track,head,sector,seclen     */
+	{ 1, 0xf7},     /*  1 * F7 (CRC)                         */
+	{22, 0x4e},     /* 22 * 4E (sector lead in)              */
+	{12, 0x00},     /* 12 * 00 (pre AM)                      */
+	{ 3, 0xf5},     /*  3 * F5 (clear CRC)                   */
+	{ 1, 0xfb},     /*  1 * FB (AM)                          */
+	{ 1, 0x81},     /*  x bytes sector data                  */
+	{ 1, 0xf7},     /*  1 * F7 (CRC)                         */
+	{16, 0x4e},     /* 16 * 4E (sector lead out)             */
+	{ 8, 0x00},     /*  8 * 00 (post sector)                 */
+	{ 0, 0x00},     /* end of data                           */
 };
 #endif
 
 /* structure describing a single density track */
-#define TRKSIZE_SD		3172
+#define TRKSIZE_SD      3172
 #if 0
 static const UINT8 track_SD[][2] = {
-	{16, 0xff}, 	/* 16 * FF (track lead in)               */
-	{ 8, 0x00}, 	/*  8 * 00 (pre DAM)                     */
-	{ 1, 0xfc}, 	/*  1 * FC (clear CRC)                   */
+	{16, 0xff},     /* 16 * FF (track lead in)               */
+	{ 8, 0x00},     /*  8 * 00 (pre DAM)                     */
+	{ 1, 0xfc},     /*  1 * FC (clear CRC)                   */
 
-	{11, 0xff}, 	/* *** sector *** 11 * FF                */
-	{ 6, 0x00}, 	/*  6 * 00 (pre DAM)                     */
-	{ 1, 0xfe}, 	/*  1 * FE (DAM)                         */
-	{ 1, 0x80}, 	/*  4 bytes track,head,sector,seclen     */
-	{ 1, 0xf7}, 	/*  1 * F7 (CRC)                         */
-	{10, 0xff}, 	/* 10 * FF (sector lead in)              */
-	{ 4, 0x00}, 	/*  4 * 00 (pre AM)                      */
-	{ 1, 0xfb}, 	/*  1 * FB (AM)                          */
-	{ 1, 0x81}, 	/*  x bytes sector data                  */
-	{ 1, 0xf7}, 	/*  1 * F7 (CRC)                         */
-	{ 0, 0x00}, 	/* end of data                           */
+	{11, 0xff},     /* *** sector *** 11 * FF                */
+	{ 6, 0x00},     /*  6 * 00 (pre DAM)                     */
+	{ 1, 0xfe},     /*  1 * FE (DAM)                         */
+	{ 1, 0x80},     /*  4 bytes track,head,sector,seclen     */
+	{ 1, 0xf7},     /*  1 * F7 (CRC)                         */
+	{10, 0xff},     /* 10 * FF (sector lead in)              */
+	{ 4, 0x00},     /*  4 * 00 (pre AM)                      */
+	{ 1, 0xfb},     /*  1 * FB (AM)                          */
+	{ 1, 0x81},     /*  x bytes sector data                  */
+	{ 1, 0xf7},     /*  1 * F7 (CRC)                         */
+	{ 0, 0x00},     /* end of data                           */
 };
 #endif
 
@@ -284,8 +288,7 @@ static const UINT8 track_SD[][2] = {
     TYPE DEFINITIONS
 ***************************************************************************/
 
-typedef struct _wd1770_state wd1770_state;
-struct _wd1770_state
+struct wd1770_state
 {
 	/* callbacks */
 	devcb_resolved_read_line in_dden_func;
@@ -317,37 +320,37 @@ struct _wd1770_state
 
 	int stepping_rate[4];  /* track stepping rate in ms */
 
-        unsigned short  crc;    /* Holds the current CRC value for write_track CRC calculation */
-        int     crc_active;	/* Flag indicating that CRC calculation in write_track is active. */
+		unsigned short  crc;    /* Holds the current CRC value for write_track CRC calculation */
+		int     crc_active; /* Flag indicating that CRC calculation in write_track is active. */
 
-	UINT8	track_reg;				/* value of track register */
-	UINT8	command_type;			/* last command type */
-	UINT8	head;					/* current head # */
+	UINT8   track_reg;              /* value of track register */
+	UINT8   command_type;           /* last command type */
+	UINT8   head;                   /* current head # */
 
-	UINT8	read_cmd;				/* last read command issued */
-	UINT8	write_cmd;				/* last write command issued */
-	INT8	direction;				/* last step direction */
-	UINT8   last_command_data;		/* last command data */
+	UINT8   read_cmd;               /* last read command issued */
+	UINT8   write_cmd;              /* last write command issued */
+	INT8    direction;              /* last step direction */
+	UINT8   last_command_data;      /* last command data */
 
-	UINT8	status_drq; 			/* status register data request bit */
-	UINT8	busy_count; 			/* how long to keep busy bit set */
+	UINT8   status_drq;             /* status register data request bit */
+	UINT8   busy_count;             /* how long to keep busy bit set */
 
-	UINT8	buffer[6144];			/* I/O buffer (holds up to a whole track) */
-	UINT32	data_offset;			/* offset into I/O buffer */
-	INT32	data_count; 			/* transfer count from/into I/O buffer */
+	UINT8   buffer[6144];           /* I/O buffer (holds up to a whole track) */
+	UINT32  data_offset;            /* offset into I/O buffer */
+	INT32   data_count;             /* transfer count from/into I/O buffer */
 
-	UINT8	*fmt_sector_data[256];	/* pointer to data after formatting a track */
+	UINT8   *fmt_sector_data[256];  /* pointer to data after formatting a track */
 
-	UINT8	dam_list[256][4];		/* list of data address marks while formatting */
-	int 	dam_data[256];			/* offset to data inside buffer while formatting */
-	int 	dam_cnt;				/* valid number of entries in the dam_list */
-	UINT16	sector_length;			/* sector length (byte) */
+	UINT8   dam_list[256][4];       /* list of data address marks while formatting */
+	int     dam_data[256];          /* offset to data inside buffer while formatting */
+	int     dam_cnt;                /* valid number of entries in the dam_list */
+	UINT16  sector_length;          /* sector length (byte) */
 
-	UINT8	ddam;					/* ddam of sector found - used when reading */
-	UINT8	sector_data_id;
-	int		data_direction;
+	UINT8   ddam;                   /* ddam of sector found - used when reading */
+	UINT8   sector_data_id;
+	int     data_direction;
 
-	int     hld_count;				/* head loaded counter */
+	int     hld_count;              /* head loaded counter */
 
 	/* timers to delay execution/completion of commands */
 	emu_timer *timer_cmd, *timer_data, *timer_rs, *timer_ws;
@@ -362,7 +365,7 @@ struct _wd1770_state
 	int pause_time;
 
 	/* Were we busy when we received a FORCE_INT command */
-	UINT8	was_busy;
+	UINT8   was_busy;
 
 	/* Pointer to interface */
 	const wd17xx_interface *intf;
@@ -401,14 +404,14 @@ static void wd17xx_timed_read_sector_request(device_t *device);
 INLINE wd1770_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->type() == FD1771 || device->type() == FD1781 || 
+	assert(device->type() == FD1771 || device->type() == FD1781 ||
 		device->type() == FD1791 || device->type() == FD1792 || device->type() == FD1793 || device->type() == FD1794 || device->type() == FD1795 || device->type() == FD1797 ||
-		device->type() == FD1761 || device->type() == FD1762 || device->type() == FD1763 || device->type() == FD1764 || device->type() == FD1765 || device->type() == FD1767 || 
+		device->type() == FD1761 || device->type() == FD1762 || device->type() == FD1763 || device->type() == FD1764 || device->type() == FD1765 || device->type() == FD1767 ||
 		device->type() == WD2791 || device->type() == WD2793 || device->type() == WD2795 || device->type() == WD2797 ||
-		device->type() == WD1770 || device->type() == WD1772 || device->type() == WD1773 || 
+		device->type() == WD1770 || device->type() == WD1772 || device->type() == WD1773 ||
 		device->type() == MB8866 || device->type() == MB8876 || device->type() == MB8877);
 
-	return (wd1770_state *)downcast<legacy_device_base *>(device)->token();
+	return (wd1770_state *)downcast<wd1770_device *>(device)->token();
 }
 
 
@@ -418,9 +421,9 @@ INLINE wd1770_state *get_safe_token(device_t *device)
 
 static int wd17xx_has_dal(device_t *device)
 {
-	return (device->type() == FD1793 || device->type() == FD1794 || device->type() == FD1797 || 
-			device->type() == FD1763 || device->type() == FD1764 || device->type() == FD1767 || 
-			device->type() == WD1770 || device->type() == WD1772 || device->type() == WD1773 || 
+	return (device->type() == FD1793 || device->type() == FD1794 || device->type() == FD1797 ||
+			device->type() == FD1763 || device->type() == FD1764 || device->type() == FD1767 ||
+			device->type() == WD1770 || device->type() == WD1772 || device->type() == WD1773 ||
 			device->type() == WD2793 || device->type() == WD2797 ||
 			device->type() == MB8877);
 }
@@ -478,7 +481,7 @@ static void wd17xx_set_drq(device_t *device)
 }
 
 /* clear interrupt request */
-static void	wd17xx_clear_intrq(device_t *device)
+static void wd17xx_clear_intrq(device_t *device)
 {
 	wd1770_state *w = get_safe_token(device);
 
@@ -487,7 +490,7 @@ static void	wd17xx_clear_intrq(device_t *device)
 }
 
 /* set interrupt request */
-static void	wd17xx_set_intrq(device_t *device)
+static void wd17xx_set_intrq(device_t *device)
 {
 	wd1770_state *w = get_safe_token(device);
 
@@ -516,15 +519,15 @@ static TIMER_CALLBACK( wd17xx_data_callback )
 	device_t *device = (device_t *)ptr;
 	wd1770_state *w = get_safe_token(device);
 
-   /* check if this is a write command */
-   if( (w->command_type == TYPE_II && w->command == FDC_WRITE_SEC) ||
-         (w->command_type == TYPE_III && w->command == FDC_WRITE_TRK) )
-   {
-      /* we are ready for new data */
-      wd17xx_set_drq(device);
+	/* check if this is a write command */
+	if( (w->command_type == TYPE_II && w->command == FDC_WRITE_SEC) ||
+			(w->command_type == TYPE_III && w->command == FDC_WRITE_TRK) )
+	{
+		/* we are ready for new data */
+		wd17xx_set_drq(device);
 
-      return;
-   }
+		return;
+	}
 
 	/* any bytes remaining? */
 	if (w->data_count >= 1)
@@ -569,7 +572,7 @@ static TIMER_CALLBACK( wd17xx_data_callback )
 			else
 			{
 				/* Delay the INTRQ 3 byte times because we need to read two CRC bytes and
-                   compare them with a calculated CRC */
+				   compare them with a calculated CRC */
 				wd17xx_complete_command(device, DELAY_DATADONE);
 
 				if (VERBOSE)
@@ -639,7 +642,7 @@ static void wd17xx_command_restore(device_t *device)
 	w->track = 0;
 #if 0
 	/* simulate seek time busy signal */
-	w->busy_count = 0;	//w->busy_count * ((w->data & FDC_STEP_RATE) + 1);
+	w->busy_count = 0;  //w->busy_count * ((w->data & FDC_STEP_RATE) + 1);
 
 	/* when command completes set irq */
 	wd17xx_set_intrq(device);
@@ -658,7 +661,7 @@ static void wd17xx_command_restore(device_t *device)
 static void write_track(device_t *device)
 {
 	wd1770_state *w = get_safe_token(device);
-	floppy_image *floppy;
+	floppy_image_legacy *floppy;
 #if 0
 	int i;
 	for (i=0;i+4<w->data_offset;)
@@ -682,24 +685,24 @@ static void write_track(device_t *device)
 #endif
 
 	/* Get the size in bytes of the current track. For real hardware this
-    may vary per system in small degree, and there even for each track
-    and head, so we should not assume a fixed value here.
-    As we are using a buffered track writing, we have to find out how long
-    the track will become. The only object which can tell us is the
-    selected format.
-    */
+	may vary per system in small degree, and there even for each track
+	and head, so we should not assume a fixed value here.
+	As we are using a buffered track writing, we have to find out how long
+	the track will become. The only object which can tell us is the
+	selected format.
+	*/
 	w->data_count = 0;
 	floppy = flopimg_get_image(w->drive);
 	if (floppy != NULL)
 		w->data_count = floppy_get_track_size(floppy, w->hd, w->track);
 
-        if (w->data_count==0)
-        {
+		if (w->data_count==0)
+		{
 			if (wd17xx_is_sd_only(device))
 				w->data_count = TRKSIZE_SD;
 			else
 				w->data_count = wd17xx_dden(device) ? TRKSIZE_SD : TRKSIZE_DD;
-        }
+		}
 
 	floppy_drive_write_track_data_info_buffer( w->drive, w->hd, (char *)w->buffer, &(w->data_count) );
 
@@ -719,17 +722,17 @@ static void write_track(device_t *device)
 static void read_track(device_t *device)
 {
 	wd1770_state *w = get_safe_token(device);
-	floppy_image *floppy;
+	floppy_image_legacy *floppy;
 #if 0
-	UINT8 *psrc;		/* pointer to track format structure */
-	UINT8 *pdst;		/* pointer to track buffer */
-	int cnt;			/* number of bytes to fill in */
-	UINT16 crc; 		/* id or data CRC */
-	UINT8 d;			/* data */
+	UINT8 *psrc;        /* pointer to track format structure */
+	UINT8 *pdst;        /* pointer to track buffer */
+	int cnt;            /* number of bytes to fill in */
+	UINT16 crc;         /* id or data CRC */
+	UINT8 d;            /* data */
 	UINT8 t = w->track; /* track of DAM */
-	UINT8 h = w->head;	/* head of DAM */
-	UINT8 s = w->sector_dam;		/* sector of DAM */
-	UINT16 l = w->sector_length;	/* sector length of DAM */
+	UINT8 h = w->head;  /* head of DAM */
+	UINT8 s = w->sector_dam;        /* sector of DAM */
+	UINT16 l = w->sector_length;    /* sector length of DAM */
 	int i;
 
 	for (i = 0; i < w->sec_per_track; i++)
@@ -755,7 +758,7 @@ static void read_track(device_t *device)
 
 	while (cnt > 0)
 	{
-		if (psrc[0] == 0)	   /* no more track format info ? */
+		if (psrc[0] == 0)      /* no more track format info ? */
 		{
 			if (w->dam_cnt < w->sec_per_track) /* but more DAM info ? */
 			{
@@ -766,52 +769,52 @@ static void read_track(device_t *device)
 			}
 		}
 
-		if (psrc[0] != 0)	   /* more track format info ? */
+		if (psrc[0] != 0)      /* more track format info ? */
 		{
 			cnt -= psrc[0];    /* subtract size */
 			d = psrc[1];
 
-			if (d == 0xf5)	   /* clear CRC ? */
+			if (d == 0xf5)     /* clear CRC ? */
 			{
 				crc = 0xffff;
-				d = 0xa1;	   /* store A1 */
+				d = 0xa1;      /* store A1 */
 			}
 
 			for (i = 0; i < *psrc; i++)
 				*pdst++ = d;   /* fill data */
 
-			if (d == 0xf7)	   /* store CRC ? */
+			if (d == 0xf7)     /* store CRC ? */
 			{
-				pdst--; 	   /* go back one byte */
-				*pdst++ = crc & 255;	/* put CRC low */
-				*pdst++ = crc / 256;	/* put CRC high */
-				cnt -= 1;	   /* count one more byte */
+				pdst--;        /* go back one byte */
+				*pdst++ = crc & 255;    /* put CRC low */
+				*pdst++ = crc / 256;    /* put CRC high */
+				cnt -= 1;      /* count one more byte */
 			}
 			else if (d == 0xfe)/* address mark ? */
 			{
-				crc = 0xffff;	/* reset CRC */
+				crc = 0xffff;   /* reset CRC */
 			}
 			else if (d == 0x80)/* sector ID ? */
 			{
-				pdst--; 	   /* go back one byte */
+				pdst--;        /* go back one byte */
 				t = *pdst++ = w->dam_list[w->dam_cnt][0]; /* track number */
 				h = *pdst++ = w->dam_list[w->dam_cnt][1]; /* head number */
 				s = *pdst++ = w->dam_list[w->dam_cnt][2]; /* sector number */
 				l = *pdst++ = w->dam_list[w->dam_cnt][3]; /* sector length code */
 				w->dam_cnt++;
-				crc = ccitt_crc16_one(crc, t);	/* build CRC */
-				crc = ccitt_crc16_one(crc, h);	/* build CRC */
-				crc = ccitt_crc16_one(crc, s);	/* build CRC */
-				crc = ccitt_crc16_one(crc, l);	/* build CRC */
+				crc = ccitt_crc16_one(crc, t);  /* build CRC */
+				crc = ccitt_crc16_one(crc, h);  /* build CRC */
+				crc = ccitt_crc16_one(crc, s);  /* build CRC */
+				crc = ccitt_crc16_one(crc, l);  /* build CRC */
 				l = (l == 0) ? 128 : l << 8;
 			}
 			else if (d == 0xfb)// data address mark ?
 			{
-				crc = 0xffff;	// reset CRC
+				crc = 0xffff;   // reset CRC
 			}
 			else if (d == 0x81)// sector DATA ?
 			{
-				pdst--; 	   /* go back one byte */
+				pdst--;        /* go back one byte */
 				if (seek(w, t, h, s) == 0)
 				{
 					if (mame_fread(w->image_file, pdst, l) != l)
@@ -834,24 +837,24 @@ static void read_track(device_t *device)
 		else
 		{
 			*pdst++ = 0xff;    /* fill track */
-			cnt--;			   /* until end */
+			cnt--;             /* until end */
 		}
 	}
 #endif
 	/* Determine the track size. We cannot allow different sizes in this
-    design (see above, write_track). */
+	design (see above, write_track). */
 	w->data_count = 0;
 	floppy = flopimg_get_image(w->drive);
 	if (floppy != NULL)
 		w->data_count = floppy_get_track_size(floppy, w->hd, w->track);
 
-        if (w->data_count==0)
-        {
+		if (w->data_count==0)
+		{
 			if (wd17xx_is_sd_only(device))
 				w->data_count = TRKSIZE_SD;
 			else
 				w->data_count = wd17xx_dden(device) ? TRKSIZE_SD : TRKSIZE_DD;
-        }
+		}
 
 	floppy_drive_read_track_data_info_buffer( w->drive, w->hd, (char *)w->buffer, &(w->data_count) );
 
@@ -973,7 +976,7 @@ static int wd17xx_locate_sector(device_t *device)
 			}
 		}
 
-		 /* index set? */
+			/* index set? */
 		if (floppy_drive_get_flag_state(w->drive, FLOPPY_DRIVE_INDEX))
 		{
 			/* update revolution count */
@@ -1003,7 +1006,18 @@ static int wd17xx_find_sector(device_t *device)
 	return 0;
 }
 
+static void wd17xx_side_compare(device_t *device, UINT8 command)
+{
+	wd1770_state *w = get_safe_token(device);
 
+	if (wd17xx_has_side_select(device))
+		wd17xx_set_side(device, (command & FDC_SIDE_CMP_T) ? 1 : 0);
+
+	if (command & FDC_SIDE_CMP_T)
+		w->head = (command & FDC_SIDE_CMP_S) ? 1 : 0;
+	else
+		w->head = ~0;
+}
 
 /* read a sector */
 static void wd17xx_read_sector(device_t *device)
@@ -1012,10 +1026,7 @@ static void wd17xx_read_sector(device_t *device)
 	w->data_offset = 0;
 
 	/* side compare? */
-	if (w->read_cmd & 0x02)
-		w->head = (w->read_cmd & 0x08) ? 1 : 0;
-	else
-		w->head = ~0;
+	wd17xx_side_compare(device, w->read_cmd);
 
 	if (wd17xx_find_sector(device))
 	{
@@ -1062,15 +1073,12 @@ static void wd17xx_write_sector(device_t *device)
 {
 	wd1770_state *w = get_safe_token(device);
 	/* at this point, the disc is write enabled, and data
-     * has been transfered into our buffer - now write it to
-     * the disc image or to the real disc
-     */
+	 * has been transfered into our buffer - now write it to
+	 * the disc image or to the real disc
+	 */
 
 	/* side compare? */
-	if (w->write_cmd & 0x02)
-		w->head = (w->write_cmd & 0x08) ? 1 : 0;
-	else
-		w->head = ~0;
+	wd17xx_side_compare(device, w->write_cmd);
 
 	/* find sector */
 	if (wd17xx_find_sector(device))
@@ -1112,7 +1120,7 @@ static void wd17xx_verify_seek(device_t *device)
 			}
 		}
 
-		 /* index set? */
+			/* index set? */
 		if (floppy_drive_get_flag_state(w->drive, FLOPPY_DRIVE_INDEX))
 		{
 			/* update revolution count */
@@ -1162,7 +1170,6 @@ static TIMER_CALLBACK( wd17xx_write_sector_callback )
 		wd17xx_complete_command(device, DELAY_NOTREADY);
 	else
 	{
-
 		/* drive write protected? */
 		if (floppy_wpt_r(w->drive) == CLEAR_LINE)
 		{
@@ -1173,10 +1180,7 @@ static TIMER_CALLBACK( wd17xx_write_sector_callback )
 		else
 		{
 			/* side compare? */
-			if (w->write_cmd & 0x02)
-				w->head = (w->write_cmd & 0x08) ? 1 : 0;
-			else
-				w->head = ~0;
+			wd17xx_side_compare(device, w->write_cmd);
 
 			/* attempt to find it first before getting data from cpu */
 			if (wd17xx_find_sector(device))
@@ -1242,14 +1246,7 @@ void wd17xx_set_drive(device_t *device, UINT8 drive)
 
 	if (w->intf->floppy_drive_tags[drive] != NULL)
 	{
-		if (device->owner() != NULL) {
-			w->drive = device->owner()->subdevice(w->intf->floppy_drive_tags[drive]);
-			if (w->drive == NULL) {
-				w->drive = device->machine().device(w->intf->floppy_drive_tags[drive]);
-			}
-		}
-		else
-			w->drive = device->machine().device(w->intf->floppy_drive_tags[drive]);
+		w->drive = device->siblingdevice(w->intf->floppy_drive_tags[drive]);
 	}
 }
 
@@ -1344,7 +1341,7 @@ WRITE_LINE_DEVICE_HANDLER( wd17xx_dden_w )
 
 	/* not supported on FD1771, FD1792, FD1794, FD1762 and FD1764 */
 	if (wd17xx_is_sd_only(device))
-		fatalerror("wd17xx_dden_w: double density input not supported on this model!");
+		fatalerror("wd17xx_dden_w: double density input not supported on this model!\n");
 	else if (!w->in_dden_func.isnull())
 		logerror("wd17xx_dden_w: write has no effect because a read handler is already defined!\n");
 	else
@@ -1538,10 +1535,10 @@ WRITE8_DEVICE_HANDLER( wd17xx_command_w )
 		if ((data & ~FDC_MASK_TYPE_II) == FDC_READ_SEC)
 		{
 			if (VERBOSE)
-            {
+			{
 				logerror("%s: wd17xx_command_w $%02X READ_SEC (", device->machine().describe_context(), data);
-                logerror("cmd=%02X, trk=%02X, sec=%02X, dat=%02X)\n",w->command,w->track,w->sector,w->data);
-            }
+				logerror("cmd=%02X, trk=%02X, sec=%02X, dat=%02X)\n",w->command,w->track,w->sector,w->data);
+			}
 			w->read_cmd = data;
 			w->command = data & ~FDC_MASK_TYPE_II;
 			w->command_type = TYPE_II;
@@ -1557,10 +1554,10 @@ WRITE8_DEVICE_HANDLER( wd17xx_command_w )
 		if ((data & ~FDC_MASK_TYPE_II) == FDC_WRITE_SEC)
 		{
 			if (VERBOSE)
-            {
+			{
 				logerror("%s: wd17xx_command_w $%02X WRITE_SEC (", device->machine().describe_context(), data);
-                logerror("cmd=%02X, trk=%02X, sec=%02X, dat=%02X)\n",w->command,w->track,w->sector,w->data);
-            }
+				logerror("cmd=%02X, trk=%02X, sec=%02X, dat=%02X)\n",w->command,w->track,w->sector,w->data);
+			}
 
 			w->write_cmd = data;
 			w->command = data & ~FDC_MASK_TYPE_II;
@@ -1606,7 +1603,6 @@ WRITE8_DEVICE_HANDLER( wd17xx_command_w )
 			}
 			else
 			{
-
 				/* drive write protected? */
 				if (floppy_wpt_r(w->drive) == CLEAR_LINE)
 				{
@@ -1715,7 +1711,7 @@ WRITE8_DEVICE_HANDLER( wd17xx_command_w )
 		}
 
 		/* simulate seek time busy signal */
-		w->busy_count = 0;	//w->busy_count * ((data & FDC_STEP_RATE) + 1);
+		w->busy_count = 0;  //w->busy_count * ((data & FDC_STEP_RATE) + 1);
 #if 0
 		wd17xx_set_intrq(device);
 #endif
@@ -1729,9 +1725,9 @@ WRITE8_DEVICE_HANDLER( wd17xx_command_w )
 			logerror("%s: wd17xx_command_w $%02X STEP dir %+d\n", device->machine().describe_context(), data, w->direction);
 
 		w->command_type = TYPE_I;
-        /* if it is a real floppy, issue a step command */
+		/* if it is a real floppy, issue a step command */
 		/* simulate seek time busy signal */
-		w->busy_count = 0;	//((data & FDC_STEP_RATE) + 1);
+		w->busy_count = 0;  //((data & FDC_STEP_RATE) + 1);
 
 		floppy_drive_seek(w->drive, w->direction);
 
@@ -1754,7 +1750,7 @@ WRITE8_DEVICE_HANDLER( wd17xx_command_w )
 		w->command_type = TYPE_I;
 		w->direction = +1;
 		/* simulate seek time busy signal */
-		w->busy_count = 0;	//((data & FDC_STEP_RATE) + 1);
+		w->busy_count = 0;  //((data & FDC_STEP_RATE) + 1);
 
 		floppy_drive_seek(w->drive, w->direction);
 
@@ -1775,7 +1771,7 @@ WRITE8_DEVICE_HANDLER( wd17xx_command_w )
 		w->command_type = TYPE_I;
 		w->direction = -1;
 		/* simulate seek time busy signal */
-		w->busy_count = 0;	//((data & FDC_STEP_RATE) + 1);
+		w->busy_count = 0;  //((data & FDC_STEP_RATE) + 1);
 
 		/* for now only allows a single drive to be selected */
 		floppy_drive_seek(w->drive, w->direction);
@@ -1848,14 +1844,14 @@ WRITE8_DEVICE_HANDLER( wd17xx_data_w )
 
 		w->buffer[w->data_offset++] = data;
 
-                if (--w->data_count < 1)
-                {
-                        if (w->command == FDC_WRITE_TRK)
-                                write_track(device);
-                        else
-                                wd17xx_write_sector(device);
+				if (--w->data_count < 1)
+				{
+						if (w->command == FDC_WRITE_TRK)
+								write_track(device);
+						else
+								wd17xx_write_sector(device);
 
-                        w->data_offset = 0;
+						w->data_offset = 0;
 
 						/* Check we should handle the next sector for a multi record write */
 						if ( w->command_type == TYPE_II && w->command == FDC_WRITE_SEC && ( w->write_cmd & FDC_MULTI_REC ) )
@@ -1878,109 +1874,109 @@ WRITE8_DEVICE_HANDLER( wd17xx_data_w )
 								logerror("wd17xx_data_w(): multi data write completed\n");
 						}
 //                       wd17xx_complete_command(device, DELAY_DATADONE);
-                }
-                else
-                {
-                        if (w->command == FDC_WRITE_TRK)
-                        {
-                                /* Process special data values according to WD17xx specification.
-                   Note that as CRC values take up two bytes which are written on
-                   every 0xf7 byte, this will cause the actual image to
-                   grow larger than what was written from the system. So we need
-                   to take the value of data_offset when writing the track.
-                                */
-                                if (wd17xx_dden(device))
-                                {
-                                        switch (data)
-                                        {
-                                        case 0xf5:
-                                        case 0xf6:
-                                                /* not allowed in FM. */
-                                                /* Take back the last write. */
-                                                w->data_offset--;
-                                                break;
-                                        case 0xf7:
-                                                /* Take back the last write. */
-                                                w->data_offset--;
-                                                /* write two crc bytes */
-                                                w->buffer[w->data_offset++] = (w->crc>>8)&0xff;
-                                                w->buffer[w->data_offset++] = (w->crc&0xff);
-                                                w->crc_active = FALSE;
-                                                break;
-                                        case 0xf8:
-                                        case 0xf9:
-                                        case 0xfa:
-                                        case 0xfb:
-                                        case 0xfe:
-                                                /* Preset crc */
-                                                w->crc = 0xffff;
+				}
+				else
+				{
+						if (w->command == FDC_WRITE_TRK)
+						{
+								/* Process special data values according to WD17xx specification.
+					Note that as CRC values take up two bytes which are written on
+					every 0xf7 byte, this will cause the actual image to
+					grow larger than what was written from the system. So we need
+					to take the value of data_offset when writing the track.
+								*/
+								if (wd17xx_dden(device))
+								{
+										switch (data)
+										{
+										case 0xf5:
+										case 0xf6:
+												/* not allowed in FM. */
+												/* Take back the last write. */
+												w->data_offset--;
+												break;
+										case 0xf7:
+												/* Take back the last write. */
+												w->data_offset--;
+												/* write two crc bytes */
+												w->buffer[w->data_offset++] = (w->crc>>8)&0xff;
+												w->buffer[w->data_offset++] = (w->crc&0xff);
+												w->crc_active = FALSE;
+												break;
+										case 0xf8:
+										case 0xf9:
+										case 0xfa:
+										case 0xfb:
+										case 0xfe:
+												/* Preset crc */
+												w->crc = 0xffff;
 						/* AM is included in the CRC */
 						w->crc = ccitt_crc16_one(w->crc, data);
-                                                w->crc_active = TRUE;
-                                                break;
-                                        case 0xfc:
-                                                /* Write index mark. No effect here as we do not store clock patterns.
-                           Maybe later. */
-                                                break;
-                                        case 0xfd:
-                                                /* Just write, don't use for CRC. */
-                                                break;
-                                        default:
-                                                /* Byte already written. */
-                                                if (w->crc_active)
-                                                        w->crc = ccitt_crc16_one(w->crc, data);
-                                        }
-                                }
-                                else  /* MFM */
-                                {
-                                        switch (data)
-                                        {
-                                        case 0xf5:
-                                                /* Take back the last write. */
-                                                w->data_offset--;
-                                                /* Write a1 */
-                                                w->buffer[w->data_offset++] = 0xa1;
-                                                /* Preset CRC */
-                                                w->crc = 0xffff;
-                                                w->crc_active = TRUE;
-                                                break;
-                                        case 0xf6:
-                                                /* Take back the last write. */
-                                                w->data_offset--;
-                                                /* Write c2 */
-                                                w->buffer[w->data_offset++] = 0xc2;
-                                                break;
-                                        case 0xf7:
-                                                /* Take back the last write. */
-                                                w->data_offset--;
-                                                /* write two crc bytes */
-                                                w->buffer[w->data_offset++] = (w->crc>>8)&0xff;
-                                                w->buffer[w->data_offset++] = (w->crc&0xff);
-                                                w->crc_active = FALSE;
-                                                break;
-                                        case 0xf8:
-                                        case 0xf9:
-                                        case 0xfa:
-                                        case 0xfb:
-                                        case 0xfc:
-                                        case 0xfd:
-                                                /* Just write, don't use for CRC. */
-                                                break;
-                                        case 0xfe:
+												w->crc_active = TRUE;
+												break;
+										case 0xfc:
+												/* Write index mark. No effect here as we do not store clock patterns.
+							Maybe later. */
+												break;
+										case 0xfd:
+												/* Just write, don't use for CRC. */
+												break;
+										default:
+												/* Byte already written. */
+												if (w->crc_active)
+														w->crc = ccitt_crc16_one(w->crc, data);
+										}
+								}
+								else  /* MFM */
+								{
+										switch (data)
+										{
+										case 0xf5:
+												/* Take back the last write. */
+												w->data_offset--;
+												/* Write a1 */
+												w->buffer[w->data_offset++] = 0xa1;
+												/* Preset CRC */
+												w->crc = 0xffff;
+												w->crc_active = TRUE;
+												break;
+										case 0xf6:
+												/* Take back the last write. */
+												w->data_offset--;
+												/* Write c2 */
+												w->buffer[w->data_offset++] = 0xc2;
+												break;
+										case 0xf7:
+												/* Take back the last write. */
+												w->data_offset--;
+												/* write two crc bytes */
+												w->buffer[w->data_offset++] = (w->crc>>8)&0xff;
+												w->buffer[w->data_offset++] = (w->crc&0xff);
+												w->crc_active = FALSE;
+												break;
+										case 0xf8:
+										case 0xf9:
+										case 0xfa:
+										case 0xfb:
+										case 0xfc:
+										case 0xfd:
+												/* Just write, don't use for CRC. */
+												break;
+										case 0xfe:
 						/* AM is included in the CRC */
 						if (w->crc_active)
 							w->crc = ccitt_crc16_one(w->crc, data);
-                                                break;
-                                        default:
-                                                /* Byte already written. */
-                                                if (w->crc_active)
-                                                        w->crc = ccitt_crc16_one(w->crc, data);
-                                        }
-                                }
-                        }
-                        /* yes... setup a timed data request */
-                        wd17xx_timed_data_request(device);
-                }
+												break;
+										default:
+												/* Byte already written. */
+												if (w->crc_active)
+														w->crc = ccitt_crc16_one(w->crc, data);
+										}
+								}
+						}
+						/* yes... setup a timed data request */
+						wd17xx_timed_data_request(device);
+				}
 	}
 	else
 	{
@@ -1996,12 +1992,12 @@ READ8_DEVICE_HANDLER( wd17xx_r )
 
 	switch (offset & 0x03)
 	{
-	case 0: data = wd17xx_status_r(device, 0); break;
-	case 1:	data = wd17xx_track_r(device, 0); break;
-	case 2:	data = wd17xx_sector_r(device, 0); break;
-	case 3:	data = wd17xx_data_r(device, 0); break;
+	case 0: data = wd17xx_status_r(device, device->machine().driver_data()->generic_space(), 0); break;
+	case 1: data = wd17xx_track_r(device, device->machine().driver_data()->generic_space(), 0); break;
+	case 2: data = wd17xx_sector_r(device, device->machine().driver_data()->generic_space(), 0); break;
+	case 3: data = wd17xx_data_r(device, device->machine().driver_data()->generic_space(), 0); break;
 	}
-	
+
 	return data;
 }
 
@@ -2009,10 +2005,10 @@ WRITE8_DEVICE_HANDLER( wd17xx_w )
 {
 	switch (offset & 0x03)
 	{
-	case 0: wd17xx_command_w(device, 0, data); break;
-	case 1:	wd17xx_track_w(device, 0, data);   break;
-	case 2: wd17xx_sector_w(device, 0, data);  break;
-	case 3: wd17xx_data_w(device, 0, data);    break;
+	case 0: wd17xx_command_w(device, device->machine().driver_data()->generic_space(), 0, data); break;
+	case 1: wd17xx_track_w(device, device->machine().driver_data()->generic_space(), 0, data);   break;
+	case 2: wd17xx_sector_w(device, device->machine().driver_data()->generic_space(), 0, data);  break;
+	case 3: wd17xx_data_w(device, device->machine().driver_data()->generic_space(), 0, data);    break;
 	}
 }
 
@@ -2078,14 +2074,7 @@ static DEVICE_RESET( wd1770 )
 		if(w->intf->floppy_drive_tags[i]!=NULL) {
 			device_t *img = NULL;
 
-			if (device->owner() != NULL)
-				img = device->owner()->subdevice(w->intf->floppy_drive_tags[i]);
-				if (img == NULL) {
-					img = device->machine().device(w->intf->floppy_drive_tags[i]);
-				}
-
-			else
-				img = device->machine().device(w->intf->floppy_drive_tags[i]);
+			img = device->siblingdevice(w->intf->floppy_drive_tags[i]);
 
 			if (img!=NULL) {
 				floppy_drive_set_controller(img,device);
@@ -2108,157 +2097,236 @@ void wd17xx_reset(device_t *device)
 	DEVICE_RESET_CALL( wd1770 );
 }
 
+const device_type FD1771 = &device_creator<fd1771_device>;
 
-/***************************************************************************
-    DEVICE GETINFO
-***************************************************************************/
+fd1771_device::fd1771_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1771, "FD1771", tag, owner, clock, "fd1771", __FILE__)
+{
+}
 
-static const char DEVTEMPLATE_SOURCE[] = __FILE__;
 
-#define DEVTEMPLATE_ID(p,s)				p##wd1770##s
-#define DEVTEMPLATE_FEATURES			DT_HAS_START | DT_HAS_RESET
-#define DEVTEMPLATE_NAME				"WD1770"
-#define DEVTEMPLATE_FAMILY				"WD17xx"
-#define DEVTEMPLATE_VERSION				"1.0"
-#define DEVTEMPLATE_CREDITS				"Copyright MESS Team"
-#include "devtempl.h"
+const device_type FD1781 = &device_creator<fd1781_device>;
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1771##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1771"
-#include "devtempl.h"
+fd1781_device::fd1781_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1781, "FD1781", tag, owner, clock, "fd1781", __FILE__)
+{
+}
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1781##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1781"
-#include "devtempl.h"
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1791##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1791"
-#include "devtempl.h"
+const device_type FD1791 = &device_creator<fd1791_device>;
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1792##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1792"
-#include "devtempl.h"
+fd1791_device::fd1791_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1791, "FD1791", tag, owner, clock, "fd1791", __FILE__)
+{
+}
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1793##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1793"
-#include "devtempl.h"
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1794##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1794"
-#include "devtempl.h"
+const device_type FD1792 = &device_creator<fd1792_device>;
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1795##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1795"
-#include "devtempl.h"
+fd1792_device::fd1792_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1792, "FD1792", tag, owner, clock, "fd1792", __FILE__)
+{
+}
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1797##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1797"
-#include "devtempl.h"
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1761##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1761"
-#include "devtempl.h"
+const device_type FD1793 = &device_creator<fd1793_device>;
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1762##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1762"
-#include "devtempl.h"
+fd1793_device::fd1793_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1793, "FD1793", tag, owner, clock, "fd1793", __FILE__)
+{
+}
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1763##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1763"
-#include "devtempl.h"
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1764##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1764"
-#include "devtempl.h"
+const device_type FD1794 = &device_creator<fd1794_device>;
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1765##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1765"
-#include "devtempl.h"
+fd1794_device::fd1794_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1794, "FD1794", tag, owner, clock, "fd1794", __FILE__)
+{
+}
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##fd1767##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"FD1767"
-#include "devtempl.h"
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##wd2791##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"WD2791"
-#include "devtempl.h"
+const device_type FD1795 = &device_creator<fd1795_device>;
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##wd2793##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"WD2793"
-#include "devtempl.h"
+fd1795_device::fd1795_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1795, "FD1795", tag, owner, clock, "fd1795", __FILE__)
+{
+}
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##wd2795##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"WD2795"
-#include "devtempl.h"
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##wd2797##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"WD2797"
-#include "devtempl.h"
+const device_type FD1797 = &device_creator<fd1797_device>;
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##wd1772##s
-#define DEVTEMPLATE_DERIVED_FEATURES	DT_HAS_START
-#define DEVTEMPLATE_DERIVED_NAME		"WD1772"
-#include "devtempl.h"
+fd1797_device::fd1797_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1797, "FD1797", tag, owner, clock, "fd1797", __FILE__)
+{
+}
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##wd1773##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"WD1773"
-#include "devtempl.h"
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##mb8866##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"MB8866"
-#include "devtempl.h"
+const device_type FD1761 = &device_creator<fd1761_device>;
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##mb8876##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"MB8876"
-#include "devtempl.h"
+fd1761_device::fd1761_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1761, "FD1761", tag, owner, clock, "fd1761", __FILE__)
+{
+}
 
-#define DEVTEMPLATE_DERIVED_ID(p,s)		p##mb8877##s
-#define DEVTEMPLATE_DERIVED_FEATURES	0
-#define DEVTEMPLATE_DERIVED_NAME		"MB8877"
-#include "devtempl.h"
 
-DEFINE_LEGACY_DEVICE(FD1771, fd1771);
-DEFINE_LEGACY_DEVICE(FD1781, fd1781);
-DEFINE_LEGACY_DEVICE(FD1791, fd1791);
-DEFINE_LEGACY_DEVICE(FD1792, fd1792);
-DEFINE_LEGACY_DEVICE(FD1793, fd1793);
-DEFINE_LEGACY_DEVICE(FD1794, fd1794);
-DEFINE_LEGACY_DEVICE(FD1795, fd1795);
-DEFINE_LEGACY_DEVICE(FD1797, fd1797);
-DEFINE_LEGACY_DEVICE(FD1761, fd1761);
-DEFINE_LEGACY_DEVICE(FD1762, fd1762);
-DEFINE_LEGACY_DEVICE(FD1763, fd1763);
-DEFINE_LEGACY_DEVICE(FD1764, fd1764);
-DEFINE_LEGACY_DEVICE(FD1765, fd1765);
-DEFINE_LEGACY_DEVICE(FD1767, fd1767);
-DEFINE_LEGACY_DEVICE(WD2791, wd2791);
-DEFINE_LEGACY_DEVICE(WD2793, wd2793);
-DEFINE_LEGACY_DEVICE(WD2795, wd2795);
-DEFINE_LEGACY_DEVICE(WD2797, wd2797);
-DEFINE_LEGACY_DEVICE(WD1770, wd1770);
-DEFINE_LEGACY_DEVICE(WD1772, wd1772);
-DEFINE_LEGACY_DEVICE(WD1773, wd1773);
-DEFINE_LEGACY_DEVICE(MB8866, mb8866);
-DEFINE_LEGACY_DEVICE(MB8876, mb8876);
-DEFINE_LEGACY_DEVICE(MB8877, mb8877);
+const device_type FD1762 = &device_creator<fd1762_device>;
+
+fd1762_device::fd1762_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1762, "FD1762", tag, owner, clock, "fd1762", __FILE__)
+{
+}
+
+
+const device_type FD1763 = &device_creator<fd1763_device>;
+
+fd1763_device::fd1763_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1763, "FD1763", tag, owner, clock, "fd1763", __FILE__)
+{
+}
+
+
+const device_type FD1764 = &device_creator<fd1764_device>;
+
+fd1764_device::fd1764_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1764, "FD1764", tag, owner, clock, "fd1764", __FILE__)
+{
+}
+
+
+const device_type FD1765 = &device_creator<fd1765_device>;
+
+fd1765_device::fd1765_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1765, "FD1765", tag, owner, clock, "fd1765", __FILE__)
+{
+}
+
+
+const device_type FD1767 = &device_creator<fd1767_device>;
+
+fd1767_device::fd1767_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, FD1767, "FD1767", tag, owner, clock, "fd1767", __FILE__)
+{
+}
+
+
+const device_type WD2791 = &device_creator<wd2791_device>;
+
+wd2791_device::wd2791_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, WD2791, "WD2791", tag, owner, clock, "wd2791", __FILE__)
+{
+}
+
+
+const device_type WD2793 = &device_creator<wd2793_device>;
+
+wd2793_device::wd2793_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, WD2793, "WD2793", tag, owner, clock, "wd2793", __FILE__)
+{
+}
+
+
+const device_type WD2795 = &device_creator<wd2795_device>;
+
+wd2795_device::wd2795_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, WD2795, "WD2795", tag, owner, clock, "wd2795", __FILE__)
+{
+}
+
+
+const device_type WD2797 = &device_creator<wd2797_device>;
+
+wd2797_device::wd2797_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, WD2797, "WD2797_LEGACY", tag, owner, clock, "wd2797_l", __FILE__)
+{
+}
+
+
+const device_type WD1770 = &device_creator<wd1770_device>;
+
+wd1770_device::wd1770_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, WD1770, "WD1770_LEGACY", tag, owner, clock, "wd1770_l", __FILE__)
+{
+	m_token = global_alloc_clear(wd1770_state);
+}
+wd1770_device::wd1770_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source)
+	: device_t(mconfig, type, name, tag, owner, clock, shortname, source)
+{
+	m_token = global_alloc_clear(wd1770_state);
+}
+
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void wd1770_device::device_config_complete()
+{
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void wd1770_device::device_start()
+{
+	DEVICE_START_NAME( wd1770 )(this);
+}
+
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void wd1770_device::device_reset()
+{
+	DEVICE_RESET_NAME( wd1770 )(this);
+}
+
+
+const device_type WD1772 = &device_creator<wd1772_device>;
+
+wd1772_device::wd1772_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, WD1772, "WD1772_LEGACY", tag, owner, clock, "wd1772_l", __FILE__)
+{
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void wd1772_device::device_start()
+{
+	DEVICE_START_NAME( wd1772 )(this);
+}
+
+
+const device_type WD1773 = &device_creator<wd1773_device>;
+
+wd1773_device::wd1773_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, WD1773, "WD1773_LEGACY", tag, owner, clock, "wd1773_l", __FILE__)
+{
+}
+
+
+const device_type MB8866 = &device_creator<mb8866_device>;
+
+mb8866_device::mb8866_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, MB8866, "MB8866", tag, owner, clock, "mb8866", __FILE__)
+{
+}
+
+
+const device_type MB8876 = &device_creator<mb8876_device>;
+
+mb8876_device::mb8876_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, MB8876, "MB8876", tag, owner, clock, "mb8876", __FILE__)
+{
+}
+
+
+const device_type MB8877 = &device_creator<mb8877_device>;
+
+mb8877_device::mb8877_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: wd1770_device(mconfig, MB8877, "MB8877_LEGACY", tag, owner, clock, "mb8877_l", __FILE__)
+{
+}

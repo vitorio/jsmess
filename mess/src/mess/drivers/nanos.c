@@ -5,23 +5,17 @@
         12/05/2009 Skeleton driver.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/z80/z80daisy.h"
 #include "machine/z80pio.h"
-#include "machine/z80sio.h"
+#include "machine/z80dart.h"
 #include "machine/z80ctc.h"
 #include "machine/upd765.h"
-#include "imagedev/flopdrv.h"
-#include "formats/basicdsk.h"
+#include "formats/nanos_dsk.h"
 #include "machine/ram.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define MACHINE_START_MEMBER(name) void name::machine_start()
-#define VIDEO_START_MEMBER(name) void name::video_start()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
 class nanos_state : public driver_device
 {
@@ -37,19 +31,33 @@ public:
 	m_ctc_0(*this, "z80ctc_0"),
 	m_ctc_1(*this, "z80ctc_1"),
 	m_fdc(*this, "upd765"),
-	m_key_t(*this, "keyboard_timer")
+	m_key_t(*this, "keyboard_timer"),
+	m_ram(*this, RAM_TAG),
+	m_region_maincpu(*this, "maincpu"),
+	m_bank1(*this, "bank1"),
+	m_bank2(*this, "bank2"),
+	m_bank3(*this, "bank3"),
+	m_line0(*this, "LINE0"),
+	m_line1(*this, "LINE1"),
+	m_line2(*this, "LINE2"),
+	m_line3(*this, "LINE3"),
+	m_line4(*this, "LINE4"),
+	m_line5(*this, "LINE5"),
+	m_line6(*this, "LINE6"),
+	m_linec(*this, "LINEC")
 	{ }
 
 	required_device<cpu_device> m_maincpu;
-	required_device<device_t> m_pio;
-	required_device<device_t> m_pio_0;
-	required_device<device_t> m_pio_1;
-	required_device<device_t> m_sio_0;
-	required_device<device_t> m_sio_1;
-	required_device<device_t> m_ctc_0;
-	required_device<device_t> m_ctc_1;
-	required_device<device_t> m_fdc;
-	required_device<device_t> m_key_t;
+	required_device<z80pio_device> m_pio;
+	required_device<z80pio_device> m_pio_0;
+	required_device<z80pio_device> m_pio_1;
+	required_device<z80sio0_device> m_sio_0;
+	required_device<z80sio0_device> m_sio_1;
+	required_device<z80ctc_device> m_ctc_0;
+	required_device<z80ctc_device> m_ctc_1;
+	required_device<upd765a_device> m_fdc;
+	required_device<timer_device> m_key_t;
+	required_device<ram_device> m_ram;
 	const UINT8 *m_p_chargen;
 	UINT8 m_key_command;
 	UINT8 m_last_code;
@@ -61,7 +69,28 @@ public:
 	virtual void machine_reset();
 	virtual void machine_start();
 	virtual void video_start();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	TIMER_DEVICE_CALLBACK_MEMBER(keyboard_callback);
+	DECLARE_WRITE_LINE_MEMBER(z80daisy_interrupt);
+	DECLARE_READ8_MEMBER(nanos_port_a_r);
+	DECLARE_READ8_MEMBER(nanos_port_b_r);
+	DECLARE_WRITE8_MEMBER(nanos_port_b_w);
+	DECLARE_FLOPPY_FORMATS( floppy_formats );
+
+protected:
+	required_memory_region m_region_maincpu;
+	required_memory_bank m_bank1;
+	required_memory_bank m_bank2;
+	required_memory_bank m_bank3;
+	required_ioport m_line0;
+	required_ioport m_line1;
+	required_ioport m_line2;
+	required_ioport m_line3;
+	required_ioport m_line4;
+	required_ioport m_line5;
+	required_ioport m_line6;
+	required_ioport m_linec;
+	UINT8 row_number(UINT8 code);
 };
 
 
@@ -73,7 +102,7 @@ ADDRESS_MAP_END
 
 WRITE8_MEMBER(nanos_state::nanos_tc_w)
 {
-	upd765_tc_w(m_fdc, BIT(data,1));
+	m_fdc->tc_w(BIT(data,1));
 }
 
 
@@ -93,52 +122,83 @@ WRITE_LINE_MEMBER( nanos_state::ctc_z2_w )
 
 static Z80CTC_INTERFACE( ctc_intf )
 {
-	0,              	/* timer disables */
-	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0),	/* interrupt handler */
-	DEVCB_DRIVER_LINE_MEMBER(nanos_state, ctc_z0_w),	/* ZC/TO0 callback */
-	DEVCB_DRIVER_LINE_MEMBER(nanos_state, ctc_z1_w),	/* ZC/TO1 callback */
-	DEVCB_DRIVER_LINE_MEMBER(nanos_state, ctc_z2_w)		/* ZC/TO2 callback */
+	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0),   /* interrupt handler */
+	DEVCB_DRIVER_LINE_MEMBER(nanos_state, ctc_z0_w),    /* ZC/TO0 callback */
+	DEVCB_DRIVER_LINE_MEMBER(nanos_state, ctc_z1_w),    /* ZC/TO1 callback */
+	DEVCB_DRIVER_LINE_MEMBER(nanos_state, ctc_z2_w)     /* ZC/TO2 callback */
 };
 
 /* Z80-PIO Interface */
 
 static Z80PIO_INTERFACE( pio1_intf )
 {
-	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0),	/* callback when change interrupt status */
-	DEVCB_NULL,						/* port A read callback */
-	DEVCB_NULL,						/* port A write callback */
-	DEVCB_NULL,						/* portA ready active callback */
-	DEVCB_NULL,						/* port B read callback */
-	DEVCB_NULL,						/* port B write callback */
-	DEVCB_NULL						/* portB ready active callback */
+	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0),   /* callback when change interrupt status */
+	DEVCB_NULL,                     /* port A read callback */
+	DEVCB_NULL,                     /* port A write callback */
+	DEVCB_NULL,                     /* portA ready active callback */
+	DEVCB_NULL,                     /* port B read callback */
+	DEVCB_NULL,                     /* port B write callback */
+	DEVCB_NULL                      /* portB ready active callback */
 };
 
 static Z80PIO_INTERFACE( pio2_intf )
 {
-	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0),	/* callback when change interrupt status */
-	DEVCB_NULL,						/* port A read callback */
-	DEVCB_NULL,						/* port A write callback */
-	DEVCB_NULL,						/* portA ready active callback */
-	DEVCB_NULL,						/* port B read callback */
-	DEVCB_NULL,						/* port B write callback */
-	DEVCB_NULL						/* portB ready active callback */
+	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0),   /* callback when change interrupt status */
+	DEVCB_NULL,                     /* port A read callback */
+	DEVCB_NULL,                     /* port A write callback */
+	DEVCB_NULL,                     /* portA ready active callback */
+	DEVCB_NULL,                     /* port B read callback */
+	DEVCB_NULL,                     /* port B write callback */
+	DEVCB_NULL                      /* portB ready active callback */
 };
 
 /* Z80-SIO Interface */
 
-static void z80daisy_interrupt(device_t *device, int state)
+WRITE_LINE_MEMBER(nanos_state::z80daisy_interrupt)
 {
-	cputag_set_input_line(device->machine(), "maincpu", INPUT_LINE_IRQ0, state);
+	m_maincpu->set_input_line(INPUT_LINE_IRQ0, state);
 }
 
-static const z80sio_interface sio_intf =
+static Z80SIO_INTERFACE( sio1_intf )
 {
-	z80daisy_interrupt,	/* interrupt handler */
-	NULL,				/* DTR changed handler */
-	NULL,				/* RTS changed handler */
-	NULL,				/* BREAK changed handler */
-	NULL,				/* transmit handler */
-	NULL				/* receive handler */
+	0, 0, 0, 0,
+
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+
+	DEVCB_DRIVER_LINE_MEMBER(nanos_state, z80daisy_interrupt)
+};
+
+static Z80SIO_INTERFACE( sio2_intf )
+{
+	0, 0, 0, 0,
+
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+
+	DEVCB_DRIVER_LINE_MEMBER(nanos_state, z80daisy_interrupt)
 };
 
 /* Z80 Daisy Chain */
@@ -154,31 +214,25 @@ static const z80_daisy_config nanos_daisy_chain[] =
 	{ "z80ctc_1" },
 	{ NULL }
 };
+
 static ADDRESS_MAP_START( nanos_io , AS_IO, 8, nanos_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	/* CPU card */
-	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE_LEGACY("z80pio", z80pio_cd_ba_r, z80pio_cd_ba_w)
+	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("z80pio", z80pio_device, read, write)
 
 	/* I/O card */
-	AM_RANGE(0x80, 0x83) AM_DEVREADWRITE_LEGACY("z80pio_0", z80pio_cd_ba_r, z80pio_cd_ba_w)
-	AM_RANGE(0x84, 0x84) AM_DEVREADWRITE_LEGACY("z80sio_0", z80sio_d_r, z80sio_d_w)
-	AM_RANGE(0x85, 0x85) AM_DEVREADWRITE_LEGACY("z80sio_0", z80sio_c_r, z80sio_c_w)
-	AM_RANGE(0x86, 0x86) AM_DEVREADWRITE_LEGACY("z80sio_0", z80sio_d_r, z80sio_d_w)
-	AM_RANGE(0x87, 0x87) AM_DEVREADWRITE_LEGACY("z80sio_0", z80sio_c_r, z80sio_c_w)
-	AM_RANGE(0x88, 0x8B) AM_DEVREADWRITE_LEGACY("z80pio_1", z80pio_cd_ba_r, z80pio_cd_ba_w)
-	AM_RANGE(0x8C, 0x8F) AM_DEVREADWRITE_LEGACY("z80ctc_0", z80ctc_r, z80ctc_w)
+	AM_RANGE(0x80, 0x83) AM_DEVREADWRITE("z80pio_0", z80pio_device, read, write)
+	AM_RANGE(0x84, 0x87) AM_DEVREADWRITE("z80sio_0", z80sio0_device, ba_cd_r, ba_cd_w)
+	AM_RANGE(0x88, 0x8B) AM_DEVREADWRITE("z80pio_1", z80pio_device, read, write)
+	AM_RANGE(0x8C, 0x8F) AM_DEVREADWRITE("z80ctc_0", z80ctc_device, read, write)
 
 	/* FDC card */
 	AM_RANGE(0x92, 0x92) AM_WRITE(nanos_tc_w)
-	AM_RANGE(0x94, 0x94) AM_DEVREAD_LEGACY("upd765", upd765_status_r)
-	AM_RANGE(0x95, 0x95) AM_DEVREADWRITE_LEGACY("upd765", upd765_data_r, upd765_data_w)
+	AM_RANGE(0x94, 0x95) AM_DEVICE("upd765", upd765a_device, map)
 	/* V24+IFSS card */
-	AM_RANGE(0xA0, 0xA0) AM_DEVREADWRITE_LEGACY("z80sio_1", z80sio_d_r, z80sio_d_w)
-	AM_RANGE(0xA1, 0xA1) AM_DEVREADWRITE_LEGACY("z80sio_1", z80sio_c_r, z80sio_c_w)
-	AM_RANGE(0xA2, 0xA2) AM_DEVREADWRITE_LEGACY("z80sio_1", z80sio_d_r, z80sio_d_w)
-	AM_RANGE(0xA3, 0xA3) AM_DEVREADWRITE_LEGACY("z80sio_1", z80sio_c_r, z80sio_c_w)
-	AM_RANGE(0xA4, 0xA7) AM_DEVREADWRITE_LEGACY("z80ctc_1", z80ctc_r, z80ctc_w)
+	AM_RANGE(0xA0, 0xA3) AM_DEVREADWRITE("z80sio_0", z80sio0_device, ba_cd_r, ba_cd_w)
+	AM_RANGE(0xA4, 0xA7) AM_DEVREADWRITE("z80ctc_1", z80ctc_device, read, write)
 
 	/* 256-k RAM card I  -  64k OS-Memory + 192k-RAM-Floppy */
 	//AM_RANGE(0xC0, 0xC7)
@@ -271,12 +325,12 @@ static INPUT_PORTS_START( nanos )
 INPUT_PORTS_END
 
 
-VIDEO_START_MEMBER( nanos_state )
+void nanos_state::video_start()
 {
-	m_p_chargen = machine().region("chargen")->base();
+	m_p_chargen = memregion("chargen")->base();
 }
 
-SCREEN_UPDATE_MEMBER( nanos_state )
+UINT32 nanos_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 //  static UINT8 framecnt=0;
 	UINT8 y,ra,chr,gfx;
@@ -288,13 +342,13 @@ SCREEN_UPDATE_MEMBER( nanos_state )
 	{
 		for (ra = 0; ra < 10; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(&bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma + 80; x++)
 			{
 				if (ra < 8)
 				{
-					chr = ram_get_ptr(machine().device(RAM_TAG))[0xf800+ x];
+					chr = m_ram->pointer()[0xf800+ x];
 
 					/* get pattern of pixels for that character scanline */
 					gfx = m_p_chargen[(chr<<3) | ra ];
@@ -318,37 +372,36 @@ SCREEN_UPDATE_MEMBER( nanos_state )
 	return 0;
 }
 
-static READ8_DEVICE_HANDLER (nanos_port_a_r)
+READ8_MEMBER(nanos_state::nanos_port_a_r)
 {
-	nanos_state *state = device->machine().driver_data<nanos_state>();
 	UINT8 retVal;
-	if (state->m_key_command==0)  {
-		return state->m_key_pressed;
+	if (m_key_command==0)  {
+		return m_key_pressed;
 	} else {
-		retVal = state->m_last_code;
-		state->m_last_code = 0;
+		retVal = m_last_code;
+		m_last_code = 0;
 		return retVal;
 	}
 }
 
-static READ8_DEVICE_HANDLER (nanos_port_b_r)
+READ8_MEMBER(nanos_state::nanos_port_b_r)
 {
 	return 0xff;
 }
 
 
-static WRITE8_DEVICE_HANDLER (nanos_port_b_w)
+WRITE8_MEMBER(nanos_state::nanos_port_b_w)
 {
-	nanos_state *state = device->machine().driver_data<nanos_state>();
-	state->m_key_command = BIT(data,1);
+	m_key_command = BIT(data,1);
 	if (BIT(data,7)) {
-		memory_set_bankptr(device->machine(), "bank1", device->machine().region("maincpu")->base());
+		m_bank1->set_base(m_region_maincpu->base());
 	} else {
-		memory_set_bankptr(device->machine(), "bank1", ram_get_ptr(device->machine().device(RAM_TAG)));
+		m_bank1->set_base(m_ram->pointer());
 	}
 }
 
-static UINT8 row_number(UINT8 code) {
+UINT8 nanos_state::row_number(UINT8 code)
+{
 	if BIT(code,0) return 0;
 	if BIT(code,1) return 1;
 	if BIT(code,2) return 2;
@@ -360,21 +413,19 @@ static UINT8 row_number(UINT8 code) {
 	return 0;
 }
 
-static TIMER_DEVICE_CALLBACK(keyboard_callback)
+TIMER_DEVICE_CALLBACK_MEMBER(nanos_state::keyboard_callback)
 {
-	nanos_state *state = timer.machine().driver_data<nanos_state>();
-	static const char *const keynames[] = { "LINE0", "LINE1", "LINE2", "LINE3", "LINE4", "LINE5", "LINE6" };
+	ioport_port *io_ports[] = { m_line0, m_line1, m_line2, m_line3, m_line4, m_line5, m_line6 };
 
 	int i;
 	UINT8 code;
 	UINT8 key_code = 0;
-	UINT8 shift = input_port_read(timer.machine(), "LINEC") & 0x02 ? 1 : 0;
-	UINT8 ctrl =  input_port_read(timer.machine(), "LINEC") & 0x01 ? 1 : 0;
-	state->m_key_pressed = 0xff;
+	UINT8 shift = m_linec->read() & 0x02 ? 1 : 0;
+	UINT8 ctrl =  m_linec->read() & 0x01 ? 1 : 0;
+	m_key_pressed = 0xff;
 	for(i = 0; i < 7; i++)
 	{
-
-		code =	input_port_read(timer.machine(), keynames[i]);
+		code = io_ports[i]->read();
 		if (code != 0)
 		{
 			if (i==0 && shift==0) {
@@ -436,89 +487,64 @@ static TIMER_DEVICE_CALLBACK(keyboard_callback)
 					case 7: key_code = 0x0A; break; // LF
 				}
 			}
-			state->m_last_code = key_code;
+			m_last_code = key_code;
 		}
 	}
 	if (key_code==0){
-		state->m_key_pressed = 0xf7;
+		m_key_pressed = 0xf7;
 	}
 }
 
-MACHINE_START_MEMBER(nanos_state)
+void nanos_state::machine_start()
 {
 	m_key_pressed = 0xff;
 }
 
-MACHINE_RESET_MEMBER(nanos_state)
+void nanos_state::machine_reset()
 {
-	address_space *space = machine().device("maincpu")->memory().space(AS_PROGRAM);
+	address_space &space = m_maincpu->space(AS_PROGRAM);
 
-	space->install_write_bank(0x0000, 0x0fff, "bank3");
-	space->install_write_bank(0x1000, 0xffff, "bank2");
+	space.install_write_bank(0x0000, 0x0fff, "bank3");
+	space.install_write_bank(0x1000, 0xffff, "bank2");
 
-	memory_set_bankptr(machine(), "bank1", machine().region("maincpu")->base());
-	memory_set_bankptr(machine(), "bank2", ram_get_ptr(machine().device(RAM_TAG)) + 0x1000);
-	memory_set_bankptr(machine(), "bank3", ram_get_ptr(machine().device(RAM_TAG)));
+	m_bank1->set_base(m_region_maincpu->base());
+	m_bank2->set_base(m_ram->pointer() + 0x1000);
+	m_bank3->set_base(m_ram->pointer());
 
-	floppy_mon_w(floppy_get_device(space->machine(), 0), CLEAR_LINE);
-	floppy_drive_set_ready_state(floppy_get_device(space->machine(), 0), 1,1);
+	machine().device<floppy_connector>("upd765:0")->get_device()->mon_w(false);
 }
 
 static Z80PIO_INTERFACE( nanos_z80pio_intf )
 {
-	DEVCB_NULL,	/* callback when change interrupt status */
-	DEVCB_HANDLER(nanos_port_a_r),
+	DEVCB_NULL, /* callback when change interrupt status */
+	DEVCB_DRIVER_MEMBER(nanos_state,nanos_port_a_r),
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_HANDLER(nanos_port_b_r),
-	DEVCB_HANDLER(nanos_port_b_w),
+	DEVCB_DRIVER_MEMBER(nanos_state,nanos_port_b_r),
+	DEVCB_DRIVER_MEMBER(nanos_state,nanos_port_b_w),
 	DEVCB_NULL
 };
 
+FLOPPY_FORMATS_MEMBER( nanos_state::floppy_formats )
+	FLOPPY_NANOS_FORMAT
+FLOPPY_FORMATS_END
 
-static const upd765_interface nanos_upd765_interface =
-{
-	DEVCB_NULL,
-	DEVCB_NULL,
-	NULL,
-	UPD765_RDY_PIN_NOT_CONNECTED,
-	{FLOPPY_0,FLOPPY_1, FLOPPY_2, FLOPPY_3}
-};
-
-static FLOPPY_OPTIONS_START(nanos)
-	FLOPPY_OPTION(nanos, "img", "NANOS disk image", basicdsk_identify_default, basicdsk_construct_default, NULL,
-		HEADS([2])
-		TRACKS([80])
-		SECTORS([5])
-		SECTOR_LENGTH([1024])
-		FIRST_SECTOR_ID([1]))
-FLOPPY_OPTIONS_END
-
-static const floppy_interface nanos_floppy_interface =
-{
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	FLOPPY_STANDARD_5_25_DSHD,
-	FLOPPY_OPTIONS_NAME(nanos),
-	NULL,
-	NULL
-};
+static SLOT_INTERFACE_START( nanos_floppies )
+	SLOT_INTERFACE( "525hd", FLOPPY_525_HD )
+SLOT_INTERFACE_END
 
 /* F4 Character Displayer */
 static const gfx_layout nanos_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	256,					/* 256 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	256,                    /* 256 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( nanos )
@@ -536,31 +562,30 @@ static MACHINE_CONFIG_START( nanos, nanos_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(nanos_state, screen_update)
 	MCFG_SCREEN_SIZE(80*8, 25*10)
 	MCFG_SCREEN_VISIBLE_AREA(0,80*8-1,0,25*10-1)
 	MCFG_GFXDECODE(nanos)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
 	/* devices */
 	MCFG_Z80CTC_ADD( "z80ctc_0", XTAL_4MHz, ctc_intf)
 	MCFG_Z80CTC_ADD( "z80ctc_1", XTAL_4MHz, ctc_intf)
 	MCFG_Z80PIO_ADD( "z80pio_0", XTAL_4MHz, pio1_intf)
 	MCFG_Z80PIO_ADD( "z80pio_1", XTAL_4MHz, pio2_intf)
-	MCFG_Z80SIO_ADD( "z80sio_0", XTAL_4MHz, sio_intf)
-	MCFG_Z80SIO_ADD( "z80sio_1", XTAL_4MHz, sio_intf)
+	MCFG_Z80SIO0_ADD( "z80sio_0", XTAL_4MHz, sio1_intf)
+	MCFG_Z80SIO0_ADD( "z80sio_1", XTAL_4MHz, sio2_intf)
 	MCFG_Z80PIO_ADD( "z80pio", XTAL_4MHz, nanos_z80pio_intf )
 	/* UPD765 */
-	MCFG_UPD765A_ADD("upd765", nanos_upd765_interface)
-
-	MCFG_FLOPPY_4_DRIVES_ADD(nanos_floppy_interface)
+	MCFG_UPD765A_ADD("upd765", false, true)
+	MCFG_FLOPPY_DRIVE_ADD("upd765:0", nanos_floppies, "525hd", nanos_state::floppy_formats)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
 	MCFG_RAM_DEFAULT_SIZE("64K")
 
-	MCFG_TIMER_ADD_PERIODIC("keyboard_timer", keyboard_callback, attotime::from_hz(24000))
+	MCFG_TIMER_DRIVER_ADD_PERIODIC("keyboard_timer", nanos_state, keyboard_callback, attotime::from_hz(24000))
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -575,6 +600,5 @@ ROM_END
 
 /* Driver */
 
-/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT COMPANY   FULLNAME       FLAGS */
-COMP( 1985, nanos,  0,       0, 	nanos,	nanos,	 0, 	  "Ingenieurhochschule fur Seefahrt Warnemunde/Wustrow",   "NANOS",		GAME_NOT_WORKING | GAME_NO_SOUND)
-
+/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT     COMPANY                                              FULLNAME       FLAGS */
+COMP( 1985, nanos,  0,      0,       nanos,     nanos, driver_device,    0,   "Ingenieurhochschule fur Seefahrt Warnemunde/Wustrow", "NANOS", GAME_NOT_WORKING | GAME_NO_SOUND)

@@ -7,8 +7,6 @@
 **********************************************************************/
 
 #include "emu.h"
-#include "devices/xmodem.h"
-#include "devices/kermit.h"
 #include "cpu/saturn/saturn.h"
 #include "sound/dac.h"
 #include "machine/nvram.h"
@@ -206,7 +204,7 @@
 /* S/SX */
 static INPUT_PORTS_START( hp48sx_kbd )
 
-        PORT_START( "LINE0" ) /* OUT = 0x001 */
+		PORT_START( "LINE0" ) /* OUT = 0x001 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "+      { }  : :" )
@@ -231,13 +229,13 @@ static INPUT_PORTS_START( hp48sx_kbd )
 	PORT_CODE ( KEYCODE_QUOTE )
 	PORT_CODE ( KEYCODE_M )
 
-        PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
+		PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE1" ) /* OUT = 0x002 */
+		PORT_START( "LINE1" ) /* OUT = 0x002 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "-      << >>  \" \"" )
+		PORT_NAME ( "-      << >>  \" \"" )
 	PORT_CODE ( KEYCODE_MINUS )
 	PORT_CODE ( KEYCODE_MINUS_PAD )
 
@@ -261,13 +259,13 @@ static INPUT_PORTS_START( hp48sx_kbd )
 	PORT_CODE ( KEYCODE_A )
 
 	PORT_BIT  ( 32, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "right shift" )
+		PORT_NAME ( "right shift" )
 	PORT_CODE ( KEYCODE_RSHIFT )
 
-        PORT_BIT ( 0xffc0, 0, IPT_UNUSED )
+		PORT_BIT ( 0xffc0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE2" ) /* OUT = 0x004 */
+		PORT_START( "LINE2" ) /* OUT = 0x004 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "*      [ ]     _" )
@@ -294,13 +292,13 @@ static INPUT_PORTS_START( hp48sx_kbd )
 	PORT_CODE ( KEYCODE_G )
 
 	PORT_BIT  ( 32, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "left shift" )
+		PORT_NAME ( "left shift" )
 	PORT_CODE ( KEYCODE_LSHIFT )
 
 	PORT_BIT ( 0xffc0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE3" ) /* OUT = 0x008 */
+		PORT_START( "LINE3" ) /* OUT = 0x008 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "/      ( )     #" )
@@ -327,16 +325,16 @@ static INPUT_PORTS_START( hp48sx_kbd )
 	PORT_CODE ( KEYCODE_S )
 
 	PORT_BIT  ( 32, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "\xCE\xB1       USER ENTRY" /* alpha */ )
+		PORT_NAME ( "\xCE\xB1       USER ENTRY" /* alpha */ )
 	PORT_CODE ( KEYCODE_LALT )
 
 	PORT_BIT ( 0xffc0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE4" ) /* OUT = 0x010 */
+		PORT_START( "LINE4" ) /* OUT = 0x010 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME (" \xE2\x87\x90       DROP  CLR" /* double left arrow */ )
+		PORT_NAME (" \xE2\x87\x90       DROP  CLR" /* double left arrow */ )
 	PORT_CODE ( KEYCODE_BACKSPACE )
 
 	PORT_BIT  ( 2, IP_ACTIVE_HIGH, IPT_KEYBOARD )
@@ -360,7 +358,7 @@ static INPUT_PORTS_START( hp48sx_kbd )
 	PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE5" ) /* OUT = 0x020 */
+		PORT_START( "LINE5" ) /* OUT = 0x020 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "1/x  X   e^x   LN" )
@@ -371,7 +369,7 @@ static INPUT_PORTS_START( hp48sx_kbd )
 	PORT_CODE ( KEYCODE_W )
 
 	PORT_BIT  ( 4, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "\xE2\x88\x9A  V   x^2  sqrt(x,y)" /* square root */ )
+		PORT_NAME ( "\xE2\x88\x9A  V   x^2  sqrt(x,y)" /* square root */ )
 	PORT_CODE ( KEYCODE_V )
 
 	PORT_BIT  ( 8, IP_ACTIVE_HIGH, IPT_KEYBOARD )
@@ -382,23 +380,23 @@ static INPUT_PORTS_START( hp48sx_kbd )
 	PORT_NAME ( "COS  T   ACOS  \xE2\x88\xAB" /* integral */ )
 	PORT_CODE ( KEYCODE_T )
 
-        PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
+		PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE6" ) /* OUT = 0x040 */
+		PORT_START( "LINE6" ) /* OUT = 0x040 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "\xE2\x86\x92  R        SWAP" /* right arrow */ )
+		PORT_NAME ( "\xE2\x86\x92  R        SWAP" /* right arrow */ )
 	PORT_CODE ( KEYCODE_RIGHT )
 	PORT_CODE ( KEYCODE_R )
 
 	PORT_BIT  ( 2, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "\xE2\x86\x93  Q        REVIEW" /* down arrow */ )
+		PORT_NAME ( "\xE2\x86\x93  Q        REVIEW" /* down arrow */ )
 	PORT_CODE ( KEYCODE_DOWN )
 	PORT_CODE ( KEYCODE_Q)
 
 	PORT_BIT  ( 4, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "\xE2\x86\x90  P        GRAPH" /* left arrow */ )
+		PORT_NAME ( "\xE2\x86\x90  P        GRAPH" /* left arrow */ )
 	PORT_CODE ( KEYCODE_LEFT )
 	PORT_CODE ( KEYCODE_P )
 
@@ -410,17 +408,17 @@ static INPUT_PORTS_START( hp48sx_kbd )
 	PORT_NAME ( "STO  N   DEF   RCL" )
 	PORT_CODE ( KEYCODE_N )
 
-        PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
+		PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE7" ) /* OUT = 0x080 */
+		PORT_START( "LINE7" ) /* OUT = 0x080 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "NXT  L   PREV" )
 	PORT_CODE ( KEYCODE_L )
 
 	PORT_BIT  ( 2, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "\xE2\x86\x91  K        LIBRARY" /* up arrow */ )
+		PORT_NAME ( "\xE2\x86\x91  K        LIBRARY" /* up arrow */ )
 	PORT_CODE ( KEYCODE_UP )
 	PORT_CODE ( KEYCODE_K )
 
@@ -436,10 +434,10 @@ static INPUT_PORTS_START( hp48sx_kbd )
 	PORT_NAME ( "PRG  H         I/O" )
 	PORT_CODE ( KEYCODE_H )
 
-        PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
+		PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE8" ) /* OUT = 0x100 */
+		PORT_START( "LINE8" ) /* OUT = 0x100 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "F" )
@@ -461,17 +459,17 @@ static INPUT_PORTS_START( hp48sx_kbd )
 	PORT_NAME ( "B" )
 	PORT_CODE ( KEYCODE_B )
 
-        PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
+		PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
 
 
-        PORT_START( "ON" ) /* ON key, appears on all OUT lines */
+		PORT_START( "ON" ) /* ON key, appears on all OUT lines */
 
 	PORT_BIT  ( 0x8000, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "ON  CANCEL CONT OFF" )
 	PORT_CODE ( KEYCODE_ESC )
 	PORT_CODE ( KEYCODE_HOME )
 
-        PORT_BIT ( 0x7fff, 0, IPT_UNUSED )
+		PORT_BIT ( 0x7fff, 0, IPT_UNUSED )
 
 INPUT_PORTS_END
 
@@ -480,7 +478,7 @@ INPUT_PORTS_END
 /* G/GX/G+ */
 static INPUT_PORTS_START( hp48gx_kbd )
 
-        PORT_START( "LINE0" ) /* OUT = 0x001 */
+		PORT_START( "LINE0" ) /* OUT = 0x001 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "+      { }  : :" )
@@ -505,13 +503,13 @@ static INPUT_PORTS_START( hp48gx_kbd )
 	PORT_CODE ( KEYCODE_QUOTE )
 	PORT_CODE ( KEYCODE_M )
 
-        PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
+		PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE1" ) /* OUT = 0x002 */
+		PORT_START( "LINE1" ) /* OUT = 0x002 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "-      << >>  \" \"" )
+		PORT_NAME ( "-      << >>  \" \"" )
 	PORT_CODE ( KEYCODE_MINUS )
 	PORT_CODE ( KEYCODE_MINUS_PAD )
 
@@ -535,13 +533,13 @@ static INPUT_PORTS_START( hp48gx_kbd )
 	PORT_CODE ( KEYCODE_A )
 
 	PORT_BIT  ( 32, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "right shift" )
+		PORT_NAME ( "right shift" )
 	PORT_CODE ( KEYCODE_RSHIFT )
 
-        PORT_BIT ( 0xffc0, 0, IPT_UNUSED )
+		PORT_BIT ( 0xffc0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE2" ) /* OUT = 0x004 */
+		PORT_START( "LINE2" ) /* OUT = 0x004 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "*      [ ]     _" )
@@ -568,13 +566,13 @@ static INPUT_PORTS_START( hp48gx_kbd )
 	PORT_CODE ( KEYCODE_G )
 
 	PORT_BIT  ( 32, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "left shift" )
+		PORT_NAME ( "left shift" )
 	PORT_CODE ( KEYCODE_LSHIFT )
 
 	PORT_BIT ( 0xffc0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE3" ) /* OUT = 0x008 */
+		PORT_START( "LINE3" ) /* OUT = 0x008 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "/      ( )     #" )
@@ -601,16 +599,16 @@ static INPUT_PORTS_START( hp48gx_kbd )
 	PORT_CODE ( KEYCODE_S )
 
 	PORT_BIT  ( 32, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "\xCE\xB1       USER ENTRY" /* alpha */ )
+		PORT_NAME ( "\xCE\xB1       USER ENTRY" /* alpha */ )
 	PORT_CODE ( KEYCODE_LALT )
 
 	PORT_BIT ( 0xffc0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE4" ) /* OUT = 0x010 */
+		PORT_START( "LINE4" ) /* OUT = 0x010 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME (" \xE2\x87\x90       DROP" /* double left arrow */ )
+		PORT_NAME (" \xE2\x87\x90       DROP" /* double left arrow */ )
 	PORT_CODE ( KEYCODE_BACKSPACE )
 
 	PORT_BIT  ( 2, IP_ACTIVE_HIGH, IPT_KEYBOARD )
@@ -634,7 +632,7 @@ static INPUT_PORTS_START( hp48gx_kbd )
 	PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE5" ) /* OUT = 0x020 */
+		PORT_START( "LINE5" ) /* OUT = 0x020 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "1/x  X   e^x   LN" )
@@ -645,7 +643,7 @@ static INPUT_PORTS_START( hp48gx_kbd )
 	PORT_CODE ( KEYCODE_W )
 
 	PORT_BIT  ( 4, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "\xE2\x88\x9A  V   x^2  sqrt(x,y)" /* square root */ )
+		PORT_NAME ( "\xE2\x88\x9A  V   x^2  sqrt(x,y)" /* square root */ )
 	PORT_CODE ( KEYCODE_V )
 
 	PORT_BIT  ( 8, IP_ACTIVE_HIGH, IPT_KEYBOARD )
@@ -656,23 +654,23 @@ static INPUT_PORTS_START( hp48gx_kbd )
 	PORT_NAME ( "COS  T   ACOS  \xE2\x88\xAB" /* integral */ )
 	PORT_CODE ( KEYCODE_T )
 
-        PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
+		PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE6" ) /* OUT = 0x040 */
+		PORT_START( "LINE6" ) /* OUT = 0x040 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "\xE2\x86\x92  R        SWAP" /* right arrow */ )
+		PORT_NAME ( "\xE2\x86\x92  R        SWAP" /* right arrow */ )
 	PORT_CODE ( KEYCODE_RIGHT )
 	PORT_CODE ( KEYCODE_R )
 
 	PORT_BIT  ( 2, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "\xE2\x86\x93  Q        VIEW" /* down arrow */ )
+		PORT_NAME ( "\xE2\x86\x93  Q        VIEW" /* down arrow */ )
 	PORT_CODE ( KEYCODE_DOWN )
 	PORT_CODE ( KEYCODE_Q)
 
 	PORT_BIT  ( 4, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "\xE2\x86\x90  P        PICTURE" /* left arrow */ )
+		PORT_NAME ( "\xE2\x86\x90  P        PICTURE" /* left arrow */ )
 	PORT_CODE ( KEYCODE_LEFT )
 	PORT_CODE ( KEYCODE_P )
 
@@ -684,17 +682,17 @@ static INPUT_PORTS_START( hp48gx_kbd )
 	PORT_NAME ( "STO  N   DEF   RCL" )
 	PORT_CODE ( KEYCODE_N )
 
-        PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
+		PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE7" ) /* OUT = 0x080 */
+		PORT_START( "LINE7" ) /* OUT = 0x080 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "NXT  L   PREV  MENU" )
 	PORT_CODE ( KEYCODE_L )
 
 	PORT_BIT  ( 2, IP_ACTIVE_HIGH, IPT_KEYBOARD )
-        PORT_NAME ( "\xE2\x86\x91  K          STACK" /* up arrow */ )
+		PORT_NAME ( "\xE2\x86\x91  K          STACK" /* up arrow */ )
 	PORT_CODE ( KEYCODE_UP )
 	PORT_CODE ( KEYCODE_K )
 
@@ -710,10 +708,10 @@ static INPUT_PORTS_START( hp48gx_kbd )
 	PORT_NAME ( "PRG  H         CHARS" )
 	PORT_CODE ( KEYCODE_H )
 
-        PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
+		PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
 
 
-        PORT_START( "LINE8" ) /* OUT = 0x100 */
+		PORT_START( "LINE8" ) /* OUT = 0x100 */
 
 	PORT_BIT  ( 1, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "F" )
@@ -735,17 +733,17 @@ static INPUT_PORTS_START( hp48gx_kbd )
 	PORT_NAME ( "B" )
 	PORT_CODE ( KEYCODE_B )
 
-        PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
+		PORT_BIT ( 0xffe0, 0, IPT_UNUSED )
 
 
-        PORT_START( "ON" ) /* ON key, appears on all OUT lines */
+		PORT_START( "ON" ) /* ON key, appears on all OUT lines */
 
 	PORT_BIT  ( 0x8000, IP_ACTIVE_HIGH, IPT_KEYBOARD )
 	PORT_NAME ( "ON  CANCEL CONT OFF" )
 	PORT_CODE ( KEYCODE_ESC )
 	PORT_CODE ( KEYCODE_HOME )
 
-        PORT_BIT ( 0x7fff, 0, IPT_UNUSED )
+		PORT_BIT ( 0x7fff, 0, IPT_UNUSED )
 
 INPUT_PORTS_END
 
@@ -756,11 +754,11 @@ INPUT_PORTS_END
  */
 
 static INPUT_PORTS_START( hp48_battery )
-        PORT_START( "BATTERY" )
-        PORT_CONFNAME ( 0x03, 0, "Battery status" )
-        PORT_CONFSETTING ( 0x00, DEF_STR( Normal ) )
-        PORT_CONFSETTING ( 0x01, DEF_STR( Low ) )
-        PORT_CONFSETTING ( 0x02, "Very low" )
+		PORT_START( "BATTERY" )
+		PORT_CONFNAME ( 0x03, 0, "Battery status" )
+		PORT_CONFSETTING ( 0x00, DEF_STR( Normal ) )
+		PORT_CONFSETTING ( 0x01, DEF_STR( Low ) )
+		PORT_CONFSETTING ( 0x02, "Very low" )
 INPUT_PORTS_END
 
 
@@ -770,13 +768,13 @@ INPUT_PORTS_END
  */
 
 static INPUT_PORTS_START( hp48sx )
-        PORT_INCLUDE( hp48sx_kbd )
-        PORT_INCLUDE( hp48_battery )
+		PORT_INCLUDE( hp48sx_kbd )
+		PORT_INCLUDE( hp48_battery )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( hp48gx )
-        PORT_INCLUDE( hp48gx_kbd )
-        PORT_INCLUDE( hp48_battery )
+		PORT_INCLUDE( hp48gx_kbd )
+		PORT_INCLUDE( hp48_battery )
 INPUT_PORTS_END
 
 
@@ -784,8 +782,8 @@ INPUT_PORTS_END
 
 /**************************** I/O **********************************/
 
-static const xmodem_config hp48_xmodem_rs232_conf = { &hp48_rs232_start_recv_byte };
-static const kermit_config hp48_kermit_rs232_conf = { &hp48_rs232_start_recv_byte };
+//static const xmodem_config hp48_xmodem_rs232_conf = { &hp48_rs232_start_recv_byte };
+//static const kermit_config hp48_kermit_rs232_conf = { &hp48_rs232_start_recv_byte };
 
 
 /**************************** ROMs *********************************/
@@ -882,18 +880,18 @@ ROM_END
 
 ROM_START ( hp49g )
 	ROM_REGION( 0x200000, "maincpu", 0 )
-    ROM_SYSTEM_BIOS( 0, "1.00", "Version C-1.00" )
-    ROMX_LOAD( "hp49gv100.rom", 0x00000, 0x200000, CRC(64c9826a) SHA1(da25371b97d439fc0003cb786dba143ee2be9160), ROM_BIOS(1))
-    ROM_SYSTEM_BIOS( 1, "1.05", "Version C-1.05" )
-    ROMX_LOAD( "hp49gv105.rom", 0x00000, 0x200000, CRC(cf777cac) SHA1(b1d063b6e95083799aa990e4a2718214a38a372f), ROM_BIOS(2))
-    ROM_SYSTEM_BIOS( 2, "1.10", "Version C-1.10" )
-    ROMX_LOAD( "hp49gv110.rom", 0x00000, 0x200000, CRC(e391efbd) SHA1(d4abad60f38faf4cb2d2d97804a24f54589dfa10), ROM_BIOS(3))
-    ROM_SYSTEM_BIOS( 3, "1.16", "Version C-1.16" )
-    ROMX_LOAD( "hp49gv116.rom", 0x00000, 0x200000, CRC(dcc0b39c) SHA1(46f64b4731f5964eb114060b733aab2b23b4180c), ROM_BIOS(4))
-    ROM_SYSTEM_BIOS( 4, "1.18", "Version C-1.18" )
-    ROMX_LOAD( "hp49gv118.rom", 0x00000, 0x200000, CRC(73a6a195) SHA1(3f283fe15a64c5cbc8c1b1254e10965957f58a84), ROM_BIOS(5))
-    ROM_SYSTEM_BIOS( 5, "1.19", "Version B-1.19-6" )
-    ROMX_LOAD( "hp49gv119.rom", 0x00000, 0x200000, CRC(75218a18) SHA1(ec0f661f0aa7158d1f6df61f24410260b5324fa9), ROM_BIOS(6))
+	ROM_SYSTEM_BIOS( 0, "1.00", "Version C-1.00" )
+	ROMX_LOAD( "hp49gv100.rom", 0x00000, 0x200000, CRC(64c9826a) SHA1(da25371b97d439fc0003cb786dba143ee2be9160), ROM_BIOS(1))
+	ROM_SYSTEM_BIOS( 1, "1.05", "Version C-1.05" )
+	ROMX_LOAD( "hp49gv105.rom", 0x00000, 0x200000, CRC(cf777cac) SHA1(b1d063b6e95083799aa990e4a2718214a38a372f), ROM_BIOS(2))
+	ROM_SYSTEM_BIOS( 2, "1.10", "Version C-1.10" )
+	ROMX_LOAD( "hp49gv110.rom", 0x00000, 0x200000, CRC(e391efbd) SHA1(d4abad60f38faf4cb2d2d97804a24f54589dfa10), ROM_BIOS(3))
+	ROM_SYSTEM_BIOS( 3, "1.16", "Version C-1.16" )
+	ROMX_LOAD( "hp49gv116.rom", 0x00000, 0x200000, CRC(dcc0b39c) SHA1(46f64b4731f5964eb114060b733aab2b23b4180c), ROM_BIOS(4))
+	ROM_SYSTEM_BIOS( 4, "1.18", "Version C-1.18" )
+	ROMX_LOAD( "hp49gv118.rom", 0x00000, 0x200000, CRC(73a6a195) SHA1(3f283fe15a64c5cbc8c1b1254e10965957f58a84), ROM_BIOS(5))
+	ROM_SYSTEM_BIOS( 5, "1.19", "Version B-1.19-6" )
+	ROMX_LOAD( "hp49gv119.rom", 0x00000, 0x200000, CRC(75218a18) SHA1(ec0f661f0aa7158d1f6df61f24410260b5324fa9), ROM_BIOS(6))
 ROM_END
 
 /**************************** memory *******************************/
@@ -908,23 +906,12 @@ ROM_END
    run-time.
  */
 
-static ADDRESS_MAP_START ( hp48, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START ( hp48, AS_PROGRAM, 8, hp48_state )
 
 	AM_RANGE( 0x00000, 0xfffff ) AM_NOP /* configured at run-time */
 
 ADDRESS_MAP_END
 
-
-
-/********************** Saturn's I/O *******************************/
-
-static const saturn_cpu_core hp48_config =
-{
-	hp48_reg_out, hp48_reg_in,
-	hp48_mem_reset, hp48_mem_config, hp48_mem_unconfig, hp48_mem_id,
-	hp48_mem_crc,
-	hp48_rsi
-};
 
 
 /*************************** layout ********************************/
@@ -940,12 +927,14 @@ static const char layout_hp48s [] = "hp48s";
 
 
 static MACHINE_CONFIG_START( hp48_common, hp48_state )
-	MCFG_MACHINE_RESET ( hp48 )
 
 	/* cpu */
 	MCFG_CPU_ADD ( "maincpu", SATURN, 3937007 ) /* almost 4 MHz */
 	MCFG_CPU_PROGRAM_MAP ( hp48)
-	MCFG_CPU_CONFIG( hp48_config )
+	MCFG_SATURN_CONFIG( WRITE32(hp48_state, hp48_reg_out), READ32(hp48_state, hp48_reg_in),
+						WRITELINE(hp48_state, hp48_mem_reset), WRITE32(hp48_state, hp48_mem_config),
+						WRITE32(hp48_state, hp48_mem_unconfig), READ32(hp48_state, hp48_mem_id),
+						WRITE32(hp48_state, hp48_mem_crc), WRITELINE(hp48_state, hp48_rsi) )
 
 	/* memory */
 	MCFG_NVRAM_ADD_0FILL("nvram")
@@ -954,13 +943,11 @@ static MACHINE_CONFIG_START( hp48_common, hp48_state )
 	MCFG_SCREEN_ADD( "screen", RASTER )
 	MCFG_SCREEN_REFRESH_RATE( 64 )
 	MCFG_SCREEN_VBLANK_TIME(0)
-	MCFG_SCREEN_FORMAT( BITMAP_FORMAT_INDEXED16 )
 	MCFG_SCREEN_SIZE ( 131, 64 )
 	MCFG_SCREEN_VISIBLE_AREA( 0, 130, 0, 63 )
-	MCFG_SCREEN_UPDATE( hp48 )
+	MCFG_SCREEN_UPDATE_DRIVER(hp48_state, screen_update_hp48)
 
 	MCFG_PALETTE_LENGTH( 256 ) /* monochrome, but with varying contrast and grayscale */
-	MCFG_PALETTE_INIT( hp48 )
 
 	/* sound */
 	MCFG_SPEAKER_STANDARD_MONO( "mono" )
@@ -969,7 +956,7 @@ static MACHINE_CONFIG_START( hp48_common, hp48_state )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( hp48gx, hp48_common )
-	MCFG_MACHINE_START  ( hp48gx )
+	MCFG_MACHINE_START_OVERRIDE  (hp48_state, hp48gx )
 	MCFG_DEFAULT_LAYOUT ( layout_hp48gx )
 
 	/* expansion ports */
@@ -977,34 +964,34 @@ static MACHINE_CONFIG_DERIVED( hp48gx, hp48_common )
 	MCFG_HP48_PORT_ADD ( "port2", hp48gx_port2_config )
 
 	/* serial I/O */
-	MCFG_XMODEM_ADD( "rs232_x", hp48_xmodem_rs232_conf )
-	MCFG_KERMIT_ADD( "rs232_k", hp48_kermit_rs232_conf )
+	//MCFG_XMODEM_ADD( "rs232_x", hp48_xmodem_rs232_conf )
+	//MCFG_KERMIT_ADD( "rs232_k", hp48_kermit_rs232_conf )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( hp48g, hp48_common )
-	MCFG_MACHINE_START  ( hp48g )
+	MCFG_MACHINE_START_OVERRIDE  (hp48_state, hp48g )
 	MCFG_DEFAULT_LAYOUT ( layout_hp48g )
 
 	/* serial I/O */
-	MCFG_XMODEM_ADD( "rs232_x", hp48_xmodem_rs232_conf )
-	MCFG_KERMIT_ADD( "rs232_k", hp48_kermit_rs232_conf )
+	//MCFG_XMODEM_ADD( "rs232_x", hp48_xmodem_rs232_conf )
+	//MCFG_KERMIT_ADD( "rs232_k", hp48_kermit_rs232_conf )
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( hp48gp, hp48_common )
-	MCFG_MACHINE_START  ( hp48gp )
+	MCFG_MACHINE_START_OVERRIDE  (hp48_state, hp48gp )
 	MCFG_DEFAULT_LAYOUT ( layout_hp48gp )
 
 	/* serial I/O */
-	MCFG_XMODEM_ADD( "rs232_x", hp48_xmodem_rs232_conf )
-	MCFG_KERMIT_ADD( "rs232_k", hp48_kermit_rs232_conf )
+	//MCFG_XMODEM_ADD( "rs232_x", hp48_xmodem_rs232_conf )
+	//MCFG_KERMIT_ADD( "rs232_k", hp48_kermit_rs232_conf )
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( hp48sx, hp48_common )
 	MCFG_CPU_MODIFY     ( "maincpu" )
 	MCFG_CPU_CLOCK      ( 2000000 )
-	MCFG_MACHINE_START  ( hp48sx )
+	MCFG_MACHINE_START_OVERRIDE  (hp48_state, hp48sx )
 	MCFG_DEFAULT_LAYOUT ( layout_hp48sx )
 
 	/* expansion ports */
@@ -1012,27 +999,26 @@ static MACHINE_CONFIG_DERIVED( hp48sx, hp48_common )
 	MCFG_HP48_PORT_ADD  ( "port2", hp48sx_port2_config )
 
 	/* serial I/O */
-	MCFG_KERMIT_ADD( "rs232_k", hp48_kermit_rs232_conf )
+	//MCFG_KERMIT_ADD( "rs232_k", hp48_kermit_rs232_conf )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( hp48s, hp48_common )
 	MCFG_CPU_MODIFY     ( "maincpu" )
 	MCFG_CPU_CLOCK      ( 2000000 )
-	MCFG_MACHINE_START  ( hp48s )
+	MCFG_MACHINE_START_OVERRIDE  (hp48_state, hp48s )
 	MCFG_DEFAULT_LAYOUT ( layout_hp48s )
 
 	/* serial I/O */
-	MCFG_KERMIT_ADD( "rs232_k", hp48_kermit_rs232_conf )
+	//MCFG_KERMIT_ADD( "rs232_k", hp48_kermit_rs232_conf )
 MACHINE_CONFIG_END
 
 
-COMP ( 1990, hp48sx, 0     , 0, hp48sx, hp48sx, hp48, "Hewlett Packard", "HP48SX", 0 )
-COMP ( 1991, hp48s , hp48sx, 0, hp48s,  hp48sx, hp48, "Hewlett Packard", "HP48S", 0 )
-COMP ( 1993, hp48gx, 0     , 0, hp48gx, hp48gx, hp48, "Hewlett Packard", "HP48GX", 0 )
-COMP ( 1993, hp48g , hp48gx, 0, hp48g,  hp48gx, hp48, "Hewlett Packard", "HP48G", 0 )
-COMP ( 1998, hp48gp, hp48gx, 0, hp48gp, hp48gx, hp48, "Hewlett Packard", "HP48G+", 0 )
+COMP ( 1990, hp48sx, 0     , 0, hp48sx, hp48sx, hp48_state, hp48, "Hewlett Packard", "HP48SX", 0 )
+COMP ( 1991, hp48s , hp48sx, 0, hp48s,  hp48sx, hp48_state, hp48, "Hewlett Packard", "HP48S", 0 )
+COMP ( 1993, hp48gx, 0     , 0, hp48gx, hp48gx, hp48_state, hp48, "Hewlett Packard", "HP48GX", 0 )
+COMP ( 1993, hp48g , hp48gx, 0, hp48g,  hp48gx, hp48_state, hp48, "Hewlett Packard", "HP48G", 0 )
+COMP ( 1998, hp48gp, hp48gx, 0, hp48gp, hp48gx, hp48_state, hp48, "Hewlett Packard", "HP48G+", 0 )
 
-COMP ( 1995, hp38g , hp48gx, 0, hp48g,  hp48gx, hp48, "Hewlett Packard", "HP38G", 0 )
-COMP ( 2000, hp39g , hp48gx, 0, hp48g,  hp48gx, hp48, "Hewlett Packard", "HP39G", GAME_NOT_WORKING )
-COMP ( 1999, hp49g , hp48gx, 0, hp48g,  hp48gx, hp48, "Hewlett Packard", "HP49G", 0 )
-
+COMP ( 1995, hp38g , hp48gx, 0, hp48g,  hp48gx, hp48_state, hp48, "Hewlett Packard", "HP38G", 0 )
+COMP ( 2000, hp39g , hp48gx, 0, hp48g,  hp48gx, hp48_state, hp48, "Hewlett Packard", "HP39G", GAME_NOT_WORKING )
+COMP ( 1999, hp49g , hp48gx, 0, hp48g,  hp48gx, hp48_state, hp48, "Hewlett Packard", "HP49G", 0 )

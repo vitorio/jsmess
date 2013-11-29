@@ -26,198 +26,172 @@ Theory of operation:
 */
 
 #include <math.h>
-
 #include "emu.h"
-
 #include "video/crt.h"
 
 
-typedef struct
-{
-	int intensity;		/* current intensity of the pixel */
-							/* a node is not in the list when (intensity == -1) */
-	int next;			/* index of next pixel in list */
-} point;
-
+// special value that tells that the node is not in list
 enum
 {
-	intensity_pixel_not_in_list = -1	/* special value that tells that the node is not in list */
+	intensity_pixel_not_in_list = -1
 };
 
-typedef struct
+
+// device type definition
+const device_type CRT = &device_creator<crt_device>;
+
+//**************************************************************************
+//  LIVE DEVICE
+//**************************************************************************
+
+//-------------------------------------------------
+//  crt_device - constructor
+//-------------------------------------------------
+
+crt_device::crt_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: device_t(mconfig, CRT, "CRT Video", tag, owner, clock, "crt", __FILE__),
+		m_list(NULL),
+		m_list_head(NULL),
+		m_decay_counter(0),
+		m_num_intensity_levels(0),
+		m_window_offset_x(0),
+		m_window_offset_y(0),
+		m_window_width(0),
+		m_window_height(0)
 {
-	point *list;		/* array of (crt_window_width*crt_window_height) point */
-	int *list_head;	/* head of the list of lit pixels (index in the array) */
-							/* keep a separate list for each display line (makes the video code slightly faster) */
-
-	int decay_counter;	/* incremented each frame (tells for how many frames the CRT has decayed between two screen refresh) */
-
-	/* CRT window */
-	int num_intensity_levels;
-	int window_offset_x, window_offset_y;
-	int window_width, window_height;
-} crt_t;
-
-
-INLINE crt_t *get_safe_token(device_t *device)
-{
-	assert(device != NULL);
-	assert(device->type() == CRT);
-
-	return (crt_t *)downcast<legacy_device_base *>(device)->token();
 }
 
-static DEVICE_START( crt )
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void crt_device::device_start()
 {
-	crt_t *crt = get_safe_token(device);
-	const crt_interface *intf = (const crt_interface *)device->static_config();
+	const crt_interface *intf = (const crt_interface *)static_config();
 	int width = intf->width;
 	int height = intf->height;
 	int i;
 
-	crt->num_intensity_levels = intf->num_levels;
-	crt->window_offset_x = intf->offset_x;
-	crt->window_offset_y = intf->offset_y;
-	crt->window_width = width;
-	crt->window_height = height;
+	m_num_intensity_levels = intf->num_levels;
+	m_window_offset_x = intf->offset_x;
+	m_window_offset_y = intf->offset_y;
+	m_window_width = width;
+	m_window_height = height;
 
 	/* alloc the arrays */
-	crt->list = auto_alloc_array(device->machine(), point, width * height);
+	m_list = auto_alloc_array(machine(), crt_point, width * height);
 
-	crt->list_head = auto_alloc_array(device->machine(), int, height);
+	m_list_head = auto_alloc_array(machine(), int, height);
 
 	/* fill with black and set up list as empty */
 	for (i=0; i<(width * height); i++)
 	{
-		crt->list[i].intensity = intensity_pixel_not_in_list;
+		m_list[i].intensity = intensity_pixel_not_in_list;
 	}
 
 	for (i=0; i<height; i++)
-		crt->list_head[i] = -1;
+		m_list_head[i] = -1;
 
-	crt->decay_counter = 0;
+	m_decay_counter = 0;
 }
 
 
-DEVICE_GET_INFO( crt )
+//
+//    crt_plot
+//
+//    schedule a pixel to be plotted
+//
+void crt_device::plot(int x, int y)
 {
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(crt_t);					break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(crt);		break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "CRT Video");					break;
-		case DEVINFO_STR_FAMILY:						strcpy(info->s, "CRT Video");					break;
-		case DEVINFO_STR_VERSION:						strcpy(info->s, "1.0");							break;
-		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);						break;
-		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright MESS Team");			break;
-	}
-}
-
-DEFINE_LEGACY_DEVICE(CRT, crt);
-
-/*
-    crt_plot
-
-    schedule a pixel to be plotted
-*/
-void crt_plot(device_t *device, int x, int y)
-{
-	crt_t *crt = get_safe_token(device);
-	point *node;
+	crt_point *node;
 	int list_index;
 
 	/* compute pixel coordinates */
 	if (x<0) x=0;
 	if (y<0) y=0;
-	if ((x>(crt->window_width-1)) || ((y>crt->window_height-1)))
+	if ((x>(m_window_width-1)) || ((y>m_window_height-1)))
 		return;
-	y = (crt->window_height-1) - y;
+	y = (m_window_height-1) - y;
 
 	/* find entry in list */
-	list_index = x + y*crt->window_width;
+	list_index = x + y*m_window_width;
 
-	node = &crt->list[list_index];
+	node = &m_list[list_index];
 
 	if (node->intensity == intensity_pixel_not_in_list)
-	{	/* insert node in list if it is not in it */
-		node->next = crt->list_head[y];
-		crt->list_head[y] = list_index;
+	{   /* insert node in list if it is not in it */
+		node->next = m_list_head[y];
+		m_list_head[y] = list_index;
 	}
 	/* set intensity */
-	node->intensity = crt->num_intensity_levels;
+	node->intensity = m_num_intensity_levels;
 }
 
 
-/*
-    crt_eof
-
-    keep track of time
-*/
-void crt_eof(device_t *device)
+//
+//  crt_eof
+//
+//  keep track of time
+//
+void crt_device::eof()
 {
-	crt_t *crt = get_safe_token(device);
-	crt->decay_counter++;
+	m_decay_counter++;
 }
 
 
-/*
-    crt_update
-
-    update the bitmap
-*/
-void crt_update(device_t *device, bitmap_t *bitmap)
+//
+//  crt_update
+//
+//  update the bitmap
+//
+void crt_device::update(bitmap_ind16 &bitmap)
 {
-	crt_t *crt = get_safe_token(device);
 	int i, p_i;
 	int y;
 
-	//if (crt->decay_counter)
+	//if (m_decay_counter)
 	{
 		/* some time has elapsed: let's update the screen */
-		for (y=0; y<crt->window_height; y++)
+		for (y=0; y<m_window_height; y++)
 		{
-			UINT16 *line = BITMAP_ADDR16(bitmap, y+crt->window_offset_y, 0);
+			UINT16 *line = &bitmap.pix16(y+m_window_offset_y);
 
 			p_i = -1;
 
-			for (i=crt->list_head[y]; (i != -1); i=crt->list[i].next)
+			for (i=m_list_head[y]; (i != -1); i=m_list[i].next)
 			{
-				point *node = &crt->list[i];
-				int x = (i % crt->window_width) + crt->window_offset_x;
+				crt_point *node = &m_list[i];
+				int x = (i % m_window_width) + m_window_offset_x;
 
-				if (node->intensity == crt->num_intensity_levels)
+				if (node->intensity == m_num_intensity_levels)
 					/* new pixel: set to max intensity */
-					node->intensity = crt->num_intensity_levels-1;
+					node->intensity = m_num_intensity_levels-1;
 				else
 				{
 					/* otherwise, apply intensity decay */
-					node->intensity -= crt->decay_counter;
+					node->intensity -= m_decay_counter;
 					if (node->intensity < 0)
 						node->intensity = 0;
 				}
 
 				/* draw pixel on screen */
-				//plot_pixel(bitmap, x, y+crt->window_offset_y, node->intensity);
+				//plot_pixel(bitmap, x, y+m_window_offset_y, node->intensity);
 				line[x] = node->intensity;
 
 				if (node->intensity != 0)
-					p_i = i;	/* current node will be next iteration's previous node */
+					p_i = i;    /* current node will be next iteration's previous node */
 				else
-				{	/* delete current node */
+				{   /* delete current node */
 					node->intensity = intensity_pixel_not_in_list;
 					if (p_i != -1)
-						crt->list[p_i].next = node->next;
+						m_list[p_i].next = node->next;
 					else
-						crt->list_head[y] = node->next;
+						m_list_head[y] = node->next;
 				}
 			}
 		}
 
-		crt->decay_counter = 0;
+		m_decay_counter = 0;
 	}
 }

@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /*************************************************************************
 
     BattleToads
@@ -17,16 +19,17 @@ class btoads_state : public driver_device
 public:
 	btoads_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_audiocpu(*this, "audiocpu"),
-		  m_bsmt(*this, "bsmt"),
-		  m_tlc34076(*this, "tlc34076"),
-		  m_vram_fg0(*this, "vram_fg0"),
-		  m_vram_fg1(*this, "vram_fg1"),
-		  m_vram_fg_data(*this, "vram_fg_data"),
-		  m_vram_bg0(*this, "vram_bg0"),
-		  m_vram_bg1(*this, "vram_bg1"),
-		  m_sprite_scale(*this, "sprite_scale"),
-		  m_sprite_control(*this, "sprite_control") { }
+			m_audiocpu(*this, "audiocpu"),
+			m_bsmt(*this, "bsmt"),
+			m_tlc34076(*this, "tlc34076"),
+			m_vram_fg0(*this, "vram_fg0", 16),
+			m_vram_fg1(*this, "vram_fg1", 16),
+			m_vram_fg_data(*this, "vram_fg_data"),
+			m_vram_bg0(*this, "vram_bg0"),
+			m_vram_bg1(*this, "vram_bg1"),
+			m_sprite_scale(*this, "sprite_scale"),
+			m_sprite_control(*this, "sprite_control") ,
+		m_maincpu(*this, "maincpu") { }
 
 	// in drivers/btoads
 	DECLARE_WRITE16_MEMBER( main_sound_w );
@@ -57,12 +60,12 @@ public:
 	DECLARE_READ16_MEMBER( vram_fg_display_r );
 	DECLARE_READ16_MEMBER( vram_fg_draw_r );
 	void render_sprite_row(UINT16 *sprite_source, UINT32 address);
-	void to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg);
-	static void static_to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg) { space->machine().driver_data<btoads_state>()->to_shiftreg(space, address, shiftreg); }
-	void from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg);
-	static void static_from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg) { space->machine().driver_data<btoads_state>()->from_shiftreg(space, address, shiftreg); }
-	void scanline_update(screen_device &screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params);
-	static void static_scanline_update(screen_device &screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params) { screen.machine().driver_data<btoads_state>()->scanline_update(screen, bitmap, scanline, params); }
+	void to_shiftreg(address_space &space, UINT32 address, UINT16 *shiftreg);
+	static void static_to_shiftreg(address_space &space, UINT32 address, UINT16 *shiftreg) { space.machine().driver_data<btoads_state>()->to_shiftreg(space, address, shiftreg); }
+	void from_shiftreg(address_space &space, UINT32 address, UINT16 *shiftreg);
+	static void static_from_shiftreg(address_space &space, UINT32 address, UINT16 *shiftreg) { space.machine().driver_data<btoads_state>()->from_shiftreg(space, address, shiftreg); }
+	void scanline_update(screen_device &screen, bitmap_rgb32 &bitmap, int scanline, const tms34010_display_params *params);
+	static void static_scanline_update(screen_device &screen, bitmap_rgb32 &bitmap, int scanline, const tms34010_display_params *params) { screen.machine().driver_data<btoads_state>()->scanline_update(screen, bitmap, scanline, params); }
 
 protected:
 	// device overrides
@@ -111,5 +114,5 @@ protected:
 	UINT16 m_sprite_dest_offs;
 	UINT16 m_misc_control;
 	int m_xcount;
+	required_device<cpu_device> m_maincpu;
 };
-

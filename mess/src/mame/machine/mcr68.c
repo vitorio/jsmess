@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     Midway MCR system
@@ -5,32 +7,12 @@
 ***************************************************************************/
 
 #include "emu.h"
-#include "audio/mcr.h"
+#include "audio/midway.h"
+#include "includes/mcr.h"
 #include "includes/mcr68.h"
 
 #define VERBOSE 0
 #define LOG(x) do { if (VERBOSE) logerror x; } while (0)
-
-
-/*************************************
- *
- *  Function prototypes
- *
- *************************************/
-
-static void subtract_from_counter(running_machine &machine, int counter, int count);
-
-static TIMER_CALLBACK( mcr68_493_callback );
-static TIMER_CALLBACK( zwackery_493_callback );
-
-static WRITE8_DEVICE_HANDLER( zwackery_pia0_w );
-static WRITE8_DEVICE_HANDLER( zwackery_pia1_w );
-static WRITE_LINE_DEVICE_HANDLER( zwackery_ca2_w );
-static WRITE_LINE_DEVICE_HANDLER( zwackery_pia_irq );
-
-static TIMER_CALLBACK( counter_fired_callback );
-
-
 
 /*************************************
  *
@@ -38,21 +20,21 @@ static TIMER_CALLBACK( counter_fired_callback );
  *
  *************************************/
 
-static READ8_DEVICE_HANDLER( zwackery_port_1_r )
+READ8_MEMBER(mcr68_state::zwackery_port_1_r)
 {
-	UINT8 ret = input_port_read(device->machine(), "IN1");
+	UINT8 ret = ioport("IN1")->read();
 
-	downcast<pia6821_device *>(device)->set_port_a_z_mask(ret);
+	downcast<pia6821_device *>(machine().device("pia1"))->set_port_a_z_mask(ret);
 
 	return ret;
 }
 
 
-static READ8_DEVICE_HANDLER( zwackery_port_3_r )
+READ8_MEMBER(mcr68_state::zwackery_port_3_r)
 {
-	UINT8 ret = input_port_read(device->machine(), "IN3");
+	UINT8 ret = ioport("IN3")->read();
 
-	downcast<pia6821_device *>(device)->set_port_a_z_mask(ret);
+	downcast<pia6821_device *>(machine().device("pia2"))->set_port_a_z_mask(ret);
 
 	return ret;
 }
@@ -60,52 +42,52 @@ static READ8_DEVICE_HANDLER( zwackery_port_3_r )
 
 const pia6821_interface zwackery_pia0_intf =
 {
-	DEVCB_NULL,		/* port A in */
-	DEVCB_INPUT_PORT("IN0"),		/* port B in */
-	DEVCB_NULL,		/* line CA1 in */
-	DEVCB_NULL,		/* line CB1 in */
-	DEVCB_NULL,		/* line CA2 in */
-	DEVCB_NULL,		/* line CB2 in */
-	DEVCB_HANDLER(zwackery_pia0_w),		/* port A out */
-	DEVCB_NULL,		/* port B out */
-	DEVCB_NULL,		/* line CA2 out */
-	DEVCB_NULL,		/* port CB2 out */
-	DEVCB_LINE(zwackery_pia_irq),		/* IRQA */
-	DEVCB_LINE(zwackery_pia_irq)		/* IRQB */
+	DEVCB_NULL,     /* port A in */
+	DEVCB_INPUT_PORT("IN0"),        /* port B in */
+	DEVCB_NULL,     /* line CA1 in */
+	DEVCB_NULL,     /* line CB1 in */
+	DEVCB_NULL,     /* line CA2 in */
+	DEVCB_NULL,     /* line CB2 in */
+	DEVCB_DRIVER_MEMBER(mcr68_state,zwackery_pia0_w),       /* port A out */
+	DEVCB_NULL,     /* port B out */
+	DEVCB_NULL,     /* line CA2 out */
+	DEVCB_NULL,     /* port CB2 out */
+	DEVCB_DRIVER_LINE_MEMBER(mcr68_state,zwackery_pia_irq),     /* IRQA */
+	DEVCB_DRIVER_LINE_MEMBER(mcr68_state,zwackery_pia_irq)      /* IRQB */
 };
 
 
 const pia6821_interface zwackery_pia1_intf =
 {
-	DEVCB_HANDLER(zwackery_port_1_r),		/* port A in */
-	DEVCB_HANDLER(zwackery_port_2_r),		/* port B in */
-	DEVCB_NULL,		/* line CA1 in */
-	DEVCB_NULL,		/* line CB1 in */
-	DEVCB_NULL,		/* line CA2 in */
-	DEVCB_NULL,		/* line CB2 in */
-	DEVCB_HANDLER(zwackery_pia1_w),		/* port A out */
-	DEVCB_NULL,		/* port B out */
-	DEVCB_LINE(zwackery_ca2_w),		/* line CA2 out */
-	DEVCB_NULL,		/* port CB2 out */
-	DEVCB_NULL,		/* IRQA */
-	DEVCB_NULL		/* IRQB */
+	DEVCB_DRIVER_MEMBER(mcr68_state,zwackery_port_1_r),     /* port A in */
+	DEVCB_DRIVER_MEMBER(mcr68_state, zwackery_port_2_r),        /* port B in */
+	DEVCB_NULL,     /* line CA1 in */
+	DEVCB_NULL,     /* line CB1 in */
+	DEVCB_NULL,     /* line CA2 in */
+	DEVCB_NULL,     /* line CB2 in */
+	DEVCB_DRIVER_MEMBER(mcr68_state,zwackery_pia1_w),       /* port A out */
+	DEVCB_NULL,     /* port B out */
+	DEVCB_DRIVER_LINE_MEMBER(mcr68_state,zwackery_ca2_w),       /* line CA2 out */
+	DEVCB_NULL,     /* port CB2 out */
+	DEVCB_NULL,     /* IRQA */
+	DEVCB_NULL      /* IRQB */
 };
 
 
 const pia6821_interface zwackery_pia2_intf =
 {
-	DEVCB_HANDLER(zwackery_port_3_r),		/* port A in */
-	DEVCB_INPUT_PORT("DSW"),				/* port B in */
-	DEVCB_NULL,		/* line CA1 in */
-	DEVCB_NULL,		/* line CB1 in */
-	DEVCB_NULL,		/* line CA2 in */
-	DEVCB_NULL,		/* line CB2 in */
-	DEVCB_NULL,		/* port A out */
-	DEVCB_NULL,		/* port B out */
-	DEVCB_NULL,		/* line CA2 out */
-	DEVCB_NULL,		/* port CB2 out */
-	DEVCB_NULL,		/* IRQA */
-	DEVCB_NULL		/* IRQB */
+	DEVCB_DRIVER_MEMBER(mcr68_state,zwackery_port_3_r),     /* port A in */
+	DEVCB_INPUT_PORT("DSW"),                /* port B in */
+	DEVCB_NULL,     /* line CA1 in */
+	DEVCB_NULL,     /* line CB1 in */
+	DEVCB_NULL,     /* line CA2 in */
+	DEVCB_NULL,     /* line CB2 in */
+	DEVCB_NULL,     /* port A out */
+	DEVCB_NULL,     /* port B out */
+	DEVCB_NULL,     /* line CA2 out */
+	DEVCB_NULL,     /* port CB2 out */
+	DEVCB_NULL,     /* IRQA */
+	DEVCB_NULL      /* IRQB */
 };
 
 
@@ -116,97 +98,88 @@ const pia6821_interface zwackery_pia2_intf =
  *
  *************************************/
 
-MACHINE_START( mcr68 )
+MACHINE_START_MEMBER(mcr68_state,mcr68)
 {
-	mcr68_state *state = machine.driver_data<mcr68_state>();
 	int i;
 
 	for (i = 0; i < 3; i++)
 	{
-		struct counter_state *m6840 = &state->m_m6840_state[i];
+		struct counter_state *m6840 = &m_m6840_state[i];
 
-		m6840->timer = machine.scheduler().timer_alloc(FUNC(counter_fired_callback));
+		m6840->timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(mcr68_state::counter_fired_callback),this));
 
-		state_save_register_item(machine, "m6840", NULL, i, m6840->control);
-		state_save_register_item(machine, "m6840", NULL, i, m6840->latch);
-		state_save_register_item(machine, "m6840", NULL, i, m6840->count);
-		state_save_register_item(machine, "m6840", NULL, i, m6840->timer_active);
+		state_save_register_item(machine(), "m6840", NULL, i, m6840->control);
+		state_save_register_item(machine(), "m6840", NULL, i, m6840->latch);
+		state_save_register_item(machine(), "m6840", NULL, i, m6840->count);
+		state_save_register_item(machine(), "m6840", NULL, i, m6840->timer_active);
 	}
 
-	state_save_register_global(machine, state->m_m6840_status);
-	state_save_register_global(machine, state->m_m6840_status_read_since_int);
-	state_save_register_global(machine, state->m_m6840_msb_buffer);
-	state_save_register_global(machine, state->m_m6840_lsb_buffer);
-	state_save_register_global(machine, state->m_m6840_irq_state);
-	state_save_register_global(machine, state->m_v493_irq_state);
-	state_save_register_global(machine, state->m_zwackery_sound_data);
+	save_item(NAME(m_m6840_status));
+	save_item(NAME(m_m6840_status_read_since_int));
+	save_item(NAME(m_m6840_msb_buffer));
+	save_item(NAME(m_m6840_lsb_buffer));
+	save_item(NAME(m_m6840_irq_state));
+	save_item(NAME(m_v493_irq_state));
+	save_item(NAME(m_zwackery_sound_data));
 }
 
 
-static void mcr68_common_init(running_machine &machine)
+void mcr68_state::mcr68_common_init()
 {
-	mcr68_state *state = machine.driver_data<mcr68_state>();
 	int i;
 
 	/* reset the 6840's */
-	state->m_m6840_counter_periods[0] = attotime::from_hz(30);			/* clocked by /VBLANK */
-	state->m_m6840_counter_periods[1] = attotime::never;					/* grounded */
-	state->m_m6840_counter_periods[2] = attotime::from_hz(512 * 30);	/* clocked by /HSYNC */
+	m_m6840_counter_periods[0] = attotime::from_hz(30);          /* clocked by /VBLANK */
+	m_m6840_counter_periods[1] = attotime::never;                    /* grounded */
+	m_m6840_counter_periods[2] = attotime::from_hz(512 * 30);    /* clocked by /HSYNC */
 
-	state->m_m6840_status = 0x00;
-	state->m_m6840_status_read_since_int = 0x00;
-	state->m_m6840_msb_buffer = state->m_m6840_lsb_buffer = 0;
+	m_m6840_status = 0x00;
+	m_m6840_status_read_since_int = 0x00;
+	m_m6840_msb_buffer = m_m6840_lsb_buffer = 0;
 	for (i = 0; i < 3; i++)
 	{
-		struct counter_state *m6840 = &state->m_m6840_state[i];
+		struct counter_state *m6840 = &m_m6840_state[i];
 
 		m6840->control = 0x00;
 		m6840->latch = 0xffff;
 		m6840->count = 0xffff;
 		m6840->timer->enable(false);
 		m6840->timer_active = 0;
-		m6840->period = state->m_m6840_counter_periods[i];
+		m6840->period = m_m6840_counter_periods[i];
 	}
 
 	/* initialize the clock */
-	state->m_m6840_internal_counter_period = attotime::from_hz(machine.device("maincpu")->unscaled_clock() / 10);
-
-	/* initialize the sound */
-	mcr_sound_reset(machine);
+	m_m6840_internal_counter_period = attotime::from_hz(m_maincpu->unscaled_clock() / 10);
 }
 
 
-MACHINE_RESET( mcr68 )
+MACHINE_RESET_MEMBER(mcr68_state,mcr68)
 {
-	mcr68_state *state = machine.driver_data<mcr68_state>();
 	/* for the most part all MCR/68k games are the same */
-	mcr68_common_init(machine);
-	state->m_v493_callback = mcr68_493_callback;
-	state->m_v493_callback_name = "mcr68_493_callback";
+	mcr68_common_init();
+	m_v493_callback = timer_expired_delegate(FUNC(mcr68_state::mcr68_493_callback),this);
 
 	/* vectors are 1 and 2 */
-	state->m_v493_irq_vector = 1;
-	state->m_m6840_irq_vector = 2;
+	m_v493_irq_vector = 1;
+	m_m6840_irq_vector = 2;
 }
 
 
-MACHINE_START( zwackery )
+MACHINE_START_MEMBER(mcr68_state,zwackery)
 {
-	MACHINE_START_CALL(mcr68);
+	MACHINE_START_CALL_MEMBER(mcr68);
 }
 
 
-MACHINE_RESET( zwackery )
+MACHINE_RESET_MEMBER(mcr68_state,zwackery)
 {
-	mcr68_state *state = machine.driver_data<mcr68_state>();
 	/* for the most part all MCR/68k games are the same */
-	mcr68_common_init(machine);
-	state->m_v493_callback = zwackery_493_callback;
-	state->m_v493_callback_name = "zwackery_493_callback";
+	mcr68_common_init();
+	m_v493_callback = timer_expired_delegate(FUNC(mcr68_state::zwackery_493_callback),this);
 
 	/* vectors are 5 and 6 */
-	state->m_v493_irq_vector = 5;
-	state->m_m6840_irq_vector = 6;
+	m_v493_irq_vector = 5;
+	m_m6840_irq_vector = 6;
 }
 
 
@@ -217,19 +190,18 @@ MACHINE_RESET( zwackery )
  *
  *************************************/
 
-INTERRUPT_GEN( mcr68_interrupt )
+INTERRUPT_GEN_MEMBER(mcr68_state::mcr68_interrupt)
 {
-	mcr68_state *state = device->machine().driver_data<mcr68_state>();
 	/* update the 6840 VBLANK clock */
-	if (!state->m_m6840_state[0].timer_active)
-		subtract_from_counter(device->machine(), 0, 1);
+	if (!m_m6840_state[0].timer_active)
+		subtract_from_counter(0, 1);
 
 	logerror("--- VBLANK ---\n");
 
 	/* also set a timer to generate the 493 signal at a specific time before the next VBLANK */
 	/* the timing of this is crucial for Blasted and Tri-Sports, which check the timing of */
 	/* VBLANK and 493 using counter 2 */
-	device->machine().scheduler().timer_set(attotime::from_hz(30) - state->m_timing_factor, state->m_v493_callback, state->m_v493_callback_name);
+	machine().scheduler().timer_set(attotime::from_hz(30) - m_timing_factor, m_v493_callback);
 }
 
 
@@ -240,28 +212,25 @@ INTERRUPT_GEN( mcr68_interrupt )
  *
  *************************************/
 
-static void update_mcr68_interrupts(running_machine &machine)
+void mcr68_state::update_mcr68_interrupts()
 {
-	mcr68_state *state = machine.driver_data<mcr68_state>();
-	cputag_set_input_line(machine, "maincpu", state->m_v493_irq_vector, state->m_v493_irq_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", state->m_m6840_irq_vector, state->m_m6840_irq_state ? ASSERT_LINE : CLEAR_LINE);
+	m_maincpu->set_input_line(m_v493_irq_vector, m_v493_irq_state ? ASSERT_LINE : CLEAR_LINE);
+	m_maincpu->set_input_line(m_m6840_irq_vector, m_m6840_irq_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
-static TIMER_CALLBACK( mcr68_493_off_callback )
+TIMER_CALLBACK_MEMBER(mcr68_state::mcr68_493_off_callback)
 {
-	mcr68_state *state = machine.driver_data<mcr68_state>();
-	state->m_v493_irq_state = 0;
-	update_mcr68_interrupts(machine);
+	m_v493_irq_state = 0;
+	update_mcr68_interrupts();
 }
 
 
-static TIMER_CALLBACK( mcr68_493_callback )
+TIMER_CALLBACK_MEMBER(mcr68_state::mcr68_493_callback)
 {
-	mcr68_state *state = machine.driver_data<mcr68_state>();
-	state->m_v493_irq_state = 1;
-	update_mcr68_interrupts(machine);
-	machine.scheduler().timer_set(machine.primary_screen->scan_period(), FUNC(mcr68_493_off_callback));
+	m_v493_irq_state = 1;
+	update_mcr68_interrupts();
+	machine().scheduler().timer_set(m_screen->scan_period(), timer_expired_delegate(FUNC(mcr68_state::mcr68_493_off_callback),this));
 	logerror("--- (INT1) ---\n");
 }
 
@@ -273,10 +242,10 @@ static TIMER_CALLBACK( mcr68_493_callback )
  *
  *************************************/
 
-WRITE8_DEVICE_HANDLER( zwackery_pia0_w )
+WRITE8_MEMBER(mcr68_state::zwackery_pia0_w)
 {
 	/* bit 7 is the watchdog */
-	if (!(data & 0x80)) watchdog_reset(device->machine());
+	if (!(data & 0x80)) machine().watchdog_reset();
 
 	/* bits 5 and 6 control hflip/vflip */
 	/* bits 3 and 4 control coin counters? */
@@ -284,43 +253,40 @@ WRITE8_DEVICE_HANDLER( zwackery_pia0_w )
 }
 
 
-WRITE8_DEVICE_HANDLER( zwackery_pia1_w )
+WRITE8_MEMBER(mcr68_state::zwackery_pia1_w)
 {
-	mcr68_state *state = device->machine().driver_data<mcr68_state>();
-	state->m_zwackery_sound_data = (data >> 4) & 0x0f;
+	m_zwackery_sound_data = (data >> 4) & 0x0f;
 }
 
 
-WRITE_LINE_DEVICE_HANDLER( zwackery_ca2_w )
+WRITE_LINE_MEMBER(mcr68_state::zwackery_ca2_w)
 {
-	mcr68_state *drvstate = device->machine().driver_data<mcr68_state>();
-	address_space *space = device->machine().device("maincpu")->memory().space(AS_PROGRAM);
-	csdeluxe_data_w(space, 0, (state << 4) | drvstate->m_zwackery_sound_data);
+	address_space &space = m_maincpu->space(AS_PROGRAM);
+	m_chip_squeak_deluxe->write(space, 0, (state << 4) | m_zwackery_sound_data);
 }
 
 
-static WRITE_LINE_DEVICE_HANDLER( zwackery_pia_irq )
+WRITE_LINE_MEMBER(mcr68_state::zwackery_pia_irq)
 {
-	mcr68_state *drvstate = device->machine().driver_data<mcr68_state>();
-	pia6821_device *pia = downcast<pia6821_device *>(device);
-	drvstate->m_v493_irq_state = pia->irq_a_state() | pia->irq_b_state();
-	update_mcr68_interrupts(device->machine());
+	pia6821_device *pia = machine().device<pia6821_device>("pia0");
+	m_v493_irq_state = pia->irq_a_state() | pia->irq_b_state();
+	update_mcr68_interrupts();
 }
 
 
-static TIMER_CALLBACK( zwackery_493_off_callback )
+TIMER_CALLBACK_MEMBER(mcr68_state::zwackery_493_off_callback)
 {
-	pia6821_device *pia = machine.device<pia6821_device>("pia0");
+	pia6821_device *pia = machine().device<pia6821_device>("pia0");
 	pia->ca1_w(0);
 }
 
 
-static TIMER_CALLBACK( zwackery_493_callback )
+TIMER_CALLBACK_MEMBER(mcr68_state::zwackery_493_callback)
 {
-	pia6821_device *pia = machine.device<pia6821_device>("pia0");
+	pia6821_device *pia = machine().device<pia6821_device>("pia0");
 
 	pia->ca1_w(1);
-	machine.scheduler().timer_set(machine.primary_screen->scan_period(), FUNC(zwackery_493_off_callback));
+	machine().scheduler().timer_set(m_screen->scan_period(), timer_expired_delegate(FUNC(mcr68_state::zwackery_493_off_callback),this));
 }
 
 
@@ -331,24 +297,22 @@ static TIMER_CALLBACK( zwackery_493_callback )
  *
  *************************************/
 
-INLINE void update_interrupts(running_machine &machine)
+inline void mcr68_state::update_interrupts()
 {
-	mcr68_state *state = machine.driver_data<mcr68_state>();
-	state->m_m6840_status &= ~0x80;
+	m_m6840_status &= ~0x80;
 
-	if ((state->m_m6840_status & 0x01) && (state->m_m6840_state[0].control & 0x40)) state->m_m6840_status |= 0x80;
-	if ((state->m_m6840_status & 0x02) && (state->m_m6840_state[1].control & 0x40)) state->m_m6840_status |= 0x80;
-	if ((state->m_m6840_status & 0x04) && (state->m_m6840_state[2].control & 0x40)) state->m_m6840_status |= 0x80;
+	if ((m_m6840_status & 0x01) && (m_m6840_state[0].control & 0x40)) m_m6840_status |= 0x80;
+	if ((m_m6840_status & 0x02) && (m_m6840_state[1].control & 0x40)) m_m6840_status |= 0x80;
+	if ((m_m6840_status & 0x04) && (m_m6840_state[2].control & 0x40)) m_m6840_status |= 0x80;
 
-	state->m_m6840_irq_state = state->m_m6840_status >> 7;
-	update_mcr68_interrupts(machine);
+	m_m6840_irq_state = m_m6840_status >> 7;
+	update_mcr68_interrupts();
 }
 
 
-static void subtract_from_counter(running_machine &machine, int counter, int count)
+void mcr68_state::subtract_from_counter(int counter, int count)
 {
-	mcr68_state *state = machine.driver_data<mcr68_state>();
-	struct counter_state *m6840 = &state->m_m6840_state[counter];
+	struct counter_state *m6840 = &m_m6840_state[counter];
 
 	/* dual-byte mode */
 	if (m6840->control & 0x04)
@@ -369,9 +333,9 @@ static void subtract_from_counter(running_machine &machine, int counter, int cou
 			/* if MSB goes less than zero, we've expired */
 			if (msb < 0)
 			{
-				state->m_m6840_status |= 1 << counter;
-				state->m_m6840_status_read_since_int &= ~(1 << counter);
-				update_interrupts(machine);
+				m_m6840_status |= 1 << counter;
+				m_m6840_status_read_since_int &= ~(1 << counter);
+				update_interrupts();
 				msb = (m6840->latch >> 8) + 1;
 				LOG(("** Counter %d fired\n", counter));
 			}
@@ -396,9 +360,9 @@ static void subtract_from_counter(running_machine &machine, int counter, int cou
 			word += m6840->latch + 1;
 
 			/* we've expired */
-			state->m_m6840_status |= 1 << counter;
-			state->m_m6840_status_read_since_int &= ~(1 << counter);
-			update_interrupts(machine);
+			m_m6840_status |= 1 << counter;
+			m_m6840_status_read_since_int &= ~(1 << counter);
+			update_interrupts();
 			LOG(("** Counter %d fired\n", counter));
 		}
 
@@ -408,24 +372,23 @@ static void subtract_from_counter(running_machine &machine, int counter, int cou
 }
 
 
-static TIMER_CALLBACK( counter_fired_callback )
+TIMER_CALLBACK_MEMBER(mcr68_state::counter_fired_callback)
 {
-	mcr68_state *state = machine.driver_data<mcr68_state>();
 	int count = param >> 2;
 	int counter = param & 3;
-	struct counter_state *m6840 = &state->m_m6840_state[counter];
+	struct counter_state *m6840 = &m_m6840_state[counter];
 
 	/* reset the timer */
 	m6840->timer_active = 0;
 
 	/* subtract it all from the counter; this will generate an interrupt */
-	subtract_from_counter(machine, counter, count);
+	subtract_from_counter(counter, count);
 }
 
 
-static void reload_count(mcr68_state *state, int counter)
+void mcr68_state::reload_count(int counter)
 {
-	struct counter_state *m6840 = &state->m_m6840_state[counter];
+	struct counter_state *m6840 = &m_m6840_state[counter];
 	attotime period;
 	attotime total_period;
 	int count;
@@ -443,9 +406,9 @@ static void reload_count(mcr68_state *state, int counter)
 
 	/* determine the clock period for this timer */
 	if (m6840->control & 0x02)
-		period = state->m_m6840_internal_counter_period;
+		period = m_m6840_internal_counter_period;
 	else
-		period = state->m_m6840_counter_periods[counter];
+		period = m_m6840_counter_periods[counter];
 
 	/* determine the number of clock periods before we expire */
 	count = m6840->count;
@@ -462,9 +425,9 @@ LOG(("reload_count(%d): period = %f  count = %d\n", counter, period.as_double(),
 }
 
 
-static UINT16 compute_counter(mcr68_state *state, int counter)
+UINT16 mcr68_state::compute_counter(int counter)
 {
-	struct counter_state *m6840 = &state->m_m6840_state[counter];
+	struct counter_state *m6840 = &m_m6840_state[counter];
 	attotime period;
 	int remaining;
 
@@ -474,9 +437,9 @@ static UINT16 compute_counter(mcr68_state *state, int counter)
 
 	/* determine the clock period for this timer */
 	if (m6840->control & 0x02)
-		period = state->m_m6840_internal_counter_period;
+		period = m_m6840_internal_counter_period;
 	else
-		period = state->m_m6840_counter_periods[counter];
+		period = m_m6840_counter_periods[counter];
 	/* see how many are left */
 	remaining = m6840->timer->remaining().as_attoseconds() / period.as_attoseconds();
 
@@ -500,16 +463,15 @@ static UINT16 compute_counter(mcr68_state *state, int counter)
  *
  *************************************/
 
-static WRITE8_HANDLER( mcr68_6840_w_common )
+WRITE8_MEMBER(mcr68_state::mcr68_6840_w_common)
 {
-	mcr68_state *state = space->machine().driver_data<mcr68_state>();
 	int i;
 
 	/* offsets 0 and 1 are control registers */
 	if (offset < 2)
 	{
-		int counter = (offset == 1) ? 1 : (state->m_m6840_state[1].control & 0x01) ? 0 : 2;
-		struct counter_state *m6840 = &state->m_m6840_state[counter];
+		int counter = (offset == 1) ? 1 : (m_m6840_state[1].control & 0x01) ? 0 : 2;
+		struct counter_state *m6840 = &m_m6840_state[counter];
 		UINT8 diffs = data ^ m6840->control;
 
 		m6840->control = data;
@@ -522,8 +484,8 @@ static WRITE8_HANDLER( mcr68_6840_w_common )
 			{
 				for (i = 0; i < 3; i++)
 				{
-					state->m_m6840_state[i].timer->adjust(attotime::never);
-					state->m_m6840_state[i].timer_active = 0;
+					m_m6840_state[i].timer->adjust(attotime::never);
+					m_m6840_state[i].timer_active = 0;
 				}
 			}
 
@@ -531,50 +493,49 @@ static WRITE8_HANDLER( mcr68_6840_w_common )
 			else
 			{
 				for (i = 0; i < 3; i++)
-					reload_count(state, i);
+					reload_count(i);
 			}
 
-			state->m_m6840_status = 0;
-			update_interrupts(space->machine());
+			m_m6840_status = 0;
+			update_interrupts();
 		}
 
 		/* changing the clock source? (needed for Zwackery) */
 		if (diffs & 0x02)
-			reload_count(state, counter);
+			reload_count(counter);
 
-		LOG(("%06X:Counter %d control = %02X\n", cpu_get_previouspc(&space->device()), counter, data));
+		LOG(("%06X:Counter %d control = %02X\n", space.device().safe_pcbase(), counter, data));
 	}
 
 	/* offsets 2, 4, and 6 are MSB buffer registers */
 	else if ((offset & 1) == 0)
 	{
-		LOG(("%06X:MSB = %02X\n", cpu_get_previouspc(&space->device()), data));
-		state->m_m6840_msb_buffer = data;
+		LOG(("%06X:MSB = %02X\n", space.device().safe_pcbase(), data));
+		m_m6840_msb_buffer = data;
 	}
 
 	/* offsets 3, 5, and 7 are Write Timer Latch commands */
 	else
 	{
 		int counter = (offset - 2) / 2;
-		struct counter_state *m6840 = &state->m_m6840_state[counter];
-		m6840->latch = (state->m_m6840_msb_buffer << 8) | (data & 0xff);
+		struct counter_state *m6840 = &m_m6840_state[counter];
+		m6840->latch = (m_m6840_msb_buffer << 8) | (data & 0xff);
 
 		/* clear the interrupt */
-		state->m_m6840_status &= ~(1 << counter);
-		update_interrupts(space->machine());
+		m_m6840_status &= ~(1 << counter);
+		update_interrupts();
 
 		/* reload the count if in an appropriate mode */
 		if (!(m6840->control & 0x10))
-			reload_count(state, counter);
+			reload_count(counter);
 
-		LOG(("%06X:Counter %d latch = %04X\n", cpu_get_previouspc(&space->device()), counter, m6840->latch));
+		LOG(("%06X:Counter %d latch = %04X\n", space.device().safe_pcbase(), counter, m6840->latch));
 	}
 }
 
 
-static READ16_HANDLER( mcr68_6840_r_common )
+READ16_MEMBER(mcr68_state::mcr68_6840_r_common)
 {
-	mcr68_state *state = space->machine().driver_data<mcr68_state>();
 	/* offset 0 is a no-op */
 	if (offset == 0)
 		return 0;
@@ -582,56 +543,55 @@ static READ16_HANDLER( mcr68_6840_r_common )
 	/* offset 1 is the status register */
 	else if (offset == 1)
 	{
-		LOG(("%06X:Status read = %04X\n", cpu_get_previouspc(&space->device()), state->m_m6840_status));
-		state->m_m6840_status_read_since_int |= state->m_m6840_status & 0x07;
-		return state->m_m6840_status;
+		LOG(("%06X:Status read = %04X\n", space.device().safe_pcbase(), m_m6840_status));
+		m_m6840_status_read_since_int |= m_m6840_status & 0x07;
+		return m_m6840_status;
 	}
 
 	/* offsets 2, 4, and 6 are Read Timer Counter commands */
 	else if ((offset & 1) == 0)
 	{
 		int counter = (offset - 2) / 2;
-		int result = compute_counter(state, counter);
+		int result = compute_counter(counter);
 
 		/* clear the interrupt if the status has been read */
-		if (state->m_m6840_status_read_since_int & (1 << counter))
-			state->m_m6840_status &= ~(1 << counter);
-		update_interrupts(space->machine());
+		if (m_m6840_status_read_since_int & (1 << counter))
+			m_m6840_status &= ~(1 << counter);
+		update_interrupts();
 
-		state->m_m6840_lsb_buffer = result & 0xff;
+		m_m6840_lsb_buffer = result & 0xff;
 
-		LOG(("%06X:Counter %d read = %04X\n", cpu_get_previouspc(&space->device()), counter, result));
+		LOG(("%06X:Counter %d read = %04X\n", space.device().safe_pcbase(), counter, result));
 		return result >> 8;
 	}
 
 	/* offsets 3, 5, and 7 are LSB buffer registers */
 	else
-		return state->m_m6840_lsb_buffer;
+		return m_m6840_lsb_buffer;
 }
 
 
-WRITE16_HANDLER( mcr68_6840_upper_w )
+WRITE16_MEMBER(mcr68_state::mcr68_6840_upper_w)
 {
 	if (ACCESSING_BITS_8_15)
 		mcr68_6840_w_common(space, offset, (data >> 8) & 0xff);
 }
 
 
-WRITE16_HANDLER( mcr68_6840_lower_w )
+WRITE16_MEMBER(mcr68_state::mcr68_6840_lower_w)
 {
 	if (ACCESSING_BITS_0_7)
 		mcr68_6840_w_common(space, offset, data & 0xff);
 }
 
 
-READ16_HANDLER( mcr68_6840_upper_r )
+READ16_MEMBER(mcr68_state::mcr68_6840_upper_r)
 {
 	return (mcr68_6840_r_common(space,offset,0) << 8) | 0x00ff;
 }
 
 
-READ16_HANDLER( mcr68_6840_lower_r )
+READ16_MEMBER(mcr68_state::mcr68_6840_lower_r)
 {
 	return mcr68_6840_r_common(space,offset,0) | 0xff00;
 }
-

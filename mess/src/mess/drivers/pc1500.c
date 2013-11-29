@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Sandro Ronco
 /***************************************************************************
 
         Sharp pocket computers 1500
@@ -9,7 +11,6 @@
 
 ****************************************************************************/
 
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/lh5801/lh5801.h"
@@ -23,17 +24,17 @@ class pc1500_state : public driver_device
 public:
 	pc1500_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, "maincpu"),
-		  m_rtc(*this, "upd1990a")
-		{ }
+			m_maincpu(*this, "maincpu"),
+			m_rtc(*this, "upd1990a"),
+			m_lcd_data(*this, "lcd_data") { }
 
 	required_device<cpu_device> m_maincpu;
 	required_device<upd1990a_device> m_rtc;
 
-	UINT8 *m_lcd_data;
+	required_shared_ptr<UINT8> m_lcd_data;
 	UINT8 m_kb_matrix;
 
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 	virtual void machine_reset();
 
 	DECLARE_WRITE8_MEMBER( kb_matrix_w );
@@ -41,18 +42,19 @@ public:
 	DECLARE_READ8_MEMBER( port_b_r );
 	DECLARE_WRITE8_MEMBER( port_c_w );
 
-	static UINT8 pc1500_kb_r(device_t *device);
+	DECLARE_READ8_MEMBER( pc1500_kb_r );
+	virtual void palette_init();
 };
 
 static ADDRESS_MAP_START( pc1500_mem , AS_PROGRAM, 8, pc1500_state)
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE( 0x0000, 0x3fff) AM_ROM	//module ROM/RAM
-	AM_RANGE( 0x4000, 0x47ff) AM_RAM	//user RAM
-	AM_RANGE( 0x4800, 0x6fff) AM_RAM	//expansion RAM
-	AM_RANGE( 0x7000, 0x71ff) AM_RAM	AM_MIRROR(0x0600)	AM_BASE( m_lcd_data )
-	AM_RANGE( 0x7800, 0x7bff) AM_RAM	AM_REGION("maincpu", 0x7800)	AM_MIRROR(0x0400)
-	AM_RANGE( 0xa000, 0xbfff) AM_ROM	//expansion ROM
-	AM_RANGE( 0xc000, 0xffff) AM_ROM	//system ROM
+	AM_RANGE( 0x0000, 0x3fff) AM_ROM    //module ROM/RAM
+	AM_RANGE( 0x4000, 0x47ff) AM_RAM    //user RAM
+	AM_RANGE( 0x4800, 0x6fff) AM_RAM    //expansion RAM
+	AM_RANGE( 0x7000, 0x71ff) AM_RAM    AM_MIRROR(0x0600)   AM_SHARE("lcd_data")
+	AM_RANGE( 0x7800, 0x7bff) AM_RAM    AM_REGION("maincpu", 0x7800)    AM_MIRROR(0x0400)
+	AM_RANGE( 0xa000, 0xbfff) AM_ROM    //expansion ROM
+	AM_RANGE( 0xc000, 0xffff) AM_ROM    //system ROM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( pc1500_mem_io , AS_IO, 8, pc1500_state)
@@ -60,36 +62,35 @@ static ADDRESS_MAP_START( pc1500_mem_io , AS_IO, 8, pc1500_state)
 	AM_RANGE( 0xf000, 0xf00f) AM_DEVREADWRITE("lh5810", lh5810_device, data_r, data_w)
 ADDRESS_MAP_END
 
-UINT8 pc1500_state::pc1500_kb_r(device_t *device)
+READ8_MEMBER( pc1500_state::pc1500_kb_r )
 {
-	pc1500_state *state = device->machine().driver_data<pc1500_state>();
-    UINT8 data = 0xff;
+	UINT8 data = 0xff;
 
-	if (!device->started()) return 0;
+	if (!started()) return 0;
 
-    if (!(state->m_kb_matrix & 0x01))
-		data &= input_port_read(device->machine(), "KEY0");
-    if (!(state->m_kb_matrix & 0x02))
-		data &= input_port_read(device->machine(), "KEY1");
-    if (!(state->m_kb_matrix & 0x04))
-		data &= input_port_read(device->machine(), "KEY2");
-    if (!(state->m_kb_matrix & 0x08))
-		data &= input_port_read(device->machine(), "KEY3");
-    if (!(state->m_kb_matrix & 0x10))
-		data &= input_port_read(device->machine(), "KEY4");
-    if (!(state->m_kb_matrix & 0x20))
-		data &= input_port_read(device->machine(), "KEY5");
-    if (!(state->m_kb_matrix & 0x40))
-		data &= input_port_read(device->machine(), "KEY6");
-    if (!(state->m_kb_matrix & 0x80))
-		data &= input_port_read(device->machine(), "KEY7");
+	if (!(m_kb_matrix & 0x01))
+		data &= ioport("KEY0")->read();
+	if (!(m_kb_matrix & 0x02))
+		data &= ioport("KEY1")->read();
+	if (!(m_kb_matrix & 0x04))
+		data &= ioport("KEY2")->read();
+	if (!(m_kb_matrix & 0x08))
+		data &= ioport("KEY3")->read();
+	if (!(m_kb_matrix & 0x10))
+		data &= ioport("KEY4")->read();
+	if (!(m_kb_matrix & 0x20))
+		data &= ioport("KEY5")->read();
+	if (!(m_kb_matrix & 0x40))
+		data &= ioport("KEY6")->read();
+	if (!(m_kb_matrix & 0x80))
+		data &= ioport("KEY7")->read();
 
 	return data;
 }
 
-bool pc1500_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
+UINT32 pc1500_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	bitmap_fill(&bitmap, &cliprect, 0);
+	bitmap.fill(0, cliprect);
 
 	for (int p=0; p<=1; p++)
 		for (int a=0; a<0x4e; a++)
@@ -98,9 +99,9 @@ bool pc1500_state::screen_update(screen_device &screen, bitmap_t &bitmap, const 
 			for (int b=0; b<8; b++)
 			{
 				if(b<4)
-					*BITMAP_ADDR16(&bitmap, b + 4 * (BIT( a,0)), (a>>1) + 0x00 + 0x27*p) = BIT(data, b);
+					bitmap.pix16(b + 4 * (BIT( a, 0)), (a>>1) + 0x00 + 0x27*p) = BIT(data, b);
 				else
-					*BITMAP_ADDR16(&bitmap, b - 4 * (BIT(~a,0)), (a>>1) + 0x4e + 0x27*p) = BIT(data, b);
+					bitmap.pix16(b - 4 * (BIT(~a, 0)), (a>>1) + 0x4e + 0x27*p) = BIT(data, b);
 			}
 		}
 
@@ -234,20 +235,20 @@ WRITE8_MEMBER( pc1500_state::port_c_w )
 READ8_MEMBER( pc1500_state::port_b_r )
 {
 	/*
-    x--- ---- ON/Break key
-    -xx- ---- upd1990ac
-    ---x ---- GND
-    ---- x--- Japan: GND, export: VCC
-    ---- -x-- cassette in
-    ---- --xx connector
-    */
+	x--- ---- ON/Break key
+	-xx- ---- upd1990ac
+	---x ---- GND
+	---- x--- Japan: GND, export: VCC
+	---- -x-- cassette in
+	---- --xx connector
+	*/
 	UINT8 data = 0;
 
 	data |= 0x08;
 
 	data |= (m_rtc->tp_r()<<5);
 	data |= (m_rtc->data_out_r()<<6);
-	data |= (input_port_read(machine(), "ON")<<7);
+	data |= (ioport("ON")->read()<<7);
 
 	return data;
 }
@@ -257,62 +258,49 @@ READ8_MEMBER( pc1500_state::port_a_r )
 	return 0xff;
 }
 
-static PALETTE_INIT( pc1500 )
+void pc1500_state::palette_init()
 {
-	palette_set_color(machine, 0, MAKE_RGB(138, 146, 148));
-	palette_set_color(machine, 1, MAKE_RGB(92, 83, 88));
+	palette_set_color(machine(), 0, MAKE_RGB(138, 146, 148));
+	palette_set_color(machine(), 1, MAKE_RGB(92, 83, 88));
 }
-
-static const lh5801_cpu_core lh5801_pc1500_config =
-{
-	pc1500_state::pc1500_kb_r
-};
 
 static const lh5810_interface lh5810_pc1500_config =
 {
-	DEVCB_DRIVER_MEMBER(pc1500_state, port_a_r),		//port A read
-	DEVCB_DRIVER_MEMBER(pc1500_state, kb_matrix_w),		//port A write
-	DEVCB_DRIVER_MEMBER(pc1500_state, port_b_r),		//port B read
-	DEVCB_NULL,											//port B write
-	DEVCB_DRIVER_MEMBER(pc1500_state, port_c_w),		//port C write
-	DEVCB_CPU_INPUT_LINE("maincpu", LH5801_LINE_MI)		//IRQ callback
-};
-
-
-static UPD1990A_INTERFACE( pc1500_upd1990a_intf )
-{
-	DEVCB_NULL,
-	DEVCB_NULL
+	DEVCB_DRIVER_MEMBER(pc1500_state, port_a_r),        //port A read
+	DEVCB_DRIVER_MEMBER(pc1500_state, kb_matrix_w),     //port A write
+	DEVCB_DRIVER_MEMBER(pc1500_state, port_b_r),        //port B read
+	DEVCB_NULL,                                         //port B write
+	DEVCB_DRIVER_MEMBER(pc1500_state, port_c_w),        //port C write
+	DEVCB_CPU_INPUT_LINE("maincpu", LH5801_LINE_MI)     //IRQ callback
 };
 
 static MACHINE_CONFIG_START( pc1500, pc1500_state )
-	MCFG_CPU_ADD("maincpu", LH5801, 1300000)			//1.3 MHz
+	MCFG_CPU_ADD("maincpu", LH5801, 1300000)            //1.3 MHz
 	MCFG_CPU_PROGRAM_MAP( pc1500_mem )
 	MCFG_CPU_IO_MAP( pc1500_mem_io )
-	MCFG_CPU_CONFIG( lh5801_pc1500_config )
+	MCFG_LH5801_IN(READ8(pc1500_state,pc1500_kb_r))
 
 	MCFG_SCREEN_ADD("screen", LCD)
 	MCFG_SCREEN_REFRESH_RATE(50)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))	// not accurate
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))  // not accurate
+	MCFG_SCREEN_UPDATE_DRIVER(pc1500_state, screen_update)
 	MCFG_SCREEN_SIZE(156, 8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 156-1, 0, 7-1)
 	MCFG_DEFAULT_LAYOUT(layout_pc1500)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(pc1500)
 
 	MCFG_LH5810_ADD("lh5810", lh5810_pc1500_config)
 
-	MCFG_UPD1990A_ADD("upd1990a", XTAL_32_768kHz, pc1500_upd1990a_intf)
+	MCFG_UPD1990A_ADD("upd1990a", XTAL_32_768kHz, NULL, NULL)
 MACHINE_CONFIG_END
 
 
 ROM_START( pc1500 )
-    ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
 	ROM_LOAD( "sys1500.rom", 0xc000, 0x4000, CRC(d480b50d) SHA1(4bf748ba4d7c2b7cd7da7f3fdefcdd2e4cd41c4e))
-    ROM_REGION( 0x10000, "ce150", ROMREGION_ERASEFF )
+	ROM_REGION( 0x10000, "ce150", ROMREGION_ERASEFF )
 	ROM_LOAD( "ce-150.rom", 0x0000, 0x2000, CRC(8fa1df6d) SHA1(a3aa02a641a46c27c0d4c0dc025b0dbe9b5b79c8))
 ROM_END
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE INPUT   INIT         COMPANY     FULLNAME */
-COMP( 198?, pc1500,	0,	0,	pc1500,	pc1500,	0,	 "Sharp", "Pocket Computer 1500", GAME_NOT_WORKING | GAME_NO_SOUND )
+COMP( 198?, pc1500, 0,  0,  pc1500, pc1500, driver_device,  0,   "Sharp", "Pocket Computer 1500", GAME_NOT_WORKING | GAME_NO_SOUND )

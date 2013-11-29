@@ -26,11 +26,10 @@
     TYPE DEFINITIONS
 ***************************************************************************/
 
-typedef struct _machine_entry machine_entry;
-struct _machine_entry
+struct machine_entry
 {
-	machine_entry *		next;
-	running_machine *	machine;
+	machine_entry *     next;
+	running_machine *   machine;
 };
 
 

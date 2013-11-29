@@ -12,7 +12,8 @@ class comquest_state : public driver_device
 {
 public:
 	comquest_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this, "maincpu") { }
 
 	UINT8 m_data[128][8];
 	void *m_timer;
@@ -20,13 +21,12 @@ public:
 	int m_dma_activ;
 	int m_state;
 	int m_count;
+	DECLARE_READ8_MEMBER(comquest_read);
+	DECLARE_WRITE8_MEMBER(comquest_write);
+	virtual void machine_reset();
+	virtual void video_start();
+	UINT32 screen_update_comquest(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
 };
-
-
-/*----------- defined in video/comquest.c -----------*/
-
-VIDEO_START( comquest );
-SCREEN_UPDATE( comquest );
-
 
 #endif /* COMQUEST_H_ */

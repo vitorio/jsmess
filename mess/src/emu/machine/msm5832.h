@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     OKI MSM5832 Real Time Clock/Calendar emulation
@@ -43,12 +45,12 @@
 
 // ======================> msm5832_device
 
-class msm5832_device :	public device_t,
+class msm5832_device :  public device_t,
 						public device_rtc_interface
 {
 public:
-    // construction/destruction
-    msm5832_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	// construction/destruction
+	msm5832_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
 	DECLARE_READ8_MEMBER( data_r );
 	DECLARE_WRITE8_MEMBER( data_w );
@@ -64,26 +66,24 @@ public:
 	DECLARE_WRITE_LINE_MEMBER( cs_w );
 
 protected:
-    // device-level overrides
-    virtual void device_start();
+	// device-level overrides
+	virtual void device_start();
+	virtual void device_reset();
 	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 
 	// device_rtc_interface overrides
-	virtual void rtc_set_time(int year, int month, int day, int day_of_week, int hour, int minute, int second);
-	virtual bool rtc_is_year_2000_compliant() { return false; }
+	virtual void rtc_clock_updated(int year, int month, int day, int day_of_week, int hour, int minute, int second);
 
 private:
 	static const device_timer_id TIMER_CLOCK = 0;
 
 	inline int read_counter(int counter);
 	inline void write_counter(int counter, int value);
-	inline void advance_seconds();
-	inline void advance_minutes();
 
-	UINT8 m_reg[13];			// registers
+	UINT8 m_reg[13];            // registers
 
-	int m_hold;					// counter hold
-	int m_address;				// address
+	int m_hold;                 // counter hold
+	int m_address;              // address
 
 	int m_read;
 	int m_write;

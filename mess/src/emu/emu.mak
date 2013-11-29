@@ -14,6 +14,7 @@ EMUSRC = $(SRC)/emu
 EMUOBJ = $(OBJ)/emu
 
 EMUAUDIO = $(EMUOBJ)/audio
+EMUBUS = $(EMUOBJ)/bus
 EMUDRIVERS = $(EMUOBJ)/drivers
 EMULAYOUT = $(EMUOBJ)/layout
 EMUMACHINE = $(EMUOBJ)/machine
@@ -26,8 +27,40 @@ OBJDIRS += \
 	$(EMUOBJ)/debug \
 	$(EMUOBJ)/debugint \
 	$(EMUOBJ)/audio \
+	$(EMUOBJ)/bus \
+	$(EMUOBJ)/bus/abcbus \
+	$(EMUOBJ)/bus/adam \
+	$(EMUOBJ)/bus/adamnet \
+	$(EMUOBJ)/bus/bw2 \
+	$(EMUOBJ)/bus/c64 \
+	$(EMUOBJ)/bus/cbm2 \
+	$(EMUOBJ)/bus/cbmiec \
+	$(EMUOBJ)/bus/comx35 \
+	$(EMUOBJ)/bus/ecbbus \
+	$(EMUOBJ)/bus/econet \
+	$(EMUOBJ)/bus/ep64 \
+	$(EMUOBJ)/bus/ieee488 \
+	$(EMUOBJ)/bus/isbx \
+	$(EMUOBJ)/bus/pet \
+	$(EMUOBJ)/bus/plus4 \
+	$(EMUOBJ)/bus/s100 \
+	$(EMUOBJ)/bus/vcs \
+	$(EMUOBJ)/bus/vic10 \
+	$(EMUOBJ)/bus/vic20 \
+	$(EMUOBJ)/bus/vidbrain \
+	$(EMUOBJ)/bus/vip \
+	$(EMUOBJ)/bus/wangpc \
+	$(EMUOBJ)/bus/a2bus \
+	$(EMUOBJ)/bus/nubus \
+	$(EMUOBJ)/bus/centronics \
+	$(EMUOBJ)/bus/iq151 \
+	$(EMUOBJ)/bus/kc \
+	$(EMUOBJ)/bus/tvc \
+	$(EMUOBJ)/bus/z88 \
 	$(EMUOBJ)/drivers \
 	$(EMUOBJ)/machine \
+	$(EMUOBJ)/netlist \
+	$(EMUOBJ)/netlist/devices \
 	$(EMUOBJ)/layout \
 	$(EMUOBJ)/imagedev \
 	$(EMUOBJ)/video \
@@ -54,22 +87,27 @@ EMUOBJS = \
 	$(EMUOBJ)/crsshair.o \
 	$(EMUOBJ)/debugger.o \
 	$(EMUOBJ)/delegate.o \
+	$(EMUOBJ)/devdelegate.o \
 	$(EMUOBJ)/devcb.o \
+	$(EMUOBJ)/devcb2.o \
 	$(EMUOBJ)/devcpu.o \
-	$(EMUOBJ)/devimage.o \
-	$(EMUOBJ)/devlegcy.o \
-	$(EMUOBJ)/devintrf.o \
+	$(EMUOBJ)/devfind.o \
+	$(EMUOBJ)/device.o \
 	$(EMUOBJ)/didisasm.o \
 	$(EMUOBJ)/diexec.o \
 	$(EMUOBJ)/diimage.o \
 	$(EMUOBJ)/dimemory.o \
+	$(EMUOBJ)/dinetwork.o \
 	$(EMUOBJ)/dinvram.o \
 	$(EMUOBJ)/dirtc.o \
+	$(EMUOBJ)/diserial.o \
 	$(EMUOBJ)/dislot.o \
 	$(EMUOBJ)/disound.o \
 	$(EMUOBJ)/distate.o \
+	$(EMUOBJ)/divideo.o \
 	$(EMUOBJ)/drawgfx.o \
 	$(EMUOBJ)/driver.o \
+	$(EMUOBJ)/drivenum.o \
 	$(EMUOBJ)/emualloc.o \
 	$(EMUOBJ)/emucore.o \
 	$(EMUOBJ)/emuopts.o \
@@ -79,11 +117,14 @@ EMUOBJS = \
 	$(EMUOBJ)/image.o \
 	$(EMUOBJ)/info.o \
 	$(EMUOBJ)/input.o \
-	$(EMUOBJ)/inptport.o \
+	$(EMUOBJ)/ioport.o \
+	$(EMUOBJ)/luaengine.o \
 	$(EMUOBJ)/mame.o \
 	$(EMUOBJ)/machine.o \
 	$(EMUOBJ)/mconfig.o \
+	$(EMUOBJ)/memarray.o \
 	$(EMUOBJ)/memory.o \
+	$(EMUOBJ)/network.o \
 	$(EMUOBJ)/output.o \
 	$(EMUOBJ)/render.o \
 	$(EMUOBJ)/rendfont.o \
@@ -96,6 +137,7 @@ EMUOBJS = \
 	$(EMUOBJ)/softlist.o \
 	$(EMUOBJ)/sound.o \
 	$(EMUOBJ)/speaker.o \
+	$(EMUOBJ)/sprite.o \
 	$(EMUOBJ)/tilemap.o \
 	$(EMUOBJ)/timer.o \
 	$(EMUOBJ)/ui.o \
@@ -103,10 +145,10 @@ EMUOBJS = \
 	$(EMUOBJ)/uiimage.o \
 	$(EMUOBJ)/uiinput.o \
 	$(EMUOBJ)/uiswlist.o \
+	$(EMUOBJ)/uimain.o \
 	$(EMUOBJ)/uimenu.o \
 	$(EMUOBJ)/validity.o \
 	$(EMUOBJ)/video.o \
-	$(EMUOBJ)/watchdog.o \
 	$(EMUOBJ)/debug/debugcmd.o \
 	$(EMUOBJ)/debug/debugcon.o \
 	$(EMUOBJ)/debug/debugcpu.o \
@@ -114,55 +156,59 @@ EMUOBJS = \
 	$(EMUOBJ)/debug/debugvw.o \
 	$(EMUOBJ)/debug/dvdisasm.o \
 	$(EMUOBJ)/debug/dvmemory.o \
+	$(EMUOBJ)/debug/dvbpoints.o \
+	$(EMUOBJ)/debug/dvwpoints.o \
 	$(EMUOBJ)/debug/dvstate.o \
 	$(EMUOBJ)/debug/dvtext.o \
 	$(EMUOBJ)/debug/express.o \
 	$(EMUOBJ)/debug/textbuf.o \
 	$(EMUOBJ)/debugint/debugint.o \
 	$(EMUOBJ)/profiler.o \
-	$(OSDOBJ)/osdepend.o
+	$(EMUOBJ)/webengine.o \
+	$(OSDOBJ)/osdepend.o \
+	$(OSDOBJ)/osdnet.o
 
 EMUSOUNDOBJS = \
 	$(EMUOBJ)/sound/filter.o \
 	$(EMUOBJ)/sound/flt_vol.o \
 	$(EMUOBJ)/sound/flt_rc.o \
 	$(EMUOBJ)/sound/wavwrite.o \
-
-EMUAUDIOOBJS = \
-	$(EMUAUDIO)/generic.o \
+	$(EMUOBJ)/sound/samples.o   \
 
 EMUDRIVEROBJS = \
 	$(EMUDRIVERS)/empty.o \
+	$(EMUDRIVERS)/testcpu.o \
 
 EMUMACHINEOBJS = \
-	$(EMUMACHINE)/8255ppi.o		\
-	$(EMUMACHINE)/generic.o		\
-	$(EMUMACHINE)/ldcore.o		\
-	$(EMUMACHINE)/ldpr8210.o	\
-	$(EMUMACHINE)/ldv1000.o		\
-	$(EMUMACHINE)/ldvp931.o		\
-	$(EMUMACHINE)/ram.o			\
-	$(EMUMACHINE)/z80ctc.o		\
-
-EMUVIDEOOBJS = \
-	$(EMUVIDEO)/generic.o		\
-	$(EMUVIDEO)/rgbutil.o		\
-	$(EMUVIDEO)/tms9928a.o		\
-	$(EMUVIDEO)/vector.o		\
+	$(EMUMACHINE)/generic.o     \
+	$(EMUMACHINE)/ram.o         \
+	$(EMUMACHINE)/nvram.o       \
+	$(EMUMACHINE)/laserdsc.o    \
+	$(EMUMACHINE)/netlist.o     \
 
 EMUIMAGEDEVOBJS = \
-	$(EMUIMAGEDEV)/bitbngr.o	\
-	$(EMUIMAGEDEV)/cartslot.o	\
-	$(EMUIMAGEDEV)/cassette.o	\
-	$(EMUIMAGEDEV)/chd_cd.o		\
-	$(EMUIMAGEDEV)/flopdrv.o	\
-	$(EMUIMAGEDEV)/harddriv.o	\
-	$(EMUIMAGEDEV)/multcart.o	\
-	$(EMUIMAGEDEV)/printer.o	\
-	$(EMUIMAGEDEV)/snapquik.o	\
+	$(EMUIMAGEDEV)/bitbngr.o    \
+	$(EMUIMAGEDEV)/cartslot.o   \
+	$(EMUIMAGEDEV)/cassette.o   \
+	$(EMUIMAGEDEV)/chd_cd.o     \
+	$(EMUIMAGEDEV)/flopdrv.o    \
+	$(EMUIMAGEDEV)/floppy.o     \
+	$(EMUIMAGEDEV)/harddriv.o   \
+	$(EMUIMAGEDEV)/midiin.o     \
+	$(EMUIMAGEDEV)/midiout.o    \
+	$(EMUIMAGEDEV)/printer.o    \
+	$(EMUIMAGEDEV)/serial.o     \
+	$(EMUIMAGEDEV)/snapquik.o   \
 
 
-LIBEMUOBJS = $(EMUOBJS) $(EMUSOUNDOBJS) $(EMUAUDIOOBJS) $(EMUDRIVEROBJS) $(EMUMACHINEOBJS) $(EMUIMAGEDEVOBJS) $(EMUVIDEOOBJS)
+EMUVIDEOOBJS = \
+	$(EMUVIDEO)/generic.o       \
+	$(EMUVIDEO)/resnet.o        \
+	$(EMUVIDEO)/rgbutil.o       \
+	$(EMUVIDEO)/vector.o        \
+
+
+LIBEMUOBJS = $(EMUOBJS) $(EMUSOUNDOBJS) $(EMUDRIVEROBJS) $(EMUMACHINEOBJS) $(EMUIMAGEDEVOBJS) $(EMUVIDEOOBJS)
 
 $(LIBEMU): $(LIBEMUOBJS)
 
@@ -174,10 +220,7 @@ $(LIBEMU): $(LIBEMUOBJS)
 
 include $(EMUSRC)/cpu/cpu.mak
 
-$(LIBCPU): $(CPUOBJS)
-
 $(LIBDASM): $(DASMOBJS)
-
 
 
 #-------------------------------------------------
@@ -186,44 +229,57 @@ $(LIBDASM): $(DASMOBJS)
 
 include $(EMUSRC)/sound/sound.mak
 
-$(LIBSOUND): $(SOUNDOBJS)
+#-------------------------------------------------
+# netlist core objects
+#-------------------------------------------------
 
+include $(EMUSRC)/netlist/netlist.mak
 
+#-------------------------------------------------
+# video core objects
+#-------------------------------------------------
+
+include $(EMUSRC)/video/video.mak
+
+#-------------------------------------------------
+# machine core objects
+#-------------------------------------------------
+
+include $(EMUSRC)/machine/machine.mak
+
+#-------------------------------------------------
+# bus core objects
+#-------------------------------------------------
+
+include $(EMUSRC)/bus/bus.mak
+
+#-------------------------------------------------
+# core optional library
+#-------------------------------------------------
+
+$(LIBOPTIONAL): $(CPUOBJS) $(SOUNDOBJS) $(VIDEOOBJS) $(MACHINEOBJS) $(BUSOBJS) $(NETLISTOBJS)
 
 #-------------------------------------------------
 # additional dependencies
 #-------------------------------------------------
 
-$(EMUOBJ)/rendfont.o:	$(EMUOBJ)/uismall.fh
+$(EMUOBJ)/rendfont.o:   $(EMUOBJ)/uismall.fh
 
-$(EMUOBJ)/video.o:	$(EMUSRC)/rendersw.c
-$(EMUVIDEO)/v9938.o:	$(EMUSRC)/video/v9938mod.c
-
-$(EMUMACHINE)/s3c2400.o:	$(EMUSRC)/machine/s3c24xx.c
-$(EMUMACHINE)/s3c2410.o:	$(EMUSRC)/machine/s3c24xx.c
-$(EMUMACHINE)/s3c2440.o:	$(EMUSRC)/machine/s3c24xx.c
-
+$(EMUOBJ)/video.o:  $(EMUSRC)/rendersw.c
 
 #-------------------------------------------------
 # core layouts
 #-------------------------------------------------
 
-$(EMUOBJ)/rendlay.o:	$(EMULAYOUT)/dualhovu.lh \
+$(EMUOBJ)/rendlay.o:    $(EMULAYOUT)/dualhovu.lh \
 						$(EMULAYOUT)/dualhsxs.lh \
 						$(EMULAYOUT)/dualhuov.lh \
 						$(EMULAYOUT)/horizont.lh \
 						$(EMULAYOUT)/triphsxs.lh \
+						$(EMULAYOUT)/quadhsxs.lh \
 						$(EMULAYOUT)/vertical.lh \
-						$(EMULAYOUT)/ho20ffff.lh \
-						$(EMULAYOUT)/ho2eff2e.lh \
-						$(EMULAYOUT)/ho4f893d.lh \
-						$(EMULAYOUT)/ho88ffff.lh \
-						$(EMULAYOUT)/hoa0a0ff.lh \
-						$(EMULAYOUT)/hoffe457.lh \
-						$(EMULAYOUT)/hoffff20.lh \
-						$(EMULAYOUT)/voffff20.lh \
 						$(EMULAYOUT)/lcd.lh \
 						$(EMULAYOUT)/lcd_rot.lh \
-						$(EMULAYOUT)/pinball.lh \
+						$(EMULAYOUT)/noscreens.lh \
 
-$(EMUOBJ)/video.o:		$(EMULAYOUT)/snap.lh
+$(EMUOBJ)/video.o:      $(EMULAYOUT)/snap.lh

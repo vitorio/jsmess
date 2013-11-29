@@ -1,13 +1,14 @@
+// license:MAME
+// copyright-holders:smf
 /*
  * PlayStation GPU emulator
  *
- * Copyright 2003-2011 smf
+ * Copyright 2003-2013 smf
  *
  */
 
 #include "emu.h"
 #include "video/psx.h"
-#include "includes/psx.h"
 
 #define VERBOSE_LEVEL ( 0 )
 
@@ -19,13 +20,16 @@ const device_type CXD8561BQ = &device_creator<cxd8561bq_device>;
 const device_type CXD8561CQ = &device_creator<cxd8561cq_device>;
 const device_type CXD8654Q = &device_creator<cxd8654q_device>;
 
-psxgpu_device::psxgpu_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, type, name, tag, owner, clock)
+psxgpu_device::psxgpu_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source) :
+	device_t(mconfig, type, name, tag, owner, clock, shortname, source),
+	m_vblank_handler(*this)
 {
 }
 
 void psxgpu_device::device_start( void )
 {
+	m_vblank_handler.resolve_safe();
+
 	if( m_type == CXD8538Q )
 	{
 		psx_gpu_init( 1 );
@@ -34,49 +38,58 @@ void psxgpu_device::device_start( void )
 	{
 		psx_gpu_init( 2 );
 	}
+}
 
+void psxgpu_device::device_reset( void )
+{
 	gpu_reset();
 }
 
 cxd8514q_device::cxd8514q_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : psxgpu_device(mconfig, CXD8514Q, "CXD8514Q", tag, owner, clock)
+	: psxgpu_device(mconfig, CXD8514Q, "CXD8514Q", tag, owner, clock, "cxd8514q", __FILE__)
 {
 }
 
 cxd8538q_device::cxd8538q_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : psxgpu_device(mconfig, CXD8538Q, "CXD8538Q", tag, owner, clock)
+	: psxgpu_device(mconfig, CXD8538Q, "CXD8538Q", tag, owner, clock, "cxd8538q", __FILE__)
 {
 }
 
 cxd8561q_device::cxd8561q_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : psxgpu_device(mconfig, CXD8561Q, "CXD8561Q", tag, owner, clock)
+	: psxgpu_device(mconfig, CXD8561Q, "CXD8561Q", tag, owner, clock, "cxd8561q", __FILE__)
 {
 }
 
 cxd8561bq_device::cxd8561bq_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : psxgpu_device(mconfig, CXD8561BQ, "CXD8561BQ", tag, owner, clock)
+	: psxgpu_device(mconfig, CXD8561BQ, "CXD8561BQ", tag, owner, clock, "cxd8561bq", __FILE__)
 {
 }
 
 cxd8561cq_device::cxd8561cq_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : psxgpu_device(mconfig, CXD8561CQ, "CXD8561CQ", tag, owner, clock)
+	: psxgpu_device(mconfig, CXD8561CQ, "CXD8561CQ", tag, owner, clock, "cxd8561cq", __FILE__)
 {
 }
 
 cxd8654q_device::cxd8654q_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : psxgpu_device(mconfig, CXD8654Q, "CXD8654Q", tag, owner, clock)
+	: psxgpu_device(mconfig, CXD8654Q, "CXD8654Q", tag, owner, clock, "cxd8654q", __FILE__)
 {
 }
 
-static const UINT16 p_n_rightpointlist[] = { 1, 2, 0 };
-static const UINT16 p_n_leftpointlist[] = { 2, 0, 1 };
+static const UINT16 m_p_n_nextpointlist4[] = { 1, 3, 0, 2 };
+static const UINT16 m_p_n_prevpointlist4[] = { 2, 0, 3, 1 };
+static const UINT16 m_p_n_nextpointlist4b[] = { 0, 3, 1, 2 };
+static const UINT16 m_p_n_prevpointlist4b[] = { 0, 2, 3, 1 };
+static const UINT16 m_p_n_nextpointlist3[] = { 1, 2, 0 };
+static const UINT16 m_p_n_prevpointlist3[] = { 2, 0, 1 };
 
 #define SINT11( x ) ( ( (INT32)( x ) << 21 ) >> 21 )
 
-#define COORD_X( a ) ( a.sw.l )
-#define COORD_Y( a ) ( a.sw.h )
-#define COORD_DX( a ) ( n_drawoffset_x + a.sw.l )
-#define COORD_DY( a ) ( n_drawoffset_y + a.sw.h )
+#define ADJUST_COORD( a ) \
+	a.w.l = SINT11( COORD_X( a ) ); \
+	a.w.h = SINT11( COORD_Y( a ) );
+
+#define COORD_X( a ) ( (INT16)a.w.l )
+#define COORD_Y( a ) ( (INT16)a.w.h )
 #define SIZE_W( a ) ( a.w.l )
 #define SIZE_H( a ) ( a.w.h )
 #define BGR_C( a ) ( a.b.h3 )
@@ -113,7 +126,7 @@ void psxgpu_device::DebugMeshInit( void )
 	m_debug.b_clear = 1;
 	m_debug.n_coord = 0;
 	m_debug.n_skip = 0;
-	m_debug.mesh = auto_bitmap_alloc( machine(), width, height, BITMAP_FORMAT_INDEXED16 );
+	m_debug.mesh = auto_bitmap_ind16_alloc( machine(), width, height );
 }
 
 void psxgpu_device::DebugMesh( int n_coordx, int n_coordy )
@@ -124,27 +137,13 @@ void psxgpu_device::DebugMesh( int n_coordx, int n_coordy )
 	int width = screen->width();
 	int height = screen->height();
 
+	n_coordx += m_n_displaystartx;
+	n_coordy += n_displaystarty;
+
 	if( m_debug.b_clear )
 	{
-		bitmap_fill( m_debug.mesh, NULL , 0x0000);
+		m_debug.mesh->fill(0x0000);
 		m_debug.b_clear = 0;
-	}
-
-	if( m_debug.n_coord < DEBUG_COORDS )
-	{
-		n_coordx += m_n_displaystartx;
-		n_coordy += n_displaystarty;
-
-		n_coordx *= 511;
-		n_coordx /= DEBUG_MAX - 1;
-		n_coordx += 256;
-		n_coordy *= 511;
-		n_coordy /= DEBUG_MAX - 1;
-		n_coordy += 256;
-
-		m_debug.n_coordx[ m_debug.n_coord ] = n_coordx;
-		m_debug.n_coordy[ m_debug.n_coord ] = n_coordy;
-		m_debug.n_coord++;
 	}
 
 	n_colour = 0x1f;
@@ -222,13 +221,20 @@ void psxgpu_device::DebugMesh( int n_coordx, int n_coordy )
 				(INT16)n_x.w.h <= width - 1 &&
 				(INT16)n_y.w.h <= height - 1 )
 			{
-				if( *BITMAP_ADDR16(m_debug.mesh, n_y.w.h, n_x.w.h) != 0xffff )
-					*BITMAP_ADDR16(m_debug.mesh, n_y.w.h, n_x.w.h) = n_colour;
+				if( m_debug.mesh->pix16(n_y.w.h, n_x.w.h) != 0xffff )
+					m_debug.mesh->pix16(n_y.w.h, n_x.w.h) = n_colour;
 			}
 			n_x.d += n_dx;
 			n_y.d += n_dy;
 			n_len--;
 		}
+	}
+
+	if( m_debug.n_coord < DEBUG_COORDS )
+	{
+		m_debug.n_coordx[ m_debug.n_coord ] = n_coordx;
+		m_debug.n_coordy[ m_debug.n_coord ] = n_coordy;
+		m_debug.n_coord++;
 	}
 }
 
@@ -240,20 +246,16 @@ void psxgpu_device::DebugMeshEnd( void )
 void psxgpu_device::DebugCheckKeys( void )
 {
 	if( machine().input().code_pressed_once( KEYCODE_M ) )
+	{
 		m_debug.b_mesh = !m_debug.b_mesh;
+		updatevisiblearea();
+	}
 
 	if( machine().input().code_pressed_once( KEYCODE_V ) )
-		m_debug.b_texture = !m_debug.b_texture;
-
-	if( m_debug.b_mesh || m_debug.b_texture )
 	{
-		screen_device *screen = machine().primary_screen;
-		int width = screen->width();
-		int height = screen->height();
-		machine().primary_screen->set_visible_area( 0, width - 1, 0, height - 1 );
+		m_debug.b_texture = !m_debug.b_texture;
+		updatevisiblearea();
 	}
-	else
-		machine().primary_screen->set_visible_area( 0, n_screenwidth - 1, 0, n_screenheight - 1 );
 
 	if( machine().input().code_pressed_once( KEYCODE_I ) )
 	{
@@ -314,17 +316,17 @@ void psxgpu_device::DebugCheckKeys( void )
 #endif
 }
 
-int psxgpu_device::DebugMeshDisplay( bitmap_t *bitmap, const rectangle *cliprect )
+int psxgpu_device::DebugMeshDisplay( bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
-	if( m_debug.mesh )
+	if( m_debug.b_mesh )
 	{
-		copybitmap( bitmap, m_debug.mesh, 0, 0, 0, 0, cliprect );
+		copybitmap( bitmap, *m_debug.mesh, 0, 0, 0, 0, cliprect );
 	}
 	m_debug.b_clear = 1;
 	return m_debug.b_mesh;
 }
 
-int psxgpu_device::DebugTextureDisplay( bitmap_t *bitmap )
+int psxgpu_device::DebugTextureDisplay( bitmap_ind16 &bitmap )
 {
 	UINT32 n_y;
 
@@ -432,9 +434,14 @@ void psxgpu_device::updatevisiblearea()
 		n_screenwidth = 640;
 		break;
 	}
-	visarea.min_x = visarea.min_y = 0;
-	visarea.max_x = n_screenwidth - 1;
-	visarea.max_y = n_screenheight - 1;
+
+	if( m_debug.b_mesh || m_debug.b_texture )
+	{
+		n_screenheight = 1024;
+		n_screenwidth = 1024;
+	}
+
+	visarea.set(0, n_screenwidth - 1, 0, n_screenheight - 1);
 	machine().primary_screen->configure(n_screenwidth, n_screenheight, visarea, HZ_TO_ATTOSECONDS(refresh));
 }
 
@@ -445,8 +452,8 @@ void psxgpu_device::psx_gpu_init( int n_gputype )
 	int n_level2;
 	int n_shade;
 	int n_shaded;
-	int width = machine().primary_screen->width();
-	int height = machine().primary_screen->height();
+	int width = 1024;
+	int height = ( vramSize / width ) / sizeof( UINT16 );
 
 	m_n_gputype = n_gputype;
 
@@ -461,8 +468,7 @@ void psxgpu_device::psx_gpu_init( int n_gputype )
 	n_lightgun_y = 0;
 	b_reverseflag = 0;
 
-	n_vram_size = width * height;
-	p_vram = auto_alloc_array_clear( machine(), UINT16, n_vram_size );
+	p_vram = auto_alloc_array_clear( machine(), UINT16, width * height );
 
 	for( n_line = 0; n_line < 1024; n_line++ )
 	{
@@ -563,42 +569,42 @@ void psxgpu_device::psx_gpu_init( int n_gputype )
 	// icky!!!
 	machine().save().save_memory( "globals", NULL, 0, "m_packet", (UINT8 *)&m_packet, 1, sizeof( m_packet ) );
 
-	state_save_register_global_pointer( machine(), p_vram, n_vram_size );
-	state_save_register_global( machine(), n_gpu_buffer_offset );
-	state_save_register_global( machine(), n_vramx );
-	state_save_register_global( machine(), n_vramy );
-	state_save_register_global( machine(), n_twy );
-	state_save_register_global( machine(), n_twx );
-	state_save_register_global( machine(), n_tww );
-	state_save_register_global( machine(), n_drawarea_x1 );
-	state_save_register_global( machine(), n_drawarea_y1 );
-	state_save_register_global( machine(), n_drawarea_x2 );
-	state_save_register_global( machine(), n_drawarea_y2 );
-	state_save_register_global( machine(), n_horiz_disstart );
-	state_save_register_global( machine(), n_horiz_disend );
-	state_save_register_global( machine(), n_vert_disstart );
-	state_save_register_global( machine(), n_vert_disend );
-	state_save_register_global( machine(), b_reverseflag );
-	state_save_register_global( machine(), n_drawoffset_x );
-	state_save_register_global( machine(), n_drawoffset_y );
-	state_save_register_global( machine(), m_n_displaystartx );
-	state_save_register_global( machine(), n_displaystarty );
-	state_save_register_global( machine(), n_gpustatus );
-	state_save_register_global( machine(), n_gpuinfo );
-	state_save_register_global( machine(), n_lightgun_x );
-	state_save_register_global( machine(), n_lightgun_y );
-	state_save_register_global( machine(), m_n_tx );
-	state_save_register_global( machine(), m_n_ty );
-	state_save_register_global( machine(), n_abr );
-	state_save_register_global( machine(), n_tp );
-	state_save_register_global( machine(), n_ix );
-	state_save_register_global( machine(), n_iy );
-	state_save_register_global( machine(), n_ti );
+	save_pointer(NAME(p_vram), width * height );
+	save_item(NAME(n_gpu_buffer_offset));
+	save_item(NAME(n_vramx));
+	save_item(NAME(n_vramy));
+	save_item(NAME(n_twy));
+	save_item(NAME(n_twx));
+	save_item(NAME(n_tww));
+	save_item(NAME(n_drawarea_x1));
+	save_item(NAME(n_drawarea_y1));
+	save_item(NAME(n_drawarea_x2));
+	save_item(NAME(n_drawarea_y2));
+	save_item(NAME(n_horiz_disstart));
+	save_item(NAME(n_horiz_disend));
+	save_item(NAME(n_vert_disstart));
+	save_item(NAME(n_vert_disend));
+	save_item(NAME(b_reverseflag));
+	save_item(NAME(n_drawoffset_x));
+	save_item(NAME(n_drawoffset_y));
+	save_item(NAME(m_n_displaystartx));
+	save_item(NAME(n_displaystarty));
+	save_item(NAME(n_gpustatus));
+	save_item(NAME(n_gpuinfo));
+	save_item(NAME(n_lightgun_x));
+	save_item(NAME(n_lightgun_y));
+	save_item(NAME(m_n_tx));
+	save_item(NAME(m_n_ty));
+	save_item(NAME(n_abr));
+	save_item(NAME(n_tp));
+	save_item(NAME(n_ix));
+	save_item(NAME(n_iy));
+	save_item(NAME(n_ti));
 
 	machine().save().register_postload( save_prepost_delegate( FUNC( psxgpu_device::updatevisiblearea ), this ) );
 }
 
-void psxgpu_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
+UINT32 psxgpu_device::update_screen(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	UINT32 n_x;
 	UINT32 n_y;
@@ -615,18 +621,18 @@ void psxgpu_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 #if defined( MAME_DEBUG )
 	if( DebugMeshDisplay( bitmap, cliprect ) )
 	{
-		return;
+		return 0;
 	}
 	if( DebugTextureDisplay( bitmap ) )
 	{
-		return;
+		return 0;
 	}
 #endif
 
 	if( ( n_gpustatus & ( 1 << 0x17 ) ) != 0 )
 	{
 		/* todo: only draw to necessary area */
-		bitmap_fill( bitmap, cliprect , 0);
+		bitmap.fill(0, cliprect);
 	}
 	else
 	{
@@ -663,8 +669,11 @@ void psxgpu_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 		}
 		else
 		{
-			/* todo: draw top border */
 			n_y = 0;
+
+			/* draw top border */
+			rectangle clip(cliprect.left(), cliprect.right(), cliprect.top(), n_top);
+			bitmap.fill(0, clip);
 		}
 		if( ( n_gpustatus & ( 1 << 0x16 ) ) != 0 )
 		{
@@ -677,7 +686,9 @@ void psxgpu_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 		}
 		else
 		{
-			/* todo: draw bottom border */
+			/* draw bottom border */
+			rectangle clip(cliprect.left(), cliprect.right(), n_y + n_top + n_lines, cliprect.bottom());
+			bitmap.fill(0, clip);
 		}
 
 		n_left = ( ( (INT32)n_horiz_disstart - n_overscanleft ) * (INT32)n_screenwidth ) / 2560;
@@ -689,8 +700,11 @@ void psxgpu_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 		}
 		else
 		{
-			/* todo: draw left border */
 			n_x = 0;
+
+			/* draw left border */
+			rectangle clip(cliprect.left(), n_x + n_left, cliprect.top(), cliprect.bottom());
+			bitmap.fill(0, clip);
 		}
 		if( n_columns > n_screenwidth - ( n_x + n_left ) )
 		{
@@ -698,7 +712,9 @@ void psxgpu_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 		}
 		else
 		{
-			/* todo: draw right border */
+			/* draw right border */
+			rectangle clip(n_x + n_left + n_columns, cliprect.right(), cliprect.top(), cliprect.bottom());
+			bitmap.fill(0, clip);
 		}
 
 		if( ( n_gpustatus & ( 1 << 0x15 ) ) != 0 )
@@ -708,7 +724,7 @@ void psxgpu_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 			while( n_line > 0 )
 			{
 				UINT16 *p_n_src = p_p_vram[ n_y + n_displaystarty ] + ((n_x + n_displaystartx) * 3);
-				UINT16 *p_n_dest = BITMAP_ADDR16(bitmap, n_y + n_top, n_x + n_left);
+				UINT16 *p_n_dest = &bitmap.pix16(n_y + n_top, n_x + n_left);
 
 				n_column = n_columns;
 				while( n_column > 0 )
@@ -735,12 +751,13 @@ void psxgpu_device::update_screen(bitmap_t *bitmap, const rectangle *cliprect)
 			n_line = n_lines;
 			while( n_line > 0 )
 			{
-				draw_scanline16( bitmap, n_x + n_left, n_y + n_top, n_columns, p_p_vram[ n_y + n_displaystarty ] + n_x + n_displaystartx, NULL );
+				draw_scanline16( bitmap, n_x + n_left, n_y + n_top, n_columns, p_p_vram[ ( n_y + n_displaystarty ) & 1023 ] + n_x + n_displaystartx, NULL );
 				n_y++;
 				n_line--;
 			}
 		}
 	}
+	return 0;
 }
 
 #define WRITE_PIXEL( p ) *( p_vram ) = p
@@ -831,7 +848,7 @@ void psxgpu_device::decode_tpage( UINT32 tpage )
 	p_n_redtrans = p_n_redaddtrans; \
 	p_n_greentrans = p_n_greenaddtrans; \
 	p_n_bluetrans = p_n_blueaddtrans; \
- \
+	\
 	switch( n_cmd & 0x02 ) \
 	{ \
 	case 0x02: \
@@ -913,12 +930,12 @@ void psxgpu_device::decode_tpage( UINT32 tpage )
 	n_b.d += n_db;
 
 #define SOLIDFILL( PIXELUPDATE ) \
-	if( n_distance > ( (INT32)n_drawarea_x2 - n_x ) + 1 ) \
+	if( n_distance > ( (INT32)n_drawarea_x2 - drawx ) + 1 ) \
 	{ \
-		n_distance = ( n_drawarea_x2 - n_x ) + 1; \
+		n_distance = ( n_drawarea_x2 - drawx ) + 1; \
 	} \
-	p_vram = p_p_vram[ n_y ] + n_x; \
- \
+	p_vram = p_p_vram[ drawy ] + drawx; \
+	\
 	switch( n_cmd & 0x02 ) \
 	{ \
 	case 0x00: \
@@ -947,8 +964,7 @@ void psxgpu_device::decode_tpage( UINT32 tpage )
 			n_distance--; \
 		} \
 		break; \
-	} \
-
+	}
 #define FLATTEXTUREDPOLYGONUPDATE \
 	n_u.d += n_du; \
 	n_v.d += n_dv;
@@ -966,7 +982,6 @@ void psxgpu_device::decode_tpage( UINT32 tpage )
 #define TEXTURE_LOOP \
 	while( n_distance > 0 ) \
 	{
-
 #define TEXTURE_ENDLOOP \
 	}
 
@@ -1045,12 +1060,12 @@ void psxgpu_device::decode_tpage( UINT32 tpage )
 	TEXTURE_ENDLOOP
 
 #define TEXTUREFILL( PIXELUPDATE, TXU, TXV ) \
-	if( n_distance > ( (INT32)n_drawarea_x2 - n_x ) + 1 ) \
+	if( n_distance > ( (INT32)n_drawarea_x2 - drawx ) + 1 ) \
 	{ \
-		n_distance = ( n_drawarea_x2 - n_x ) + 1; \
+		n_distance = ( n_drawarea_x2 - drawx ) + 1; \
 	} \
-	p_vram = p_p_vram[ n_y ] + n_x; \
- \
+	p_vram = p_p_vram[ drawy ] + drawx; \
+	\
 	if( n_ti != 0 ) \
 	{ \
 		/* interleaved texture */ \
@@ -1261,7 +1276,81 @@ void psxgpu_device::decode_tpage( UINT32 tpage )
 		} \
 	}
 
-void psxgpu_device::FlatPolygon( int n_startpoint )
+INLINE int CullVertex( int a, int b )
+{
+	int d = a - b;
+	if( d < -1023 || d > 1023 )
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+#define CULLTRIANGLE( PacketType, start ) \
+( \
+	CULLPOINT( PacketType, start, start + 1 ) || CULLPOINT( PacketType, start + 1, start + 2 ) || CULLPOINT( PacketType, start + 2, start ) \
+)
+
+#define CULLPOINT( PacketType, p1, p2 ) \
+( \
+	CullVertex( COORD_Y( m_packet.PacketType.vertex[ p1 ].n_coord ), COORD_Y( m_packet.PacketType.vertex[ p2 ].n_coord ) ) || \
+	CullVertex( COORD_X( m_packet.PacketType.vertex[ p1 ].n_coord ), COORD_X( m_packet.PacketType.vertex[ p2 ].n_coord ) ) \
+)
+
+#define FINDTOPLEFT( PacketType ) \
+	for( n_point = 0; n_point < n_points; n_point++ ) \
+	{ \
+		ADJUST_COORD( m_packet.PacketType.vertex[ n_point ].n_coord ); \
+	} \
+	\
+	n_leftpoint = 0; \
+	if( n_points == 4 ) \
+	{ \
+		if( CULLTRIANGLE( PacketType, 0 ) ) \
+		{ \
+			if( CULLTRIANGLE( PacketType, 1 ) ) \
+			{ \
+				return; \
+			} \
+			\
+			p_n_rightpointlist = m_p_n_nextpointlist4b; \
+			p_n_leftpointlist = m_p_n_prevpointlist4b; \
+			n_leftpoint++; \
+		} \
+		else if( CULLTRIANGLE( PacketType, 1 ) ) \
+		{ \
+			p_n_rightpointlist = m_p_n_nextpointlist3; \
+			p_n_leftpointlist = m_p_n_prevpointlist3; \
+			n_points--; \
+		} \
+		else \
+		{ \
+			p_n_rightpointlist = m_p_n_nextpointlist4; \
+			p_n_leftpointlist = m_p_n_prevpointlist4; \
+		} \
+	} \
+	else if( CULLTRIANGLE( PacketType, 0 ) ) \
+	{ \
+		return; \
+	} \
+	else \
+	{ \
+		p_n_rightpointlist = m_p_n_nextpointlist3; \
+		p_n_leftpointlist = m_p_n_prevpointlist3; \
+	} \
+	\
+	for( n_point = n_leftpoint + 1; n_point < n_points; n_point++ ) \
+	{ \
+		if( COORD_Y( m_packet.PacketType.vertex[ n_point ].n_coord ) < COORD_Y( m_packet.PacketType.vertex[ n_leftpoint ].n_coord ) || \
+			( COORD_Y( m_packet.PacketType.vertex[ n_point ].n_coord ) == COORD_Y( m_packet.PacketType.vertex[ n_leftpoint ].n_coord ) && \
+			COORD_X( m_packet.PacketType.vertex[ n_point ].n_coord ) < COORD_X( m_packet.PacketType.vertex[ n_leftpoint ].n_coord ) ) ) \
+		{ \
+			n_leftpoint = n_point; \
+		} \
+	} \
+	n_rightpoint = n_leftpoint;
+void psxgpu_device::FlatPolygon( int n_points )
 {
 	INT16 n_y;
 	INT16 n_x;
@@ -1285,20 +1374,23 @@ void psxgpu_device::FlatPolygon( int n_startpoint )
 	UINT8 n_cmd;
 
 	INT32 n_distance;
+
 	UINT16 n_point;
 	UINT16 n_rightpoint;
 	UINT16 n_leftpoint;
+	const UINT16 *p_n_rightpointlist;
+	const UINT16 *p_n_leftpointlist;
+
 	UINT16 *p_vram;
-	struct FLATVERTEX *vertex = &m_packet.FlatPolygon.vertex[ n_startpoint ];
 
 #if defined( MAME_DEBUG )
 	if( m_debug.n_skip == 1 )
 	{
 		return;
 	}
-	for( n_point = 0; n_point < 3; n_point++ )
+	for( n_point = 0; n_point < n_points; n_point++ )
 	{
-		DebugMesh( COORD_DX( vertex[ n_point ].n_coord ), COORD_DY( vertex[ n_point ].n_coord ) );
+		DebugMesh( SINT11( COORD_X( m_packet.FlatPolygon.vertex[ n_point ].n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.FlatPolygon.vertex[ n_point ].n_coord ) ) + n_drawoffset_y );
 	}
 	DebugMeshEnd();
 #endif
@@ -1314,28 +1406,18 @@ void psxgpu_device::FlatPolygon( int n_startpoint )
 	n_g.w.h = BGR_G( m_packet.FlatPolygon.n_bgr ); n_g.w.l = 0;
 	n_b.w.h = BGR_B( m_packet.FlatPolygon.n_bgr ); n_b.w.l = 0;
 
-	n_leftpoint = 0;
-	for( n_point = 1; n_point < 3; n_point++ )
-	{
-		if( COORD_DY( vertex[ n_point ].n_coord ) < COORD_DY( vertex[ n_leftpoint ].n_coord ) ||
-			( COORD_DY( vertex[ n_point ].n_coord ) == COORD_DY( vertex[ n_leftpoint ].n_coord ) &&
-			COORD_DX( vertex[ n_point ].n_coord ) < COORD_DX( vertex[ n_leftpoint ].n_coord ) ) )
-		{
-			n_leftpoint = n_point;
-		}
-	}
-	n_rightpoint = n_leftpoint;
+	FINDTOPLEFT( FlatPolygon )
 
 	n_dx1 = 0;
 	n_dx2 = 0;
 
-	n_y = COORD_DY( vertex[ n_rightpoint ].n_coord );
+	n_y = COORD_Y( m_packet.FlatPolygon.vertex[ n_rightpoint ].n_coord );
 
 	for( ;; )
 	{
-		if( n_y == COORD_DY( vertex[ n_leftpoint ].n_coord ) )
+		if( n_y == COORD_Y( m_packet.FlatPolygon.vertex[ n_leftpoint ].n_coord ) )
 		{
-			while( n_y == COORD_DY( vertex[ p_n_leftpointlist[ n_leftpoint ] ].n_coord ) )
+			while( n_y == COORD_Y( m_packet.FlatPolygon.vertex[ p_n_leftpointlist[ n_leftpoint ] ].n_coord ) )
 			{
 				n_leftpoint = p_n_leftpointlist[ n_leftpoint ];
 				if( n_leftpoint == n_rightpoint )
@@ -1343,18 +1425,18 @@ void psxgpu_device::FlatPolygon( int n_startpoint )
 					break;
 				}
 			}
-			n_cx1.w.h = COORD_DX( vertex[ n_leftpoint ].n_coord ); n_cx1.w.l = 0;
+			n_cx1.w.h = COORD_X( m_packet.FlatPolygon.vertex[ n_leftpoint ].n_coord ); n_cx1.w.l = 0;
 			n_leftpoint = p_n_leftpointlist[ n_leftpoint ];
-			n_distance = COORD_DY( vertex[ n_leftpoint ].n_coord ) - n_y;
+			n_distance = COORD_Y( m_packet.FlatPolygon.vertex[ n_leftpoint ].n_coord ) - n_y;
 			if( n_distance < 1 )
 			{
 				break;
 			}
-			n_dx1 = (INT32)( ( COORD_DX( vertex[ n_leftpoint ].n_coord ) << 16 ) - n_cx1.d ) / n_distance;
+			n_dx1 = (INT32)( ( COORD_X( m_packet.FlatPolygon.vertex[ n_leftpoint ].n_coord ) << 16 ) - n_cx1.d ) / n_distance;
 		}
-		if( n_y == COORD_DY( vertex[ n_rightpoint ].n_coord ) )
+		if( n_y == COORD_Y( m_packet.FlatPolygon.vertex[ n_rightpoint ].n_coord ) )
 		{
-			while( n_y == COORD_DY( vertex[ p_n_rightpointlist[ n_rightpoint ] ].n_coord ) )
+			while( n_y == COORD_Y( m_packet.FlatPolygon.vertex[ p_n_rightpointlist[ n_rightpoint ] ].n_coord ) )
 			{
 				n_rightpoint = p_n_rightpointlist[ n_rightpoint ];
 				if( n_rightpoint == n_leftpoint )
@@ -1362,16 +1444,19 @@ void psxgpu_device::FlatPolygon( int n_startpoint )
 					break;
 				}
 			}
-			n_cx2.w.h = COORD_DX( vertex[ n_rightpoint ].n_coord ); n_cx2.w.l = 0;
+			n_cx2.w.h = COORD_X( m_packet.FlatPolygon.vertex[ n_rightpoint ].n_coord ); n_cx2.w.l = 0;
 			n_rightpoint = p_n_rightpointlist[ n_rightpoint ];
-			n_distance = COORD_DY( vertex[ n_rightpoint ].n_coord ) - n_y;
+			n_distance = COORD_Y( m_packet.FlatPolygon.vertex[ n_rightpoint ].n_coord ) - n_y;
 			if( n_distance < 1 )
 			{
 				break;
 			}
-			n_dx2 = (INT32)( ( COORD_DX( vertex[ n_rightpoint ].n_coord ) << 16 ) - n_cx2.d ) / n_distance;
+			n_dx2 = (INT32)( ( COORD_X( m_packet.FlatPolygon.vertex[ n_rightpoint ].n_coord ) << 16 ) - n_cx2.d ) / n_distance;
 		}
-		if( (INT16)n_cx1.w.h != (INT16)n_cx2.w.h && n_y >= (INT32)n_drawarea_y1 && n_y <= (INT32)n_drawarea_y2 )
+
+		int drawy = n_y + n_drawoffset_y;
+
+		if( (INT16)n_cx1.w.h != (INT16)n_cx2.w.h && drawy >= (INT32)n_drawarea_y1 && drawy <= (INT32)n_drawarea_y2 )
 		{
 			if( (INT16)n_cx1.w.h < (INT16)n_cx2.w.h )
 			{
@@ -1384,11 +1469,14 @@ void psxgpu_device::FlatPolygon( int n_startpoint )
 				n_distance = (INT16)n_cx1.w.h - n_x;
 			}
 
-			if( ( (INT32)n_drawarea_x1 - n_x ) > 0 )
+			int drawx = n_x + n_drawoffset_x;
+
+			if( ( (INT32)n_drawarea_x1 - drawx ) > 0 )
 			{
-				n_distance -= ( n_drawarea_x1 - n_x );
-				n_x = n_drawarea_x1;
+				n_distance -= ( n_drawarea_x1 - drawx );
+				drawx = n_drawarea_x1;
 			}
+
 			SOLIDFILL( FLATPOLYGONUPDATE )
 		}
 		n_cx1.d += n_dx1;
@@ -1397,7 +1485,7 @@ void psxgpu_device::FlatPolygon( int n_startpoint )
 	}
 }
 
-void psxgpu_device::FlatTexturedPolygon( int n_startpoint )
+void psxgpu_device::FlatTexturedPolygon( int n_points )
 {
 	INT16 n_y;
 	INT16 n_x;
@@ -1442,19 +1530,20 @@ void psxgpu_device::FlatTexturedPolygon( int n_startpoint )
 	UINT16 n_point;
 	UINT16 n_rightpoint;
 	UINT16 n_leftpoint;
+	const UINT16 *p_n_rightpointlist;
+	const UINT16 *p_n_leftpointlist;
 	UINT16 *p_clut;
 	UINT16 *p_vram;
 	UINT32 n_bgr;
-	struct FLATTEXTUREDVERTEX *vertex = &m_packet.FlatTexturedPolygon.vertex[ n_startpoint ];
 
 #if defined( MAME_DEBUG )
 	if( m_debug.n_skip == 2 )
 	{
 		return;
 	}
-	for( n_point = 0; n_point < 3; n_point++ )
+	for( n_point = 0; n_point < n_points; n_point++ )
 	{
-		DebugMesh( COORD_DX( vertex[ n_point ].n_coord ), COORD_DY( vertex[ n_point ].n_coord ) );
+		DebugMesh( SINT11( COORD_X( m_packet.FlatTexturedPolygon.vertex[ n_point ].n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.FlatTexturedPolygon.vertex[ n_point ].n_coord ) ) + n_drawoffset_y );
 	}
 	DebugMeshEnd();
 #endif
@@ -1491,17 +1580,7 @@ void psxgpu_device::FlatTexturedPolygon( int n_startpoint )
 		break;
 	}
 
-	n_leftpoint = 0;
-	for( n_point = 1; n_point < 3; n_point++ )
-	{
-		if( COORD_DY( vertex[ n_point ].n_coord ) < COORD_DY( vertex[ n_leftpoint ].n_coord ) ||
-			( COORD_DY( vertex[ n_point ].n_coord ) == COORD_DY( vertex[ n_leftpoint ].n_coord ) &&
-			COORD_DX( vertex[ n_point ].n_coord ) < COORD_DX( vertex[ n_leftpoint ].n_coord ) ) )
-		{
-			n_leftpoint = n_point;
-		}
-	}
-	n_rightpoint = n_leftpoint;
+	FINDTOPLEFT( FlatTexturedPolygon )
 
 	n_dx1 = 0;
 	n_dx2 = 0;
@@ -1510,13 +1589,13 @@ void psxgpu_device::FlatTexturedPolygon( int n_startpoint )
 	n_dv1 = 0;
 	n_dv2 = 0;
 
-	n_y = COORD_DY( vertex[ n_rightpoint ].n_coord );
+	n_y = COORD_Y( m_packet.FlatTexturedPolygon.vertex[ n_rightpoint ].n_coord );
 
 	for( ;; )
 	{
-		if( n_y == COORD_DY( vertex[ n_leftpoint ].n_coord ) )
+		if( n_y == COORD_Y( m_packet.FlatTexturedPolygon.vertex[ n_leftpoint ].n_coord ) )
 		{
-			while( n_y == COORD_DY( vertex[ p_n_leftpointlist[ n_leftpoint ] ].n_coord ) )
+			while( n_y == COORD_Y( m_packet.FlatTexturedPolygon.vertex[ p_n_leftpointlist[ n_leftpoint ] ].n_coord ) )
 			{
 				n_leftpoint = p_n_leftpointlist[ n_leftpoint ];
 				if( n_leftpoint == n_rightpoint )
@@ -1524,22 +1603,22 @@ void psxgpu_device::FlatTexturedPolygon( int n_startpoint )
 					break;
 				}
 			}
-			n_cx1.w.h = COORD_DX( vertex[ n_leftpoint ].n_coord ); n_cx1.w.l = 0;
-			n_cu1.w.h = TEXTURE_U( vertex[ n_leftpoint ].n_texture ); n_cu1.w.l = 0;
-			n_cv1.w.h = TEXTURE_V( vertex[ n_leftpoint ].n_texture ); n_cv1.w.l = 0;
+			n_cx1.w.h = COORD_X( m_packet.FlatTexturedPolygon.vertex[ n_leftpoint ].n_coord ); n_cx1.w.l = 0;
+			n_cu1.w.h = TEXTURE_U( m_packet.FlatTexturedPolygon.vertex[ n_leftpoint ].n_texture ); n_cu1.w.l = 0;
+			n_cv1.w.h = TEXTURE_V( m_packet.FlatTexturedPolygon.vertex[ n_leftpoint ].n_texture ); n_cv1.w.l = 0;
 			n_leftpoint = p_n_leftpointlist[ n_leftpoint ];
-			n_distance = COORD_DY( vertex[ n_leftpoint ].n_coord ) - n_y;
+			n_distance = COORD_Y( m_packet.FlatTexturedPolygon.vertex[ n_leftpoint ].n_coord ) - n_y;
 			if( n_distance < 1 )
 			{
 				break;
 			}
-			n_dx1 = (INT32)( ( COORD_DX( vertex[ n_leftpoint ].n_coord ) << 16 ) - n_cx1.d ) / n_distance;
-			n_du1 = (INT32)( ( TEXTURE_U( vertex[ n_leftpoint ].n_texture ) << 16 ) - n_cu1.d ) / n_distance;
-			n_dv1 = (INT32)( ( TEXTURE_V( vertex[ n_leftpoint ].n_texture ) << 16 ) - n_cv1.d ) / n_distance;
+			n_dx1 = (INT32)( ( COORD_X( m_packet.FlatTexturedPolygon.vertex[ n_leftpoint ].n_coord ) << 16 ) - n_cx1.d ) / n_distance;
+			n_du1 = (INT32)( ( TEXTURE_U( m_packet.FlatTexturedPolygon.vertex[ n_leftpoint ].n_texture ) << 16 ) - n_cu1.d ) / n_distance;
+			n_dv1 = (INT32)( ( TEXTURE_V( m_packet.FlatTexturedPolygon.vertex[ n_leftpoint ].n_texture ) << 16 ) - n_cv1.d ) / n_distance;
 		}
-		if( n_y == COORD_DY( vertex[ n_rightpoint ].n_coord ) )
+		if( n_y == COORD_Y( m_packet.FlatTexturedPolygon.vertex[ n_rightpoint ].n_coord ) )
 		{
-			while( n_y == COORD_DY( vertex[ p_n_rightpointlist[ n_rightpoint ] ].n_coord ) )
+			while( n_y == COORD_Y( m_packet.FlatTexturedPolygon.vertex[ p_n_rightpointlist[ n_rightpoint ] ].n_coord ) )
 			{
 				n_rightpoint = p_n_rightpointlist[ n_rightpoint ];
 				if( n_rightpoint == n_leftpoint )
@@ -1547,20 +1626,23 @@ void psxgpu_device::FlatTexturedPolygon( int n_startpoint )
 					break;
 				}
 			}
-			n_cx2.w.h = COORD_DX( vertex[ n_rightpoint ].n_coord ); n_cx2.w.l = 0;
-			n_cu2.w.h = TEXTURE_U( vertex[ n_rightpoint ].n_texture ); n_cu2.w.l = 0;
-			n_cv2.w.h = TEXTURE_V( vertex[ n_rightpoint ].n_texture ); n_cv2.w.l = 0;
+			n_cx2.w.h = COORD_X( m_packet.FlatTexturedPolygon.vertex[ n_rightpoint ].n_coord ); n_cx2.w.l = 0;
+			n_cu2.w.h = TEXTURE_U( m_packet.FlatTexturedPolygon.vertex[ n_rightpoint ].n_texture ); n_cu2.w.l = 0;
+			n_cv2.w.h = TEXTURE_V( m_packet.FlatTexturedPolygon.vertex[ n_rightpoint ].n_texture ); n_cv2.w.l = 0;
 			n_rightpoint = p_n_rightpointlist[ n_rightpoint ];
-			n_distance = COORD_DY( vertex[ n_rightpoint ].n_coord ) - n_y;
+			n_distance = COORD_Y( m_packet.FlatTexturedPolygon.vertex[ n_rightpoint ].n_coord ) - n_y;
 			if( n_distance < 1 )
 			{
 				break;
 			}
-			n_dx2 = (INT32)( ( COORD_DX( vertex[ n_rightpoint ].n_coord ) << 16 ) - n_cx2.d ) / n_distance;
-			n_du2 = (INT32)( ( TEXTURE_U( vertex[ n_rightpoint ].n_texture ) << 16 ) - n_cu2.d ) / n_distance;
-			n_dv2 = (INT32)( ( TEXTURE_V( vertex[ n_rightpoint ].n_texture ) << 16 ) - n_cv2.d ) / n_distance;
+			n_dx2 = (INT32)( ( COORD_X( m_packet.FlatTexturedPolygon.vertex[ n_rightpoint ].n_coord ) << 16 ) - n_cx2.d ) / n_distance;
+			n_du2 = (INT32)( ( TEXTURE_U( m_packet.FlatTexturedPolygon.vertex[ n_rightpoint ].n_texture ) << 16 ) - n_cu2.d ) / n_distance;
+			n_dv2 = (INT32)( ( TEXTURE_V( m_packet.FlatTexturedPolygon.vertex[ n_rightpoint ].n_texture ) << 16 ) - n_cv2.d ) / n_distance;
 		}
-		if( (INT16)n_cx1.w.h != (INT16)n_cx2.w.h && n_y >= (INT32)n_drawarea_y1 && n_y <= (INT32)n_drawarea_y2 )
+
+		int drawy = n_y + n_drawoffset_y;
+
+		if( (INT16)n_cx1.w.h != (INT16)n_cx2.w.h && drawy >= (INT32)n_drawarea_y1 && drawy <= (INT32)n_drawarea_y2 )
 		{
 			if( (INT16)n_cx1.w.h < (INT16)n_cx2.w.h )
 			{
@@ -1583,13 +1665,16 @@ void psxgpu_device::FlatTexturedPolygon( int n_startpoint )
 				n_dv = (INT32)( n_cv1.d - n_cv2.d ) / n_distance;
 			}
 
-			if( ( (INT32)n_drawarea_x1 - n_x ) > 0 )
+			int drawx = n_x + n_drawoffset_x;
+
+			if( ( (INT32)n_drawarea_x1 - drawx ) > 0 )
 			{
-				n_u.d += n_du * ( n_drawarea_x1 - n_x );
-				n_v.d += n_dv * ( n_drawarea_x1 - n_x );
-				n_distance -= ( n_drawarea_x1 - n_x );
-				n_x = n_drawarea_x1;
+				n_u.d += n_du * ( n_drawarea_x1 - drawx );
+				n_v.d += n_dv * ( n_drawarea_x1 - drawx );
+				n_distance -= ( n_drawarea_x1 - drawx );
+				drawx = n_drawarea_x1;
 			}
+
 			TEXTUREFILL( FLATTEXTUREDPOLYGONUPDATE, n_u.w.h, n_v.w.h );
 		}
 		n_cx1.d += n_dx1;
@@ -1602,7 +1687,7 @@ void psxgpu_device::FlatTexturedPolygon( int n_startpoint )
 	}
 }
 
-void psxgpu_device::GouraudPolygon( int n_startpoint )
+void psxgpu_device::GouraudPolygon( int n_points )
 {
 	INT16 n_y;
 	INT16 n_x;
@@ -1641,20 +1726,23 @@ void psxgpu_device::GouraudPolygon( int n_startpoint )
 	INT32 n_db2;
 
 	INT32 n_distance;
+
 	UINT16 n_point;
 	UINT16 n_rightpoint;
 	UINT16 n_leftpoint;
+	const UINT16 *p_n_rightpointlist;
+	const UINT16 *p_n_leftpointlist;
+
 	UINT16 *p_vram;
-	struct GOURAUDVERTEX *vertex = &m_packet.GouraudPolygon.vertex[ n_startpoint ];
 
 #if defined( MAME_DEBUG )
 	if( m_debug.n_skip == 3 )
 	{
 		return;
 	}
-	for( n_point = 0; n_point < 3; n_point++ )
+	for( n_point = 0; n_point < n_points; n_point++ )
 	{
-		DebugMesh( COORD_DX( vertex[ n_point ].n_coord ), COORD_DY( vertex[ n_point ].n_coord ) );
+		DebugMesh( SINT11( COORD_X( m_packet.GouraudPolygon.vertex[ n_point ].n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.GouraudPolygon.vertex[ n_point ].n_coord ) ) + n_drawoffset_y );
 	}
 	DebugMeshEnd();
 #endif
@@ -1672,17 +1760,7 @@ void psxgpu_device::GouraudPolygon( int n_startpoint )
 
 	SOLIDSETUP
 
-	n_leftpoint = 0;
-	for( n_point = 1; n_point < 3; n_point++ )
-	{
-		if( COORD_DY( vertex[ n_point ].n_coord ) < COORD_DY( vertex[ n_leftpoint ].n_coord ) ||
-			( COORD_DY( vertex[ n_point ].n_coord ) == COORD_DY( vertex[ n_leftpoint ].n_coord ) &&
-			COORD_DX( vertex[ n_point ].n_coord ) < COORD_DX( vertex[ n_leftpoint ].n_coord ) ) )
-		{
-			n_leftpoint = n_point;
-		}
-	}
-	n_rightpoint = n_leftpoint;
+	FINDTOPLEFT( GouraudPolygon )
 
 	n_dx1 = 0;
 	n_dx2 = 0;
@@ -1693,13 +1771,13 @@ void psxgpu_device::GouraudPolygon( int n_startpoint )
 	n_db1 = 0;
 	n_db2 = 0;
 
-	n_y = COORD_DY( vertex[ n_rightpoint ].n_coord );
+	n_y = COORD_Y( m_packet.GouraudPolygon.vertex[ n_rightpoint ].n_coord );
 
 	for( ;; )
 	{
-		if( n_y == COORD_DY( vertex[ n_leftpoint ].n_coord ) )
+		if( n_y == COORD_Y( m_packet.GouraudPolygon.vertex[ n_leftpoint ].n_coord ) )
 		{
-			while( n_y == COORD_DY( vertex[ p_n_leftpointlist[ n_leftpoint ] ].n_coord ) )
+			while( n_y == COORD_Y( m_packet.GouraudPolygon.vertex[ p_n_leftpointlist[ n_leftpoint ] ].n_coord ) )
 			{
 				n_leftpoint = p_n_leftpointlist[ n_leftpoint ];
 				if( n_leftpoint == n_rightpoint )
@@ -1707,24 +1785,24 @@ void psxgpu_device::GouraudPolygon( int n_startpoint )
 					break;
 				}
 			}
-			n_cx1.w.h = COORD_DX( vertex[ n_leftpoint ].n_coord ); n_cx1.w.l = 0;
-			n_cr1.w.h = BGR_R( vertex[ n_leftpoint ].n_bgr ); n_cr1.w.l = 0;
-			n_cg1.w.h = BGR_G( vertex[ n_leftpoint ].n_bgr ); n_cg1.w.l = 0;
-			n_cb1.w.h = BGR_B( vertex[ n_leftpoint ].n_bgr ); n_cb1.w.l = 0;
+			n_cx1.w.h = COORD_X( m_packet.GouraudPolygon.vertex[ n_leftpoint ].n_coord ); n_cx1.w.l = 0;
+			n_cr1.w.h = BGR_R( m_packet.GouraudPolygon.vertex[ n_leftpoint ].n_bgr ); n_cr1.w.l = 0;
+			n_cg1.w.h = BGR_G( m_packet.GouraudPolygon.vertex[ n_leftpoint ].n_bgr ); n_cg1.w.l = 0;
+			n_cb1.w.h = BGR_B( m_packet.GouraudPolygon.vertex[ n_leftpoint ].n_bgr ); n_cb1.w.l = 0;
 			n_leftpoint = p_n_leftpointlist[ n_leftpoint ];
-			n_distance = COORD_DY( vertex[ n_leftpoint ].n_coord ) - n_y;
+			n_distance = COORD_Y( m_packet.GouraudPolygon.vertex[ n_leftpoint ].n_coord ) - n_y;
 			if( n_distance < 1 )
 			{
 				break;
 			}
-			n_dx1 = (INT32)( ( COORD_DX( vertex[ n_leftpoint ].n_coord ) << 16 ) - n_cx1.d ) / n_distance;
-			n_dr1 = (INT32)( ( BGR_R( vertex[ n_leftpoint ].n_bgr ) << 16 ) - n_cr1.d ) / n_distance;
-			n_dg1 = (INT32)( ( BGR_G( vertex[ n_leftpoint ].n_bgr ) << 16 ) - n_cg1.d ) / n_distance;
-			n_db1 = (INT32)( ( BGR_B( vertex[ n_leftpoint ].n_bgr ) << 16 ) - n_cb1.d ) / n_distance;
+			n_dx1 = (INT32)( ( COORD_X( m_packet.GouraudPolygon.vertex[ n_leftpoint ].n_coord ) << 16 ) - n_cx1.d ) / n_distance;
+			n_dr1 = (INT32)( ( BGR_R( m_packet.GouraudPolygon.vertex[ n_leftpoint ].n_bgr ) << 16 ) - n_cr1.d ) / n_distance;
+			n_dg1 = (INT32)( ( BGR_G( m_packet.GouraudPolygon.vertex[ n_leftpoint ].n_bgr ) << 16 ) - n_cg1.d ) / n_distance;
+			n_db1 = (INT32)( ( BGR_B( m_packet.GouraudPolygon.vertex[ n_leftpoint ].n_bgr ) << 16 ) - n_cb1.d ) / n_distance;
 		}
-		if( n_y == COORD_DY( vertex[ n_rightpoint ].n_coord ) )
+		if( n_y == COORD_Y( m_packet.GouraudPolygon.vertex[ n_rightpoint ].n_coord ) )
 		{
-			while( n_y == COORD_DY( vertex[ p_n_rightpointlist[ n_rightpoint ] ].n_coord ) )
+			while( n_y == COORD_Y( m_packet.GouraudPolygon.vertex[ p_n_rightpointlist[ n_rightpoint ] ].n_coord ) )
 			{
 				n_rightpoint = p_n_rightpointlist[ n_rightpoint ];
 				if( n_rightpoint == n_leftpoint )
@@ -1732,22 +1810,25 @@ void psxgpu_device::GouraudPolygon( int n_startpoint )
 					break;
 				}
 			}
-			n_cx2.w.h = COORD_DX( vertex[ n_rightpoint ].n_coord ); n_cx2.w.l = 0;
-			n_cr2.w.h = BGR_R( vertex[ n_rightpoint ].n_bgr ); n_cr2.w.l = 0;
-			n_cg2.w.h = BGR_G( vertex[ n_rightpoint ].n_bgr ); n_cg2.w.l = 0;
-			n_cb2.w.h = BGR_B( vertex[ n_rightpoint ].n_bgr ); n_cb2.w.l = 0;
+			n_cx2.w.h = COORD_X( m_packet.GouraudPolygon.vertex[ n_rightpoint ].n_coord ); n_cx2.w.l = 0;
+			n_cr2.w.h = BGR_R( m_packet.GouraudPolygon.vertex[ n_rightpoint ].n_bgr ); n_cr2.w.l = 0;
+			n_cg2.w.h = BGR_G( m_packet.GouraudPolygon.vertex[ n_rightpoint ].n_bgr ); n_cg2.w.l = 0;
+			n_cb2.w.h = BGR_B( m_packet.GouraudPolygon.vertex[ n_rightpoint ].n_bgr ); n_cb2.w.l = 0;
 			n_rightpoint = p_n_rightpointlist[ n_rightpoint ];
-			n_distance = COORD_DY( vertex[ n_rightpoint ].n_coord ) - n_y;
+			n_distance = COORD_Y( m_packet.GouraudPolygon.vertex[ n_rightpoint ].n_coord ) - n_y;
 			if( n_distance < 1 )
 			{
 				break;
 			}
-			n_dx2 = (INT32)( ( COORD_DX( vertex[ n_rightpoint ].n_coord ) << 16 ) - n_cx2.d ) / n_distance;
-			n_dr2 = (INT32)( ( BGR_R( vertex[ n_rightpoint ].n_bgr ) << 16 ) - n_cr2.d ) / n_distance;
-			n_dg2 = (INT32)( ( BGR_G( vertex[ n_rightpoint ].n_bgr ) << 16 ) - n_cg2.d ) / n_distance;
-			n_db2 = (INT32)( ( BGR_B( vertex[ n_rightpoint ].n_bgr ) << 16 ) - n_cb2.d ) / n_distance;
+			n_dx2 = (INT32)( ( COORD_X( m_packet.GouraudPolygon.vertex[ n_rightpoint ].n_coord ) << 16 ) - n_cx2.d ) / n_distance;
+			n_dr2 = (INT32)( ( BGR_R( m_packet.GouraudPolygon.vertex[ n_rightpoint ].n_bgr ) << 16 ) - n_cr2.d ) / n_distance;
+			n_dg2 = (INT32)( ( BGR_G( m_packet.GouraudPolygon.vertex[ n_rightpoint ].n_bgr ) << 16 ) - n_cg2.d ) / n_distance;
+			n_db2 = (INT32)( ( BGR_B( m_packet.GouraudPolygon.vertex[ n_rightpoint ].n_bgr ) << 16 ) - n_cb2.d ) / n_distance;
 		}
-		if( (INT16)n_cx1.w.h != (INT16)n_cx2.w.h && n_y >= (INT32)n_drawarea_y1 && n_y <= (INT32)n_drawarea_y2 )
+
+		int drawy = n_y + n_drawoffset_y;
+
+		if( (INT16)n_cx1.w.h != (INT16)n_cx2.w.h && drawy >= (INT32)n_drawarea_y1 && drawy <= (INT32)n_drawarea_y2 )
 		{
 			if( (INT16)n_cx1.w.h < (INT16)n_cx2.w.h )
 			{
@@ -1774,14 +1855,17 @@ void psxgpu_device::GouraudPolygon( int n_startpoint )
 				n_db = (INT32)( n_cb1.d - n_cb2.d ) / n_distance;
 			}
 
-			if( ( (INT32)n_drawarea_x1 - n_x ) > 0 )
+			int drawx = n_x + n_drawoffset_x;
+
+			if( ( (INT32)n_drawarea_x1 - drawx ) > 0 )
 			{
-				n_r.d += n_dr * ( n_drawarea_x1 - n_x );
-				n_g.d += n_dg * ( n_drawarea_x1 - n_x );
-				n_b.d += n_db * ( n_drawarea_x1 - n_x );
-				n_distance -= ( n_drawarea_x1 - n_x );
-				n_x = n_drawarea_x1;
+				n_r.d += n_dr * ( n_drawarea_x1 - drawx );
+				n_g.d += n_dg * ( n_drawarea_x1 - drawx );
+				n_b.d += n_db * ( n_drawarea_x1 - drawx );
+				n_distance -= ( n_drawarea_x1 - drawx );
+				drawx = n_drawarea_x1;
 			}
+
 			SOLIDFILL( GOURAUDPOLYGONUPDATE )
 		}
 		n_cx1.d += n_dx1;
@@ -1796,7 +1880,7 @@ void psxgpu_device::GouraudPolygon( int n_startpoint )
 	}
 }
 
-void psxgpu_device::GouraudTexturedPolygon( int n_startpoint )
+void psxgpu_device::GouraudTexturedPolygon( int n_points )
 {
 	INT16 n_y;
 	INT16 n_x;
@@ -1856,19 +1940,20 @@ void psxgpu_device::GouraudTexturedPolygon( int n_startpoint )
 	UINT16 n_point;
 	UINT16 n_rightpoint;
 	UINT16 n_leftpoint;
+	const UINT16 *p_n_rightpointlist;
+	const UINT16 *p_n_leftpointlist;
 	UINT16 *p_clut;
 	UINT16 *p_vram;
 	UINT32 n_bgr;
-	struct GOURAUDTEXTUREDVERTEX *vertex = &m_packet.GouraudTexturedPolygon.vertex[ n_startpoint ];
 
 #if defined( MAME_DEBUG )
 	if( m_debug.n_skip == 4 )
 	{
 		return;
 	}
-	for( n_point = 0; n_point < 3; n_point++ )
+	for( n_point = 0; n_point < n_points; n_point++ )
 	{
-		DebugMesh( COORD_DX( vertex[ n_point ].n_coord ), COORD_DY( vertex[ n_point ].n_coord ) );
+		DebugMesh( SINT11( COORD_X( m_packet.GouraudTexturedPolygon.vertex[ n_point ].n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.GouraudTexturedPolygon.vertex[ n_point ].n_coord ) ) + n_drawoffset_y );
 	}
 	DebugMeshEnd();
 #endif
@@ -1894,17 +1979,7 @@ void psxgpu_device::GouraudTexturedPolygon( int n_startpoint )
 	decode_tpage( m_packet.GouraudTexturedPolygon.vertex[ 1 ].n_texture.w.h );
 	TEXTURESETUP
 
-	n_leftpoint = 0;
-	for( n_point = 1; n_point < 3; n_point++ )
-	{
-		if( COORD_DY( vertex[ n_point ].n_coord ) < COORD_DY( vertex[ n_leftpoint ].n_coord ) ||
-			( COORD_DY( vertex[ n_point ].n_coord ) == COORD_DY( vertex[ n_leftpoint ].n_coord ) &&
-			COORD_DX( vertex[ n_point ].n_coord ) < COORD_DX( vertex[ n_leftpoint ].n_coord ) ) )
-		{
-			n_leftpoint = n_point;
-		}
-	}
-	n_rightpoint = n_leftpoint;
+	FINDTOPLEFT( GouraudTexturedPolygon )
 
 	n_dx1 = 0;
 	n_dx2 = 0;
@@ -1919,13 +1994,13 @@ void psxgpu_device::GouraudTexturedPolygon( int n_startpoint )
 	n_dv1 = 0;
 	n_dv2 = 0;
 
-	n_y = COORD_DY( vertex[ n_rightpoint ].n_coord );
+	n_y = COORD_Y( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_coord );
 
 	for( ;; )
 	{
-		if( n_y == COORD_DY( vertex[ n_leftpoint ].n_coord ) )
+		if( n_y == COORD_Y( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_coord ) )
 		{
-			while( n_y == COORD_DY( vertex[ p_n_leftpointlist[ n_leftpoint ] ].n_coord ) )
+			while( n_y == COORD_Y( m_packet.GouraudTexturedPolygon.vertex[ p_n_leftpointlist[ n_leftpoint ] ].n_coord ) )
 			{
 				n_leftpoint = p_n_leftpointlist[ n_leftpoint ];
 				if( n_leftpoint == n_rightpoint )
@@ -1933,13 +2008,13 @@ void psxgpu_device::GouraudTexturedPolygon( int n_startpoint )
 					break;
 				}
 			}
-			n_cx1.w.h = COORD_DX( vertex[ n_leftpoint ].n_coord ); n_cx1.w.l = 0;
+			n_cx1.w.h = COORD_X( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_coord ); n_cx1.w.l = 0;
 			switch( n_cmd & 0x01 )
 			{
 			case 0x00:
-				n_cr1.w.h = BGR_R( vertex[ n_leftpoint ].n_bgr ); n_cr1.w.l = 0;
-				n_cg1.w.h = BGR_G( vertex[ n_leftpoint ].n_bgr ); n_cg1.w.l = 0;
-				n_cb1.w.h = BGR_B( vertex[ n_leftpoint ].n_bgr ); n_cb1.w.l = 0;
+				n_cr1.w.h = BGR_R( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_bgr ); n_cr1.w.l = 0;
+				n_cg1.w.h = BGR_G( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_bgr ); n_cg1.w.l = 0;
+				n_cb1.w.h = BGR_B( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_bgr ); n_cb1.w.l = 0;
 				break;
 			case 0x01:
 				n_cr1.w.h = 0x80; n_cr1.w.l = 0;
@@ -1947,21 +2022,21 @@ void psxgpu_device::GouraudTexturedPolygon( int n_startpoint )
 				n_cb1.w.h = 0x80; n_cb1.w.l = 0;
 				break;
 			}
-			n_cu1.w.h = TEXTURE_U( vertex[ n_leftpoint ].n_texture ); n_cu1.w.l = 0;
-			n_cv1.w.h = TEXTURE_V( vertex[ n_leftpoint ].n_texture ); n_cv1.w.l = 0;
+			n_cu1.w.h = TEXTURE_U( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_texture ); n_cu1.w.l = 0;
+			n_cv1.w.h = TEXTURE_V( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_texture ); n_cv1.w.l = 0;
 			n_leftpoint = p_n_leftpointlist[ n_leftpoint ];
-			n_distance = COORD_DY( vertex[ n_leftpoint ].n_coord ) - n_y;
+			n_distance = COORD_Y( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_coord ) - n_y;
 			if( n_distance < 1 )
 			{
 				break;
 			}
-			n_dx1 = (INT32)( ( COORD_DX( vertex[ n_leftpoint ].n_coord ) << 16 ) - n_cx1.d ) / n_distance;
+			n_dx1 = (INT32)( ( COORD_X( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_coord ) << 16 ) - n_cx1.d ) / n_distance;
 			switch( n_cmd & 0x01 )
 			{
 			case 0x00:
-				n_dr1 = (INT32)( ( BGR_R( vertex[ n_leftpoint ].n_bgr ) << 16 ) - n_cr1.d ) / n_distance;
-				n_dg1 = (INT32)( ( BGR_G( vertex[ n_leftpoint ].n_bgr ) << 16 ) - n_cg1.d ) / n_distance;
-				n_db1 = (INT32)( ( BGR_B( vertex[ n_leftpoint ].n_bgr ) << 16 ) - n_cb1.d ) / n_distance;
+				n_dr1 = (INT32)( ( BGR_R( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_bgr ) << 16 ) - n_cr1.d ) / n_distance;
+				n_dg1 = (INT32)( ( BGR_G( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_bgr ) << 16 ) - n_cg1.d ) / n_distance;
+				n_db1 = (INT32)( ( BGR_B( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_bgr ) << 16 ) - n_cb1.d ) / n_distance;
 				break;
 			case 0x01:
 				n_dr1 = 0;
@@ -1969,12 +2044,12 @@ void psxgpu_device::GouraudTexturedPolygon( int n_startpoint )
 				n_db1 = 0;
 				break;
 			}
-			n_du1 = (INT32)( ( TEXTURE_U( vertex[ n_leftpoint ].n_texture ) << 16 ) - n_cu1.d ) / n_distance;
-			n_dv1 = (INT32)( ( TEXTURE_V( vertex[ n_leftpoint ].n_texture ) << 16 ) - n_cv1.d ) / n_distance;
+			n_du1 = (INT32)( ( TEXTURE_U( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_texture ) << 16 ) - n_cu1.d ) / n_distance;
+			n_dv1 = (INT32)( ( TEXTURE_V( m_packet.GouraudTexturedPolygon.vertex[ n_leftpoint ].n_texture ) << 16 ) - n_cv1.d ) / n_distance;
 		}
-		if( n_y == COORD_DY( vertex[ n_rightpoint ].n_coord ) )
+		if( n_y == COORD_Y( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_coord ) )
 		{
-			while( n_y == COORD_DY( vertex[ p_n_rightpointlist[ n_rightpoint ] ].n_coord ) )
+			while( n_y == COORD_Y( m_packet.GouraudTexturedPolygon.vertex[ p_n_rightpointlist[ n_rightpoint ] ].n_coord ) )
 			{
 				n_rightpoint = p_n_rightpointlist[ n_rightpoint ];
 				if( n_rightpoint == n_leftpoint )
@@ -1982,13 +2057,13 @@ void psxgpu_device::GouraudTexturedPolygon( int n_startpoint )
 					break;
 				}
 			}
-			n_cx2.w.h = COORD_DX( vertex[ n_rightpoint ].n_coord ); n_cx2.w.l = 0;
+			n_cx2.w.h = COORD_X( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_coord ); n_cx2.w.l = 0;
 			switch( n_cmd & 0x01 )
 			{
 			case 0x00:
-				n_cr2.w.h = BGR_R( vertex[ n_rightpoint ].n_bgr ); n_cr2.w.l = 0;
-				n_cg2.w.h = BGR_G( vertex[ n_rightpoint ].n_bgr ); n_cg2.w.l = 0;
-				n_cb2.w.h = BGR_B( vertex[ n_rightpoint ].n_bgr ); n_cb2.w.l = 0;
+				n_cr2.w.h = BGR_R( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_bgr ); n_cr2.w.l = 0;
+				n_cg2.w.h = BGR_G( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_bgr ); n_cg2.w.l = 0;
+				n_cb2.w.h = BGR_B( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_bgr ); n_cb2.w.l = 0;
 				break;
 			case 0x01:
 				n_cr2.w.h = 0x80; n_cr2.w.l = 0;
@@ -1996,21 +2071,21 @@ void psxgpu_device::GouraudTexturedPolygon( int n_startpoint )
 				n_cb2.w.h = 0x80; n_cb2.w.l = 0;
 				break;
 			}
-			n_cu2.w.h = TEXTURE_U( vertex[ n_rightpoint ].n_texture ); n_cu2.w.l = 0;
-			n_cv2.w.h = TEXTURE_V( vertex[ n_rightpoint ].n_texture ); n_cv2.w.l = 0;
+			n_cu2.w.h = TEXTURE_U( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_texture ); n_cu2.w.l = 0;
+			n_cv2.w.h = TEXTURE_V( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_texture ); n_cv2.w.l = 0;
 			n_rightpoint = p_n_rightpointlist[ n_rightpoint ];
-			n_distance = COORD_DY( vertex[ n_rightpoint ].n_coord ) - n_y;
+			n_distance = COORD_Y( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_coord ) - n_y;
 			if( n_distance < 1 )
 			{
 				break;
 			}
-			n_dx2 = (INT32)( ( COORD_DX( vertex[ n_rightpoint ].n_coord ) << 16 ) - n_cx2.d ) / n_distance;
+			n_dx2 = (INT32)( ( COORD_X( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_coord ) << 16 ) - n_cx2.d ) / n_distance;
 			switch( n_cmd & 0x01 )
 			{
 			case 0x00:
-				n_dr2 = (INT32)( ( BGR_R( vertex[ n_rightpoint ].n_bgr ) << 16 ) - n_cr2.d ) / n_distance;
-				n_dg2 = (INT32)( ( BGR_G( vertex[ n_rightpoint ].n_bgr ) << 16 ) - n_cg2.d ) / n_distance;
-				n_db2 = (INT32)( ( BGR_B( vertex[ n_rightpoint ].n_bgr ) << 16 ) - n_cb2.d ) / n_distance;
+				n_dr2 = (INT32)( ( BGR_R( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_bgr ) << 16 ) - n_cr2.d ) / n_distance;
+				n_dg2 = (INT32)( ( BGR_G( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_bgr ) << 16 ) - n_cg2.d ) / n_distance;
+				n_db2 = (INT32)( ( BGR_B( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_bgr ) << 16 ) - n_cb2.d ) / n_distance;
 				break;
 			case 0x01:
 				n_dr2 = 0;
@@ -2018,10 +2093,13 @@ void psxgpu_device::GouraudTexturedPolygon( int n_startpoint )
 				n_db2 = 0;
 				break;
 			}
-			n_du2 = (INT32)( ( TEXTURE_U( vertex[ n_rightpoint ].n_texture ) << 16 ) - n_cu2.d ) / n_distance;
-			n_dv2 = (INT32)( ( TEXTURE_V( vertex[ n_rightpoint ].n_texture ) << 16 ) - n_cv2.d ) / n_distance;
+			n_du2 = (INT32)( ( TEXTURE_U( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_texture ) << 16 ) - n_cu2.d ) / n_distance;
+			n_dv2 = (INT32)( ( TEXTURE_V( m_packet.GouraudTexturedPolygon.vertex[ n_rightpoint ].n_texture ) << 16 ) - n_cv2.d ) / n_distance;
 		}
-		if( (INT16)n_cx1.w.h != (INT16)n_cx2.w.h && n_y >= (INT32)n_drawarea_y1 && n_y <= (INT32)n_drawarea_y2 )
+
+		int drawy = n_y + n_drawoffset_y;
+
+		if( (INT16)n_cx1.w.h != (INT16)n_cx2.w.h && drawy >= (INT32)n_drawarea_y1 && drawy <= (INT32)n_drawarea_y2 )
 		{
 			if( (INT16)n_cx1.w.h < (INT16)n_cx2.w.h )
 			{
@@ -2056,16 +2134,19 @@ void psxgpu_device::GouraudTexturedPolygon( int n_startpoint )
 				n_dv = (INT32)( n_cv1.d - n_cv2.d ) / n_distance;
 			}
 
-			if( ( (INT32)n_drawarea_x1 - n_x ) > 0 )
+			int drawx = n_x + n_drawoffset_x;
+
+			if( ( (INT32)n_drawarea_x1 - drawx ) > 0 )
 			{
-				n_r.d += n_dr * ( n_drawarea_x1 - n_x );
-				n_g.d += n_dg * ( n_drawarea_x1 - n_x );
-				n_b.d += n_db * ( n_drawarea_x1 - n_x );
-				n_u.d += n_du * ( n_drawarea_x1 - n_x );
-				n_v.d += n_dv * ( n_drawarea_x1 - n_x );
-				n_distance -= ( n_drawarea_x1 - n_x );
-				n_x = n_drawarea_x1;
+				n_r.d += n_dr * ( n_drawarea_x1 - drawx );
+				n_g.d += n_dg * ( n_drawarea_x1 - drawx );
+				n_b.d += n_db * ( n_drawarea_x1 - drawx );
+				n_u.d += n_du * ( n_drawarea_x1 - drawx );
+				n_v.d += n_dv * ( n_drawarea_x1 - drawx );
+				n_distance -= ( n_drawarea_x1 - drawx );
+				drawx = n_drawarea_x1;
 			}
+
 			TEXTUREFILL( GOURAUDTEXTUREDPOLYGONUPDATE, n_u.w.h, n_v.w.h );
 		}
 		n_cx1.d += n_dx1;
@@ -2107,15 +2188,15 @@ void psxgpu_device::MonochromeLine( void )
 	{
 		return;
 	}
-	DebugMesh( COORD_DX( m_packet.MonochromeLine.vertex[ 0 ].n_coord ), COORD_DY( m_packet.MonochromeLine.vertex[ 0 ].n_coord ) );
-	DebugMesh( COORD_DX( m_packet.MonochromeLine.vertex[ 1 ].n_coord ), COORD_DY( m_packet.MonochromeLine.vertex[ 1 ].n_coord ) );
+	DebugMesh( SINT11( COORD_X( m_packet.MonochromeLine.vertex[ 0 ].n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.MonochromeLine.vertex[ 0 ].n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.MonochromeLine.vertex[ 1 ].n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.MonochromeLine.vertex[ 1 ].n_coord ) ) + n_drawoffset_y );
 	DebugMeshEnd();
 #endif
 
-	n_xstart = COORD_DX( m_packet.MonochromeLine.vertex[ 0 ].n_coord );
-	n_xend = COORD_DX( m_packet.MonochromeLine.vertex[ 1 ].n_coord );
-	n_ystart = COORD_DY( m_packet.MonochromeLine.vertex[ 0 ].n_coord );
-	n_yend = COORD_DY( m_packet.MonochromeLine.vertex[ 1 ].n_coord );
+	n_xstart = SINT11( COORD_X( m_packet.MonochromeLine.vertex[ 0 ].n_coord ) );
+	n_xend = SINT11( COORD_X( m_packet.MonochromeLine.vertex[ 1 ].n_coord ) );
+	n_ystart = SINT11( COORD_Y( m_packet.MonochromeLine.vertex[ 0 ].n_coord ) );
+	n_yend = SINT11( COORD_Y( m_packet.MonochromeLine.vertex[ 1 ].n_coord ) );
 
 	n_r = BGR_R( m_packet.MonochromeLine.n_bgr );
 	n_g = BGR_G( m_packet.MonochromeLine.n_bgr );
@@ -2161,12 +2242,13 @@ void psxgpu_device::MonochromeLine( void )
 
 	while( n_len > 0 )
 	{
-		if( (INT16)n_x.w.h >= (INT32)n_drawarea_x1 &&
-			(INT16)n_y.w.h >= (INT32)n_drawarea_y1 &&
-			(INT16)n_x.w.h <= (INT32)n_drawarea_x2 &&
-			(INT16)n_y.w.h <= (INT32)n_drawarea_y2 )
+		int drawx = n_x.w.h + n_drawoffset_x;
+		int drawy = n_y.w.h + n_drawoffset_y;
+
+		if( drawx >= (INT32)n_drawarea_x1 && drawy >= (INT32)n_drawarea_y1 &&
+			drawx <= (INT32)n_drawarea_x2 && drawy <= (INT32)n_drawarea_y2 )
 		{
-			p_vram = p_p_vram[ n_y.w.h ] + n_x.w.h;
+			p_vram = p_p_vram[ drawy ] + drawx;
 			WRITE_PIXEL(
 				p_n_redshade[ MID_LEVEL | n_r ] |
 				p_n_greenshade[ MID_LEVEL | n_g ] |
@@ -2210,19 +2292,19 @@ void psxgpu_device::GouraudLine( void )
 	{
 		return;
 	}
-	DebugMesh( COORD_DX( m_packet.GouraudLine.vertex[ 0 ].n_coord ), COORD_DY( m_packet.GouraudLine.vertex[ 0 ].n_coord ) );
-	DebugMesh( COORD_DX( m_packet.GouraudLine.vertex[ 1 ].n_coord ), COORD_DY( m_packet.GouraudLine.vertex[ 1 ].n_coord ) );
+	DebugMesh( SINT11( COORD_X( m_packet.GouraudLine.vertex[ 0 ].n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.GouraudLine.vertex[ 0 ].n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.GouraudLine.vertex[ 1 ].n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.GouraudLine.vertex[ 1 ].n_coord ) ) + n_drawoffset_y );
 	DebugMeshEnd();
 #endif
 
-	n_xstart = COORD_DX( m_packet.GouraudLine.vertex[ 0 ].n_coord );
-	n_ystart = COORD_DY( m_packet.GouraudLine.vertex[ 0 ].n_coord );
+	n_xstart = SINT11( COORD_X( m_packet.GouraudLine.vertex[ 0 ].n_coord ) );
+	n_ystart = SINT11( COORD_Y( m_packet.GouraudLine.vertex[ 0 ].n_coord ) );
 	n_cr1.w.h = BGR_R( m_packet.GouraudLine.vertex[ 0 ].n_bgr ); n_cr1.w.l = 0;
 	n_cg1.w.h = BGR_G( m_packet.GouraudLine.vertex[ 0 ].n_bgr ); n_cg1.w.l = 0;
 	n_cb1.w.h = BGR_B( m_packet.GouraudLine.vertex[ 0 ].n_bgr ); n_cb1.w.l = 0;
 
-	n_xend = COORD_DX( m_packet.GouraudLine.vertex[ 1 ].n_coord );
-	n_yend = COORD_DY( m_packet.GouraudLine.vertex[ 1 ].n_coord );
+	n_xend = SINT11( COORD_X( m_packet.GouraudLine.vertex[ 1 ].n_coord ) );
+	n_yend = SINT11( COORD_Y( m_packet.GouraudLine.vertex[ 1 ].n_coord ) );
 	n_cr2.w.h = BGR_R( m_packet.GouraudLine.vertex[ 1 ].n_bgr ); n_cr1.w.l = 0;
 	n_cg2.w.h = BGR_G( m_packet.GouraudLine.vertex[ 1 ].n_bgr ); n_cg1.w.l = 0;
 	n_cb2.w.h = BGR_B( m_packet.GouraudLine.vertex[ 1 ].n_bgr ); n_cb1.w.l = 0;
@@ -2273,12 +2355,13 @@ void psxgpu_device::GouraudLine( void )
 
 	while( n_distance > 0 )
 	{
-		if( (INT16)n_x.w.h >= (INT32)n_drawarea_x1 &&
-			(INT16)n_y.w.h >= (INT32)n_drawarea_y1 &&
-			(INT16)n_x.w.h <= (INT32)n_drawarea_x2 &&
-			(INT16)n_y.w.h <= (INT32)n_drawarea_y2 )
+		int drawx = n_x.w.h + n_drawoffset_x;
+		int drawy = n_y.w.h + n_drawoffset_y;
+
+		if( drawx >= (INT32)n_drawarea_x1 && drawy >= (INT32)n_drawarea_y1 &&
+			drawx <= (INT32)n_drawarea_x2 && drawy <= (INT32)n_drawarea_y2 )
 		{
-			p_vram = p_p_vram[ n_y.w.h ] + n_x.w.h;
+			p_vram = p_p_vram[ drawy ] + drawx;
 			WRITE_PIXEL(
 				p_n_redshade[ MID_LEVEL | n_r.w.h ] |
 				p_n_greenshade[ MID_LEVEL | n_g.w.h ] |
@@ -2309,10 +2392,10 @@ void psxgpu_device::FrameBufferRectangleDraw( void )
 	{
 		return;
 	}
-	DebugMesh( COORD_X( m_packet.FlatRectangle.n_coord ), COORD_Y( m_packet.FlatRectangle.n_coord ) );
-	DebugMesh( COORD_X( m_packet.FlatRectangle.n_coord ) + SIZE_W( m_packet.FlatRectangle.n_size ), COORD_Y( m_packet.FlatRectangle.n_coord ) );
-	DebugMesh( COORD_X( m_packet.FlatRectangle.n_coord ), COORD_Y( m_packet.FlatRectangle.n_coord ) + SIZE_H( m_packet.FlatRectangle.n_size ) );
-	DebugMesh( COORD_X( m_packet.FlatRectangle.n_coord ) + SIZE_W( m_packet.FlatRectangle.n_size ), COORD_Y( m_packet.FlatRectangle.n_coord ) + SIZE_H( m_packet.FlatRectangle.n_size ) );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle.n_coord ) ), SINT11( COORD_Y( m_packet.FlatRectangle.n_coord ) ) );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle.n_coord ) ) + SIZE_W( m_packet.FlatRectangle.n_size ), SINT11( COORD_Y( m_packet.FlatRectangle.n_coord ) ) );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle.n_coord ) ), SINT11( COORD_Y( m_packet.FlatRectangle.n_coord ) ) + SIZE_H( m_packet.FlatRectangle.n_size ) );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle.n_coord ) ) + SIZE_W( m_packet.FlatRectangle.n_size ), SINT11( COORD_Y( m_packet.FlatRectangle.n_coord ) ) + SIZE_H( m_packet.FlatRectangle.n_size ) );
 	DebugMeshEnd();
 #endif
 
@@ -2371,10 +2454,10 @@ void psxgpu_device::FlatRectangle( void )
 	{
 		return;
 	}
-	DebugMesh( COORD_DX( m_packet.FlatRectangle.n_coord ), COORD_DY( m_packet.FlatRectangle.n_coord ) );
-	DebugMesh( COORD_DX( m_packet.FlatRectangle.n_coord ) + SIZE_W( m_packet.FlatRectangle.n_size ), COORD_DY( m_packet.FlatRectangle.n_coord ) );
-	DebugMesh( COORD_DX( m_packet.FlatRectangle.n_coord ), COORD_DY( m_packet.FlatRectangle.n_coord ) + SIZE_H( m_packet.FlatRectangle.n_size ) );
-	DebugMesh( COORD_DX( m_packet.FlatRectangle.n_coord ) + SIZE_W( m_packet.FlatRectangle.n_size ), COORD_DY( m_packet.FlatRectangle.n_coord ) + SIZE_H( m_packet.FlatRectangle.n_size ) );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.FlatRectangle.n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle.n_coord ) ) + n_drawoffset_x + SIZE_W( m_packet.FlatRectangle.n_size ), SINT11( COORD_Y( m_packet.FlatRectangle.n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.FlatRectangle.n_coord ) ) + n_drawoffset_y + SIZE_H( m_packet.FlatRectangle.n_size ) );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle.n_coord ) ) + n_drawoffset_x + SIZE_W( m_packet.FlatRectangle.n_size ), SINT11( COORD_Y( m_packet.FlatRectangle.n_coord ) ) + n_drawoffset_y + SIZE_H( m_packet.FlatRectangle.n_size ) );
 	DebugMeshEnd();
 #endif
 
@@ -2386,21 +2469,26 @@ void psxgpu_device::FlatRectangle( void )
 	n_g.w.h = BGR_G( m_packet.FlatRectangle.n_bgr ); n_g.w.l = 0;
 	n_b.w.h = BGR_B( m_packet.FlatRectangle.n_bgr ); n_b.w.l = 0;
 
-	n_y = COORD_DY( m_packet.FlatRectangle.n_coord );
+	n_x = SINT11( COORD_X( m_packet.FlatRectangle.n_coord ) );
+	n_y = SINT11( COORD_Y( m_packet.FlatRectangle.n_coord ) );
 	n_h = SIZE_H( m_packet.FlatRectangle.n_size );
 
 	while( n_h > 0 )
 	{
-		n_x = COORD_DX( m_packet.FlatRectangle.n_coord );
-
 		n_distance = SIZE_W( m_packet.FlatRectangle.n_size );
-		if( n_distance > 0 && n_y >= (INT32)n_drawarea_y1 && n_y <= (INT32)n_drawarea_y2 )
+
+		int drawy = n_y + n_drawoffset_y;
+
+		if( n_distance > 0 && drawy >= (INT32)n_drawarea_y1 && drawy <= (INT32)n_drawarea_y2 )
 		{
-			if( ( (INT32)n_drawarea_x1 - n_x ) > 0 )
+			int drawx = n_x + n_drawoffset_x;
+
+			if( ( (INT32)n_drawarea_x1 - drawx ) > 0 )
 			{
-				n_distance -= ( n_drawarea_x1 - n_x );
-				n_x = n_drawarea_x1;
+				n_distance -= ( n_drawarea_x1 - drawx );
+				drawx = n_drawarea_x1;
 			}
+
 			SOLIDFILL( FLATRECTANGEUPDATE )
 		}
 		n_y++;
@@ -2436,10 +2524,10 @@ void psxgpu_device::FlatRectangle8x8( void )
 	{
 		return;
 	}
-	DebugMesh( COORD_DX( m_packet.FlatRectangle8x8.n_coord ), COORD_DY( m_packet.FlatRectangle8x8.n_coord ) );
-	DebugMesh( COORD_DX( m_packet.FlatRectangle8x8.n_coord ) + 8, COORD_DY( m_packet.FlatRectangle8x8.n_coord ) );
-	DebugMesh( COORD_DX( m_packet.FlatRectangle8x8.n_coord ), COORD_DY( m_packet.FlatRectangle8x8.n_coord ) + 8 );
-	DebugMesh( COORD_DX( m_packet.FlatRectangle8x8.n_coord ) + 8, COORD_DY( m_packet.FlatRectangle8x8.n_coord ) + 8 );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle8x8.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.FlatRectangle8x8.n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle8x8.n_coord ) ) + n_drawoffset_x + 8, SINT11( COORD_Y( m_packet.FlatRectangle8x8.n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle8x8.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.FlatRectangle8x8.n_coord ) ) + n_drawoffset_y + 8 );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle8x8.n_coord ) ) + n_drawoffset_x + 8, SINT11( COORD_Y( m_packet.FlatRectangle8x8.n_coord ) ) + n_drawoffset_y + 8 );
 	DebugMeshEnd();
 #endif
 
@@ -2451,21 +2539,26 @@ void psxgpu_device::FlatRectangle8x8( void )
 	n_g.w.h = BGR_G( m_packet.FlatRectangle8x8.n_bgr ); n_g.w.l = 0;
 	n_b.w.h = BGR_B( m_packet.FlatRectangle8x8.n_bgr ); n_b.w.l = 0;
 
-	n_y = COORD_DY( m_packet.FlatRectangle8x8.n_coord );
+	n_x = SINT11( COORD_X( m_packet.FlatRectangle8x8.n_coord ) );
+	n_y = SINT11( COORD_Y( m_packet.FlatRectangle8x8.n_coord ) );
 	n_h = 8;
 
 	while( n_h > 0 )
 	{
-		n_x = COORD_DX( m_packet.FlatRectangle8x8.n_coord );
-
 		n_distance = 8;
-		if( n_distance > 0 && n_y >= (INT32)n_drawarea_y1 && n_y <= (INT32)n_drawarea_y2 )
+
+		int drawy = n_y + n_drawoffset_y;
+
+		if( n_distance > 0 && drawy >= (INT32)n_drawarea_y1 && drawy <= (INT32)n_drawarea_y2 )
 		{
-			if( ( (INT32)n_drawarea_x1 - n_x ) > 0 )
+			int drawx = n_x + n_drawoffset_x;
+
+			if( ( (INT32)n_drawarea_x1 - drawx ) > 0 )
 			{
-				n_distance -= ( n_drawarea_x1 - n_x );
-				n_x = n_drawarea_x1;
+				n_distance -= ( n_drawarea_x1 - drawx );
+				drawx = n_drawarea_x1;
 			}
+
 			SOLIDFILL( FLATRECTANGEUPDATE )
 		}
 		n_y++;
@@ -2501,10 +2594,10 @@ void psxgpu_device::FlatRectangle16x16( void )
 	{
 		return;
 	}
-	DebugMesh( COORD_DX( m_packet.FlatRectangle16x16.n_coord ), COORD_DY( m_packet.FlatRectangle16x16.n_coord ) );
-	DebugMesh( COORD_DX( m_packet.FlatRectangle16x16.n_coord ) + 16, COORD_DY( m_packet.FlatRectangle16x16.n_coord ) );
-	DebugMesh( COORD_DX( m_packet.FlatRectangle16x16.n_coord ), COORD_DY( m_packet.FlatRectangle16x16.n_coord ) + 16 );
-	DebugMesh( COORD_DX( m_packet.FlatRectangle16x16.n_coord ) + 16, COORD_DY( m_packet.FlatRectangle16x16.n_coord ) + 16 );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle16x16.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.FlatRectangle16x16.n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle16x16.n_coord ) ) + n_drawoffset_x + 16, SINT11( COORD_Y( m_packet.FlatRectangle16x16.n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle16x16.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.FlatRectangle16x16.n_coord ) ) + n_drawoffset_y + 16 );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatRectangle16x16.n_coord ) ) + n_drawoffset_x + 16, SINT11( COORD_Y( m_packet.FlatRectangle16x16.n_coord ) ) + n_drawoffset_y + 16 );
 	DebugMeshEnd();
 #endif
 
@@ -2516,21 +2609,26 @@ void psxgpu_device::FlatRectangle16x16( void )
 	n_g.w.h = BGR_G( m_packet.FlatRectangle16x16.n_bgr ); n_g.w.l = 0;
 	n_b.w.h = BGR_B( m_packet.FlatRectangle16x16.n_bgr ); n_b.w.l = 0;
 
-	n_y = COORD_DY( m_packet.FlatRectangle16x16.n_coord );
+	n_x = SINT11( COORD_X( m_packet.FlatRectangle16x16.n_coord ) );
+	n_y = SINT11( COORD_Y( m_packet.FlatRectangle16x16.n_coord ) );
 	n_h = 16;
 
 	while( n_h > 0 )
 	{
-		n_x = COORD_DX( m_packet.FlatRectangle16x16.n_coord );
-
 		n_distance = 16;
+
+		int drawy = n_y + n_drawoffset_y;
+
 		if( n_distance > 0 && n_y >= (INT32)n_drawarea_y1 && n_y <= (INT32)n_drawarea_y2 )
 		{
-			if( ( (INT32)n_drawarea_x1 - n_x ) > 0 )
+			int drawx = n_x + n_drawoffset_x;
+
+			if( ( (INT32)n_drawarea_x1 - drawx ) > 0 )
 			{
-				n_distance -= ( n_drawarea_x1 - n_x );
-				n_x = n_drawarea_x1;
+				n_distance -= ( n_drawarea_x1 - drawx );
+				drawx = n_drawarea_x1;
 			}
+
 			SOLIDFILL( FLATRECTANGEUPDATE )
 		}
 		n_y++;
@@ -2577,10 +2675,10 @@ void psxgpu_device::FlatTexturedRectangle( void )
 	{
 		return;
 	}
-	DebugMesh( COORD_DX( m_packet.FlatTexturedRectangle.n_coord ), COORD_DY( m_packet.FlatTexturedRectangle.n_coord ) );
-	DebugMesh( COORD_DX( m_packet.FlatTexturedRectangle.n_coord ) + SIZE_W( m_packet.FlatTexturedRectangle.n_size ), COORD_DY( m_packet.FlatTexturedRectangle.n_coord ) );
-	DebugMesh( COORD_DX( m_packet.FlatTexturedRectangle.n_coord ), COORD_DY( m_packet.FlatTexturedRectangle.n_coord ) + SIZE_H( m_packet.FlatTexturedRectangle.n_size ) );
-	DebugMesh( COORD_DX( m_packet.FlatTexturedRectangle.n_coord ) + SIZE_W( m_packet.FlatTexturedRectangle.n_size ), COORD_DY( m_packet.FlatTexturedRectangle.n_coord ) + SIZE_H( m_packet.FlatTexturedRectangle.n_size ) );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatTexturedRectangle.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.FlatTexturedRectangle.n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatTexturedRectangle.n_coord ) ) + n_drawoffset_x + SIZE_W( m_packet.FlatTexturedRectangle.n_size ), SINT11( COORD_Y( m_packet.FlatTexturedRectangle.n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatTexturedRectangle.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.FlatTexturedRectangle.n_coord ) ) + n_drawoffset_y + SIZE_H( m_packet.FlatTexturedRectangle.n_size ) );
+	DebugMesh( SINT11( COORD_X( m_packet.FlatTexturedRectangle.n_coord ) ) + n_drawoffset_x + SIZE_W( m_packet.FlatTexturedRectangle.n_size ), SINT11( COORD_Y( m_packet.FlatTexturedRectangle.n_coord ) ) + n_drawoffset_y + SIZE_H( m_packet.FlatTexturedRectangle.n_size ) );
 	DebugMeshEnd();
 #endif
 
@@ -2610,24 +2708,29 @@ void psxgpu_device::FlatTexturedRectangle( void )
 		break;
 	}
 
+	n_x = SINT11( COORD_X( m_packet.FlatTexturedRectangle.n_coord ) );
+	n_y = SINT11( COORD_Y( m_packet.FlatTexturedRectangle.n_coord ) );
 	n_v = TEXTURE_V( m_packet.FlatTexturedRectangle.n_texture );
-	n_y = COORD_DY( m_packet.FlatTexturedRectangle.n_coord );
 	n_h = SIZE_H( m_packet.FlatTexturedRectangle.n_size );
 
 	while( n_h > 0 )
 	{
-		n_x = COORD_DX( m_packet.FlatTexturedRectangle.n_coord );
 		n_u = TEXTURE_U( m_packet.FlatTexturedRectangle.n_texture );
-
 		n_distance = SIZE_W( m_packet.FlatTexturedRectangle.n_size );
-		if( n_distance > 0 && n_y >= (INT32)n_drawarea_y1 && n_y <= (INT32)n_drawarea_y2 )
+
+		int drawy = n_y + n_drawoffset_y;
+
+		if( n_distance > 0 && drawy >= (INT32)n_drawarea_y1 && drawy <= (INT32)n_drawarea_y2 )
 		{
-			if( ( (INT32)n_drawarea_x1 - n_x ) > 0 )
+			int drawx = n_x + n_drawoffset_x;
+
+			if( ( (INT32)n_drawarea_x1 - drawx ) > 0 )
 			{
-				n_u += ( n_drawarea_x1 - n_x ) * n_du;
-				n_distance -= ( n_drawarea_x1 - n_x );
-				n_x = n_drawarea_x1;
+				n_u += ( n_drawarea_x1 - drawx ) * n_du;
+				n_distance -= ( n_drawarea_x1 - drawx );
+				drawx = n_drawarea_x1;
 			}
+
 			TEXTUREFILL( FLATTEXTUREDRECTANGLEUPDATE, n_u, n_v );
 		}
 		n_v += n_dv;
@@ -2675,10 +2778,10 @@ void psxgpu_device::Sprite8x8( void )
 	{
 		return;
 	}
-	DebugMesh( COORD_DX( m_packet.Sprite8x8.n_coord ), COORD_DY( m_packet.Sprite8x8.n_coord ) );
-	DebugMesh( COORD_DX( m_packet.Sprite8x8.n_coord ) + 7, COORD_DY( m_packet.Sprite8x8.n_coord ) );
-	DebugMesh( COORD_DX( m_packet.Sprite8x8.n_coord ), COORD_DY( m_packet.Sprite8x8.n_coord ) + 7 );
-	DebugMesh( COORD_DX( m_packet.Sprite8x8.n_coord ) + 7, COORD_DY( m_packet.Sprite8x8.n_coord ) + 7 );
+	DebugMesh( SINT11( COORD_X( m_packet.Sprite8x8.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.Sprite8x8.n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.Sprite8x8.n_coord ) ) + n_drawoffset_x + 7, SINT11( COORD_Y( m_packet.Sprite8x8.n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.Sprite8x8.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.Sprite8x8.n_coord ) ) + n_drawoffset_y + 7 );
+	DebugMesh( SINT11( COORD_X( m_packet.Sprite8x8.n_coord ) ) + n_drawoffset_x + 7, SINT11( COORD_Y( m_packet.Sprite8x8.n_coord ) ) + n_drawoffset_y + 7 );
 	DebugMeshEnd();
 #endif
 
@@ -2708,24 +2811,29 @@ void psxgpu_device::Sprite8x8( void )
 		break;
 	}
 
+	n_x = SINT11( COORD_X( m_packet.Sprite8x8.n_coord ) );
+	n_y = SINT11( COORD_Y( m_packet.Sprite8x8.n_coord ) );
 	n_v = TEXTURE_V( m_packet.Sprite8x8.n_texture );
-	n_y = COORD_DY( m_packet.Sprite8x8.n_coord );
 	n_h = 8;
 
 	while( n_h > 0 )
 	{
-		n_x = COORD_DX( m_packet.Sprite8x8.n_coord );
 		n_u = TEXTURE_U( m_packet.Sprite8x8.n_texture );
-
 		n_distance = 8;
-		if( n_distance > 0 && n_y >= (INT32)n_drawarea_y1 && n_y <= (INT32)n_drawarea_y2 )
+
+		int drawy = n_y + n_drawoffset_y;
+
+		if( n_distance > 0 && drawy >= (INT32)n_drawarea_y1 && drawy <= (INT32)n_drawarea_y2 )
 		{
-			if( ( (INT32)n_drawarea_x1 - n_x ) > 0 )
+			int drawx = n_x + n_drawoffset_x;
+
+			if( ( (INT32)n_drawarea_x1 - drawx ) > 0 )
 			{
-				n_u += ( n_drawarea_x1 - n_x ) * n_du;
-				n_distance -= ( n_drawarea_x1 - n_x );
-				n_x = n_drawarea_x1;
+				n_u += ( n_drawarea_x1 - drawx ) * n_du;
+				n_distance -= ( n_drawarea_x1 - drawx );
+				drawx = n_drawarea_x1;
 			}
+
 			TEXTUREFILL( FLATTEXTUREDRECTANGLEUPDATE, n_u, n_v );
 		}
 		n_v += n_dv;
@@ -2773,10 +2881,10 @@ void psxgpu_device::Sprite16x16( void )
 	{
 		return;
 	}
-	DebugMesh( COORD_DX( m_packet.Sprite16x16.n_coord ), COORD_DY( m_packet.Sprite16x16.n_coord ) );
-	DebugMesh( COORD_DX( m_packet.Sprite16x16.n_coord ) + 7, COORD_DY( m_packet.Sprite16x16.n_coord ) );
-	DebugMesh( COORD_DX( m_packet.Sprite16x16.n_coord ), COORD_DY( m_packet.Sprite16x16.n_coord ) + 7 );
-	DebugMesh( COORD_DX( m_packet.Sprite16x16.n_coord ) + 7, COORD_DY( m_packet.Sprite16x16.n_coord ) + 7 );
+	DebugMesh( SINT11( COORD_X( m_packet.Sprite16x16.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.Sprite16x16.n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.Sprite16x16.n_coord ) ) + n_drawoffset_x + 7, SINT11( COORD_Y( m_packet.Sprite16x16.n_coord ) ) + n_drawoffset_y );
+	DebugMesh( SINT11( COORD_X( m_packet.Sprite16x16.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.Sprite16x16.n_coord ) ) + n_drawoffset_y + 7 );
+	DebugMesh( SINT11( COORD_X( m_packet.Sprite16x16.n_coord ) ) + n_drawoffset_x + 7, SINT11( COORD_Y( m_packet.Sprite16x16.n_coord ) ) + n_drawoffset_y + 7 );
 	DebugMeshEnd();
 #endif
 
@@ -2806,24 +2914,29 @@ void psxgpu_device::Sprite16x16( void )
 		break;
 	}
 
+	n_x = SINT11( COORD_X( m_packet.Sprite16x16.n_coord ) );
+	n_y = SINT11( COORD_Y( m_packet.Sprite16x16.n_coord ) );
 	n_v = TEXTURE_V( m_packet.Sprite16x16.n_texture );
-	n_y = COORD_DY( m_packet.Sprite16x16.n_coord );
 	n_h = 16;
 
 	while( n_h > 0 )
 	{
-		n_x = COORD_DX( m_packet.Sprite16x16.n_coord );
 		n_u = TEXTURE_U( m_packet.Sprite16x16.n_texture );
-
 		n_distance = 16;
-		if( n_distance > 0 && n_y >= (INT32)n_drawarea_y1 && n_y <= (INT32)n_drawarea_y2 )
+
+		int drawy = n_y + n_drawoffset_y;
+
+		if( n_distance > 0 && drawy >= (INT32)n_drawarea_y1 && drawy <= (INT32)n_drawarea_y2 )
 		{
-			if( ( (INT32)n_drawarea_x1 - n_x ) > 0 )
+			int drawx = n_x + n_drawoffset_x;
+
+			if( ( (INT32)n_drawarea_x1 - drawx ) > 0 )
 			{
-				n_u += ( n_drawarea_x1 - n_x ) * n_du;
-				n_distance -= ( n_drawarea_x1 - n_x );
-				n_x = n_drawarea_x1;
+				n_u += ( n_drawarea_x1 - drawx ) * n_du;
+				n_distance -= ( n_drawarea_x1 - drawx );
+				drawx = n_drawarea_x1;
 			}
+
 			TEXTUREFILL( FLATTEXTUREDRECTANGLEUPDATE, n_u, n_v );
 		}
 		n_v += n_dv;
@@ -2846,22 +2959,23 @@ void psxgpu_device::Dot( void )
 	{
 		return;
 	}
-	DebugMesh( COORD_DX( m_packet.Dot.vertex.n_coord ), COORD_DY( m_packet.Dot.vertex.n_coord ) );
+	DebugMesh( SINT11( COORD_X( m_packet.Dot.vertex.n_coord ) ) + n_drawoffset_x, SINT11( COORD_Y( m_packet.Dot.vertex.n_coord ) ) + n_drawoffset_y );
 	DebugMeshEnd();
 #endif
 
 	n_r = BGR_R( m_packet.Dot.n_bgr );
 	n_g = BGR_G( m_packet.Dot.n_bgr );
 	n_b = BGR_B( m_packet.Dot.n_bgr );
-	n_x = COORD_DX( m_packet.Dot.vertex.n_coord );
-	n_y = COORD_DY( m_packet.Dot.vertex.n_coord );
+	n_x = SINT11( COORD_X( m_packet.Dot.vertex.n_coord ) );
+	n_y = SINT11( COORD_Y( m_packet.Dot.vertex.n_coord ) );
 
-	if( (INT16)n_x >= (INT32)n_drawarea_x1 &&
-		(INT16)n_y >= (INT32)n_drawarea_y1 &&
-		(INT16)n_x <= (INT32)n_drawarea_x2 &&
-		(INT16)n_y <= (INT32)n_drawarea_y2 )
+	int drawx = n_x + n_drawoffset_x;
+	int drawy = n_y + n_drawoffset_y;
+
+	if( drawx >= (INT32)n_drawarea_x1 && drawy >= (INT32)n_drawarea_y1 &&
+		drawx <= (INT32)n_drawarea_x2 && drawy <= (INT32)n_drawarea_y2 )
 	{
-		p_vram = p_p_vram[ n_y ] + n_x;
+		p_vram = p_p_vram[ drawy ] + drawx;
 		WRITE_PIXEL(
 			p_n_redshade[ MID_LEVEL | n_r ] |
 			p_n_greenshade[ MID_LEVEL | n_g ] |
@@ -2884,10 +2998,10 @@ void psxgpu_device::MoveImage( void )
 	{
 		return;
 	}
-	DebugMesh( COORD_X( m_packet.MoveImage.vertex[ 1 ].n_coord ), COORD_Y( m_packet.MoveImage.vertex[ 1 ].n_coord ) );
-	DebugMesh( COORD_X( m_packet.MoveImage.vertex[ 1 ].n_coord ) + SIZE_W( m_packet.MoveImage.n_size ), COORD_Y( m_packet.MoveImage.vertex[ 1 ].n_coord ) );
-	DebugMesh( COORD_X( m_packet.MoveImage.vertex[ 1 ].n_coord ), COORD_Y( m_packet.MoveImage.vertex[ 1 ].n_coord ) + SIZE_H( m_packet.MoveImage.n_size ) );
-	DebugMesh( COORD_X( m_packet.MoveImage.vertex[ 1 ].n_coord ) + SIZE_W( m_packet.MoveImage.n_size ), COORD_Y( m_packet.MoveImage.vertex[ 1 ].n_coord ) + SIZE_H( m_packet.MoveImage.n_size ) );
+	DebugMesh( SINT11( COORD_X( m_packet.MoveImage.vertex[ 1 ].n_coord ) ), SINT11( COORD_Y( m_packet.MoveImage.vertex[ 1 ].n_coord ) ) );
+	DebugMesh( SINT11( COORD_X( m_packet.MoveImage.vertex[ 1 ].n_coord ) ) + SIZE_W( m_packet.MoveImage.n_size ), SINT11( COORD_Y( m_packet.MoveImage.vertex[ 1 ].n_coord ) ) );
+	DebugMesh( SINT11( COORD_X( m_packet.MoveImage.vertex[ 1 ].n_coord ) ), SINT11( COORD_Y( m_packet.MoveImage.vertex[ 1 ].n_coord ) ) + SIZE_H( m_packet.MoveImage.n_size ) );
+	DebugMesh( SINT11( COORD_X( m_packet.MoveImage.vertex[ 1 ].n_coord ) ) + SIZE_W( m_packet.MoveImage.n_size ), SINT11( COORD_Y( m_packet.MoveImage.vertex[ 1 ].n_coord ) ) + SIZE_H( m_packet.MoveImage.n_size ) );
 	DebugMeshEnd();
 #endif
 
@@ -2914,11 +3028,8 @@ void psxgpu_device::MoveImage( void )
 	}
 }
 
-void psxgpu_device::dma_write( UINT32 n_address, INT32 n_size )
+void psxgpu_device::dma_write( UINT32 *p_n_psxram, UINT32 n_address, INT32 n_size )
 {
-	psx_state *p_psx = machine().driver_data<psx_state>();
-	UINT32 *p_n_psxram = p_psx->m_p_n_psxram;
-
 	gpu_write( &p_n_psxram[ n_address / 4 ], n_size );
 }
 
@@ -2962,7 +3073,7 @@ void psxgpu_device::gpu_write( UINT32 *p_ram, INT32 n_size )
 			else
 			{
 				verboselog( machine(), 1, "%02x: monochrome 3 point polygon\n", m_packet.n_entry[ 0 ] >> 24 );
-				FlatPolygon( 0 );
+				FlatPolygon( 3 );
 				n_gpu_buffer_offset = 0;
 			}
 			break;
@@ -2977,7 +3088,7 @@ void psxgpu_device::gpu_write( UINT32 *p_ram, INT32 n_size )
 			else
 			{
 				verboselog( machine(), 1, "%02x: textured 3 point polygon\n", m_packet.n_entry[ 0 ] >> 24 );
-				FlatTexturedPolygon( 0 );
+				FlatTexturedPolygon( 3 );
 				n_gpu_buffer_offset = 0;
 			}
 			break;
@@ -2992,8 +3103,7 @@ void psxgpu_device::gpu_write( UINT32 *p_ram, INT32 n_size )
 			else
 			{
 				verboselog( machine(), 1, "%02x: monochrome 4 point polygon\n", m_packet.n_entry[ 0 ] >> 24 );
-				FlatPolygon( 0 );
-				FlatPolygon( 1 );
+				FlatPolygon( 4 );
 				n_gpu_buffer_offset = 0;
 			}
 			break;
@@ -3008,8 +3118,7 @@ void psxgpu_device::gpu_write( UINT32 *p_ram, INT32 n_size )
 			else
 			{
 				verboselog( machine(), 1, "%02x: textured 4 point polygon\n", m_packet.n_entry[ 0 ] >> 24 );
-				FlatTexturedPolygon( 0 );
-				FlatTexturedPolygon( 1 );
+				FlatTexturedPolygon( 4 );
 				n_gpu_buffer_offset = 0;
 			}
 			break;
@@ -3024,7 +3133,7 @@ void psxgpu_device::gpu_write( UINT32 *p_ram, INT32 n_size )
 			else
 			{
 				verboselog( machine(), 1, "%02x: gouraud 3 point polygon\n", m_packet.n_entry[ 0 ] >> 24 );
-				GouraudPolygon( 0 );
+				GouraudPolygon( 3 );
 				n_gpu_buffer_offset = 0;
 			}
 			break;
@@ -3039,7 +3148,7 @@ void psxgpu_device::gpu_write( UINT32 *p_ram, INT32 n_size )
 			else
 			{
 				verboselog( machine(), 1, "%02x: gouraud textured 3 point polygon\n", m_packet.n_entry[ 0 ] >> 24 );
-				GouraudTexturedPolygon( 0 );
+				GouraudTexturedPolygon( 3 );
 				n_gpu_buffer_offset = 0;
 			}
 			break;
@@ -3054,8 +3163,7 @@ void psxgpu_device::gpu_write( UINT32 *p_ram, INT32 n_size )
 			else
 			{
 				verboselog( machine(), 1, "%02x: gouraud 4 point polygon\n", m_packet.n_entry[ 0 ] >> 24 );
-				GouraudPolygon( 0 );
-				GouraudPolygon( 1 );
+				GouraudPolygon( 4 );
 				n_gpu_buffer_offset = 0;
 			}
 			break;
@@ -3070,8 +3178,7 @@ void psxgpu_device::gpu_write( UINT32 *p_ram, INT32 n_size )
 			else
 			{
 				verboselog( machine(), 1, "%02x: gouraud textured 4 point polygon\n", m_packet.n_entry[ 0 ] >> 24 );
-				GouraudTexturedPolygon( 0 );
-				GouraudTexturedPolygon( 1 );
+				GouraudTexturedPolygon( 4 );
 				n_gpu_buffer_offset = 0;
 			}
 			break;
@@ -3554,11 +3661,8 @@ WRITE32_MEMBER( psxgpu_device::write )
 }
 
 
-void psxgpu_device::dma_read( UINT32 n_address, INT32 n_size )
+void psxgpu_device::dma_read( UINT32 *p_n_psxram, UINT32 n_address, INT32 n_size )
 {
-	psx_state *p_psx = machine().driver_data<psx_state>();
-	UINT32 *p_n_psxram = p_psx->m_p_n_psxram;
-
 	gpu_read( &p_n_psxram[ n_address / 4 ], n_size );
 }
 
@@ -3576,7 +3680,7 @@ void psxgpu_device::gpu_read( UINT32 *p_ram, INT32 n_size )
 			for( n_pixel = 0; n_pixel < 2; n_pixel++ )
 			{
 				data.w.l = data.w.h;
-				data.w.h = *( p_p_vram[ n_vramy + ( m_packet.n_entry[ 1 ] >> 16 ) ] + n_vramx + ( m_packet.n_entry[ 1 ] & 0xffff ) );
+				data.w.h = *( p_p_vram[ ( n_vramy + ( m_packet.n_entry[ 1 ] >> 16 ) ) & 0x3ff ] + ( ( n_vramx + ( m_packet.n_entry[ 1 ] & 0xffff ) ) & 0x3ff ) );
 				n_vramx++;
 				if( n_vramx >= ( m_packet.n_entry[ 2 ] & 0xffff ) )
 				{
@@ -3631,15 +3735,17 @@ READ32_MEMBER( psxgpu_device::read )
 	return data;
 }
 
-void psxgpu_device::vblank( void )
+void psxgpu_device::vblank(screen_device &screen, bool vblank_state)
 {
+	if( vblank_state )
+	{
 #if defined( MAME_DEBUG )
-	DebugCheckKeys();
+		DebugCheckKeys();
 #endif
 
-	n_gpustatus ^= ( 1L << 31 );
-
-	psx_irq_set( machine(), 0x0001 );
+		n_gpustatus ^= ( 1L << 31 );
+		m_vblank_handler(1);
+	}
 }
 
 void psxgpu_device::gpu_reset( void )
@@ -3672,4 +3778,37 @@ void psxgpu_device::lightgun_set( int n_x, int n_y )
 {
 	n_lightgun_x = n_x;
 	n_lightgun_y = n_y;
+}
+
+PALETTE_INIT_MEMBER( psxgpu_device, psx )
+{
+	UINT32 n_colour;
+
+	for( n_colour = 0; n_colour < 0x10000; n_colour++ )
+	{
+		palette_set_color_rgb( machine(), n_colour, pal5bit(n_colour >> 0), pal5bit(n_colour >> 5), pal5bit(n_colour >> 10) );
+	}
+}
+
+MACHINE_CONFIG_FRAGMENT( psxgpu )
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE( 60 )
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC( 0 ))
+	MCFG_SCREEN_SIZE( 1024, 1024 )
+	MCFG_SCREEN_VISIBLE_AREA( 0, 639, 0, 479 )
+	MCFG_SCREEN_UPDATE_DEVICE( DEVICE_SELF, psxgpu_device, update_screen )
+	((screen_device *)device)->register_vblank_callback(vblank_state_delegate(FUNC(psxgpu_device::vblank), (psxgpu_device *) owner));
+
+	MCFG_PALETTE_LENGTH( 65536 )
+	MCFG_PALETTE_INIT_OVERRIDE(psxgpu_device, psx)
+MACHINE_CONFIG_END
+
+//-------------------------------------------------
+//  machine_config_additions - device-specific
+//  machine configurations
+//-------------------------------------------------
+
+machine_config_constructor psxgpu_device::device_mconfig_additions() const
+{
+	return MACHINE_CONFIG_NAME( psxgpu );
 }

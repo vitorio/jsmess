@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     bsmt2000.c
@@ -6,42 +8,10 @@
 
 ****************************************************************************
 
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-
-****************************************************************************
-
     Chip is actually a TMS320C15 DSP with embedded mask rom
     Trivia: BSMT stands for "Brian Schmidt's Mouse Trap"
 
 ***************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "bsmt2000.h"
@@ -91,8 +61,8 @@ ADDRESS_MAP_END
 
 // ROM definition for the BSMT2000 program ROM
 ROM_START( bsmt2000 )
-	ROM_REGION( 0x2000, "bsmt2000", ROMREGION_LOADBYNAME )
-	ROM_LOAD16_WORD_SWAP( "bsmt2000.bin", 0x0000, 0x2000, CRC(c2a265af) SHA1(6ec9eb038fb8eb842c5482aebe1d149daf49f2e6) )
+	ROM_REGION( 0x2000, "bsmt2000", 0 )
+	ROM_LOAD16_WORD( "bsmt2000.bin", 0x0000, 0x2000, CRC(c2a265af) SHA1(6ec9eb038fb8eb842c5482aebe1d149daf49f2e6) )
 ROM_END
 
 
@@ -106,27 +76,24 @@ ROM_END
 //  bsmt2000_device - constructor
 //-------------------------------------------------
 
-//-------------------------------------------------
-//  bsmt2000_device - constructor
-//-------------------------------------------------
-
 bsmt2000_device::bsmt2000_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, BSMT2000, "BSMT2000", "bsmt2000", tag, owner, clock),
-	  device_sound_interface(mconfig, *this),
-	  device_memory_interface(mconfig, *this),
-	  m_space_config("samples", ENDIANNESS_LITTLE, 8, 32, 0, NULL, *ADDRESS_MAP_NAME(bsmt2000)),
-	  m_ready_callback(NULL),
-	  m_stream(NULL),
-	  m_direct(NULL),
-	  m_cpu(NULL),
-	  m_register_select(0),
-	  m_write_data(0),
-	  m_rom_address(0),
-	  m_rom_bank(0),
-	  m_left_data(0),
-	  m_right_data(0),
-	  m_write_pending(false)
+	: device_t(mconfig, BSMT2000, "BSMT2000", tag, owner, clock, "bsmt2000", __FILE__),
+		device_sound_interface(mconfig, *this),
+		device_memory_interface(mconfig, *this),
+		m_space_config("samples", ENDIANNESS_LITTLE, 8, 32, 0, NULL),
+		m_ready_callback(NULL),
+		m_stream(NULL),
+		m_direct(NULL),
+		m_cpu(NULL),
+		m_register_select(0),
+		m_write_data(0),
+		m_rom_address(0),
+		m_rom_bank(0),
+		m_left_data(0),
+		m_right_data(0),
+		m_write_pending(false)
 {
+	m_address_map[0] = *ADDRESS_MAP_NAME(bsmt2000);
 }
 
 
@@ -171,16 +138,16 @@ machine_config_constructor bsmt2000_device::device_mconfig_additions() const
 void bsmt2000_device::device_start()
 {
 	// find our CPU
-	m_cpu = downcast<tms32015_device*>(subdevice("bsmt2000"));
+	m_cpu = subdevice<tms32015_device>("bsmt2000");
 
 	// find our direct access
-	m_direct = &space()->direct();
+	m_direct = &space().direct();
 
 	// create the stream; BSMT typically runs at 24MHz and writes to a DAC, so
 	// in theory we should generate a 24MHz stream, but that's certainly overkill
 	// internally at 24MHz the max output sample rate is 32kHz
 	// divided by 128 gives us 6x the max output rate which is plenty for oversampling
-	m_stream = machine().sound().stream_alloc(*this, 0, 2, clock() / 128);
+	m_stream = stream_alloc(0, 2, clock() / 128);
 
 	// register for save states
 	save_item(NAME(m_register_select));

@@ -1,19 +1,22 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /****************************************************************************************************
 
         XOR S-100-12
 
 *****************************************************************************************************
 
+        All input must be in upper case.
         Summary of Monitor commands:
 
-        D xxxx yyyy = dump memory to screen
-        F xxxx yyyy zz = fill memory from xxxx to yyyy-1 with zz
-        G xxxx         = execute program at xxxx
-        H xxxx yyyy aa bb...  = unknown
-        L xxxx         = edit memory (. to exit)
-        M xxxx yyyy zzzz = Move (copy) memory
-        V xxxx           = unknown
-        X n     = Select a bank (0 works, others freeze)
+        D xxxx yyyy           = dump memory to screen
+        F xxxx yyyy zz        = fill memory from xxxx to yyyy-1 with zz
+        G xxxx                = execute program at xxxx
+        H xxxx yyyy aa bb...  = Search memory for a string of bytes
+        L xxxx                = edit memory (. to exit)
+        M xxxx yyyy zzzz      = Move (copy) memory
+        V xxxx                = Ascii dump of memory to the screen (cr to continue, space to exit)
+        X n                   = Select a bank (0 works, others freeze)
 
         Note some of the commands are a bit buggy, eg F doesn't fill the last byte
 
@@ -23,28 +26,15 @@
 
     TODO:
 
-    - cannot boot from floppy because terminal does not support CTRL modifier key (CTRL-C)
+    - cannot boot from floppy (at prompt press ^C, wait, it says 'Drive not ready')
     - honor jumper settings
     - CTC signal header
     - serial printer
-    - cassette?
+    - cassette? (no mention of it in the manuals)
 
 */
 
-#define ADDRESS_MAP_MODERN
 
-#include "emu.h"
-#include "cpu/z80/z80.h"
-#include "formats/basicdsk.h"
-#include "imagedev/flopdrv.h"
-#include "machine/ram.h"
-#include "machine/com8116.h"
-#include "machine/ctronics.h"
-#include "machine/i8255.h"
-#include "machine/msm8251.h"
-#include "machine/terminal.h"
-#include "machine/wd17xx.h"
-#include "machine/z80ctc.h"
 #include "includes/xor100.h"
 
 /* Read/Write Handlers */
@@ -58,61 +48,61 @@ enum
 
 void xor100_state::bankswitch()
 {
-	address_space *program = m_maincpu->memory().space(AS_PROGRAM);
-	int banks = ram_get_size(m_ram) / 0x10000;
+	address_space &program = m_maincpu->space(AS_PROGRAM);
+	int banks = m_ram->size() / 0x10000;
 
 	switch (m_mode)
 	{
 	case EPROM_0000:
 		if (m_bank < banks)
 		{
-			program->install_write_bank(0x0000, 0xffff, "bank1");
-			memory_set_bank(machine(), "bank1", 1 + m_bank);
+			program.install_write_bank(0x0000, 0xffff, "bank1");
+			membank("bank1")->set_entry(1 + m_bank);
 		}
 		else
 		{
-			program->unmap_write(0x0000, 0xffff);
+			program.unmap_write(0x0000, 0xffff);
 		}
 
-		program->install_read_bank(0x0000, 0xf7ff, 0x07ff, 0, "bank2");
-		program->install_read_bank(0xf800, 0xffff, "bank3");
-		memory_set_bank(machine(), "bank2", 0);
-		memory_set_bank(machine(), "bank3", 0);
+		program.install_read_bank(0x0000, 0xf7ff, 0x07ff, 0, "bank2");
+		program.install_read_bank(0xf800, 0xffff, "bank3");
+		membank("bank2")->set_entry(0);
+		membank("bank3")->set_entry(0);
 		break;
 
 	case EPROM_F800:
 		if (m_bank < banks)
 		{
-			program->install_write_bank(0x0000, 0xffff, "bank1");
-			program->install_read_bank(0x0000, 0xf7ff, "bank2");
-			memory_set_bank(machine(), "bank1", 1 + m_bank);
-			memory_set_bank(machine(), "bank2", 1 + m_bank);
+			program.install_write_bank(0x0000, 0xffff, "bank1");
+			program.install_read_bank(0x0000, 0xf7ff, "bank2");
+			membank("bank1")->set_entry(1 + m_bank);
+			membank("bank2")->set_entry(1 + m_bank);
 		}
 		else
 		{
-			program->unmap_write(0x0000, 0xffff);
-			program->unmap_read(0x0000, 0xf7ff);
+			program.unmap_write(0x0000, 0xffff);
+			program.unmap_read(0x0000, 0xf7ff);
 		}
 
-		program->install_read_bank(0xf800, 0xffff, "bank3");
-		memory_set_bank(machine(), "bank3", 0);
+		program.install_read_bank(0xf800, 0xffff, "bank3");
+		membank("bank3")->set_entry(0);
 		break;
 
 	case EPROM_OFF:
 		if (m_bank < banks)
 		{
-			program->install_write_bank(0x0000, 0xffff, "bank1");
-			program->install_read_bank(0x0000, 0xf7ff, "bank2");
-			program->install_read_bank(0xf800, 0xffff, "bank3");
-			memory_set_bank(machine(), "bank1", 1 + m_bank);
-			memory_set_bank(machine(), "bank2", 1 + m_bank);
-			memory_set_bank(machine(), "bank3", 1 + m_bank);
+			program.install_write_bank(0x0000, 0xffff, "bank1");
+			program.install_read_bank(0x0000, 0xf7ff, "bank2");
+			program.install_read_bank(0xf800, 0xffff, "bank3");
+			membank("bank1")->set_entry(1 + m_bank);
+			membank("bank2")->set_entry(1 + m_bank);
+			membank("bank3")->set_entry(1 + m_bank);
 		}
 		else
 		{
-			program->unmap_write(0x0000, 0xffff);
-			program->unmap_read(0x0000, 0xf7ff);
-			program->unmap_read(0xf800, 0xffff);
+			program.unmap_write(0x0000, 0xffff);
+			program.unmap_read(0x0000, 0xf7ff);
+			program.unmap_read(0xf800, 0xffff);
 		}
 		break;
 	}
@@ -122,18 +112,18 @@ WRITE8_MEMBER( xor100_state::mmu_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       A16
-        1       A17
-        2       A18
-        3       A19
-        4
-        5
-        6
-        7
+	    0       A16
+	    1       A17
+	    2       A18
+	    3       A19
+	    4
+	    5
+	    6
+	    7
 
-    */
+	*/
 
 	m_bank = data & 0x07;
 
@@ -162,37 +152,41 @@ READ8_MEMBER( xor100_state::prom_disable_r )
 
 WRITE8_MEMBER( xor100_state::baud_w )
 {
-	m_dbrg->str_w(space, 0, data & 0x0f);
-	m_dbrg->stt_w(space, 0, data >> 4);
+	m_dbrg->str_w(data & 0x0f);
+	m_dbrg->stt_w(data >> 4);
 }
 
-WRITE8_MEMBER( xor100_state::i8251_b_data_w )
+READ8_MEMBER( xor100_state::fdc_r )
 {
-	msm8251_data_w(m_uart_b, 0, data);
-	terminal_write(m_terminal, 0, data);
+	return m_fdc->gen_r(offset) ^ 0xff;
+}
+
+WRITE8_MEMBER( xor100_state::fdc_w )
+{
+	m_fdc->gen_w(offset, data ^ 0xff);
 }
 
 READ8_MEMBER( xor100_state::fdc_wait_r )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0
-        1
-        2
-        3
-        4
-        5
-        6
-        7       FDC IRQ
+	    0
+	    1
+	    2
+	    3
+	    4
+	    5
+	    6
+	    7       FDC IRQ
 
-    */
+	*/
 
 	if (!m_fdc_irq && !m_fdc_drq)
 	{
-		/* TODO: this is really connected to the Z80 _RDY line */
-		device_set_input_line(m_maincpu, INPUT_LINE_HALT, ASSERT_LINE);
+		fatalerror("Z80 WAIT not supported by MAME core\n");
+		m_maincpu->set_input_line(Z80_INPUT_LINE_WAIT, ASSERT_LINE);
 	}
 
 	return !m_fdc_irq << 7;
@@ -202,45 +196,48 @@ WRITE8_MEMBER( xor100_state::fdc_dcont_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       DS0
-        1       DS1
-        2       DS2
-        3       DS3
-        4
-        5
-        6
-        7       _HLSTB
+	    0       DS0
+	    1       DS1
+	    2       DS2
+	    3       DS3
+	    4
+	    5
+	    6
+	    7       _HLSTB
 
-    */
+	*/
 
-	/* drive select */
-	if (BIT(data, 0)) wd17xx_set_drive(m_fdc, 0);
-	if (BIT(data, 1)) wd17xx_set_drive(m_fdc, 1);
+	// drive select
+	floppy_image_device *floppy = NULL;
 
-	floppy_mon_w(m_floppy0, CLEAR_LINE);
-	floppy_mon_w(m_floppy1, CLEAR_LINE);
-	floppy_drive_set_ready_state(m_floppy0, 1, 1);
-	floppy_drive_set_ready_state(m_floppy1, 1, 1);
+	if (BIT(data, 0)) floppy = m_floppy0->get_device();
+	if (BIT(data, 1)) floppy = m_floppy1->get_device();
+	if (BIT(data, 2)) floppy = m_floppy2->get_device();
+	if (BIT(data, 3)) floppy = m_floppy3->get_device();
+
+	m_fdc->set_floppy(floppy);
+
+	if (floppy) floppy->mon_w(0);
 }
 
 WRITE8_MEMBER( xor100_state::fdc_dsel_w )
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        0       J
-        1       K
-        2
-        3
-        4
-        5
-        6
-        7
+	    0       J
+	    1       K
+	    2
+	    3
+	    4
+	    5
+	    6
+	    7
 
-    */
+	*/
 
 	switch (data & 0x03)
 	{
@@ -250,7 +247,7 @@ WRITE8_MEMBER( xor100_state::fdc_dsel_w )
 	case 3: m_fdc_dden = !m_fdc_dden; break;
 	}
 
-	wd17xx_dden_w(m_fdc, m_fdc_dden);
+	m_fdc->dden_w(m_fdc_dden);
 }
 
 /* Memory Maps */
@@ -263,17 +260,17 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( xor100_io, AS_IO, 8, xor100_state )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE_LEGACY(I8251_A_TAG, msm8251_data_r, msm8251_data_w)
-	AM_RANGE(0x01, 0x01) AM_DEVREADWRITE_LEGACY(I8251_A_TAG, msm8251_status_r, msm8251_control_w)
-	AM_RANGE(0x02, 0x02) AM_DEVREAD_LEGACY(I8251_B_TAG, msm8251_data_r) AM_WRITE(i8251_b_data_w)
-	AM_RANGE(0x03, 0x03) AM_DEVREADWRITE_LEGACY(I8251_B_TAG, msm8251_status_r, msm8251_control_w)
+	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE(I8251_A_TAG, i8251_device, data_r, data_w)
+	AM_RANGE(0x01, 0x01) AM_DEVREADWRITE(I8251_A_TAG, i8251_device, status_r, control_w)
+	AM_RANGE(0x02, 0x02) AM_DEVREADWRITE(I8251_B_TAG, i8251_device, data_r, data_w)
+	AM_RANGE(0x03, 0x03) AM_DEVREADWRITE(I8251_B_TAG, i8251_device, status_r, control_w)
 	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE(I8255A_TAG, i8255_device, read, write)
 	AM_RANGE(0x08, 0x08) AM_WRITE(mmu_w)
 	AM_RANGE(0x09, 0x09) AM_WRITE(prom_toggle_w)
 	AM_RANGE(0x0a, 0x0a) AM_READ(prom_disable_r)
 	AM_RANGE(0x0b, 0x0b) AM_READ_PORT("DSW0") AM_WRITE(baud_w)
-	AM_RANGE(0x0c, 0x0f) AM_DEVREADWRITE_LEGACY(Z80CTC_TAG, z80ctc_r, z80ctc_w)
-	AM_RANGE(0xf8, 0xfb) AM_DEVREADWRITE_LEGACY(WD1795_TAG, wd17xx_r, wd17xx_w)
+	AM_RANGE(0x0c, 0x0f) AM_DEVREADWRITE(Z80CTC_TAG, z80ctc_device, read, write)
+	AM_RANGE(0xf8, 0xfb) AM_READWRITE(fdc_r, fdc_w)
 	AM_RANGE(0xfc, 0xfc) AM_READWRITE(fdc_wait_r, fdc_dcont_w)
 	AM_RANGE(0xfd, 0xfd) AM_WRITE(fdc_dsel_w)
 ADDRESS_MAP_END
@@ -361,36 +358,27 @@ INPUT_PORTS_END
 
 /* COM5016 Interface */
 
-static WRITE_LINE_DEVICE_HANDLER( com5016_fr_w )
+WRITE_LINE_MEMBER( xor100_state::com5016_fr_w )
 {
-	msm8251_transmit_clock(device);
-	msm8251_receive_clock(device);
+	m_uart_a->transmit_clock();
+	m_uart_a->receive_clock();
 }
 
-static WRITE_LINE_DEVICE_HANDLER( com5016_ft_w )
+WRITE_LINE_MEMBER( xor100_state::com5016_ft_w )
 {
-	msm8251_transmit_clock(device);
-	msm8251_receive_clock(device);
+	m_uart_b->transmit_clock();
+	m_uart_b->receive_clock();
 }
-
-static COM8116_INTERFACE( com5016_intf )
-{
-	DEVCB_NULL,					/* fX/4 output */
-	DEVCB_DEVICE_LINE(I8251_A_TAG, com5016_fr_w),	/* fR output */
-	DEVCB_DEVICE_LINE(I8251_B_TAG, com5016_ft_w),	/* fT output */
-	{ 101376, 67584, 46080, 37686, 33792, 16896, 8448, 4224, 2816, 2534, 2112, 1408, 1056, 704, 528, 264 },	// WRONG?
-	{ 101376, 67584, 46080, 37686, 33792, 16896, 8448, 4224, 2816, 2534, 2112, 1408, 1056, 704, 528, 264 },	// WRONG?
-};
 
 /* Printer 8251A Interface */
 
-static const msm8251_interface printer_8251_intf =
+static const i8251_interface printer_8251_intf =
 {
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, serial_port_device, rx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, serial_port_device, tx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, rs232_port_device, dsr_r),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, rs232_port_device, dtr_w),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_A_TAG, rs232_port_device, rts_w),
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -399,13 +387,13 @@ static const msm8251_interface printer_8251_intf =
 
 /* Terminal 8251A Interface */
 
-static const msm8251_interface terminal_8251_intf =
+static const i8251_interface terminal_8251_intf =
 {
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, serial_port_device, rx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, serial_port_device, tx),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, rs232_port_device, dsr_r),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, rs232_port_device, dtr_w),
+	DEVCB_DEVICE_LINE_MEMBER(RS232_B_TAG, rs232_port_device, rts_w),
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -414,30 +402,30 @@ static const msm8251_interface terminal_8251_intf =
 
 /* Printer 8255A Interface */
 
-static READ8_DEVICE_HANDLER( i8255_pc_r )
+READ8_MEMBER(xor100_state::i8255_pc_r)
 {
 	/*
 
-        bit     description
+	    bit     description
 
-        PC0
-        PC1
-        PC2
-        PC3
-        PC4     ON LINE
-        PC5     BUSY
-        PC6     _ACK
-        PC7
+	    PC0
+	    PC1
+	    PC2
+	    PC3
+	    PC4     ON LINE
+	    PC5     BUSY
+	    PC6     _ACK
+	    PC7
 
-    */
+	*/
 
 	UINT8 data = 0;
 
 	/* on line */
-	data |= centronics_vcc_r(device) << 4;
+	data |= m_centronics->vcc_r() << 4;
 
 	/* busy */
-	data |= centronics_busy_r(device) << 5;
+	data |= m_centronics->busy_r() << 5;
 
 	return data;
 }
@@ -445,16 +433,15 @@ static READ8_DEVICE_HANDLER( i8255_pc_r )
 static I8255A_INTERFACE( printer_8255_intf )
 {
 	DEVCB_NULL,
-	DEVCB_DEVICE_HANDLER(CENTRONICS_TAG, centronics_data_w),
+	DEVCB_DEVICE_MEMBER(CENTRONICS_TAG, centronics_device, write),
 	DEVCB_NULL,
-	DEVCB_DEVICE_LINE(CENTRONICS_TAG, centronics_strobe_w),
-	DEVCB_DEVICE_HANDLER(CENTRONICS_TAG, i8255_pc_r),
+	DEVCB_DEVICE_LINE_MEMBER(CENTRONICS_TAG, centronics_device, strobe_w),
+	DEVCB_DRIVER_MEMBER(xor100_state, i8255_pc_r),
 	DEVCB_NULL
 };
 
 static const centronics_interface xor100_centronics_intf =
 {
-	0,
 	DEVCB_DEVICE_LINE_MEMBER(I8255A_TAG, i8255_device, pc4_w),
 	DEVCB_NULL,
 	DEVCB_NULL
@@ -462,93 +449,133 @@ static const centronics_interface xor100_centronics_intf =
 
 /* Z80-CTC Interface */
 
-static WRITE_LINE_DEVICE_HANDLER( ctc_z0_w )
+WRITE_LINE_MEMBER( xor100_state::ctc_z0_w )
 {
 }
 
-static WRITE_LINE_DEVICE_HANDLER( ctc_z1_w )
+WRITE_LINE_MEMBER( xor100_state::ctc_z1_w )
 {
 }
 
-static WRITE_LINE_DEVICE_HANDLER( ctc_z2_w )
+WRITE_LINE_MEMBER( xor100_state::ctc_z2_w )
 {
 }
 
 static Z80CTC_INTERFACE( ctc_intf )
 {
-	0,              	/* timer disables */
-	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0),	/* interrupt handler */
-	DEVCB_LINE(ctc_z0_w),			/* ZC/TO0 callback */
-	DEVCB_LINE(ctc_z1_w),			/* ZC/TO1 callback */
-	DEVCB_LINE(ctc_z2_w)    		/* ZC/TO2 callback */
+	DEVCB_CPU_INPUT_LINE(Z80_TAG, INPUT_LINE_IRQ0), /* interrupt handler */
+	DEVCB_DRIVER_LINE_MEMBER(xor100_state, ctc_z0_w),           /* ZC/TO0 callback */
+	DEVCB_DRIVER_LINE_MEMBER(xor100_state, ctc_z1_w),           /* ZC/TO1 callback */
+	DEVCB_DRIVER_LINE_MEMBER(xor100_state, ctc_z2_w)        /* ZC/TO2 callback */
 };
 
 /* WD1795-02 Interface */
 
-WRITE_LINE_MEMBER( xor100_state::fdc_irq_w )
+static SLOT_INTERFACE_START( xor100_floppies )
+	SLOT_INTERFACE( "8ssdd", FLOPPY_8_SSDD ) // Shugart SA-100
+SLOT_INTERFACE_END
+
+void xor100_state::fdc_intrq_w(bool state)
 {
 	m_fdc_irq = state;
-	z80ctc_trg0_w(m_ctc, state);
+	m_ctc->trg0(state);
 
 	if (state)
 	{
-		/* TODO: this is really connected to the Z80 _RDY line */
-		device_set_input_line(m_maincpu, INPUT_LINE_HALT, CLEAR_LINE);
+		fatalerror("Z80 WAIT not supported by MAME core\n");
+		m_maincpu->set_input_line(Z80_INPUT_LINE_WAIT, ASSERT_LINE);
 	}
 }
 
-WRITE_LINE_MEMBER( xor100_state::fdc_drq_w )
+void xor100_state::fdc_drq_w(bool state)
 {
 	m_fdc_drq = state;
 
 	if (state)
 	{
-		/* TODO: this is really connected to the Z80 _RDY line */
-		device_set_input_line(m_maincpu, INPUT_LINE_HALT, CLEAR_LINE);
+		fatalerror("Z80 WAIT not supported by MAME core\n");
+		m_maincpu->set_input_line(Z80_INPUT_LINE_WAIT, ASSERT_LINE);
 	}
 }
 
-static const wd17xx_interface fdc_intf =
+
+//-------------------------------------------------
+//  rs232_port_interface rs232a_intf
+//-------------------------------------------------
+
+static const rs232_port_interface rs232a_intf =
 {
 	DEVCB_NULL,
-	DEVCB_DRIVER_LINE_MEMBER(xor100_state, fdc_irq_w),
-	DEVCB_DRIVER_LINE_MEMBER(xor100_state, fdc_drq_w),
-	{ FLOPPY_0, FLOPPY_1, NULL, NULL }
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
 };
 
-/* Terminal Interface */
 
-static WRITE8_DEVICE_HANDLER( xor100_kbd_put )
-{
-	msm8251_receive_character(device, data);
-}
+//-------------------------------------------------
+//  rs232_port_interface rs232b_intf
+//-------------------------------------------------
 
-static GENERIC_TERMINAL_INTERFACE( xor100_terminal_intf )
+static DEVICE_INPUT_DEFAULTS_START( terminal )
+	DEVICE_INPUT_DEFAULTS( "TERM_FRAME", 0x0f, 0x06 ) // 9600
+	DEVICE_INPUT_DEFAULTS( "TERM_FRAME", 0x30, 0x00 ) // 8N1
+DEVICE_INPUT_DEFAULTS_END
+
+static const rs232_port_interface rs232b_intf =
 {
-	DEVCB_DEVICE_HANDLER(I8251_B_TAG, xor100_kbd_put)
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
 };
+
+static S100_INTERFACE( s100_intf )
+{
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_CPU_INPUT_LINE(Z80_TAG, Z80_INPUT_LINE_WAIT),
+	DEVCB_NULL,
+	DEVCB_NULL,
+};
+
+static SLOT_INTERFACE_START( xor100_s100_cards )
+SLOT_INTERFACE_END
 
 /* Machine Initialization */
 
 void xor100_state::machine_start()
 {
-	int banks = ram_get_size(m_ram) / 0x10000;
-	UINT8 *ram = ram_get_ptr(m_ram);
-	UINT8 *rom = machine().region(Z80_TAG)->base();
+	int banks = m_ram->size() / 0x10000;
+	UINT8 *ram = m_ram->pointer();
+	UINT8 *rom = m_rom->base();
 
 	/* setup memory banking */
-	memory_configure_bank(machine(), "bank1", 1, banks, ram, 0x10000);
-	memory_configure_bank(machine(), "bank2", 0, 1, rom, 0);
-	memory_configure_bank(machine(), "bank2", 1, banks, ram, 0x10000);
-	memory_configure_bank(machine(), "bank3", 0, 1, rom, 0);
-	memory_configure_bank(machine(), "bank3", 1, banks, ram + 0xf800, 0x10000);
+	membank("bank1")->configure_entries(1, banks, ram, 0x10000);
+	membank("bank2")->configure_entry(0, rom);
+	membank("bank2")->configure_entries(1, banks, ram, 0x10000);
+	membank("bank3")->configure_entry(0, rom);
+	membank("bank3")->configure_entries(1, banks, ram + 0xf800, 0x10000);
 
 	/* register for state saving */
-	state_save_register_global(machine(), m_mode);
-	state_save_register_global(machine(), m_bank);
-	state_save_register_global(machine(), m_fdc_irq);
-	state_save_register_global(machine(), m_fdc_drq);
-	state_save_register_global(machine(), m_fdc_dden);
+	save_item(NAME(m_mode));
+	save_item(NAME(m_bank));
+	save_item(NAME(m_fdc_irq));
+	save_item(NAME(m_fdc_drq));
+	save_item(NAME(m_fdc_dden));
 }
 
 void xor100_state::machine_reset()
@@ -560,38 +587,40 @@ void xor100_state::machine_reset()
 
 /* Machine Driver */
 
-static const floppy_interface xor100_floppy_interface =
-{
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	FLOPPY_STANDARD_5_25_DSDD,
-	FLOPPY_OPTIONS_NAME(default),
-	NULL,
-	NULL
-};
-
 static MACHINE_CONFIG_START( xor100, xor100_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD(Z80_TAG, Z80, XTAL_8MHz/2)
 	MCFG_CPU_PROGRAM_MAP(xor100_mem)
 	MCFG_CPU_IO_MAP(xor100_io)
 
-	/* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
-
 	/* devices */
-	MCFG_MSM8251_ADD(I8251_A_TAG, /*XTAL_8MHz/2,*/ printer_8251_intf)
-	MCFG_MSM8251_ADD(I8251_B_TAG, /*XTAL_8MHz/2,*/ terminal_8251_intf)
+	MCFG_I8251_ADD(I8251_A_TAG, /*XTAL_8MHz/2,*/ printer_8251_intf)
+	MCFG_I8251_ADD(I8251_B_TAG, /*XTAL_8MHz/2,*/ terminal_8251_intf)
 	MCFG_I8255A_ADD(I8255A_TAG, printer_8255_intf)
 	MCFG_Z80CTC_ADD(Z80CTC_TAG, XTAL_8MHz/2, ctc_intf)
-	MCFG_COM8116_ADD(COM5016_TAG, 5000000, com5016_intf)
-	MCFG_FD1795_ADD(WD1795_TAG, /*XTAL_8MHz/8,*/ fdc_intf)
-	MCFG_FLOPPY_2_DRIVES_ADD(xor100_floppy_interface)
-	MCFG_CENTRONICS_ADD(CENTRONICS_TAG, xor100_centronics_intf)
-	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, xor100_terminal_intf)
+	MCFG_COM8116_ADD(COM5016_TAG, XTAL_5_0688MHz, NULL, WRITELINE(xor100_state, com5016_fr_w), WRITELINE(xor100_state, com5016_ft_w))
+	MCFG_FD1795x_ADD(WD1795_TAG, XTAL_8MHz/4)
+	MCFG_FLOPPY_DRIVE_ADD(WD1795_TAG":0", xor100_floppies, "8ssdd", floppy_image_device::default_floppy_formats)
+	MCFG_FLOPPY_DRIVE_ADD(WD1795_TAG":1", xor100_floppies, "8ssdd", floppy_image_device::default_floppy_formats)
+	MCFG_FLOPPY_DRIVE_ADD(WD1795_TAG":2", xor100_floppies, NULL,    floppy_image_device::default_floppy_formats)
+	MCFG_FLOPPY_DRIVE_ADD(WD1795_TAG":3", xor100_floppies, NULL,    floppy_image_device::default_floppy_formats)
+	MCFG_CENTRONICS_PRINTER_ADD(CENTRONICS_TAG, xor100_centronics_intf)
+	MCFG_RS232_PORT_ADD(RS232_A_TAG, rs232a_intf, default_rs232_devices, NULL)
+	MCFG_RS232_PORT_ADD(RS232_B_TAG, rs232b_intf, default_rs232_devices, "serial_terminal")
+	MCFG_DEVICE_CARD_DEVICE_INPUT_DEFAULTS("serial_terminal", terminal)
+
+	// S-100
+	MCFG_S100_BUS_ADD(s100_intf)
+	MCFG_S100_SLOT_ADD("s100_1", xor100_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_2", xor100_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_3", xor100_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_4", xor100_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_5", xor100_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_6", xor100_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_7", xor100_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_8", xor100_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_9", xor100_s100_cards, NULL)
+	MCFG_S100_SLOT_ADD("s100_10", xor100_s100_cards, NULL)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -609,5 +638,5 @@ ROM_END
 
 /* System Drivers */
 
-/*    YEAR  NAME        PARENT  COMPAT  MACHINE     INPUT       INIT    COMPANY                 FULLNAME        FLAGS */
-COMP( 1980, xor100,		0,		0,		xor100,		xor100,		0,		"Xor Data Science",		"XOR S-100-12",	GAME_SUPPORTS_SAVE | GAME_NO_SOUND)
+/*    YEAR  NAME    PARENT  COMPAT  MACHINE     INPUT       INIT    COMPANY                 FULLNAME        FLAGS */
+COMP( 1980, xor100, 0,      0,      xor100,     xor100, driver_device,     0,   "Xor Data Science",     "XOR S-100-12", GAME_SUPPORTS_SAVE | GAME_NO_SOUND_HW)

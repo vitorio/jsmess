@@ -13,26 +13,25 @@ End sequence uses rowscroll '98 c0' on pf1 (jmp to 1d61a on supbtimj)
 ***************************************************************************/
 
 #include "emu.h"
-#include "video/deco16ic.h"
 #include "includes/supbtime.h"
-#include "video/decospr.h"
+
 
 /******************************************************************************/
 
 /******************************************************************************/
 
-SCREEN_UPDATE(supbtime)
+UINT32 supbtime_state::screen_update_supbtime(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	supbtime_state *state = screen->machine().driver_data<supbtime_state>();
-	UINT16 flip = deco16ic_pf_control_r(state->m_deco_tilegen1, 0, 0xffff);
+	address_space &space = machine().driver_data()->generic_space();
+	UINT16 flip = m_deco_tilegen1->pf_control_r(space, 0, 0xffff);
 
-	flip_screen_set(screen->machine(), BIT(flip, 7));
-	deco16ic_pf_update(state->m_deco_tilegen1, state->m_pf1_rowscroll, state->m_pf2_rowscroll);
+	flip_screen_set(BIT(flip, 7));
+	m_deco_tilegen1->pf_update(m_pf1_rowscroll, m_pf2_rowscroll);
 
-	bitmap_fill(bitmap, cliprect, 768);
+	bitmap.fill(768, cliprect);
 
-	deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
-	screen->machine().device<decospr_device>("spritegen")->draw_sprites(screen->machine(), bitmap, cliprect, state->m_spriteram, 0x400);
-	deco16ic_tilemap_1_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
+	m_deco_tilegen1->tilemap_2_draw(screen, bitmap, cliprect, 0, 0);
+	m_sprgen->draw_sprites(bitmap, cliprect, m_spriteram, 0x400);
+	m_deco_tilegen1->tilemap_1_draw(screen, bitmap, cliprect, 0, 0);
 	return 0;
 }

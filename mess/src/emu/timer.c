@@ -1,44 +1,14 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     timer.c
 
     Timer devices.
 
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-
 ***************************************************************************/
 
 #include "emu.h"
-#include "profiler.h"
 
 
 /***************************************************************************
@@ -47,7 +17,7 @@
 
 #define VERBOSE 0
 
-#define LOG(x)	do { if (VERBOSE) logerror x; } while (0)
+#define LOG(x)  do { if (VERBOSE) logerror x; } while (0)
 
 
 
@@ -63,19 +33,19 @@ const device_type TIMER = &device_creator<timer_device>;
 //-------------------------------------------------
 
 timer_device::timer_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, TIMER, "Timer", tag, owner, clock),
-	  m_type(TIMER_TYPE_GENERIC),
-	  m_callback(NULL),
-	  m_ptr(NULL),
-	  m_start_delay(attotime::zero),
-	  m_period(attotime::zero),
-	  m_param(0),
-	  m_screen_tag(NULL),
-	  m_screen(NULL),
-	  m_first_vpos(0),
-	  m_increment(0),
-	  m_timer(NULL),
-	  m_first_time(true)
+	: device_t(mconfig, TIMER, "Timer", tag, owner, clock, "timer", __FILE__),
+		m_type(TIMER_TYPE_GENERIC),
+		m_callback(timer_device_expired_delegate()),
+		m_ptr(NULL),
+		m_start_delay(attotime::zero),
+		m_period(attotime::zero),
+		m_param(0),
+		m_screen_tag(NULL),
+		m_screen(NULL),
+		m_first_vpos(0),
+		m_increment(0),
+		m_timer(NULL),
+		m_first_time(true)
 {
 }
 
@@ -85,7 +55,7 @@ timer_device::timer_device(const machine_config &mconfig, const char *tag, devic
 //  helper to set up a generic timer
 //-------------------------------------------------
 
-void timer_device::static_configure_generic(device_t &device, timer_device_fired_func callback)
+void timer_device::static_configure_generic(device_t &device, timer_device_expired_delegate callback)
 {
 	timer_device &timer = downcast<timer_device &>(device);
 	timer.m_type = TIMER_TYPE_GENERIC;
@@ -98,7 +68,7 @@ void timer_device::static_configure_generic(device_t &device, timer_device_fired
 //  helper to set up a periodic timer
 //-------------------------------------------------
 
-void timer_device::static_configure_periodic(device_t &device, timer_device_fired_func callback, attotime period)
+void timer_device::static_configure_periodic(device_t &device, timer_device_expired_delegate callback, attotime period)
 {
 	timer_device &timer = downcast<timer_device &>(device);
 	timer.m_type = TIMER_TYPE_PERIODIC;
@@ -112,7 +82,7 @@ void timer_device::static_configure_periodic(device_t &device, timer_device_fire
 //  helper to set up a scanline timer
 //-------------------------------------------------
 
-void timer_device::static_configure_scanline(device_t &device, timer_device_fired_func callback, const char *screen, int first_vpos, int increment)
+void timer_device::static_configure_scanline(device_t &device, timer_device_expired_delegate callback, const char *screen, int first_vpos, int increment)
 {
 	timer_device &timer = downcast<timer_device &>(device);
 	timer.m_type = TIMER_TYPE_SCANLINE;
@@ -128,7 +98,7 @@ void timer_device::static_configure_scanline(device_t &device, timer_device_fire
 //  to set the callback
 //-------------------------------------------------
 
-void timer_device::static_set_callback(device_t &device, timer_device_fired_func callback)
+void timer_device::static_set_callback(device_t &device, timer_device_expired_delegate callback)
 {
 	timer_device &timer = downcast<timer_device &>(device);
 	timer.m_callback = callback;
@@ -176,54 +146,40 @@ void timer_device::static_set_ptr(device_t &device, void *ptr)
 //  configuration
 //-------------------------------------------------
 
-bool timer_device::device_validity_check(emu_options &options, const game_driver &driver) const
+void timer_device::device_validity_check(validity_checker &valid) const
 {
-	bool error = false;
-
 	// type based configuration
 	switch (m_type)
 	{
 		case TIMER_TYPE_GENERIC:
 			if (m_screen_tag != NULL || m_first_vpos != 0 || m_start_delay != attotime::zero)
-				mame_printf_warning("%s: %s generic timer '%s' specified parameters for a scanline timer\n", driver.source_file, driver.name, tag());
+				mame_printf_warning("Generic timer specified parameters for a scanline timer\n");
 			if (m_period != attotime::zero || m_start_delay != attotime::zero)
-				mame_printf_warning("%s: %s generic timer '%s' specified parameters for a periodic timer\n", driver.source_file, driver.name, tag());
+				mame_printf_warning("Generic timer specified parameters for a periodic timer\n");
 			break;
 
 		case TIMER_TYPE_PERIODIC:
 			if (m_screen_tag != NULL || m_first_vpos != 0)
-				mame_printf_warning("%s: %s periodic timer '%s' specified parameters for a scanline timer\n", driver.source_file, driver.name, tag());
+				mame_printf_warning("Periodic timer specified parameters for a scanline timer\n");
 			if (m_period <= attotime::zero)
-			{
-				mame_printf_error("%s: %s periodic timer '%s' specified invalid period\n", driver.source_file, driver.name, tag());
-				error = true;
-			}
+				mame_printf_error("Periodic timer specified invalid period\n");
 			break;
 
 		case TIMER_TYPE_SCANLINE:
 			if (m_period != attotime::zero || m_start_delay != attotime::zero)
-				mame_printf_warning("%s: %s scanline timer '%s' specified parameters for a periodic timer\n", driver.source_file, driver.name, tag());
+				mame_printf_warning("Scanline timer specified parameters for a periodic timer\n");
 			if (m_param != 0)
-				mame_printf_warning("%s: %s scanline timer '%s' specified parameter which is ignored\n", driver.source_file, driver.name, tag());
-			if (m_first_vpos < 0)
-			{
-				mame_printf_error("%s: %s scanline timer '%s' specified invalid initial position\n", driver.source_file, driver.name, tag());
-				error = true;
-			}
-			if (m_increment < 0)
-			{
-				mame_printf_error("%s: %s scanline timer '%s' specified invalid increment\n", driver.source_file, driver.name, tag());
-				error = true;
-			}
+				mame_printf_warning("Scanline timer specified parameter which is ignored\n");
+//          if (m_first_vpos < 0)
+//              mame_printf_error("Scanline timer specified invalid initial position\n");
+//          if (m_increment < 0)
+//              mame_printf_error("Scanline timer specified invalid increment\n");
 			break;
 
 		default:
-			mame_printf_error("%s: %s timer '%s' has an invalid type\n", driver.source_file, driver.name, tag());
-			error = true;
+			mame_printf_error("Invalid type specified\n");
 			break;
 	}
-
-	return error;
 }
 
 
@@ -240,6 +196,8 @@ void timer_device::device_start()
 
 	// allocate the timer
 	m_timer = timer_alloc();
+
+	m_callback.bind_relative_to(*owner());
 
 	// register for save states
 	save_item(NAME(m_first_time));
@@ -298,8 +256,8 @@ void timer_device::device_timer(emu_timer &timer, device_timer_id id, int param,
 		// general periodic timers just call through
 		case TIMER_TYPE_GENERIC:
 		case TIMER_TYPE_PERIODIC:
-			if (m_callback != NULL)
-				(*m_callback)(*this, m_ptr, param);
+			if (!m_callback.isnull())
+				(m_callback)(*this, m_ptr, param);
 			break;
 
 
@@ -314,10 +272,11 @@ void timer_device::device_timer(emu_timer &timer, device_timer_id id, int param,
 			{
 				// call the real callback
 				int vpos = m_screen->vpos();
-				(*m_callback)(*this, m_ptr, vpos);
+				if (!m_callback.isnull())
+					(m_callback)(*this, m_ptr, vpos);
 
 				// advance by the increment only if we will still be within the screen bounds
-		        if (m_increment != 0 && (vpos + m_increment) < m_screen->height())
+				if (m_increment != 0 && (vpos + m_increment) < m_screen->height())
 					next_vpos = vpos + m_increment;
 			}
 			m_first_time = false;

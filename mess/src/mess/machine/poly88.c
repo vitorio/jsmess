@@ -12,23 +12,43 @@
 #include "includes/poly88.h"
 
 
-static TIMER_CALLBACK(poly88_usart_timer_callback)
+void poly88_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	poly88_state *state = machine.driver_data<poly88_state>();
-	state->m_int_vector = 0xe7;
-	device_set_input_line(machine.device("maincpu"), 0, HOLD_LINE);
+	switch (id)
+	{
+	case TIMER_USART:
+		poly88_usart_timer_callback(ptr, param);
+		break;
+	case TIMER_KEYBOARD:
+		keyboard_callback(ptr, param);
+		break;
+	case TIMER_CASSETTE:
+		poly88_cassette_timer_callback(ptr, param);
+		break;
+	case TIMER_SETUP_MACHINE_STATE:
+		setup_machine_state(ptr, param);
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in poly88_state::device_timer");
+	}
 }
 
-WRITE8_HANDLER(poly88_baud_rate_w)
+
+TIMER_CALLBACK_MEMBER(poly88_state::poly88_usart_timer_callback)
 {
-	poly88_state *state = space->machine().driver_data<poly88_state>();
+	m_int_vector = 0xe7;
+	m_maincpu->set_input_line(0, HOLD_LINE);
+}
+
+WRITE8_MEMBER(poly88_state::poly88_baud_rate_w)
+{
 	logerror("poly88_baud_rate_w %02x\n",data);
-	state->m_usart_timer = space->machine().scheduler().timer_alloc(FUNC(poly88_usart_timer_callback));
-	state->m_usart_timer->adjust(attotime::zero, 0, attotime::from_hz(300));
+	m_usart_timer = timer_alloc(TIMER_USART);
+	m_usart_timer->adjust(attotime::zero, 0, attotime::from_hz(300));
 
 }
 
-static UINT8 row_number(UINT8 code) {
+UINT8 poly88_state::row_number(UINT8 code) {
 	if BIT(code,0) return 0;
 	if BIT(code,1) return 1;
 	if BIT(code,2) return 2;
@@ -40,21 +60,27 @@ static UINT8 row_number(UINT8 code) {
 	return 0;
 }
 
-static TIMER_CALLBACK(keyboard_callback)
+TIMER_CALLBACK_MEMBER(poly88_state::keyboard_callback)
 {
-	poly88_state *state = machine.driver_data<poly88_state>();
-	static const char *const keynames[] = { "LINE0", "LINE1", "LINE2", "LINE3", "LINE4", "LINE5", "LINE6" };
-
 	int i;
 	UINT8 code;
 	UINT8 key_code = 0;
-	UINT8 shift = input_port_read(machine, "LINEC") & 0x02 ? 1 : 0;
-	UINT8 ctrl =  input_port_read(machine, "LINEC") & 0x01 ? 1 : 0;
+	UINT8 shift = m_linec->read() & 0x02 ? 1 : 0;
+	UINT8 ctrl =  m_linec->read() & 0x01 ? 1 : 0;
 
 	for(i = 0; i < 7; i++)
 	{
-
-		code =	input_port_read(machine, keynames[i]);
+		switch ( i )
+		{
+			case 0: code = m_line0->read(); break;
+			case 1: code = m_line1->read(); break;
+			case 2: code = m_line2->read(); break;
+			case 3: code = m_line3->read(); break;
+			case 4: code = m_line4->read(); break;
+			case 5: code = m_line5->read(); break;
+			case 6: code = m_line6->read(); break;
+			default: code = 0;
+		}
 		if (code != 0)
 		{
 			if (i==0 && shift==0) {
@@ -118,161 +144,142 @@ static TIMER_CALLBACK(keyboard_callback)
 			}
 		}
 	}
-	if (key_code==0 && state->m_last_code !=0){
-		state->m_int_vector = 0xef;
-		cputag_set_input_line(machine, "maincpu", 0, HOLD_LINE);
+	if (key_code==0 && m_last_code !=0){
+		m_int_vector = 0xef;
+		m_maincpu->set_input_line(0, HOLD_LINE);
 	} else {
-		state->m_last_code = key_code;
+		m_last_code = key_code;
 	}
+
+	timer_set(attotime::from_hz(24000), TIMER_KEYBOARD);
 }
 
-static IRQ_CALLBACK (poly88_irq_callback)
+IRQ_CALLBACK_MEMBER(poly88_state::poly88_irq_callback)
 {
-	poly88_state *state = device->machine().driver_data<poly88_state>();
-	return state->m_int_vector;
+	return m_int_vector;
 }
 
-
-
-static void poly88_cassette_write(running_machine &machine, int id, unsigned long state)
+TIMER_CALLBACK_MEMBER(poly88_state::poly88_cassette_timer_callback)
 {
-	poly88_state *drvstate = machine.driver_data<poly88_state>();
-	drvstate->m_cassette_serial_connection.input_state = state;
-}
-
-static TIMER_CALLBACK(poly88_cassette_timer_callback)
-{
-	poly88_state *state = machine.driver_data<poly88_state>();
 	int data;
 	int current_level;
 
-
-//  if (!(input_port_read(machine, "DSW0") & 0x02)) /* V.24 / Tape Switch */
+//  if (!(ioport("DSW0")->read() & 0x02)) /* V.24 / Tape Switch */
 	//{
 		/* tape reading */
-		if (machine.device<cassette_image_device>(CASSETTE_TAG)->get_state()&CASSETTE_PLAY)
+		if (m_cassette->get_state()&CASSETTE_PLAY)
 		{
-					if (state->m_clk_level_tape)
+					if (m_clk_level_tape)
 					{
-						state->m_previous_level = ((machine.device<cassette_image_device>(CASSETTE_TAG))->input() > 0.038) ? 1 : 0;
-						state->m_clk_level_tape = 0;
+						m_previous_level = (m_cassette->input() > 0.038) ? 1 : 0;
+						m_clk_level_tape = 0;
 					}
 					else
 					{
-						current_level = ((machine.device<cassette_image_device>(CASSETTE_TAG))->input() > 0.038) ? 1 : 0;
+						current_level = (m_cassette->input() > 0.038) ? 1 : 0;
 
-						if (state->m_previous_level!=current_level)
+						if (m_previous_level!=current_level)
 						{
-							data = (!state->m_previous_level && current_level) ? 1 : 0;
+							data = (!m_previous_level && current_level) ? 1 : 0;
 //data = current_level;
-							set_out_data_bit(state->m_cassette_serial_connection.State, data);
-							serial_connection_out(machine, &state->m_cassette_serial_connection);
-							msm8251_receive_clock(machine.device("uart"));
+							m_sercas->send_bit(data);
+							m_uart->receive_clock();
 
-							state->m_clk_level_tape = 1;
+							m_clk_level_tape = 1;
 						}
 					}
 		}
 
 		/* tape writing */
-		if (machine.device<cassette_image_device>(CASSETTE_TAG)->get_state()&CASSETTE_RECORD)
+		if (m_cassette->get_state()&CASSETTE_RECORD)
 		{
-			data = get_in_data_bit(state->m_cassette_serial_connection.input_state);
-			data ^= state->m_clk_level_tape;
-			machine.device<cassette_image_device>(CASSETTE_TAG)->output(data&0x01 ? 1 : -1);
+			data = m_sercas->get_in_data_bit();
+			data ^= m_clk_level_tape;
+			m_cassette->output(data&0x01 ? 1 : -1);
 
-			if (!state->m_clk_level_tape)
-				msm8251_transmit_clock(machine.device("uart"));
+			if (!m_clk_level_tape)
+				m_uart->transmit_clock();
 
-			state->m_clk_level_tape = state->m_clk_level_tape ? 0 : 1;
+			m_clk_level_tape = m_clk_level_tape ? 0 : 1;
 
 			return;
 		}
 
-		state->m_clk_level_tape = 1;
+		m_clk_level_tape = 1;
 
-		if (!state->m_clk_level)
-			msm8251_transmit_clock(machine.device("uart"));
-		state->m_clk_level = state->m_clk_level ? 0 : 1;
+		if (!m_clk_level)
+			m_uart->transmit_clock();
+		m_clk_level = m_clk_level ? 0 : 1;
 //  }
 }
 
 
-static TIMER_CALLBACK( setup_machine_state )
+TIMER_CALLBACK_MEMBER(poly88_state::setup_machine_state)
 {
-	poly88_state *state = machine.driver_data<poly88_state>();
-	msm8251_connect(machine.device("uart"), &state->m_cassette_serial_connection);
+	m_uart->connect(m_sercas);
 }
 
-DRIVER_INIT ( poly88 )
+DRIVER_INIT_MEMBER(poly88_state,poly88)
 {
-	poly88_state *state = machine.driver_data<poly88_state>();
-	state->m_previous_level = 0;
-	state->m_clk_level = state->m_clk_level_tape = 1;
-	state->m_cassette_timer = machine.scheduler().timer_alloc(FUNC(poly88_cassette_timer_callback));
-	state->m_cassette_timer->adjust(attotime::zero, 0, attotime::from_hz(600));
+	m_previous_level = 0;
+	m_clk_level = m_clk_level_tape = 1;
+	m_cassette_timer = timer_alloc(TIMER_CASSETTE);
+	m_cassette_timer->adjust(attotime::zero, 0, attotime::from_hz(600));
 
-	serial_connection_init(machine, &state->m_cassette_serial_connection);
-	serial_connection_set_in_callback(machine, &state->m_cassette_serial_connection, poly88_cassette_write);
-
-	machine.scheduler().timer_pulse(attotime::from_hz(24000), FUNC(keyboard_callback));
+	timer_set(attotime::from_hz(24000), TIMER_KEYBOARD);
 }
 
-MACHINE_RESET(poly88)
+void poly88_state::machine_reset()
 {
-	poly88_state *state = machine.driver_data<poly88_state>();
-	device_set_irq_callback(machine.device("maincpu"), poly88_irq_callback);
-	state->m_intr = 0;
-	state->m_last_code = 0;
+	m_maincpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(poly88_state::poly88_irq_callback),this));
+	m_intr = 0;
+	m_last_code = 0;
 
-	machine.scheduler().timer_set(attotime::zero, FUNC(setup_machine_state));
+	timer_set(attotime::zero, TIMER_SETUP_MACHINE_STATE);
 }
 
-INTERRUPT_GEN( poly88_interrupt )
+INTERRUPT_GEN_MEMBER(poly88_state::poly88_interrupt)
 {
-	poly88_state *state = device->machine().driver_data<poly88_state>();
-	state->m_int_vector = 0xf7;
-	device_set_input_line(device, 0, HOLD_LINE);
+	m_int_vector = 0xf7;
+	device.execute().set_input_line(0, HOLD_LINE);
 }
 
-static WRITE_LINE_DEVICE_HANDLER( poly88_usart_rxready )
+WRITE_LINE_MEMBER(poly88_state::poly88_usart_rxready)
 {
-	//poly88_state *drvstate = device->machine().driver_data<poly88_state>();
-	//drvstate->m_int_vector = 0xe7;
-	//device_set_input_line(device, 0, HOLD_LINE);
+	//drvm_int_vector = 0xe7;
+	//execute().set_input_line(0, HOLD_LINE);
 }
 
-const msm8251_interface poly88_usart_interface=
+const i8251_interface poly88_usart_interface=
 {
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_LINE(poly88_usart_rxready),
+	DEVCB_DRIVER_LINE_MEMBER(poly88_state,poly88_usart_rxready),
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL
 };
 
-READ8_HANDLER(poly88_keyboard_r)
+READ8_MEMBER(poly88_state::poly88_keyboard_r)
 {
-	poly88_state *state = space->machine().driver_data<poly88_state>();
-	UINT8 retVal = state->m_last_code;
-	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
-	state->m_last_code = 0x00;
+	UINT8 retVal = m_last_code;
+	m_maincpu->set_input_line(0, CLEAR_LINE);
+	m_last_code = 0x00;
 	return retVal;
 }
 
-WRITE8_HANDLER(poly88_intr_w)
+WRITE8_MEMBER(poly88_state::poly88_intr_w)
 {
-	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+	m_maincpu->set_input_line(0, CLEAR_LINE);
 }
 
-SNAPSHOT_LOAD( poly88 )
+SNAPSHOT_LOAD_MEMBER( poly88_state, poly88 )
 {
-	address_space *space = image.device().machine().device("maincpu")->memory().space(AS_PROGRAM);
-	UINT8* data= auto_alloc_array(image.device().machine(), UINT8, snapshot_size);
+	address_space &space = m_maincpu->space(AS_PROGRAM);
+	UINT8* data= auto_alloc_array(machine(), UINT8, snapshot_size);
 	UINT16 recordNum;
 	UINT16 recordLen;
 	UINT16 address;
@@ -303,7 +310,7 @@ SNAPSHOT_LOAD( poly88 )
 		switch(recordType) {
 			case 0 :
 					/* 00 Absolute */
-					memcpy(space->get_read_ptr(address ), data + pos ,recordLen);
+					memcpy(space.get_read_ptr(address ), data + pos ,recordLen);
 					break;
 			case 1 :
 					/* 01 Comment */
@@ -314,7 +321,7 @@ SNAPSHOT_LOAD( poly88 )
 					break;
 			case 3 :
 					/* 03 Auto Start @ Address */
-					cpu_set_reg(image.device().machine().device("maincpu"), I8085_PC, address);
+					m_maincpu->set_state_int(I8085_PC, address);
 					theend = 1;
 					break;
 			case 4 :
@@ -339,6 +346,6 @@ SNAPSHOT_LOAD( poly88 )
 		}
 		pos+=recordLen;
 	}
-	image.device().machine().device("uart")->reset();
+	machine().device("uart")->reset();
 	return IMAGE_INIT_PASS;
 }

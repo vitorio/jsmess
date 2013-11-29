@@ -47,7 +47,6 @@ Notes:
 
 */
 
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
@@ -66,8 +65,8 @@ INPUT_PORTS_END
 
 void msbc1_state::machine_reset()
 {
-	void *ram = machine().firstcpu->memory().space(AS_PROGRAM)->get_write_ptr(0);
-	UINT8 *rom = machine().region(MC68000R12_TAG)->base();
+	void *ram = machine().firstcpu->space(AS_PROGRAM).get_write_ptr(0);
+	UINT8 *rom = memregion(MC68000R12_TAG)->base();
 
 	memcpy(ram, rom, 8);
 
@@ -80,12 +79,9 @@ static GENERIC_TERMINAL_INTERFACE( terminal_intf )
 };
 
 static MACHINE_CONFIG_START( msbc1, msbc1_state )
-    /* basic machine hardware */
-    MCFG_CPU_ADD(MC68000R12_TAG, M68000, XTAL_12_5MHz)
-    MCFG_CPU_PROGRAM_MAP(msbc1_mem)
-
-    /* video hardware */
-	MCFG_FRAGMENT_ADD( generic_terminal )
+	/* basic machine hardware */
+	MCFG_CPU_ADD(MC68000R12_TAG, M68000, XTAL_12_5MHz)
+	MCFG_CPU_PROGRAM_MAP(msbc1_mem)
 
 	// devices
 	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, terminal_intf)
@@ -93,7 +89,7 @@ MACHINE_CONFIG_END
 
 /* ROM definition */
 ROM_START( msbc1 )
-    ROM_REGION16_BE( 0x8000, MC68000R12_TAG, 0 )
+	ROM_REGION16_BE( 0x8000, MC68000R12_TAG, 0 )
 	ROM_LOAD16_BYTE( "47-2818-36g1.u18", 0x0000, 0x4000, CRC(14f25d47) SHA1(964bc49c1dd9e9680c0d3d89ff3794c5044bea62) )
 	ROM_LOAD16_BYTE( "47-2818-36g2.u19", 0x0001, 0x4000, CRC(4814b9e1) SHA1(d96cf75084c6588cb33513830c6beeeffc2de853) )
 
@@ -115,4 +111,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1985, msbc1,  0,       0, 	msbc1,	msbc1,	 0,			 "Omnibyte",   "MSBC-1",		GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 1985, msbc1,  0,      0,       msbc1,     msbc1, driver_device,   0,    "Omnibyte", "MSBC-1", GAME_NOT_WORKING | GAME_NO_SOUND)

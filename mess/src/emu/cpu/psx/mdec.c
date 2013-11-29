@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:smf
 /*
  * PlayStation Motion Decoder emulator
  *
@@ -10,7 +12,6 @@
 #include "emu.h"
 #include "dma.h"
 #include "mdec.h"
-#include "includes/psx.h"
 
 #define VERBOSE_LEVEL ( 0 )
 
@@ -30,7 +31,7 @@ INLINE void ATTR_PRINTF(3,4) verboselog( running_machine& machine, int n_level, 
 const device_type PSX_MDEC = &device_creator<psxmdec_device>;
 
 psxmdec_device::psxmdec_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, PSX_MDEC, "PSX MDEC", tag, owner, clock)
+	: device_t(mconfig, PSX_MDEC, "PSX MDEC", tag, owner, clock, "psxmdec", __FILE__)
 {
 }
 
@@ -95,7 +96,7 @@ INLINE UINT16 psxreadword( UINT32 *p_n_psxram, UINT32 n_address )
 
 static const UINT32 m_p_n_mdec_zigzag[ DCTSIZE2 ] =
 {
-	 0,  1,  8, 16,  9,  2,  3, 10,
+		0,  1,  8, 16,  9,  2,  3, 10,
 	17, 24, 32, 25, 18, 11,  4,  5,
 	12, 19, 26, 33, 40, 48, 41, 34,
 	27, 20, 13,  6,  7, 14, 21, 28,
@@ -170,11 +171,8 @@ INLINE INT32 mdec_unpack_val( UINT16 n_packed )
 	return ( ( (INT32)n_packed ) << 22 ) >> 22;
 }
 
-UINT32 psxmdec_device::mdec_unpack( UINT32 n_address )
+UINT32 psxmdec_device::mdec_unpack( UINT32 *p_n_psxram, UINT32 n_address )
 {
-	psx_state *p_psx = machine().driver_data<psx_state>();
-	UINT32 *p_n_psxram = p_psx->m_p_n_psxram;
-
 	UINT8 n_z;
 	INT32 n_qscale;
 	UINT16 n_packed;
@@ -422,10 +420,8 @@ void psxmdec_device::mdec_yuv2_to_rgb24( void )
 	n_decoded = ( 24 * 16 ) / 2;
 }
 
-void psxmdec_device::dma_write( UINT32 n_address, INT32 n_size )
+void psxmdec_device::dma_write( UINT32 *p_n_psxram, UINT32 n_address, INT32 n_size )
 {
-	psx_state *p_psx = machine().driver_data<psx_state>();
-	UINT32 *p_n_psxram = p_psx->m_p_n_psxram;
 	int n_index;
 
 	verboselog( machine(), 2, "mdec0_write( %08x, %08x )\n", n_address, n_size );
@@ -481,10 +477,8 @@ void psxmdec_device::dma_write( UINT32 n_address, INT32 n_size )
 	}
 }
 
-void psxmdec_device::dma_read( UINT32 n_address, INT32 n_size )
+void psxmdec_device::dma_read( UINT32 *p_n_psxram, UINT32 n_address, INT32 n_size )
 {
-	psx_state *p_psx = machine().driver_data<psx_state>();
-	UINT32 *p_n_psxram = p_psx->m_p_n_psxram;
 	UINT32 n_this;
 	UINT32 n_nextaddress;
 
@@ -502,7 +496,7 @@ void psxmdec_device::dma_read( UINT32 n_address, INT32 n_size )
 					break;
 				}
 
-				n_nextaddress = mdec_unpack( n_0_address );
+				n_nextaddress = mdec_unpack( p_n_psxram, n_0_address );
 				n_0_size -= n_nextaddress - n_0_address;
 				n_0_address = n_nextaddress;
 
@@ -515,6 +509,11 @@ void psxmdec_device::dma_read( UINT32 n_address, INT32 n_size )
 					mdec_yuv2_to_rgb24();
 				}
 				n_offset = 0;
+				while((psxreadword( p_n_psxram, n_0_address ) == 0xfe00) && n_0_size)
+				{
+					n_0_address += 2;  // eat up 0xfe00
+					n_0_size -= 2;
+				}
 			}
 
 			n_this = n_decoded;
@@ -539,7 +538,8 @@ void psxmdec_device::dma_read( UINT32 n_address, INT32 n_size )
 	{
 		mame_printf_debug( "mdec1_read no conversion :%08x:%08x:\n", n_0_command, n_0_size );
 	}
-	n_1_status &= ~( 1L << 29 );
+	if((int)n_0_size <= 0)
+		n_1_status &= ~( 1L << 29 );
 }
 
 WRITE32_MEMBER( psxmdec_device::write )

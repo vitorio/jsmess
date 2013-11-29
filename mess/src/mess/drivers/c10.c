@@ -9,29 +9,34 @@
         constantly looking at.
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define VIDEO_START_MEMBER(name) void name::video_start()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
 class c10_state : public driver_device
 {
 public:
+	enum
+	{
+		TIMER_RESET
+	};
+
 	c10_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
-	m_maincpu(*this, "maincpu")
-	{ }
+	m_maincpu(*this, "maincpu"),
+	m_p_videoram(*this, "p_videoram"){ }
 
 	required_device<cpu_device> m_maincpu;
 	const UINT8 *m_p_chargen;
-	const UINT8 *m_p_videoram;
+	required_shared_ptr<const UINT8> m_p_videoram;
 	virtual void machine_reset();
 	virtual void video_start();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	DECLARE_DRIVER_INIT(c10);
+
+protected:
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 };
 
 
@@ -42,7 +47,7 @@ static ADDRESS_MAP_START(c10_mem, AS_PROGRAM, 8, c10_state)
 	AM_RANGE(0x1000, 0x7fff) AM_RAM
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xf0a1) AM_RAM
-	AM_RANGE(0xf0a2, 0xffff) AM_RAM AM_BASE(m_p_videoram)
+	AM_RANGE(0xf0a2, 0xffff) AM_RAM AM_SHARE("p_videoram")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( c10_io, AS_IO, 8, c10_state)
@@ -53,26 +58,33 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( c10 )
 INPUT_PORTS_END
 
-/* after the first 4 bytes have been read from ROM, switch the ram back in */
-static TIMER_CALLBACK( c10_reset )
+void c10_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
 {
-	memory_set_bank(machine, "boot", 0);
+	switch (id)
+	{
+	case TIMER_RESET:
+		/* after the first 4 bytes have been read from ROM, switch the ram back in */
+		membank("boot")->set_entry(0);
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in c10_state::device_timer");
+	}
 }
 
-MACHINE_RESET_MEMBER(c10_state)
+void c10_state::machine_reset()
 {
-	memory_set_bank(machine(), "boot", 1);
-	machine().scheduler().timer_set(attotime::from_usec(4), FUNC(c10_reset));
+	membank("boot")->set_entry(1);
+	timer_set(attotime::from_usec(4), TIMER_RESET);
 }
 
-VIDEO_START_MEMBER( c10_state )
+void c10_state::video_start()
 {
-	m_p_chargen = machine().region("chargen")->base();
+	m_p_chargen = memregion("chargen")->base();
 }
 
 /* This system appears to have inline attribute bytes of unknown meaning.
     Currently they are ignored. The word at FAB5 looks like it might be cursor location. */
-SCREEN_UPDATE_MEMBER( c10_state )
+UINT32 c10_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	//static UINT8 framecnt=0;
 	UINT8 y,ra,chr,gfx;
@@ -84,7 +96,7 @@ SCREEN_UPDATE_MEMBER( c10_state )
 	{
 		for (ra = 0; ra < 10; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(&bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			xx = ma;
 			for (x = ma; x < ma + 80; x++)
@@ -101,20 +113,17 @@ SCREEN_UPDATE_MEMBER( c10_state )
 					if BIT(chr, 7)  // ignore attribute bytes
 						x--;
 					else
-					{
 						gfx = m_p_chargen[(chr<<4) | ra ];
-
-						/* Display a scanline of a character */
-						*p++ = BIT(gfx, 7);
-						*p++ = BIT(gfx, 6);
-						*p++ = BIT(gfx, 5);
-						*p++ = BIT(gfx, 4);
-						*p++ = BIT(gfx, 3);
-						*p++ = BIT(gfx, 2);
-						*p++ = BIT(gfx, 1);
-						*p++ = BIT(gfx, 0);
-					}
 				}
+				/* Display a scanline of a character */
+				*p++ = BIT(gfx, 7);
+				*p++ = BIT(gfx, 6);
+				*p++ = BIT(gfx, 5);
+				*p++ = BIT(gfx, 4);
+				*p++ = BIT(gfx, 3);
+				*p++ = BIT(gfx, 2);
+				*p++ = BIT(gfx, 1);
+				*p++ = BIT(gfx, 0);
 			}
 		}
 		ma+=96;
@@ -125,15 +134,15 @@ SCREEN_UPDATE_MEMBER( c10_state )
 /* F4 Character Displayer */
 static const gfx_layout c10_charlayout =
 {
-	8, 9,					/* 8 x 9 characters */
-	512,					/* 512 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 9,                   /* 8 x 9 characters */
+	512,                    /* 512 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8, 8*8 },
-	8*16					/* every char takes 16 bytes */
+	8*16                    /* every char takes 16 bytes */
 };
 
 static GFXDECODE_START( c10 )
@@ -151,18 +160,18 @@ static MACHINE_CONFIG_START( c10, c10_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(c10_state, screen_update)
 	MCFG_SCREEN_SIZE(640, 250)
 	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 249)
 	MCFG_GFXDECODE(c10)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 MACHINE_CONFIG_END
 
-DRIVER_INIT( c10 )
+DRIVER_INIT_MEMBER(c10_state,c10)
 {
-	UINT8 *RAM = machine.region("maincpu")->base();
-	memory_configure_bank(machine, "boot", 0, 2, &RAM[0x0000], 0x8000);
+	UINT8 *RAM = memregion("maincpu")->base();
+	membank("boot")->configure_entries(0, 2, &RAM[0x0000], 0x8000);
 }
 
 /* ROM definition */
@@ -176,5 +185,5 @@ ROM_END
 
 /* Driver */
 
-/*   YEAR  NAME    PARENT  COMPAT   MACHINE  INPUT  INIT        COMPANY   FULLNAME       FLAGS */
-COMP( 1982, c10,  0,       0,	c10,	c10,	 c10,	  "Cromemco",   "C-10",	GAME_NOT_WORKING | GAME_NO_SOUND)
+/*   YEAR   NAME    PARENT  COMPAT   MACHINE  INPUT  INIT        COMPANY   FULLNAME       FLAGS */
+COMP( 1982, c10,    0,      0,       c10,     c10, c10_state,    c10,     "Cromemco", "C-10", GAME_NOT_WORKING | GAME_NO_SOUND)

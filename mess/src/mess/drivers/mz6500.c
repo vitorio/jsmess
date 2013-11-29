@@ -5,14 +5,11 @@
 
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i86/i86.h"
 #include "machine/upd765.h"
 #include "video/upd7220.h"
-
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
 class mz6500_state : public driver_device
 {
@@ -21,72 +18,55 @@ public:
 		: driver_device(mconfig, type, tag),
 	m_hgdc(*this, "upd7220"),
 	m_fdc(*this, "upd765")
-	{ }
+	,
+		m_video_ram(*this, "video_ram"),
+		m_maincpu(*this, "maincpu") { }
 
 	required_device<upd7220_device> m_hgdc;
-	required_device<device_t> m_fdc;
-	DECLARE_READ8_MEMBER(fdc_r);
-	DECLARE_WRITE8_MEMBER(fdc_w);
+	required_device<upd765a_device> m_fdc;
 	DECLARE_READ8_MEMBER(mz6500_vram_r);
 	DECLARE_WRITE8_MEMBER(mz6500_vram_w);
-	DECLARE_WRITE_LINE_MEMBER(fdc_irq);
-	DECLARE_WRITE_LINE_MEMBER(fdc_drq);
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	void fdc_irq(bool state);
+	void fdc_drq(bool state);
+	required_shared_ptr<UINT8> m_video_ram;
+	virtual void machine_reset();
+	virtual void video_start();
+	required_device<cpu_device> m_maincpu;
 };
-
-SCREEN_UPDATE_MEMBER( mz6500_state )
-{
-	bitmap_fill(&bitmap, &cliprect, 0);
-
-	/* graphics */
-	m_hgdc->update_screen(&bitmap, &cliprect);
-
-	return 0;
-}
 
 static UPD7220_DISPLAY_PIXELS( hgdc_display_pixels )
 {
-	//mz6500_state *state = device->machine().driver_data<mz6500_state>();
+	mz6500_state *state = device->machine().driver_data<mz6500_state>();
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
 	int gfx[3];
 	UINT8 i,pen;
 
-	gfx[0] = vram[address + 0x00000];
-	gfx[1] = vram[address + 0x10000];
-	gfx[2] = vram[address + 0x20000];
+	gfx[0] = state->m_video_ram[address + 0x00000];
+	gfx[1] = state->m_video_ram[address + 0x10000];
+	gfx[2] = state->m_video_ram[address + 0x20000];
 
 	for(i=0; i<8; i++)
 	{
 		pen = (BIT(gfx[0], i)) | (BIT(gfx[1], i) << 1) | (BIT(gfx[2], i) << 2);
 
-		*BITMAP_ADDR16(bitmap, y, x + i) = pen;
+		bitmap.pix32(y, x + i) = palette[pen];
 	}
 }
 
 
-static VIDEO_START( mz6500 )
+void mz6500_state::video_start()
 {
 }
 
-
-READ8_MEMBER( mz6500_state::fdc_r )
-{
-	return (offset) ? upd765_data_r(m_fdc, 0) : upd765_status_r(m_fdc, 0);
-}
-
-WRITE8_MEMBER( mz6500_state::fdc_w )
-{
-	if(offset)
-		upd765_data_w(m_fdc, 0, data);
-}
 
 READ8_MEMBER( mz6500_state::mz6500_vram_r )
 {
-	return m_hgdc->vram_r(space, offset);
+	return m_video_ram[offset];
 }
 
 WRITE8_MEMBER( mz6500_state::mz6500_vram_w )
 {
-	m_hgdc->vram_w(space, offset, data);
+	m_video_ram[offset] = data;
 }
 
 static ADDRESS_MAP_START(mz6500_map, AS_PROGRAM, 16, mz6500_state)
@@ -101,7 +81,7 @@ static ADDRESS_MAP_START(mz6500_io, AS_IO, 16, mz6500_state)
 	ADDRESS_MAP_UNMAP_HIGH
 //  AM_RANGE(0x0000, 0x000f) i8237 dma
 //  AM_RANGE(0x0010, 0x001f) i8255
-	AM_RANGE(0x0020, 0x0021) AM_MIRROR(0xe) AM_READWRITE8(fdc_r,fdc_w,0xffff)
+	AM_RANGE(0x0020, 0x0021) AM_MIRROR(0xe) AM_DEVICE8("upd765", upd765a_device, map, 0xffff)
 //  AM_RANGE(0x0030, 0x003f) i8259 master
 //  AM_RANGE(0x0040, 0x004f) i8259 slave
 //  AM_RANGE(0x0050, 0x0050) segment byte for DMA
@@ -127,46 +107,26 @@ static INPUT_PORTS_START( mz6500 )
 INPUT_PORTS_END
 
 
-static MACHINE_RESET(mz6500)
+void mz6500_state::machine_reset()
 {
 }
 
-WRITE_LINE_MEMBER( mz6500_state::fdc_irq )
+void mz6500_state::fdc_irq(bool state)
 {
 	//printf("%02x IRQ\n",state);
 }
 
-WRITE_LINE_MEMBER( mz6500_state::fdc_drq )
+void mz6500_state::fdc_drq(bool state)
 {
 	//printf("%02x DRQ\n",state);
 }
 
-static const struct upd765_interface upd765_intf =
-{
-	DEVCB_DRIVER_LINE_MEMBER(mz6500_state, fdc_irq),
-	DEVCB_DRIVER_LINE_MEMBER(mz6500_state, fdc_drq),
-	NULL,
-	UPD765_RDY_PIN_CONNECTED,
-	{FLOPPY_0, FLOPPY_1, NULL, NULL}
-};
-
-static const floppy_interface mz6500_floppy_interface =
-{
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_NULL,
-	FLOPPY_STANDARD_5_25_DSHD,
-	FLOPPY_OPTIONS_NAME(default),
-	NULL,
-	NULL
-};
-
+static SLOT_INTERFACE_START( mz6500_floppies )
+	SLOT_INTERFACE( "525hd", FLOPPY_525_HD )
+SLOT_INTERFACE_END
 
 static UPD7220_INTERFACE( hgdc_intf )
 {
-	"screen",
 	hgdc_display_pixels,
 	NULL,
 	DEVCB_NULL,
@@ -175,35 +135,31 @@ static UPD7220_INTERFACE( hgdc_intf )
 };
 
 static ADDRESS_MAP_START( upd7220_map, AS_0, 8, mz6500_state )
-	AM_RANGE(0x00000, 0x3ffff) AM_DEVREADWRITE("upd7220", upd7220_device, vram_r, vram_w)
+	AM_RANGE(0x00000, 0x3ffff) AM_RAM AM_SHARE("video_ram")
 ADDRESS_MAP_END
 
 
 static MACHINE_CONFIG_START( mz6500, mz6500_state )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", I8086, 4000000) //unk clock
+	MCFG_CPU_ADD("maincpu", I8086, 8000000) //unk clock
 	MCFG_CPU_PROGRAM_MAP(mz6500_map)
 	MCFG_CPU_IO_MAP(mz6500_io)
 
-	MCFG_MACHINE_RESET(mz6500)
-
-	MCFG_UPD765A_ADD("upd765", upd765_intf)
-	MCFG_FLOPPY_2_DRIVES_ADD(mz6500_floppy_interface)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DEVICE("upd7220", upd7220_device, screen_update)
 	MCFG_SCREEN_SIZE(640, 480)
 	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
-
-	MCFG_UPD7220_ADD("upd7220", 4000000, hgdc_intf, upd7220_map)
-
 	MCFG_PALETTE_LENGTH(8)
-//  MCFG_PALETTE_INIT(black_and_white)
 
-	MCFG_VIDEO_START(mz6500)
+	/* Devices */
+	MCFG_UPD7220_ADD("upd7220", 8000000/6, hgdc_intf, upd7220_map) // unk clock
+	MCFG_UPD765A_ADD("upd765", true, true)
+	MCFG_FLOPPY_DRIVE_ADD("upd765:0", mz6500_floppies, "525hd", floppy_image_device::default_floppy_formats)
+	MCFG_FLOPPY_DRIVE_ADD("upd765:1", mz6500_floppies, "525hd", floppy_image_device::default_floppy_formats)
 MACHINE_CONFIG_END
 
 /* ROM definition */
@@ -221,4 +177,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY           FULLNAME       FLAGS */
-COMP( 198?, mz6500,  0,      0,       mz6500,     mz6500,    0,     "Sharp",   "MZ-6500", GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 198?, mz6500,  0,      0,       mz6500,     mz6500, driver_device,    0,     "Sharp",   "MZ-6500", GAME_NOT_WORKING | GAME_NO_SOUND)

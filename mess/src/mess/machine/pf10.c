@@ -1,162 +1,151 @@
-/***************************************************************************
+/**********************************************************************
 
-    Epson PF-10
+    EPSON PF-10
 
-    Serial floppy drive
+    license: MAME, GPL-2.0+
+    copyright-holders: Dirk Best
 
-    Skeleton driver, not working
+    Battery operated portable 3.5" floppy drive
 
-***************************************************************************/
+    Status: Skeleton driver, not doing much.
 
-#include "emu.h"
+**********************************************************************/
+
 #include "pf10.h"
-#include "cpu/m6800/m6800.h"
-#include "machine/upd765.h"
 
 
-/***************************************************************************
-    TYPE DEFINITIONS
-***************************************************************************/
+//**************************************************************************
+//  DEVICE DEFINITIONS
+//**************************************************************************
 
-typedef struct _pf10_state pf10_state;
-struct _pf10_state
-{
-	UINT8 dummy;
-};
+const device_type EPSON_PF10 = &device_creator<epson_pf10_device>;
 
 
-/*****************************************************************************
-    INLINE FUNCTIONS
-*****************************************************************************/
+//-------------------------------------------------
+//  address maps
+//-------------------------------------------------
 
-INLINE pf10_state *get_safe_token(device_t *device)
-{
-	assert(device != NULL);
-	assert(device->type() == PF10);
-
-	return (pf10_state *)downcast<legacy_device_base *>(device)->token();
-}
-
-
-/*****************************************************************************
-    ADDRESS MAPS
-*****************************************************************************/
-
-static ADDRESS_MAP_START( pf10_mem, AS_PROGRAM, 8 )
-	AM_RANGE(0x0040, 0x013f) AM_RAM /* internal ram */
+static ADDRESS_MAP_START( cpu_mem, AS_PROGRAM, 8, epson_pf10_device )
+	AM_RANGE(0x0000, 0x001f) AM_DEVREADWRITE("maincpu", hd6303y_cpu_device, m6801_io_r, m6801_io_w)
+	AM_RANGE(0x0040, 0x00ff) AM_RAM /* 192 bytes internal ram */
 	AM_RANGE(0x0800, 0x0fff) AM_RAM /* external 2k ram */
-	AM_RANGE(0xe000, 0xffff) AM_ROM AM_REGION("pf10", 0)
+	AM_RANGE(0xe000, 0xffff) AM_ROM AM_REGION("maincpu", 0)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pf10_io, AS_IO, 8 )
+static ADDRESS_MAP_START( cpu_io, AS_IO, 8, epson_pf10_device )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 ADDRESS_MAP_END
 
 
-/*****************************************************************************
-    MACHINE CONFIG
-*****************************************************************************/
-
-static const upd765_interface pf10_upd765a_intf =
-{
-	DEVCB_NULL, /* interrupt line */
-	DEVCB_NULL,
-	NULL,
-	UPD765_RDY_PIN_NOT_CONNECTED, /* ??? */
-	{NULL, NULL, NULL, NULL}
-};
-
-static MACHINE_CONFIG_FRAGMENT( pf10 )
-	MCFG_CPU_ADD("pf10", M6803, XTAL_2_4576MHz / 4 /* ??? */) /* HD63A03 */
-	MCFG_CPU_PROGRAM_MAP(pf10_mem)
-	MCFG_CPU_IO_MAP(pf10_io)
-
-	MCFG_UPD765A_ADD("upd765a", pf10_upd765a_intf)
-MACHINE_CONFIG_END
-
-
-/***************************************************************************
-    ROM DEFINITIONS
-***************************************************************************/
+//-------------------------------------------------
+//  rom_region - device-specific ROM region
+//-------------------------------------------------
 
 ROM_START( pf10 )
-	ROM_REGION(0x2000, "pf10", ROMREGION_LOADBYNAME)
+	ROM_REGION(0x2000, "maincpu", 0)
 	ROM_LOAD("k3pf1.bin", 0x0000, 0x2000, CRC(eef4593a) SHA1(bb176e4baf938fe58c2d32f7c46d7bb7b0627755))
 ROM_END
 
-
-/*****************************************************************************
-    DEVICE INTERFACE
-*****************************************************************************/
-
-static DEVICE_START( pf10 )
+const rom_entry *epson_pf10_device::device_rom_region() const
 {
-	pf10_state *pf10 = get_safe_token(device);
-
-	pf10->dummy = 0;
-}
-
-static DEVICE_RESET( pf10 )
-{
-}
-
-DEVICE_GET_INFO( pf10 )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:			info->i = sizeof(pf10_state);					break;
-		case DEVINFO_INT_INLINE_CONFIG_BYTES:	info->i = 0;									break;
-
-		/* --- the following bits of info are returned as pointers --- */
-		case DEVINFO_PTR_MACHINE_CONFIG:		info->machine_config = MACHINE_CONFIG_NAME(pf10);	break;
-		case DEVINFO_PTR_ROM_REGION:			info->romregion = ROM_NAME(pf10);				break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:					info->start = DEVICE_START_NAME(pf10);			break;
-		case DEVINFO_FCT_STOP:					/* Nothing */									break;
-		case DEVINFO_FCT_RESET:					info->reset = DEVICE_RESET_NAME(pf10);			break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:					strcpy(info->s, "PF-10");						break;
-		case DEVINFO_STR_FAMILY:				strcpy(info->s, "Floppy drive");				break;
-		case DEVINFO_STR_VERSION:				strcpy(info->s, "1.0");							break;
-		case DEVINFO_STR_SOURCE_FILE:			strcpy(info->s, __FILE__);						break;
-		case DEVINFO_STR_CREDITS:				strcpy(info->s, "Copyright MESS Team");			break;
-	}
+	return ROM_NAME( pf10 );
 }
 
 
-/***************************************************************************
-    IMPLEMENTATION
-***************************************************************************/
+//-------------------------------------------------
+//  machine_config_additions - device-specific
+//  machine configurations
+//-------------------------------------------------
 
-/* serial interface in (to the host computer) */
-READ_LINE_DEVICE_HANDLER( pf10_txd1_r )
+static SLOT_INTERFACE_START( pf10_floppies )
+	SLOT_INTERFACE( "35dd", FLOPPY_35_DD )
+SLOT_INTERFACE_END
+
+static MACHINE_CONFIG_FRAGMENT( pf10 )
+	MCFG_CPU_ADD("maincpu", HD6303Y, XTAL_2_4576MHz / 4 /* ??? */) // HD63A03XF
+	MCFG_CPU_PROGRAM_MAP(cpu_mem)
+	MCFG_CPU_IO_MAP(cpu_io)
+
+	MCFG_UPD765A_ADD("upd765a", false, true)
+	MCFG_FLOPPY_DRIVE_ADD("upd765a:0", pf10_floppies, "35dd", floppy_image_device::default_floppy_formats) // SMD-165
+
+	MCFG_EPSON_SIO_ADD("sio", NULL)
+MACHINE_CONFIG_END
+
+machine_config_constructor epson_pf10_device::device_mconfig_additions() const
 {
-	logerror("%s: pf10_txd1_r\n", device->machine().describe_context());
-
-	return 0;
+	return MACHINE_CONFIG_NAME( pf10 );
 }
 
-WRITE_LINE_DEVICE_HANDLER( pf10_rxd1_w )
+
+//**************************************************************************
+//  LIVE DEVICE
+//**************************************************************************
+
+//-------------------------------------------------
+//  epson_pf10_device - constructor
+//-------------------------------------------------
+
+epson_pf10_device::epson_pf10_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock) :
+	device_t(mconfig, EPSON_PF10, "EPSON PF-10 floppy drive", tag, owner, clock, "epson_pf10", __FILE__),
+	device_epson_sio_interface(mconfig, *this),
+	m_cpu(*this, "maincpu"),
+	m_fdc(*this, "upd765a"),
+	m_sio(*this, "sio")
 {
-	logerror("%s: pf10_rxd1_w %u\n", device->machine().describe_context(), state);
 }
 
 
-/* serial interface out (to another floppy drive) */
-READ_LINE_DEVICE_HANDLER( pf10_txd2_r )
-{
-	logerror("%s: pf10_txd2_r\n", device->machine().describe_context());
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
 
-	return 0;
+void epson_pf10_device::device_start()
+{
+	m_floppy = subdevice<floppy_connector>("upd765a:0")->get_device();
 }
 
-WRITE_LINE_DEVICE_HANDLER( pf10_rxd2_w )
+
+//-------------------------------------------------
+//  tx_w
+//-------------------------------------------------
+
+void epson_pf10_device::tx_w(int level)
 {
-	logerror("%s: pf10_rxd2_w %u\n", device->machine().describe_context(), state);
+	logerror("%s: tx_w(%d)\n", tag(), level);
 }
 
-DEFINE_LEGACY_DEVICE(PF10, pf10);
+
+//-------------------------------------------------
+//  pout_w
+//-------------------------------------------------
+
+void epson_pf10_device::pout_w(int level)
+{
+	logerror("%s: pout_w(%d)\n", tag(), level);
+}
+
+
+//-------------------------------------------------
+//  rx_r
+//-------------------------------------------------
+
+int epson_pf10_device::rx_r()
+{
+	logerror("%s: rx_r\n", tag());
+
+	return 1;
+}
+
+
+//-------------------------------------------------
+//  pin_r
+//-------------------------------------------------
+
+int epson_pf10_device::pin_r()
+{
+	logerror("%s: pin_r\n", tag());
+
+	return 1;
+}

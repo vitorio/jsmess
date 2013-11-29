@@ -1,17 +1,17 @@
 #include "emu.h"
-#include "video/konicdev.h"
 #include "includes/rockrage.h"
 
-PALETTE_INIT( rockrage )
+void rockrage_state::palette_init()
 {
+	const UINT8 *color_prom = memregion("proms")->base();
 	int i;
 
 	/* allocate the colortable */
-	machine.colortable = colortable_alloc(machine, 0x40);
+	machine().colortable = colortable_alloc(machine(), 0x40);
 
 	/* sprites */
 	for (i = 0x20; i < 0x40; i++)
-		colortable_entry_set_value(machine.colortable, i, i);
+		colortable_entry_set_value(machine().colortable, i, i);
 
 	/* characters */
 	for (i = 0x40; i < 0x140; i++)
@@ -19,10 +19,10 @@ PALETTE_INIT( rockrage )
 		UINT8 ctabentry;
 
 		ctabentry = (color_prom[(i - 0x40) + 0x000] & 0x0f) | 0x00;
-		colortable_entry_set_value(machine.colortable, i + 0x000, ctabentry);
+		colortable_entry_set_value(machine().colortable, i + 0x000, ctabentry);
 
 		ctabentry = (color_prom[(i - 0x40) + 0x100] & 0x0f) | 0x10;
-		colortable_entry_set_value(machine.colortable, i + 0x100, ctabentry);
+		colortable_entry_set_value(machine().colortable, i + 0x100, ctabentry);
 	}
 }
 
@@ -76,18 +76,17 @@ void rockrage_sprite_callback( running_machine &machine, int *code, int *color )
 }
 
 
-WRITE8_HANDLER( rockrage_vreg_w )
+WRITE8_MEMBER(rockrage_state::rockrage_vreg_w)
 {
 	/* bits 4-7: unused */
 	/* bit 3: bit 4 of bank # (layer 0) */
 	/* bit 2: bit 1 of bank # (layer 0) */
 	/* bits 0-1: sprite bank select */
-	rockrage_state *state = space->machine().driver_data<rockrage_state>();
 
-	if ((data & 0x0c) != (state->m_vreg & 0x0c))
-		tilemap_mark_all_tiles_dirty_all(space->machine());
+	if ((data & 0x0c) != (m_vreg & 0x0c))
+		machine().tilemap().mark_all_dirty();
 
-	state->m_vreg = data;
+	m_vreg = data;
 }
 
 /***************************************************************************
@@ -96,18 +95,16 @@ WRITE8_HANDLER( rockrage_vreg_w )
 
 ***************************************************************************/
 
-SCREEN_UPDATE( rockrage )
+UINT32 rockrage_state::screen_update_rockrage(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	rockrage_state *state = screen->machine().driver_data<rockrage_state>();
+	set_pens(machine());
 
-	set_pens(screen->machine());
+	m_k007342->tilemap_update();
 
-	k007342_tilemap_update(state->m_k007342);
-
-	k007342_tilemap_draw(state->m_k007342, bitmap, cliprect, 0, TILEMAP_DRAW_OPAQUE, 0);
-	k007420_sprites_draw(state->m_k007420, bitmap, cliprect, screen->machine().gfx[1]);
-	k007342_tilemap_draw(state->m_k007342, bitmap, cliprect, 0, 1 | TILEMAP_DRAW_OPAQUE, 0);
-	k007342_tilemap_draw(state->m_k007342, bitmap, cliprect, 1, 0, 0);
-	k007342_tilemap_draw(state->m_k007342, bitmap, cliprect, 1, 1, 0);
+	m_k007342->tilemap_draw(screen, bitmap, cliprect, 0, TILEMAP_DRAW_OPAQUE, 0);
+	m_k007420->sprites_draw(bitmap, cliprect, machine().gfx[1]);
+	m_k007342->tilemap_draw(screen, bitmap, cliprect, 0, 1 | TILEMAP_DRAW_OPAQUE, 0);
+	m_k007342->tilemap_draw(screen, bitmap, cliprect, 1, 0, 0);
+	m_k007342->tilemap_draw(screen, bitmap, cliprect, 1, 1, 0);
 	return 0;
 }

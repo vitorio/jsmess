@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Angelo Salese
 /***************************************************************************
 
     Hitachi B(asic Master?) 16
@@ -10,25 +12,25 @@
     0xfcc67 after the ROM checksum to zero (bp 0xfc153 -> SI = 0) -> system boots
 
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i86/i86.h"
 #include "video/mc6845.h"
-#include "machine/8237dma.h"
+#include "machine/am9517a.h"
 
-#define VIDEO_START_MEMBER(name) void name::video_start()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
 
 class b16_state : public driver_device
 {
 public:
 	b16_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_vram(*this, "vram"),
+		m_dma8237(*this, "8237dma"),
+		m_maincpu(*this, "maincpu") { }
 
 	UINT8 *m_char_rom;
-	UINT16 *m_vram;
+	required_shared_ptr<UINT16> m_vram;
 	UINT8 m_crtc_vreg[0x100],m_crtc_index;
 
 	DECLARE_READ16_MEMBER(vblank_r);
@@ -37,47 +39,50 @@ public:
 	DECLARE_WRITE8_MEMBER(b16_6845_data_w);
 	DECLARE_READ8_MEMBER(unk_dev_r);
 	DECLARE_WRITE8_MEMBER(unk_dev_w);
+	DECLARE_READ8_MEMBER(memory_read_byte);
+	DECLARE_WRITE8_MEMBER(memory_write_byte);
 
 	virtual void video_start();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 
 	mc6845_device *m_mc6845;
-	i8237_device  *m_dma8237;
+	required_device<am9517a_device> m_dma8237;
+	virtual void machine_start();
+	virtual void machine_reset();
+	required_device<cpu_device> m_maincpu;
 };
 
-#define mc6845_h_char_total 	(m_crtc_vreg[0])
-#define mc6845_h_display		(m_crtc_vreg[1])
-#define mc6845_h_sync_pos		(m_crtc_vreg[2])
-#define mc6845_sync_width		(m_crtc_vreg[3])
-#define mc6845_v_char_total		(m_crtc_vreg[4])
-#define mc6845_v_total_adj		(m_crtc_vreg[5])
-#define mc6845_v_display		(m_crtc_vreg[6])
-#define mc6845_v_sync_pos		(m_crtc_vreg[7])
-#define mc6845_mode_ctrl		(m_crtc_vreg[8])
-#define mc6845_tile_height		(m_crtc_vreg[9]+1)
-#define mc6845_cursor_y_start	(m_crtc_vreg[0x0a])
-#define mc6845_cursor_y_end 	(m_crtc_vreg[0x0b])
-#define mc6845_start_addr		(((m_crtc_vreg[0x0c]<<8) & 0x3f00) | (m_crtc_vreg[0x0d] & 0xff))
-#define mc6845_cursor_addr  	(((m_crtc_vreg[0x0e]<<8) & 0x3f00) | (m_crtc_vreg[0x0f] & 0xff))
-#define mc6845_light_pen_addr	(((m_crtc_vreg[0x10]<<8) & 0x3f00) | (m_crtc_vreg[0x11] & 0xff))
-#define mc6845_update_addr  	(((m_crtc_vreg[0x12]<<8) & 0x3f00) | (m_crtc_vreg[0x13] & 0xff))
+#define mc6845_h_char_total     (m_crtc_vreg[0])
+#define mc6845_h_display        (m_crtc_vreg[1])
+#define mc6845_h_sync_pos       (m_crtc_vreg[2])
+#define mc6845_sync_width       (m_crtc_vreg[3])
+#define mc6845_v_char_total     (m_crtc_vreg[4])
+#define mc6845_v_total_adj      (m_crtc_vreg[5])
+#define mc6845_v_display        (m_crtc_vreg[6])
+#define mc6845_v_sync_pos       (m_crtc_vreg[7])
+#define mc6845_mode_ctrl        (m_crtc_vreg[8])
+#define mc6845_tile_height      (m_crtc_vreg[9]+1)
+#define mc6845_cursor_y_start   (m_crtc_vreg[0x0a])
+#define mc6845_cursor_y_end     (m_crtc_vreg[0x0b])
+#define mc6845_start_addr       (((m_crtc_vreg[0x0c]<<8) & 0x3f00) | (m_crtc_vreg[0x0d] & 0xff))
+#define mc6845_cursor_addr      (((m_crtc_vreg[0x0e]<<8) & 0x3f00) | (m_crtc_vreg[0x0f] & 0xff))
+#define mc6845_light_pen_addr   (((m_crtc_vreg[0x10]<<8) & 0x3f00) | (m_crtc_vreg[0x11] & 0xff))
+#define mc6845_update_addr      (((m_crtc_vreg[0x12]<<8) & 0x3f00) | (m_crtc_vreg[0x13] & 0xff))
 
 
-VIDEO_START_MEMBER( b16_state )
+void b16_state::video_start()
 {
 	// find memory regions
-	m_char_rom = machine().region("pcg")->base();
-
-	VIDEO_START_NAME(generic_bitmapped)(machine());
+	m_char_rom = memregion("pcg")->base();
 }
 
 
-SCREEN_UPDATE_MEMBER( b16_state )
+UINT32 b16_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	b16_state *state = machine().driver_data<b16_state>();
 	int x,y;
 	int xi,yi;
-	UINT8 *gfx_rom = machine().region("pcg")->base();
+	UINT8 *gfx_rom = memregion("pcg")->base();
 
 	for(y=0;y<mc6845_v_display;y++)
 	{
@@ -94,7 +99,7 @@ SCREEN_UPDATE_MEMBER( b16_state )
 					pen = (gfx_rom[tile*16+yi] >> (7-xi) & 1) ? color : 0;
 
 					if(y*mc6845_tile_height < 400 && x*8+xi < 640) /* TODO: safety check */
-						*BITMAP_ADDR16(&bitmap, y*mc6845_tile_height+yi, x*8+xi) = machine().pens[pen];
+						bitmap.pix16(y*mc6845_tile_height+yi, x*8+xi) = machine().pens[pen];
 				}
 			}
 		}
@@ -107,21 +112,21 @@ WRITE8_MEMBER( b16_state::b16_pcg_w )
 {
 	m_char_rom[offset] = data;
 
-	gfx_element_mark_dirty(machine().gfx[0], offset >> 4);
+	machine().gfx[0]->mark_dirty(offset >> 4);
 }
 
 static ADDRESS_MAP_START( b16_map, AS_PROGRAM, 16, b16_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE( 0x00000, 0x9ffff ) AM_RAM // probably not all of it.
 	AM_RANGE( 0xa0000, 0xaffff ) AM_RAM // bitmap?
-	AM_RANGE( 0xb0000, 0xb7fff ) AM_RAM AM_BASE(m_vram) // tvram
+	AM_RANGE( 0xb0000, 0xb7fff ) AM_RAM AM_SHARE("vram") // tvram
 	AM_RANGE( 0xb8000, 0xbbfff ) AM_WRITE8(b16_pcg_w,0x00ff) // pcg
 	AM_RANGE( 0xfc000, 0xfffff ) AM_ROM AM_REGION("ipl",0)
 ADDRESS_MAP_END
 
 READ16_MEMBER( b16_state::vblank_r )
 {
-	return input_port_read(machine(), "SYSTEM");
+	return ioport("SYSTEM")->read();
 }
 
 WRITE8_MEMBER( b16_state::b16_6845_address_w )
@@ -216,7 +221,7 @@ ADDRESS_MAP_END
 /* Input ports */
 static INPUT_PORTS_START( b16 )
 	PORT_START("SYSTEM")
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_VBLANK )
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_CUSTOM ) PORT_VBLANK("screen")
 INPUT_PORTS_END
 
 
@@ -237,43 +242,49 @@ static GFXDECODE_START( b16 )
 	GFXDECODE_ENTRY( "pcg", 0x0000, b16_charlayout, 0, 1 )
 GFXDECODE_END
 
-static MACHINE_START(b16)
+void b16_state::machine_start()
 {
-	b16_state *state = machine.driver_data<b16_state>();
-
-	state->m_dma8237 = machine.device<i8237_device>( "dma8237" );
-	state->m_mc6845 = machine.device<mc6845_device>("crtc");
+	m_mc6845 = machine().device<mc6845_device>("crtc");
 }
 
-static MACHINE_RESET(b16)
+void b16_state::machine_reset()
 {
 }
 
 
 
-static const mc6845_interface mc6845_intf =
+static MC6845_INTERFACE( mc6845_intf )
 {
-	"screen",	/* screen we are acting on */
-	8,			/* number of pixels per video memory address */
-	NULL,		/* before pixel update callback */
-	NULL,		/* row update callback */
-	NULL,		/* after pixel update callback */
-	DEVCB_NULL,	/* callback for display state changes */
-	DEVCB_NULL,	/* callback for cursor state changes */
-	DEVCB_NULL,	/* HSYNC callback */
-	DEVCB_NULL,	/* VSYNC callback */
-	NULL		/* update address callback */
+	false,      /* show border area */
+	8,          /* number of pixels per video memory address */
+	NULL,       /* before pixel update callback */
+	NULL,       /* row update callback */
+	NULL,       /* after pixel update callback */
+	DEVCB_NULL, /* callback for display state changes */
+	DEVCB_NULL, /* callback for cursor state changes */
+	DEVCB_NULL, /* HSYNC callback */
+	DEVCB_NULL, /* VSYNC callback */
+	NULL        /* update address callback */
 };
 
-static UINT8 memory_read_byte(address_space *space, offs_t address) { return space->read_byte(address); }
-static void memory_write_byte(address_space *space, offs_t address, UINT8 data) { space->write_byte(address, data); }
+READ8_MEMBER(b16_state::memory_read_byte)
+{
+	address_space& prog_space = m_maincpu->space(AS_PROGRAM);
+	return prog_space.read_byte(offset);
+}
+
+WRITE8_MEMBER(b16_state::memory_write_byte)
+{
+	address_space& prog_space = m_maincpu->space(AS_PROGRAM);
+	return prog_space.write_byte(offset, data);
+}
 
 static I8237_INTERFACE( b16_dma8237_interface )
 {
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, memory_read_byte),
-	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, memory_write_byte),
+	DEVCB_DRIVER_MEMBER(b16_state, memory_read_byte),
+	DEVCB_DRIVER_MEMBER(b16_state, memory_write_byte),
 	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL },
 	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL },
 	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL }
@@ -286,23 +297,21 @@ static MACHINE_CONFIG_START( b16, b16_state )
 	MCFG_CPU_PROGRAM_MAP(b16_map)
 	MCFG_CPU_IO_MAP(b16_io)
 
-	MCFG_MACHINE_START(b16)
-	MCFG_MACHINE_RESET(b16)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(60)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(b16_state, screen_update)
 	MCFG_SCREEN_SIZE(640, 400)
 	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 400-1)
 
-	MCFG_MC6845_ADD("crtc", H46505, XTAL_14_31818MHz/5, mc6845_intf)	/* unknown clock, hand tuned to get ~60 fps */
+	MCFG_MC6845_ADD("crtc", H46505, "screen", XTAL_14_31818MHz/5, mc6845_intf)    /* unknown clock, hand tuned to get ~60 fps */
 	MCFG_I8237_ADD("8237dma", XTAL_14_31818MHz/2, b16_dma8237_interface)
 
 	MCFG_GFXDECODE(b16)
 	MCFG_PALETTE_LENGTH(8)
-//  MCFG_PALETTE_INIT(black_and_white) // TODO
+//  MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white) // TODO
 
 MACHINE_CONFIG_END
 
@@ -317,4 +326,4 @@ ROM_END
 /* Driver */
 
 /*    YEAR  NAME    PARENT  COMPAT   MACHINE     INPUT    INIT    COMPANY           FULLNAME       FLAGS */
-COMP( 1983, b16,  0,      0,       b16,      b16,   0,      "Hitachi",   "B16", GAME_NOT_WORKING | GAME_NO_SOUND)
+COMP( 1983, b16,  0,      0,       b16,      b16, driver_device,   0,      "Hitachi",   "B16", GAME_NOT_WORKING | GAME_NO_SOUND)

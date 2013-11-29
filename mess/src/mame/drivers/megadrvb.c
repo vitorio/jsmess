@@ -62,10 +62,10 @@ Stephh's notes (based on the game M68000 code and some tests) :
   - 0xff7e16.b to 0xff7e19.b = ??? (range 0x30-0x33 * 3 + 0x00) - MSDigit first - see below
   - 0xff7e21.b = difficulty (range 0x00-0x02) - see below
 
-2) Adresses notes
+2) Addresses notes
 
-  - I can't tell what adresses 0xff7r12.l and 0xff7e16.l are supposed to be designed for :
-    they are written once at the begining of each level (code at 0x1a9030) but I haven't found
+  - I can't tell what addresses 0xff7r12.l and 0xff7e16.l are supposed to be designed for :
+    they are written once at the beginning of each level (code at 0x1a9030) but I haven't found
     when they were read back (I've only played the 2 first levels though as well as the bonus level,
     but I also watched all demo levels till the end after the games full credits).
     I guess they were originally designed for bonus lives (additional and first), but no evidence.
@@ -264,61 +264,132 @@ connector, but of course, I can be wrong.
  *
  *************************************/
 
-static WRITE16_HANDLER( aladmdb_w )
+WRITE16_MEMBER(md_boot_state::aladmdb_w )
 {
-    /*
-    Values returned from the log file :
-      - aladmdb_w : 1b2a6c - data = 6600 (each time a coin is inserted)
-      - aladmdb_w : 1b2a82 - data = 0000 (each time a coin is inserted)
-      - aladmdb_w : 1b2d18 - data = aa00 (only once on reset)
-      - aladmdb_w : 1b2d42 - data = 0000 (only once on reset)
-    */
-	logerror("aladmdb_w : %06x - data = %04x\n",cpu_get_pc(&space->device()),data);
+	/*
+	Values returned from the log file :
+	  - aladmdb_w : 1b2a6c - data = 6600 (each time a coin is inserted)
+	  - aladmdb_w : 1b2a82 - data = 0000 (each time a coin is inserted)
+	  - aladmdb_w : 1b2d18 - data = aa00 (only once on reset)
+	  - aladmdb_w : 1b2d42 - data = 0000 (only once on reset)
+	*/
+	logerror("aladmdb_w : %06x - data = %04x\n",space.device().safe_pc(),data);
 }
 
-static READ16_HANDLER( aladmdb_r )
+READ16_MEMBER(md_boot_state::aladmdb_r )
 {
-	md_boot_state *state = space->machine().driver_data<md_boot_state>();
-	if (cpu_get_pc(&space->device())==0x1b2a56)
+	if (space.device().safe_pc()==0x1b2a56)
 	{
-		state->m_aladmdb_mcu_port = input_port_read(space->machine(), "MCU");
+		m_aladmdb_mcu_port = ioport("MCU")->read();
 
-		if (state->m_aladmdb_mcu_port & 0x100)
-			return ((state->m_aladmdb_mcu_port & 0x0f) | 0x100); // coin inserted, calculate the number of coins
+		if (m_aladmdb_mcu_port & 0x100)
+			return ((m_aladmdb_mcu_port & 0x0f) | 0x100); // coin inserted, calculate the number of coins
 		else
 			return (0x100); //MCU status, needed if you fall into a pitfall
 	}
-	if (cpu_get_pc(&space->device())==0x1b2a72) return 0x0000;
-	if (cpu_get_pc(&space->device())==0x1b2d24) return (input_port_read(space->machine(), "MCU") & 0x00f0) | 0x1200;    // difficulty
-	if (cpu_get_pc(&space->device())==0x1b2d4e) return 0x0000;
+	if (space.device().safe_pc()==0x1b2a72) return 0x0000;
+	if (space.device().safe_pc()==0x1b2d24) return (ioport("MCU")->read() & 0x00f0) | 0x1200;    // difficulty
+	if (space.device().safe_pc()==0x1b2d4e) return 0x0000;
 
-	logerror("aladbl_r : %06x\n",cpu_get_pc(&space->device()));
+	logerror("aladbl_r : %06x\n",space.device().safe_pc());
 
 	return 0x0000;
 }
 
-static READ16_HANDLER( mk3mdb_dsw_r )
+READ16_MEMBER(md_boot_state::mk3mdb_dsw_r )
 {
 	static const char *const dswname[3] = { "DSWA", "DSWB", "DSWC" };
-	return input_port_read(space->machine(), dswname[offset]);
+	return ioport(dswname[offset])->read();
 }
 
-static READ16_HANDLER( ssf2mdb_dsw_r )
+READ16_MEMBER(md_boot_state::ssf2mdb_dsw_r )
 {
 	static const char *const dswname[3] = { "DSWA", "DSWB", "DSWC" };
-	return input_port_read(space->machine(), dswname[offset]);
+	return ioport(dswname[offset])->read();
 }
 
-static READ16_HANDLER( srmdb_dsw_r )
+READ16_MEMBER(md_boot_state::srmdb_dsw_r )
 {
 	static const char *const dswname[3] = { "DSWA", "DSWB", "DSWC" };
-	return input_port_read(space->machine(), dswname[offset]);
+	return ioport(dswname[offset])->read();
 }
 
-static READ16_HANDLER( topshoot_200051_r )
+READ16_MEMBER(md_boot_state::topshoot_200051_r )
 {
 	return -0x5b;
 }
+
+// jzth protection
+WRITE16_MEMBER(md_boot_state::bl_710000_w)
+{
+	int pc = space.device().safe_pc();
+
+	logerror("%06x writing to bl_710000_w %04x %04x\n", pc, data, mem_mask);
+
+	// protection value is read from  0x710000 after a series of writes.. and stored at ff0007
+	// startup
+	/*
+	059ce0 writing to bl_710000_w ff08 ffff
+	059d04 writing to bl_710000_w 000a ffff
+	059d04 writing to bl_710000_w 000b ffff
+	059d04 writing to bl_710000_w 000c ffff
+	059d04 writing to bl_710000_w 000f ffff
+	059d1c writing to bl_710000_w ff09 ffff
+	059d2a reading from bl_710000_r  (wants 0xe)
+	059ce0 writing to bl_710000_w ff08 ffff
+	059d04 writing to bl_710000_w 000a ffff
+	059d04 writing to bl_710000_w 000b ffff
+	059d04 writing to bl_710000_w 000c ffff
+	059d04 writing to bl_710000_w 000f ffff
+	059d1c writing to bl_710000_w ff09 ffff
+	059d2a reading from bl_710000_r  (wants 0xe)
+	*/
+	// before lv stage 3
+	/*
+	059ce0 writing to bl_710000_w 0008 ffff
+	059d04 writing to bl_710000_w 000b ffff
+	059d04 writing to bl_710000_w 000f ffff
+	059d1c writing to bl_710000_w ff09 ffff
+	059d2a reading from bl_710000_r  (wants 0x4)
+	*/
+	// start level 3
+	/*
+	059ce0 writing to bl_710000_w ff08 ffff
+	059d04 writing to bl_710000_w 000b ffff
+	059d04 writing to bl_710000_w 000c ffff
+	059d04 writing to bl_710000_w 000e ffff
+	059d1c writing to bl_710000_w ff09 ffff
+	059d2a reading from bl_710000_r  (wants 0x5)
+
+	// after end sequence
+	059ce0 writing to bl_710000_w 0008 ffff
+	059d04 writing to bl_710000_w 000a ffff
+	059d04 writing to bl_710000_w 000b ffff
+	059d04 writing to bl_710000_w 000c ffff
+	059d04 writing to bl_710000_w 000f ffff
+	059d1c writing to bl_710000_w ff09 ffff
+	059d2a reading from bl_710000_r  (wants 0xe)
+
+	*/
+	m_protcount++;
+}
+
+
+READ16_MEMBER(md_boot_state::bl_710000_r)
+{
+	UINT16 ret;
+	int pc = space.device().safe_pc();
+	logerror("%06x reading from bl_710000_r\n", pc);
+
+	if (m_protcount==6) { ret = 0xe; }
+	else if (m_protcount==5) { ret = 0x5; }
+	else if (m_protcount==4) { ret = 0x4; }
+	else ret = 0xf;
+
+	m_protcount = 0;
+	return ret;
+}
+
 
 /*************************************
  *
@@ -342,19 +413,19 @@ INPUT_PORTS_START( ssf2mdb )
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START2 )
 
-	PORT_START("EXTRA1")	/* Extra buttons for Joypad 1 (6 button + start + mode) NOT READ DIRECTLY */
+	PORT_START("EXTRA1")    /* Extra buttons for Joypad 1 (6 button + start + mode) NOT READ DIRECTLY */
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("EXTRA2")	/* Extra buttons for Joypad 2 (6 button + start + mode) NOT READ DIRECTLY */
+	PORT_START("EXTRA2")    /* Extra buttons for Joypad 2 (6 button + start + mode) NOT READ DIRECTLY */
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(2)
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(2)
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(2)
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN0")		/* 3rd I/O port */
+	PORT_START("IN0")       /* 3rd I/O port */
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 )
 
@@ -416,13 +487,13 @@ INPUT_PORTS_START( mk3mdb )
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START2 )
 
-	PORT_START("EXTRA1")	/* Extra buttons for Joypad 1 (6 button + start + mode) NOT READ DIRECTLY */
+	PORT_START("EXTRA1")    /* Extra buttons for Joypad 1 (6 button + start + mode) NOT READ DIRECTLY */
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("EXTRA2")	/* Extra buttons for Joypad 2 (6 button + start + mode) NOT READ DIRECTLY */
+	PORT_START("EXTRA2")    /* Extra buttons for Joypad 2 (6 button + start + mode) NOT READ DIRECTLY */
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(2)
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(2)
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(2)
@@ -470,16 +541,16 @@ INPUT_PORTS_END
 INPUT_PORTS_START( aladmdb )
 	PORT_INCLUDE( md_common )
 
-	PORT_MODIFY("PAD1")		/* Joypad 1 (3 button + start) NOT READ DIRECTLY */
+	PORT_MODIFY("PAD1")     /* Joypad 1 (3 button + start) NOT READ DIRECTLY */
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1) PORT_NAME("P1 Throw") // a
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1) PORT_NAME("P1 Sword") // b
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1) PORT_NAME("P1 Jump") // c
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START1 ) // start
 
-	PORT_MODIFY("PAD2")		/* Joypad 2 (3 button + start) NOT READ DIRECTLY - not used */
+	PORT_MODIFY("PAD2")     /* Joypad 2 (3 button + start) NOT READ DIRECTLY - not used */
 	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-    /* As I don't know how it is on real hardware, this is more a guess than anything */
+	/* As I don't know how it is on real hardware, this is more a guess than anything */
 	PORT_START("MCU")
 	PORT_DIPNAME( 0x07, 0x01, DEF_STR( Coinage ) )          /* code at 0x1b2a50 - unsure if there are so many settings */
 //  PORT_DIPSETTING(    0x00, "INVALID" )                   /* adds 0 credit */
@@ -489,7 +560,7 @@ INPUT_PORTS_START( aladmdb )
 	PORT_DIPSETTING(    0x04, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x05, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(    0x06, DEF_STR( 1C_6C ) )
-    PORT_DIPSETTING(    0x07, DEF_STR( 1C_7C ) )
+	PORT_DIPSETTING(    0x07, DEF_STR( 1C_7C ) )
 //  PORT_BIT( 0x0010, IP_ACTIVE_HIGH, IPT_SPECIAL )         /* to avoid it being changed and corrupting Coinage settings */
 	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ) )       /* code at 0x1b2680 */
 	PORT_DIPSETTING(    0x10, DEF_STR( Easy ) )             /* "PRACTICE" */
@@ -517,7 +588,7 @@ INPUT_PORTS_START( srmdb )
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNUSED ) // c (duplicate shoot button)
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START2 )
 
-	PORT_START("IN0")		/* 3rd I/O port */
+	PORT_START("IN0")       /* 3rd I/O port */
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 )
 
@@ -579,6 +650,26 @@ static MACHINE_CONFIG_START( megadrvb, md_boot_state )
 	MCFG_FRAGMENT_ADD(md_ntsc)
 MACHINE_CONFIG_END
 
+MACHINE_START_MEMBER(md_boot_state, md_6button)
+{
+	MACHINE_START_CALL_MEMBER(megadriv);
+
+	m_io_pad_6b[0] = ioport("EXTRA1");
+	m_io_pad_6b[1] = ioport("EXTRA2");
+	m_io_pad_6b[2] = ioport("IN0");
+	m_io_pad_6b[3] = ioport("UNK");
+
+	// setup timers for 6 button pads
+	for (int i = 0; i < 3; i++)
+		m_io_timeout[i] = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(md_base_state::io_timeout_timer_callback),this), (void*)(FPTR)i);
+}
+
+static MACHINE_CONFIG_START( megadrvb_6b, md_boot_state )
+	MCFG_FRAGMENT_ADD(md_ntsc)
+	MCFG_MACHINE_START_OVERRIDE(md_boot_state, md_6button)
+MACHINE_CONFIG_END
+
+
 /*************************************
  *
  *  ROM definition(s)
@@ -594,7 +685,7 @@ ROM_START( aladmdb )
 ROM_END
 
 ROM_START( mk3mdb ) // roms are scrambled, we take care of the address descramble in the ROM load, and the data descramble in the init
-                    // this is bootlegged from  "Mortal Kombat 3 (4) [!].bin"
+					// this is bootlegged from  "Mortal Kombat 3 (4) [!].bin"
 	ROM_REGION( 0x400000, "maincpu", ROMREGION_ERASE00 ) /* 68000 Code */
 	ROM_LOAD16_BYTE( "1.u1", 0x080001, 0x020000,  CRC(0dc01b23) SHA1(f1aa7ac88c8e3deb5a0a065862722e9d27b87b4c) )
 	ROM_CONTINUE(            0x000001, 0x020000)
@@ -653,29 +744,28 @@ ROM_END
 
 #define ENERGY_CONSOLE_MODE 0
 
-static DRIVER_INIT( aladmdb )
+DRIVER_INIT_MEMBER(md_boot_state,aladmdb)
 {
 	/*
-     * Game does a check @ 1afc00 with work RAM fff57c that makes it play like the original console version (i.e. 8 energy hits instead of 2)
-     */
+	 * Game does a check @ 1afc00 with work RAM fff57c that makes it play like the original console version (i.e. 8 energy hits instead of 2)
+	 */
 	#if ENERGY_CONSOLE_MODE
-	UINT16 *rom = (UINT16 *)machine.region("maincpu")->base();
+	UINT16 *rom = (UINT16 *)memregion("maincpu")->base();
 	rom[0x1afc08/2] = 0x6600;
 	#endif
 
 	// 220000 = writes to mcu? 330000 = reads?
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x220000, 0x220001, FUNC(aladmdb_w));
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x330000, 0x330001, FUNC(aladmdb_r));
+	m_maincpu->space(AS_PROGRAM).install_write_handler(0x220000, 0x220001, write16_delegate(FUNC(md_boot_state::aladmdb_w),this));
+	m_maincpu->space(AS_PROGRAM).install_read_handler(0x330000, 0x330001, read16_delegate(FUNC(md_boot_state::aladmdb_r),this));
 
-	megadrive_6buttons_pad = 0;
 	DRIVER_INIT_CALL(megadrij);
 }
 
 // this should be correct, the areas of the ROM that differ to the original
 // after this decode look like intentional changes
-static DRIVER_INIT( mk3mdb )
+DRIVER_INIT_MEMBER(md_boot_state,mk3mdb)
 {
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = memregion("maincpu")->base();
 
 	for (int x = 0x000001; x < 0x100001; x += 2)
 	{
@@ -714,51 +804,42 @@ static DRIVER_INIT( mk3mdb )
 	rom[0x07] = 0x02;
 	rom[0x06] = 0x10;
 
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x770070, 0x770075, FUNC(mk3mdb_dsw_r) );
+	m_maincpu->space(AS_PROGRAM).install_read_handler(0x770070, 0x770075, read16_delegate(FUNC(md_boot_state::mk3mdb_dsw_r),this));
 
-	megadrive_6buttons_pad = 1;
 	DRIVER_INIT_CALL(megadriv);
+	// 6 button game, so overwrite 3 button io handlers
+	m_megadrive_io_read_data_port_ptr = read8_delegate(FUNC(md_base_state::megadrive_io_read_data_port_6button),this);
+	m_megadrive_io_write_data_port_ptr = write16_delegate(FUNC(md_base_state::megadrive_io_write_data_port_6button),this);
 }
 
-static DRIVER_INIT( ssf2mdb )
+DRIVER_INIT_MEMBER(md_boot_state,ssf2mdb)
 {
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0xA130F0, 0xA130FF); // custom banking is disabled (!)
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x400000, 0x5fffff, "bank5");
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0x400000, 0x5fffff);
+	m_maincpu->space(AS_PROGRAM).nop_write(0xA130F0, 0xA130FF); // custom banking is disabled (!)
+	m_maincpu->space(AS_PROGRAM).install_read_bank(0x400000, 0x5fffff, "bank5");
+	m_maincpu->space(AS_PROGRAM).unmap_write(0x400000, 0x5fffff);
 
-	memory_set_bankptr(machine,  "bank5", machine.region( "maincpu" )->base() + 0x400000 );
+	membank("bank5")->set_base(memregion( "maincpu" )->base() + 0x400000 );
 
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x770070, 0x770075, FUNC(ssf2mdb_dsw_r) );
+	m_maincpu->space(AS_PROGRAM).install_read_handler(0x770070, 0x770075, read16_delegate(FUNC(md_boot_state::ssf2mdb_dsw_r),this));
 
-	megadrive_6buttons_pad = 1;
 	DRIVER_INIT_CALL(megadrij);
+	// 6 button game, so overwrite 3 button io handlers
+	m_megadrive_io_read_data_port_ptr = read8_delegate(FUNC(md_base_state::megadrive_io_read_data_port_6button),this);
+	m_megadrive_io_write_data_port_ptr = write16_delegate(FUNC(md_base_state::megadrive_io_write_data_port_6button),this);
 }
 
-static DRIVER_INIT( srmdb )
+DRIVER_INIT_MEMBER(md_boot_state,srmdb)
 {
-	UINT8* rom = machine.region("maincpu")->base();
+	UINT8* rom = memregion("maincpu")->base();
 
-	/* todo, reduce bitswaps to single swap */
 	for (int x = 0x00001; x < 0x40000; x += 2)
 	{
-		rom[x] = rom[x] ^ 0xff;
-		rom[x] = BITSWAP8(rom[x], 7,6,5,4,3,2,1,0);
-		rom[x] = BITSWAP8(rom[x], 1,6,5,4,3,2,7,0);
-		rom[x] = BITSWAP8(rom[x], 7,6,5,3,4,2,1,0);
-		rom[x] = BITSWAP8(rom[x], 7,6,5,2,3,4,1,0);
-		rom[x] = BITSWAP8(rom[x], 5,6,7,4,3,2,1,0);
-		rom[x] = BITSWAP8(rom[x], 7,5,6,4,3,2,1,0);
+		rom[x] = BITSWAP8(rom[x] ^ 0xff, 5,1,6,2,4,3,7,0);
 	}
 
 	for (int x = 0x40001; x < 0x80000; x += 2)
 	{
-		rom[x] = BITSWAP8(rom[x], 7,6,5,4,3,2,1,0);
-		rom[x] = BITSWAP8(rom[x], 7,6,1,4,3,2,5,0);
-		rom[x] = BITSWAP8(rom[x], 7,6,5,4,0,2,1,3);
-		rom[x] = BITSWAP8(rom[x], 2,6,5,4,3,7,1,0);
-		rom[x] = BITSWAP8(rom[x], 7,6,5,0,3,2,1,4);
-		rom[x] = BITSWAP8(rom[x], 7,6,5,1,3,2,4,0);
-
+		rom[x] = BITSWAP8(rom[x] ^ 0x00, 2,6,1,5,0,7,3,4);
 	}
 
 	// boot vectors don't seem to be valid, so they are patched...
@@ -770,21 +851,19 @@ static DRIVER_INIT( srmdb )
 	rom[0x06] = 0xd2;
 	rom[0x07] = 0x00;
 
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x770070, 0x770075, FUNC(srmdb_dsw_r) );
+	m_maincpu->space(AS_PROGRAM).install_read_handler(0x770070, 0x770075, read16_delegate(FUNC(md_boot_state::srmdb_dsw_r),this));
 
-	megadrive_6buttons_pad = 0;
 	DRIVER_INIT_CALL(megadriv);
 }
 
-static DRIVER_INIT(topshoot)
+DRIVER_INIT_MEMBER(md_boot_state,topshoot)
 {
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x200050, 0x200051, FUNC(topshoot_200051_r) );
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0x200042, 0x200043, "IN0");
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0x200044, 0x200045, "IN1");
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0x200046, 0x200047, "IN2");
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0x200048, 0x200049, "IN3");
+	m_maincpu->space(AS_PROGRAM).install_read_handler(0x200050, 0x200051, read16_delegate(FUNC(md_boot_state::topshoot_200051_r),this));
+	m_maincpu->space(AS_PROGRAM).install_read_port(0x200042, 0x200043, "IN0");
+	m_maincpu->space(AS_PROGRAM).install_read_port(0x200044, 0x200045, "IN1");
+	m_maincpu->space(AS_PROGRAM).install_read_port(0x200046, 0x200047, "IN2");
+	m_maincpu->space(AS_PROGRAM).install_read_port(0x200048, 0x200049, "IN3");
 
-	megadrive_6buttons_pad = 0;
 	DRIVER_INIT_CALL(megadriv);
 }
 
@@ -794,8 +873,8 @@ static DRIVER_INIT(topshoot)
  *
  *************************************/
 
-GAME( 1993, aladmdb,  0, megadrvb,   aladmdb,  aladmdb,  ROT0, "bootleg / Sega",   "Aladdin (bootleg of Japanese Megadrive version)", 0)
-GAME( 1996, mk3mdb,   0, megadrvb,   mk3mdb,   mk3mdb,   ROT0, "bootleg / Midway", "Mortal Kombat 3 (bootleg of Megadrive version)", 0)
-GAME( 1994, ssf2mdb,  0, megadrvb,   ssf2mdb,  ssf2mdb,  ROT0, "bootleg / Capcom", "Super Street Fighter II - The New Challengers (bootleg of Japanese MegaDrive version)", 0)
-GAME( 1993, srmdb,    0, megadrvb,   srmdb,    srmdb,    ROT0, "bootleg / Konami", "Sunset Riders (bootleg of Megadrive version)", 0)
-GAME( 1995, topshoot, 0, md_bootleg, topshoot, topshoot, ROT0, "Sun Mixing",       "Top Shooter", 0)
+GAME( 1993, aladmdb,  0, megadrvb,     aladmdb,  md_boot_state,  aladmdb,  ROT0, "bootleg / Sega",   "Aladdin (bootleg of Japanese Megadrive version)", 0)
+GAME( 1996, mk3mdb,   0, megadrvb_6b,  mk3mdb,   md_boot_state,  mk3mdb,   ROT0, "bootleg / Midway", "Mortal Kombat 3 (bootleg of Megadrive version)", 0)
+GAME( 1994, ssf2mdb,  0, megadrvb_6b,  ssf2mdb,  md_boot_state,  ssf2mdb,  ROT0, "bootleg / Capcom", "Super Street Fighter II - The New Challengers (bootleg of Japanese MegaDrive version)", 0)
+GAME( 1993, srmdb,    0, megadrvb,     srmdb,    md_boot_state,  srmdb,    ROT0, "bootleg / Konami", "Sunset Riders (bootleg of Megadrive version)", 0)
+GAME( 1995, topshoot, 0, md_bootleg,   topshoot, md_boot_state,  topshoot, ROT0, "Sun Mixing",       "Top Shooter", 0)

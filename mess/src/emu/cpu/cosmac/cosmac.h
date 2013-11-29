@@ -1,11 +1,51 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
-    RCA "COSMAC" CPU emulation
+    RCA COSMAC CPU emulation
 
     Copyright MESS Team.
     Visit http://mamedev.org for licensing and usage restrictions.
 
 **********************************************************************
+                            _____   _____
+                   Vcc   1 |*    \_/     | 40  Vdd
+                _BUS 3   2 |             | 39  _BUS 4
+                _BUS 2   3 |             | 38  _BUS 5
+                _BUS 1   4 |             | 37  _BUS 6
+                _BUS 0   5 |             | 36  _BUS 7
+                   _N0   6 |             | 35  Vss
+                   _N1   7 |             | 34  _EF1
+                   _N2   8 |             | 33  _EF2
+                   _N3   9 |             | 32  _EF3
+                     *  10 |   CDP1801U  | 31  _EF4
+                     *  11 |             | 30  _DMA OUT
+                     *  12 |             | 29  _INTERRUPT
+                     *  13 |             | 28  _DMA IN
+                     *  14 |             | 27  _CLEAR
+                _CLOCK  15 |             | 26  _LOAD
+                  _TPB  16 |             | 25  _SC2
+                  _TPA  17 |             | 24  _SC1
+                     *  18 |             | 23  _SC0
+                   MWR  19 |             | 22  _M READ
+                   Vss  20 |_____________| 21  *
+
+                            _____   _____
+                   Vcc   1 |*    \_/     | 28  Vdd
+                _BUS 4   2 |             | 27  _BUS 3
+                _BUS 5   3 |             | 26  _BUS 2
+                _BUS 6   4 |             | 25  _BUS 1
+                _BUS 7   5 |             | 24  _BUS 0
+                  _MA0   6 |             | 23  *
+                  _MA1   7 |   CDP1801C  | 22  _TPB
+                  _MA2   8 |             | 21  *
+                  _MA3   9 |             | 20  *
+                  _MA4  10 |             | 19  *
+                  _MA5  11 |             | 18  *
+                  _MA6  12 |             | 17  *
+                  _MA7  13 |             | 16  *
+                   Vss  14 |_____________| 15  _CLEAR
+
                             _____   _____
                  CLOCK   1 |*    \_/     | 40  Vdd
                  _WAIT   2 |             | 39  _XTAL
@@ -119,18 +159,18 @@ typedef void (*cosmac_out_sc_func)(device_t *device, cosmac_state_code sc);
 
 struct cosmac_interface
 {
-	devcb_read_line		m_in_wait_cb;
-	devcb_read_line		m_in_clear_cb;
-	devcb_read_line		m_in_ef1_cb;
-	devcb_read_line		m_in_ef2_cb;
-	devcb_read_line		m_in_ef3_cb;
-	devcb_read_line		m_in_ef4_cb;
-	devcb_write_line	m_out_q_cb;
-	devcb_read8			m_in_dma_cb;
-	devcb_write8		m_out_dma_cb;
-	cosmac_out_sc_func	m_out_sc_cb;
-	devcb_write_line	m_out_tpa_cb;
-	devcb_write_line	m_out_tpb_cb;
+	devcb_read_line     m_in_wait_cb;
+	devcb_read_line     m_in_clear_cb;
+	devcb_read_line     m_in_ef1_cb;
+	devcb_read_line     m_in_ef2_cb;
+	devcb_read_line     m_in_ef3_cb;
+	devcb_read_line     m_in_ef4_cb;
+	devcb_write_line    m_out_q_cb;
+	devcb_read8         m_in_dma_cb;
+	devcb_write8        m_out_dma_cb;
+	cosmac_out_sc_func  m_out_sc_cb;
+	devcb_write_line    m_out_tpa_cb;
+	devcb_write_line    m_out_tpb_cb;
 };
 
 #define COSMAC_INTERFACE(name) \
@@ -140,11 +180,11 @@ struct cosmac_interface
 // ======================> cosmac_device
 
 class cosmac_device : public cpu_device,
-					  public cosmac_interface
+						public cosmac_interface
 {
 public:
 	// construction/destruction
-	cosmac_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	cosmac_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, const char *shortname, const char *source);
 
 	// public interfaces
 	offs_t get_memory_address();
@@ -173,7 +213,6 @@ protected:
 	// device_disasm_interface overrides
 	virtual UINT32 disasm_min_opcode_bytes() const;
 	virtual UINT32 disasm_max_opcode_bytes() const;
-	virtual offs_t disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options);
 
 	// helpers
 	inline UINT8 read_opcode(offs_t pc);
@@ -290,6 +329,7 @@ protected:
 	// control instructions opcode handlers
 	void idl();
 	void nop();
+	void und();
 	void sep();
 	void sex();
 	void seq();
@@ -303,19 +343,19 @@ protected:
 	void out();
 	void inp();
 
-	const address_space_config		m_program_config;
-	const address_space_config		m_io_config;
+	const address_space_config      m_program_config;
+	const address_space_config      m_io_config;
 
 	// device callbacks
-	devcb_resolved_read_line	m_in_wait_func;
-	devcb_resolved_read_line	m_in_clear_func;
-	devcb_resolved_read_line	m_in_ef_func[4];
-	devcb_resolved_write_line	m_out_q_func;
-	devcb_resolved_read8		m_in_dma_func;
-	devcb_resolved_write8		m_out_dma_func;
-	cosmac_out_sc_func			m_out_sc_func;
-	devcb_resolved_write_line	m_out_tpa_func;
-	devcb_resolved_write_line	m_out_tpb_func;
+	devcb_resolved_read_line    m_in_wait_func;
+	devcb_resolved_read_line    m_in_clear_func;
+	devcb_resolved_read_line    m_in_ef_func[4];
+	devcb_resolved_write_line   m_out_q_func;
+	devcb_resolved_read8        m_in_dma_func;
+	devcb_resolved_write8       m_out_dma_func;
+	cosmac_out_sc_func          m_out_sc_func;
+	devcb_resolved_write_line   m_out_tpa_func;
+	devcb_resolved_write_line   m_out_tpb_func;
 
 	// control modes
 	enum cosmac_mode
@@ -339,46 +379,83 @@ protected:
 	};
 
 	// internal state
-	UINT8				m_op;				// current opcode
-	UINT8				m_flagsio;			// flags storage for state saving
-	cosmac_state		m_state;			// state
-	cosmac_mode			m_mode;				// control mode
-	cosmac_mode			m_pmode;			// previous control mode
-	int					m_irq;				// interrupt request
-	int					m_dmain;			// DMA input request
-	int					m_dmaout;			// DMA output request
-	int					m_ef[4];			// external flags
+	UINT16              m_pc;               // fake program counter
+	UINT8               m_op;               // current opcode
+	UINT8               m_flagsio;          // flags storage for state saving
+	cosmac_state        m_state;            // state
+	cosmac_mode         m_mode;             // control mode
+	cosmac_mode         m_pmode;            // previous control mode
+	int                 m_irq;              // interrupt request
+	int                 m_dmain;            // DMA input request
+	int                 m_dmaout;           // DMA output request
+	int                 m_ef[4];            // external flags
 
 	// registers
-	UINT8				m_d;				// data register (accumulator)
-	UINT8				m_b;				// auxiliary holding register
-	UINT16				m_r[16];			// scratchpad registers
-	UINT8				m_p;				// designates which register is Program Counter
-	UINT8				m_x;				// designates which register is Data Pointer
-	UINT8				m_n;				// low-order instruction digit
-	UINT8				m_i;				// high-order instruction digit
-	UINT8				m_t;				// temporary register
+	UINT8               m_d;                // data register (accumulator)
+	UINT8               m_b;                // auxiliary holding register
+	UINT16              m_r[16];            // scratchpad registers
+	UINT8               m_p;                // designates which register is Program Counter
+	UINT8               m_x;                // designates which register is Data Pointer
+	UINT8               m_n;                // low-order instruction digit
+	UINT8               m_i;                // high-order instruction digit
+	UINT8               m_t;                // temporary register
 
 	// flags
-	int					m_df;				// data flag (ALU carry)
-	int					m_ie;				// interrupt enable
-	int					m_q;				// output flip-flop
+	int                 m_df;               // data flag (ALU carry)
+	int                 m_ie;               // interrupt enable
+	int                 m_q;                // output flip-flop
 
 	// internal stuff
-	int					m_icount;
-	address_space *		m_program;
-	address_space *		m_io;
-	direct_read_data *	m_direct;
+	int                 m_icount;
+	address_space *     m_program;
+	address_space *     m_io;
+	direct_read_data *  m_direct;
 
 	// opcode/condition tables
 	typedef void (cosmac_device::*ophandler)();
+	virtual cosmac_device::ophandler get_ophandler(UINT8 opcode) = 0;
+};
+
+
+// ======================> cdp1801_device
+
+class cdp1801_device : public cosmac_device
+{
+public:
+	// construction/destruction
+	cdp1801_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+
+protected:
+	// device_disasm_interface overrides
+	virtual offs_t disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options);
+
+	virtual cosmac_device::ophandler get_ophandler(UINT8 opcode);
+
+	static const ophandler s_opcodetable[256];
+};
+
+
+// ======================> cdp1802_device
+
+class cdp1802_device : public cosmac_device
+{
+public:
+	// construction/destruction
+	cdp1802_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+
+protected:
+	// device_disasm_interface overrides
+	virtual offs_t disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options);
+
+	virtual cosmac_device::ophandler get_ophandler(UINT8 opcode);
 
 	static const ophandler s_opcodetable[256];
 };
 
 
 // device type definition
-extern const device_type COSMAC;
+extern const device_type CDP1801;
+extern const device_type CDP1802;
 
 
 #endif /* __COSMAC_H__ */

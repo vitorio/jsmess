@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Curt Coder
 /**********************************************************************
 
     RCA CDP1871 Keyboard Encoder emulation
@@ -9,8 +11,6 @@
 
 #include "emu.h"
 #include "cdp1871.h"
-#include "cpu/mcs48/mcs48.h"
-#include "machine/devhelpr.h"
 
 
 // device type definition
@@ -95,14 +95,15 @@ static const UINT8 CDP1871_KEY_CODES[4][11][8] =
 //-------------------------------------------------
 
 cdp1871_device::cdp1871_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, CDP1871, "RCA CDP1871", tag, owner, clock),
-	  m_inhibit(false),
-	  m_sense(0),
-	  m_drive(0),
-	  m_next_da(CLEAR_LINE),
-	  m_next_rpt(CLEAR_LINE)
+	: device_t(mconfig, CDP1871, "RCA CDP1871", tag, owner, clock, "cdp1871", __FILE__),
+		m_inhibit(false),
+		m_sense(0),
+		m_drive(0),
+		m_da(0),
+		m_next_da(CLEAR_LINE),
+		m_rpt(0),
+		m_next_rpt(CLEAR_LINE)
 {
-
 }
 
 

@@ -5,24 +5,23 @@
  ****************************************************************************/
 
 #include "emu.h"
-#include "memconv.h"
 #include "video/pc_aga.h"
 #include "video/pc_cga.h"
 #include "includes/amstr_pc.h"
 #include "video/mc6845.h"
 #include "video/cgapal.h"
+#include "drivlgcy.h"
 
 
-#define CGA_MONITOR		(input_port_read(space->machine(), "VIDEO") & 0x1C)
-#define CGA_MONITOR_RGB			0x00	/* Colour RGB */
-#define CGA_MONITOR_MONO		0x04	/* Greyscale RGB */
-#define CGA_MONITOR_COMPOSITE	0x08	/* Colour composite */
-#define CGA_MONITOR_TELEVISION	0x0C	/* Television */
-#define CGA_MONITOR_LCD			0x10	/* LCD, eg PPC512 */
+#define CGA_MONITOR     (space.machine().root_device().ioport("VIDEO")->read() & 0x1C)
+#define CGA_MONITOR_RGB         0x00    /* Colour RGB */
+#define CGA_MONITOR_MONO        0x04    /* Greyscale RGB */
+#define CGA_MONITOR_COMPOSITE   0x08    /* Colour composite */
+#define CGA_MONITOR_TELEVISION  0x0C    /* Television */
+#define CGA_MONITOR_LCD         0x10    /* LCD, eg PPC512 */
 
 
 static VIDEO_START( pc_aga );
-static SCREEN_UPDATE( mc6845_aga );
 static PALETTE_INIT( pc_aga );
 static MC6845_UPDATE_ROW( aga_update_row );
 static WRITE_LINE_DEVICE_HANDLER( aga_hsync_changed );
@@ -30,37 +29,38 @@ static WRITE_LINE_DEVICE_HANDLER( aga_vsync_changed );
 static VIDEO_START( pc200 );
 
 
-static const mc6845_interface mc6845_aga_intf = {
-	AGA_SCREEN_NAME,	/* screen number */
-	8,					/* numbers of pixels per video memory address */
-	NULL,				/* begin_update */
-	aga_update_row,		/* update_row */
-	NULL,				/* end_update */
-	DEVCB_NULL,			/* on_de_chaged */
-	DEVCB_NULL,			/* on_cur_chaged */
-	DEVCB_LINE(aga_hsync_changed),	/* on_hsync_changed */
-	DEVCB_LINE(aga_vsync_changed),	/* on_vsync_changed */
+static MC6845_INTERFACE( mc6845_aga_intf )
+{
+	false,              /* show border area */
+	8,                  /* numbers of pixels per video memory address */
+	NULL,               /* begin_update */
+	aga_update_row,     /* update_row */
+	NULL,               /* end_update */
+	DEVCB_NULL,         /* on_de_chaged */
+	DEVCB_NULL,         /* on_cur_chaged */
+	DEVCB_LINE(aga_hsync_changed),  /* on_hsync_changed */
+	DEVCB_LINE(aga_vsync_changed),  /* on_vsync_changed */
 	NULL
 };
 
 
 static struct {
-	AGA_MODE	mode;
-	UINT8	mda_mode_control;
-	UINT8	mda_status;
-	UINT8	*mda_chr_gen;
+	AGA_MODE    mode;
+	UINT8   mda_mode_control;
+	UINT8   mda_status;
+	UINT8   *mda_chr_gen;
 
-	UINT8	cga_mode_control;
-	UINT8	cga_color_select;
-	UINT8	cga_status;
-	UINT8	*cga_chr_gen;
+	UINT8   cga_mode_control;
+	UINT8   cga_color_select;
+	UINT8   cga_status;
+	UINT8   *cga_chr_gen;
 
-	UINT8	pc_framecnt;
+	UINT8   pc_framecnt;
 
-	mc6845_update_row_func	update_row;
-	UINT8	cga_palette_lut_2bpp[4];
-	UINT8	vsync;
-	UINT8	hsync;
+	mc6845_update_row_func  update_row;
+	UINT8   cga_palette_lut_2bpp[4];
+	UINT8   vsync;
+	UINT8   hsync;
 
 	UINT8  *videoram;
 } aga;
@@ -68,14 +68,13 @@ static struct {
 
 MACHINE_CONFIG_FRAGMENT( pcvideo_aga )
 	MCFG_SCREEN_ADD( AGA_SCREEN_NAME, RASTER )
-	MCFG_SCREEN_FORMAT( BITMAP_FORMAT_INDEXED16 )
 	MCFG_SCREEN_RAW_PARAMS( XTAL_14_31818MHz,912,0,640,262,0,200 )
-	MCFG_SCREEN_UPDATE( mc6845_aga )
+	MCFG_SCREEN_UPDATE_DEVICE( AGA_MC6845_NAME, mc6845_device, screen_update )
 
 	MCFG_PALETTE_LENGTH( CGA_PALETTE_SETS * 16 )
 	MCFG_PALETTE_INIT( pc_aga )
 
-	MCFG_MC6845_ADD( AGA_MC6845_NAME, MC6845, XTAL_14_31818MHz/8, mc6845_aga_intf )
+	MCFG_MC6845_ADD( AGA_MC6845_NAME, MC6845, AGA_SCREEN_NAME, XTAL_14_31818MHz/8, mc6845_aga_intf )
 
 	MCFG_VIDEO_START( pc_aga )
 MACHINE_CONFIG_END
@@ -124,9 +123,10 @@ static WRITE_LINE_DEVICE_HANDLER( aga_vsync_changed ) {
 
 /* colors need fixing in the mda_text_* functions ! */
 static MC6845_UPDATE_ROW( mda_text_inten_update_row ) {
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
 	UINT8 *videoram = aga.videoram;
-	UINT16	*p = BITMAP_ADDR16( bitmap, y, 0 );
-	UINT16	chr_base = ( ra & 0x08 ) ? 0x800 | ( ra & 0x07 ) : ra;
+	UINT32  *p = &bitmap.pix32(y);
+	UINT16  chr_base = ( ra & 0x08 ) ? 0x800 | ( ra & 0x07 ) : ra;
 	int i;
 
 	if ( y == 0 ) logerror("mda_text_inten_update_row\n");
@@ -165,18 +165,18 @@ static MC6845_UPDATE_ROW( mda_text_inten_update_row ) {
 			data = 0xFF;
 		}
 
-		*p = ( data & 0x80 ) ? fg : bg; p++;
-		*p = ( data & 0x40 ) ? fg : bg; p++;
-		*p = ( data & 0x20 ) ? fg : bg; p++;
-		*p = ( data & 0x10 ) ? fg : bg; p++;
-		*p = ( data & 0x08 ) ? fg : bg; p++;
-		*p = ( data & 0x04 ) ? fg : bg; p++;
-		*p = ( data & 0x02 ) ? fg : bg; p++;
-		*p = ( data & 0x01 ) ? fg : bg; p++;
+		*p = palette[( data & 0x80 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x40 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x20 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x10 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x08 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x04 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x02 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x01 ) ? fg : bg]; p++;
 		if ( ( chr & 0xE0 ) == 0xC0 ) {
-			*p = ( data & 0x01 ) ? fg : bg; p++;
+			*p = palette[( data & 0x01 ) ? fg : bg]; p++;
 		} else {
-			*p = bg; p++;
+			*p = palette[bg]; p++;
 		}
 	}
 }
@@ -184,8 +184,9 @@ static MC6845_UPDATE_ROW( mda_text_inten_update_row ) {
 
 static MC6845_UPDATE_ROW( mda_text_blink_update_row ) {
 	UINT8 *videoram = aga.videoram;
-	UINT16	*p = BITMAP_ADDR16( bitmap, y, 0 );
-	UINT16	chr_base = ( ra & 0x08 ) ? 0x800 | ( ra & 0x07 ) : ra;
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
+	UINT32  *p = &bitmap.pix32(y);
+	UINT16  chr_base = ( ra & 0x08 ) ? 0x800 | ( ra & 0x07 ) : ra;
 	int i;
 
 	if ( y == 0 ) logerror("mda_text_blink_update_row\n");
@@ -225,18 +226,18 @@ static MC6845_UPDATE_ROW( mda_text_blink_update_row ) {
 			}
 		}
 
-		*p = ( data & 0x80 ) ? fg : bg; p++;
-		*p = ( data & 0x40 ) ? fg : bg; p++;
-		*p = ( data & 0x20 ) ? fg : bg; p++;
-		*p = ( data & 0x10 ) ? fg : bg; p++;
-		*p = ( data & 0x08 ) ? fg : bg; p++;
-		*p = ( data & 0x04 ) ? fg : bg; p++;
-		*p = ( data & 0x02 ) ? fg : bg; p++;
-		*p = ( data & 0x01 ) ? fg : bg; p++;
+		*p = palette[( data & 0x80 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x40 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x20 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x10 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x08 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x04 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x02 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x01 ) ? fg : bg]; p++;
 		if ( ( chr & 0xE0 ) == 0xC0 ) {
-			*p = ( data & 0x01 ) ? fg : bg; p++;
+			*p = palette[( data & 0x01 ) ? fg : bg]; p++;
 		} else {
-			*p = bg; p++;
+			*p = palette[bg]; p++;
 		}
 	}
 }
@@ -244,7 +245,8 @@ static MC6845_UPDATE_ROW( mda_text_blink_update_row ) {
 
 static MC6845_UPDATE_ROW( cga_text_inten_update_row ) {
 	UINT8 *videoram = aga.videoram;
-	UINT16  *p = BITMAP_ADDR16(bitmap, y, 0);
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
+	UINT32  *p = &bitmap.pix32(y);
 	int i;
 
 	if ( y == 0 ) logerror("cga_text_inten_update_row\n");
@@ -260,20 +262,21 @@ static MC6845_UPDATE_ROW( cga_text_inten_update_row ) {
 			data = 0xFF;
 		}
 
-		*p = ( data & 0x80 ) ? fg : bg; p++;
-		*p = ( data & 0x40 ) ? fg : bg; p++;
-		*p = ( data & 0x20 ) ? fg : bg; p++;
-		*p = ( data & 0x10 ) ? fg : bg; p++;
-		*p = ( data & 0x08 ) ? fg : bg; p++;
-		*p = ( data & 0x04 ) ? fg : bg; p++;
-		*p = ( data & 0x02 ) ? fg : bg; p++;
-		*p = ( data & 0x01 ) ? fg : bg; p++;
+		*p = palette[( data & 0x80 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x40 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x20 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x10 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x08 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x04 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x02 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x01 ) ? fg : bg]; p++;
 	}
 }
 
 static MC6845_UPDATE_ROW( cga_text_inten_alt_update_row ) {
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
 	UINT8 *videoram = aga.videoram;
-	UINT16  *p = BITMAP_ADDR16(bitmap, y, 0);
+	UINT32  *p = &bitmap.pix32(y);
 	int i;
 
 	if ( y == 0 ) logerror("cga_text_inten_alt_update_row\n");
@@ -288,20 +291,21 @@ static MC6845_UPDATE_ROW( cga_text_inten_alt_update_row ) {
 			data = 0xFF;
 		}
 
-		*p = ( data & 0x80 ) ? fg : 0; p++;
-		*p = ( data & 0x40 ) ? fg : 0; p++;
-		*p = ( data & 0x20 ) ? fg : 0; p++;
-		*p = ( data & 0x10 ) ? fg : 0; p++;
-		*p = ( data & 0x08 ) ? fg : 0; p++;
-		*p = ( data & 0x04 ) ? fg : 0; p++;
-		*p = ( data & 0x02 ) ? fg : 0; p++;
-		*p = ( data & 0x01 ) ? fg : 0; p++;
+		*p = palette[( data & 0x80 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x40 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x20 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x10 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x08 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x04 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x02 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x01 ) ? fg : 0]; p++;
 	}
 }
 
 static MC6845_UPDATE_ROW( cga_text_blink_update_row ) {
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
 	UINT8 *videoram = aga.videoram;
-	UINT16	*p = BITMAP_ADDR16(bitmap, y, 0);
+	UINT32  *p = &bitmap.pix32(y);
 	int i;
 
 	for ( i = 0; i < x_count; i++ ) {
@@ -310,7 +314,7 @@ static MC6845_UPDATE_ROW( cga_text_blink_update_row ) {
 		UINT8 attr = videoram[ offset +1 ];
 		UINT8 data = aga.cga_chr_gen[ chr * 16 + ra ];
 		UINT16 fg = attr & 0x0F;
-		UINT16 bg = attr >> 4;
+		UINT16 bg = (attr >> 4) & 0x07;
 
 		if ( i == cursor_x ) {
 			data = 0xFF;
@@ -320,20 +324,21 @@ static MC6845_UPDATE_ROW( cga_text_blink_update_row ) {
 			}
 		}
 
-		*p = ( data & 0x80 ) ? fg : bg; p++;
-		*p = ( data & 0x40 ) ? fg : bg; p++;
-		*p = ( data & 0x20 ) ? fg : bg; p++;
-		*p = ( data & 0x10 ) ? fg : bg; p++;
-		*p = ( data & 0x08 ) ? fg : bg; p++;
-		*p = ( data & 0x04 ) ? fg : bg; p++;
-		*p = ( data & 0x02 ) ? fg : bg; p++;
-		*p = ( data & 0x01 ) ? fg : bg; p++;
+		*p = palette[( data & 0x80 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x40 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x20 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x10 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x08 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x04 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x02 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x01 ) ? fg : bg]; p++;
 	}
 }
 
 static MC6845_UPDATE_ROW( cga_text_blink_alt_update_row ) {
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
 	UINT8 *videoram = aga.videoram;
-	UINT16  *p = BITMAP_ADDR16(bitmap, y, 0);
+	UINT32  *p = &bitmap.pix32(y);
 	int i;
 
 	if ( y == 0 ) logerror("cga_text_blink_alt_update_row\n");
@@ -354,20 +359,21 @@ static MC6845_UPDATE_ROW( cga_text_blink_alt_update_row ) {
 			}
 		}
 
-		*p = ( data & 0x80 ) ? fg : bg; p++;
-		*p = ( data & 0x40 ) ? fg : bg; p++;
-		*p = ( data & 0x20 ) ? fg : bg; p++;
-		*p = ( data & 0x10 ) ? fg : bg; p++;
-		*p = ( data & 0x08 ) ? fg : bg; p++;
-		*p = ( data & 0x04 ) ? fg : bg; p++;
-		*p = ( data & 0x02 ) ? fg : bg; p++;
-		*p = ( data & 0x01 ) ? fg : bg; p++;
+		*p = palette[( data & 0x80 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x40 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x20 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x10 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x08 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x04 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x02 ) ? fg : bg]; p++;
+		*p = palette[( data & 0x01 ) ? fg : bg]; p++;
 	}
 }
 
 static MC6845_UPDATE_ROW( cga_gfx_4bppl_update_row ) {
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
 	UINT8 *videoram = aga.videoram;
-	UINT16  *p = BITMAP_ADDR16(bitmap, y, 0);
+	UINT32  *p = &bitmap.pix32(y);
 	int i;
 
 	if ( y == 0 ) logerror("cga_gfx_4bppl_update_row\n");
@@ -375,23 +381,24 @@ static MC6845_UPDATE_ROW( cga_gfx_4bppl_update_row ) {
 		UINT16 offset = ( ( ( ma + i ) << 1 ) & 0x1fff ) | ( ( y & 1 ) << 13 );
 		UINT8 data = videoram[ offset ];
 
-		*p = data >> 4; p++;
-		*p = data >> 4; p++;
-		*p = data & 0x0F; p++;
-		*p = data & 0x0F; p++;
+		*p = palette[data >> 4]; p++;
+		*p = palette[data >> 4]; p++;
+		*p = palette[data & 0x0F]; p++;
+		*p = palette[data & 0x0F]; p++;
 
 		data = videoram[ offset + 1 ];
 
-		*p = data >> 4; p++;
-		*p = data >> 4; p++;
-		*p = data & 0x0F; p++;
-		*p = data & 0x0F; p++;
+		*p = palette[data >> 4]; p++;
+		*p = palette[data >> 4]; p++;
+		*p = palette[data & 0x0F]; p++;
+		*p = palette[data & 0x0F]; p++;
 	}
 }
 
 static MC6845_UPDATE_ROW( cga_gfx_4bpph_update_row ) {
 	UINT8 *videoram = aga.videoram;
-	UINT16  *p = BITMAP_ADDR16(bitmap, y, 0);
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
+	UINT32  *p = &bitmap.pix32(y);
 	int i;
 
 	if ( y == 0 ) logerror("cga_gfx_4bpph_update_row\n");
@@ -399,31 +406,32 @@ static MC6845_UPDATE_ROW( cga_gfx_4bpph_update_row ) {
 		UINT16 offset = ( ( ( ma + i ) << 1 ) & 0x1fff ) | ( ( y & 1 ) << 13 );
 		UINT8 data = videoram[ offset ];
 
-		*p = data >> 4; p++;
-		*p = data >> 4; p++;
-		*p = data >> 4; p++;
-		*p = data >> 4; p++;
-		*p = data & 0x0F; p++;
-		*p = data & 0x0F; p++;
-		*p = data & 0x0F; p++;
-		*p = data & 0x0F; p++;
+		*p = palette[data >> 4]; p++;
+		*p = palette[data >> 4]; p++;
+		*p = palette[data >> 4]; p++;
+		*p = palette[data >> 4]; p++;
+		*p = palette[data & 0x0F]; p++;
+		*p = palette[data & 0x0F]; p++;
+		*p = palette[data & 0x0F]; p++;
+		*p = palette[data & 0x0F]; p++;
 
 		data = videoram[ offset + 1 ];
 
-		*p = data >> 4; p++;
-		*p = data >> 4; p++;
-		*p = data >> 4; p++;
-		*p = data >> 4; p++;
-		*p = data & 0x0F; p++;
-		*p = data & 0x0F; p++;
-		*p = data & 0x0F; p++;
-		*p = data & 0x0F; p++;
+		*p = palette[data >> 4]; p++;
+		*p = palette[data >> 4]; p++;
+		*p = palette[data >> 4]; p++;
+		*p = palette[data >> 4]; p++;
+		*p = palette[data & 0x0F]; p++;
+		*p = palette[data & 0x0F]; p++;
+		*p = palette[data & 0x0F]; p++;
+		*p = palette[data & 0x0F]; p++;
 	}
 }
 
 static MC6845_UPDATE_ROW( cga_gfx_2bpp_update_row ) {
 	UINT8 *videoram = aga.videoram;
-	UINT16  *p = BITMAP_ADDR16(bitmap, y, 0);
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
+	UINT32  *p = &bitmap.pix32(y);
 	int i;
 
 //  if ( y == 0 ) logerror("cga_gfx_2bpp_update_row\n");
@@ -431,24 +439,25 @@ static MC6845_UPDATE_ROW( cga_gfx_2bpp_update_row ) {
 		UINT16 offset = ( ( ( ma + i ) << 1 ) & 0x1fff ) | ( ( y & 1 ) << 13 );
 		UINT8 data = videoram[ offset ];
 
-		*p = aga.cga_palette_lut_2bpp[ ( data >> 6 ) & 0x03 ]; p++;
-		*p = aga.cga_palette_lut_2bpp[ ( data >> 4 ) & 0x03 ]; p++;
-		*p = aga.cga_palette_lut_2bpp[ ( data >> 2 ) & 0x03 ]; p++;
-		*p = aga.cga_palette_lut_2bpp[   data        & 0x03 ]; p++;
+		*p = palette[aga.cga_palette_lut_2bpp[ ( data >> 6 ) & 0x03 ]]; p++;
+		*p = palette[aga.cga_palette_lut_2bpp[ ( data >> 4 ) & 0x03 ]]; p++;
+		*p = palette[aga.cga_palette_lut_2bpp[ ( data >> 2 ) & 0x03 ]]; p++;
+		*p = palette[aga.cga_palette_lut_2bpp[   data        & 0x03 ]]; p++;
 
 		data = videoram[ offset+1 ];
 
-		*p = aga.cga_palette_lut_2bpp[ ( data >> 6 ) & 0x03 ]; p++;
-		*p = aga.cga_palette_lut_2bpp[ ( data >> 4 ) & 0x03 ]; p++;
-		*p = aga.cga_palette_lut_2bpp[ ( data >> 2 ) & 0x03 ]; p++;
-		*p = aga.cga_palette_lut_2bpp[   data        & 0x03 ]; p++;
+		*p = palette[aga.cga_palette_lut_2bpp[ ( data >> 6 ) & 0x03 ]]; p++;
+		*p = palette[aga.cga_palette_lut_2bpp[ ( data >> 4 ) & 0x03 ]]; p++;
+		*p = palette[aga.cga_palette_lut_2bpp[ ( data >> 2 ) & 0x03 ]]; p++;
+		*p = palette[aga.cga_palette_lut_2bpp[   data        & 0x03 ]]; p++;
 	}
 }
 
 static MC6845_UPDATE_ROW( cga_gfx_1bpp_update_row ) {
 	UINT8 *videoram = aga.videoram;
-	UINT16  *p = BITMAP_ADDR16(bitmap, y, 0);
-	UINT8	fg = aga.cga_color_select & 0x0F;
+	const rgb_t *palette = palette_entry_list_raw(bitmap.palette());
+	UINT32  *p = &bitmap.pix32(y);
+	UINT8   fg = aga.cga_color_select & 0x0F;
 	int i;
 
 	if ( y == 0 ) logerror("cga_gfx_1bpp_update_row\n");
@@ -456,25 +465,25 @@ static MC6845_UPDATE_ROW( cga_gfx_1bpp_update_row ) {
 		UINT16 offset = ( ( ( ma + i ) << 1 ) & 0x1fff ) | ( ( ra & 1 ) << 13 );
 		UINT8 data = videoram[ offset ];
 
-		*p = ( data & 0x80 ) ? fg : 0; p++;
-		*p = ( data & 0x40 ) ? fg : 0; p++;
-		*p = ( data & 0x20 ) ? fg : 0; p++;
-		*p = ( data & 0x10 ) ? fg : 0; p++;
-		*p = ( data & 0x08 ) ? fg : 0; p++;
-		*p = ( data & 0x04 ) ? fg : 0; p++;
-		*p = ( data & 0x02 ) ? fg : 0; p++;
-		*p = ( data & 0x01 ) ? fg : 0; p++;
+		*p = palette[( data & 0x80 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x40 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x20 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x10 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x08 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x04 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x02 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x01 ) ? fg : 0]; p++;
 
 		data = videoram[ offset + 1 ];
 
-		*p = ( data & 0x80 ) ? fg : 0; p++;
-		*p = ( data & 0x40 ) ? fg : 0; p++;
-		*p = ( data & 0x20 ) ? fg : 0; p++;
-		*p = ( data & 0x10 ) ? fg : 0; p++;
-		*p = ( data & 0x08 ) ? fg : 0; p++;
-		*p = ( data & 0x04 ) ? fg : 0; p++;
-		*p = ( data & 0x02 ) ? fg : 0; p++;
-		*p = ( data & 0x01 ) ? fg : 0; p++;
+		*p = palette[( data & 0x80 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x40 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x20 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x10 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x08 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x04 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x02 ) ? fg : 0]; p++;
+		*p = palette[( data & 0x01 ) ? fg : 0]; p++;
 	}
 }
 
@@ -489,17 +498,17 @@ static READ8_HANDLER ( pc_aga_mda_r )
 	UINT8 data = 0xFF;
 
 	if ( aga.mode == AGA_MONO ) {
-		mc6845_device *mc6845 = space->machine().device<mc6845_device>(AGA_MC6845_NAME);
+		mc6845_device *mc6845 = space.machine().device<mc6845_device>(AGA_MC6845_NAME);
 		switch( offset )
 		{
 		case 0: case 2: case 4: case 6:
 			/* return last written mc6845 address value here? */
 			break;
 		case 1: case 3: case 5: case 7:
-			data = mc6845->register_r(*space, offset);
+			data = mc6845->register_r(space, offset);
 			break;
 		case 10:
-			data = (input_port_read(space->machine(), "IN0") & 0x80 ) | 0x08 | aga.mda_status;
+			data = (space.machine().root_device().ioport("IN0")->read() & 0x80 ) | 0x08 | aga.mda_status;
 			aga.mda_status ^= 0x01;
 			break;
 		/* 12, 13, 14  are the LPT1 ports */
@@ -511,14 +520,14 @@ static READ8_HANDLER ( pc_aga_mda_r )
 static WRITE8_HANDLER ( pc_aga_mda_w )
 {
 	if ( aga.mode == AGA_MONO ) {
-		mc6845_device *mc6845 = space->machine().device<mc6845_device>(AGA_MC6845_NAME);
+		mc6845_device *mc6845 = space.machine().device<mc6845_device>(AGA_MC6845_NAME);
 		switch( offset )
 		{
 			case 0: case 2: case 4: case 6:
-				mc6845->address_w( *space, offset, data );
+				mc6845->address_w( space, offset, data );
 				break;
 			case 1: case 3: case 5: case 7:
-				mc6845->register_w( *space, offset, data );
+				mc6845->register_w( space, offset, data );
 				break;
 			case 8:
 				aga.mda_mode_control = data;
@@ -544,13 +553,13 @@ static READ8_HANDLER ( pc_aga_cga_r )
 	UINT8 data = 0xFF;
 
 	if ( aga.mode == AGA_COLOR ) {
-		mc6845_device *mc6845 = space->machine().device<mc6845_device>(AGA_MC6845_NAME);
+		mc6845_device *mc6845 = space.machine().device<mc6845_device>(AGA_MC6845_NAME);
 		switch( offset ) {
 		case 0: case 2: case 4: case 6:
 			/* return last written mc6845 address value here? */
 			break;
 		case 1: case 3: case 5: case 7:
-			data = mc6845->register_r( *space, offset);
+			data = mc6845->register_r( space, offset);
 			break;
 		case 10:
 			data = aga.vsync | ( ( data & 0x40 ) >> 4 ) | aga.hsync;
@@ -590,14 +599,14 @@ static void pc_aga_set_palette_luts(void) {
 static WRITE8_HANDLER ( pc_aga_cga_w )
 {
 	if ( aga.mode == AGA_COLOR ) {
-		mc6845_device *mc6845 = space->machine().device<mc6845_device>(AGA_MC6845_NAME);
+		mc6845_device *mc6845 = space.machine().device<mc6845_device>(AGA_MC6845_NAME);
 
 		switch(offset) {
 		case 0: case 2: case 4: case 6:
-			mc6845->address_w( *space, offset, data );
+			mc6845->address_w( space, offset, data );
 			break;
 		case 1: case 3: case 5: case 7:
-			mc6845->register_w( *space, offset, data );
+			mc6845->register_w( space, offset, data );
 			break;
 		case 8:
 			aga.cga_mode_control = data;
@@ -659,14 +668,6 @@ static WRITE8_HANDLER ( pc_aga_cga_w )
 	}
 }
 
-
-static READ16_HANDLER ( pc16le_aga_mda_r ) { return read16le_with_read8_handler(pc_aga_mda_r, space, offset, mem_mask); }
-static WRITE16_HANDLER ( pc16le_aga_mda_w ) { write16le_with_write8_handler(pc_aga_mda_w, space, offset, data, mem_mask); }
-static READ16_HANDLER ( pc16le_aga_cga_r ) { return read16le_with_read8_handler(pc_aga_cga_r, space, offset, mem_mask); }
-static WRITE16_HANDLER ( pc16le_aga_cga_w ) { write16le_with_write8_handler(pc_aga_cga_w, space, offset, data, mem_mask); }
-
-
-
 /*************************************/
 
 void pc_aga_set_mode(running_machine &machine, AGA_MODE mode)
@@ -690,76 +691,65 @@ void pc_aga_set_mode(running_machine &machine, AGA_MODE mode)
 
 VIDEO_START( pc_aga )
 {
-	address_space *space = machine.firstcpu->memory().space(AS_PROGRAM);
-	address_space *spaceio = machine.firstcpu->memory().space(AS_IO);
-	int buswidth = machine.firstcpu->memory().space_config(AS_PROGRAM)->m_databus_width;
+	address_space &space = machine.firstcpu->space(AS_PROGRAM);
+	address_space &spaceio = machine.firstcpu->space(AS_IO);
+	int buswidth = machine.firstcpu->space_config(AS_PROGRAM)->m_databus_width;
 	switch(buswidth)
 	{
 		case 8:
-			space->install_legacy_readwrite_handler(0xb0000, 0xbffff, FUNC(pc200_videoram_r), FUNC(pc200_videoram_w) );
-			spaceio->install_legacy_readwrite_handler(0x3b0, 0x3bf, FUNC(pc_aga_mda_r), FUNC(pc_aga_mda_w) );
-			spaceio->install_legacy_readwrite_handler(0x3d0, 0x3df, FUNC(pc_aga_cga_r), FUNC(pc_aga_cga_w) );
+			space.install_legacy_readwrite_handler(0xb0000, 0xbffff, FUNC(pc200_videoram_r), FUNC(pc200_videoram_w) );
+			spaceio.install_legacy_readwrite_handler(0x3b0, 0x3bf, FUNC(pc_aga_mda_r), FUNC(pc_aga_mda_w) );
+			spaceio.install_legacy_readwrite_handler(0x3d0, 0x3df, FUNC(pc_aga_cga_r), FUNC(pc_aga_cga_w) );
 			break;
 
 		case 16:
-			space->install_legacy_readwrite_handler(0xb0000, 0xbffff, FUNC(pc200_videoram16le_r), FUNC(pc200_videoram16le_w) );
-			spaceio->install_legacy_readwrite_handler(0x3b0, 0x3bf, FUNC(pc16le_aga_mda_r), FUNC(pc16le_aga_mda_w) );
-			spaceio->install_legacy_readwrite_handler(0x3d0, 0x3df, FUNC(pc16le_aga_cga_r), FUNC(pc16le_aga_cga_w) );
+			space.install_legacy_readwrite_handler(0xb0000, 0xbffff, FUNC(pc200_videoram_r), FUNC(pc200_videoram_w), 0xffff );
+			spaceio.install_legacy_readwrite_handler(0x3b0, 0x3bf, FUNC(pc_aga_mda_r), FUNC(pc_aga_mda_w), 0xffff );
+			spaceio.install_legacy_readwrite_handler(0x3d0, 0x3df, FUNC(pc_aga_cga_r), FUNC(pc_aga_cga_w), 0xffff );
 			break;
 
 		default:
-			fatalerror("AGA:  Bus width %d not supported", buswidth);
+			fatalerror("AGA:  Bus width %d not supported\n", buswidth);
 			break;
 	}
 
 	memset( &aga, 0, sizeof( aga ) );
 	aga.mode = AGA_COLOR;
-	aga.mda_chr_gen = machine.region("gfx1")->base() + 0x1000;
-	aga.cga_chr_gen = machine.region("gfx1")->base();
+	aga.mda_chr_gen = machine.root_device().memregion("gfx1")->base() + 0x1000;
+	aga.cga_chr_gen = machine.root_device().memregion("gfx1")->base();
 	aga.videoram = auto_alloc_array(machine, UINT8, 0x10000);
 }
-
-READ16_HANDLER( pc_aga_videoram16le_r )	{ return read16le_with_read8_handler(pc_aga_videoram_r, space, offset, mem_mask); }
-WRITE16_HANDLER( pc_aga_videoram16le_w )	{ write16le_with_write8_handler(pc_aga_videoram_w, space, offset, data, mem_mask); }
 
 VIDEO_START( pc200 )
 {
-	address_space *space = machine.firstcpu->memory().space(AS_PROGRAM);
-	address_space *spaceio = machine.firstcpu->memory().space(AS_IO);
-	int buswidth = machine.firstcpu->memory().space_config(AS_PROGRAM)->m_databus_width;
+	address_space &space = machine.firstcpu->space(AS_PROGRAM);
+	address_space &spaceio = machine.firstcpu->space(AS_IO);
+	int buswidth = machine.firstcpu->space_config(AS_PROGRAM)->m_databus_width;
 	switch(buswidth)
 	{
 		case 8:
-			space->install_legacy_readwrite_handler(0xb0000, 0xbffff, FUNC(pc_aga_videoram_r), FUNC(pc_aga_videoram_w) );
-			spaceio->install_legacy_readwrite_handler(0x3b0, 0x3bf, FUNC(pc_aga_mda_r), FUNC(pc_aga_mda_w) );
-			spaceio->install_legacy_readwrite_handler(0x3d0, 0x3df, FUNC(pc200_cga_r),  FUNC(pc200_cga_w) );
+			space.install_legacy_readwrite_handler(0xb0000, 0xbffff, FUNC(pc_aga_videoram_r), FUNC(pc_aga_videoram_w) );
+			spaceio.install_legacy_readwrite_handler(0x3b0, 0x3bf, FUNC(pc_aga_mda_r), FUNC(pc_aga_mda_w) );
+			spaceio.install_legacy_readwrite_handler(0x3d0, 0x3df, FUNC(pc200_cga_r),  FUNC(pc200_cga_w) );
 			break;
 
 		case 16:
-			space->install_legacy_readwrite_handler(0xb0000, 0xbffff, FUNC(pc_aga_videoram16le_r), FUNC(pc_aga_videoram16le_w) );
-			spaceio->install_legacy_readwrite_handler(0x3b0, 0x3bf, FUNC(pc16le_aga_mda_r), FUNC(pc16le_aga_mda_w) );
-			spaceio->install_legacy_readwrite_handler(0x3d0, 0x3df, FUNC(pc200_cga16le_r), FUNC(pc200_cga16le_w) );
+			space.install_legacy_readwrite_handler(0xb0000, 0xbffff, FUNC(pc_aga_videoram_r), FUNC(pc_aga_videoram_w), 0xffff );
+			spaceio.install_legacy_readwrite_handler(0x3b0, 0x3bf, FUNC(pc_aga_mda_r), FUNC(pc_aga_mda_w), 0xffff );
+			spaceio.install_legacy_readwrite_handler(0x3d0, 0x3df, FUNC(pc200_cga_r),  FUNC(pc200_cga_w), 0xffff );
 			break;
 
 		default:
-			fatalerror("AGA:  Bus width %d not supported", buswidth);
+			fatalerror("AGA:  Bus width %d not supported\n", buswidth);
 			break;
 	}
 	memset( &aga, 0, sizeof( aga ) );
 
 	aga.mode = AGA_COLOR;
-	aga.mda_chr_gen = machine.region("gfx1")->base();
-	aga.cga_chr_gen = machine.region("gfx1")->base() + 0x1000;
+	aga.mda_chr_gen = machine.root_device().memregion("gfx1")->base();
+	aga.cga_chr_gen = machine.root_device().memregion("gfx1")->base() + 0x1000;
 	aga.videoram = auto_alloc_array(machine, UINT8, 0x10000);
-}
-
-
-static SCREEN_UPDATE( mc6845_aga )
-{
-	mc6845_device *mc6845 = screen->machine().device<mc6845_device>(AGA_MC6845_NAME);
-	mc6845->update(bitmap, cliprect);
-
-	return 0;
+	memset(aga.videoram, 0, sizeof(UINT8) * 0x10000);
 }
 
 
@@ -777,7 +767,7 @@ WRITE8_HANDLER ( pc_aga_videoram_w )
 	}
 }
 
- READ8_HANDLER( pc_aga_videoram_r )
+	READ8_HANDLER( pc_aga_videoram_r )
 {
 	UINT8 *videoram = aga.videoram;
 	switch (aga.mode) {
@@ -819,10 +809,6 @@ WRITE8_HANDLER ( pc200_videoram_w )
 	}
 }
 
-READ16_HANDLER( pc200_videoram16le_r )	{ return read16le_with_read8_handler(pc200_videoram_r, space, offset, mem_mask); }
-WRITE16_HANDLER( pc200_videoram16le_w )	{ write16le_with_write8_handler(pc200_videoram_w, space, offset, data, mem_mask); }
-
-
 static struct {
 	UINT8 port8, portd, porte;
 } pc200= { 0 };
@@ -831,7 +817,7 @@ static struct {
 // but now cga and mda are splitted in mess
 WRITE8_HANDLER( pc200_cga_w )
 {
-	pc_aga_cga_w(space, offset,data);
+	pc_aga_cga_w(space, offset,data,mem_mask);
 	switch(offset) {
 	case 4:
 		pc200.portd |= 0x20;
@@ -853,11 +839,11 @@ WRITE8_HANDLER( pc200_cga_w )
 		if ((pc200.porte & 7) != (data & 7))
 		{
 			if (data & 4)
-				pc_aga_set_mode(space->machine(), AGA_OFF);
+				pc_aga_set_mode(space.machine(), AGA_OFF);
 			else if (data & 2)
-				pc_aga_set_mode(space->machine(), AGA_MONO);
+				pc_aga_set_mode(space.machine(), AGA_MONO);
 			else
-				pc_aga_set_mode(space->machine(), AGA_COLOR);
+				pc_aga_set_mode(space.machine(), AGA_COLOR);
 		}
 		pc200.porte = data;
 		break;
@@ -885,15 +871,12 @@ READ8_HANDLER ( pc200_cga_r )
 	case 0xe:
 		// 0x20 low cga
 		// 0x10 low special
-		result = input_port_read(space->machine(), "DSW0") & 0x38;
+		result = space.machine().root_device().ioport("DSW0")->read() & 0x38;
 		break;
 
 	default:
-		result = pc_aga_cga_r(space, offset);
+		result = pc_aga_cga_r(space, offset, mem_mask);
 		break;
 	}
 	return result;
 }
-
-READ16_HANDLER( pc200_cga16le_r ) { return read16le_with_read8_handler(pc200_cga_r, space, offset, mem_mask); }
-WRITE16_HANDLER( pc200_cga16le_w ) { write16le_with_write8_handler(pc200_cga_w, space, offset, data, mem_mask); }

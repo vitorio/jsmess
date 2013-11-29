@@ -1,3 +1,5 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     Atari "Stella on Steroids" hardware
@@ -17,11 +19,11 @@
 
 void beathead_state::video_start()
 {
-	state_save_register_global(machine(), m_finescroll);
-	state_save_register_global(machine(), m_vram_latch_offset);
-	state_save_register_global(machine(), m_hsyncram_offset);
-	state_save_register_global(machine(), m_hsyncram_start);
-	state_save_register_global_array(machine(), m_hsyncram);
+	save_item(NAME(m_finescroll));
+	save_item(NAME(m_vram_latch_offset));
+	save_item(NAME(m_hsyncram_offset));
+	save_item(NAME(m_hsyncram_start));
+	save_item(NAME(m_hsyncram));
 }
 
 
@@ -86,10 +88,10 @@ WRITE32_MEMBER( beathead_state::finescroll_w )
 	UINT32 newword = COMBINE_DATA(&m_finescroll);
 
 	/* if VBLANK is going off on a scanline other than the last, suspend time */
-	if ((oldword & 8) && !(newword & 8) && space.machine().primary_screen->vpos() != 261)
+	if ((oldword & 8) && !(newword & 8) && m_screen->vpos() != 261)
 	{
-		logerror("Suspending time! (scanline = %d)\n", space.machine().primary_screen->vpos());
-		cputag_set_input_line(space.machine(), "maincpu", INPUT_LINE_HALT, ASSERT_LINE);
+		logerror("Suspending time! (scanline = %d)\n", m_screen->vpos());
+		m_maincpu->set_input_line(INPUT_LINE_HALT, ASSERT_LINE);
 	}
 }
 
@@ -122,7 +124,7 @@ READ32_MEMBER( beathead_state::hsync_ram_r )
 {
 	/* offset 0 is probably write-only */
 	if (offset == 0)
-		logerror("%08X:Unexpected HSYNC RAM read at offset 0\n", cpu_get_previouspc(&space.device()));
+		logerror("%08X:Unexpected HSYNC RAM read at offset 0\n", space.device().safe_pcbase());
 
 	/* offset 1 reads the data */
 	else
@@ -154,9 +156,9 @@ WRITE32_MEMBER( beathead_state::hsync_ram_w )
  *
  *************************************/
 
-bool beathead_state::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
+UINT32 beathead_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	UINT8 *videoram = reinterpret_cast<UINT8 *>(m_videoram);
+	UINT8 *videoram = reinterpret_cast<UINT8 *>(m_videoram.target());
 	int x, y;
 
 	/* generate the final screen */
@@ -182,7 +184,7 @@ bool beathead_state::screen_update(screen_device &screen, bitmap_t &bitmap, cons
 		}
 
 		/* then draw it */
-		draw_scanline16(&bitmap, cliprect.min_x, y, cliprect.max_x - cliprect.min_x + 1, &scanline[cliprect.min_x], NULL);
+		draw_scanline16(bitmap, cliprect.min_x, y, cliprect.width(), &scanline[cliprect.min_x], NULL);
 	}
 	return 0;
 }

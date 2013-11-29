@@ -1,5 +1,4 @@
 #include "emu.h"
-#include "video/konicdev.h"
 #include "includes/battlnts.h"
 
 /***************************************************************************
@@ -31,10 +30,9 @@ void battlnts_sprite_callback(running_machine &machine, int *code,int *color)
 	*color = 0;
 }
 
-WRITE8_HANDLER( battlnts_spritebank_w )
+WRITE8_MEMBER(battlnts_state::battlnts_spritebank_w)
 {
-	battlnts_state *state = space->machine().driver_data<battlnts_state>();
-	state->m_spritebank = 1024 * (data & 1);
+	m_spritebank = 1024 * (data & 1);
 }
 
 /***************************************************************************
@@ -43,14 +41,12 @@ WRITE8_HANDLER( battlnts_spritebank_w )
 
 ***************************************************************************/
 
-SCREEN_UPDATE( battlnts )
+UINT32 battlnts_state::screen_update_battlnts(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	battlnts_state *state = screen->machine().driver_data<battlnts_state>();
+	m_k007342->tilemap_update();
 
-	k007342_tilemap_update(state->m_k007342);
-
-	k007342_tilemap_draw(state->m_k007342, bitmap, cliprect, 0, TILEMAP_DRAW_OPAQUE ,0);
-	k007420_sprites_draw(state->m_k007420, bitmap, cliprect, screen->machine().gfx[1]);
-	k007342_tilemap_draw(state->m_k007342, bitmap, cliprect, 0, 1 | TILEMAP_DRAW_OPAQUE ,0);
+	m_k007342->tilemap_draw(screen, bitmap, cliprect, 0, TILEMAP_DRAW_OPAQUE ,0);
+	m_k007420->sprites_draw(bitmap, cliprect, machine().gfx[1]);
+	m_k007342->tilemap_draw(screen, bitmap, cliprect, 0, 1 | TILEMAP_DRAW_OPAQUE ,0);
 	return 0;
 }

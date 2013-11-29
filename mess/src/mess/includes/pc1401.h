@@ -9,42 +9,45 @@
 #ifndef PC1401_H_
 #define PC1401_H_
 
-#define CONTRAST (input_port_read(machine, "DSW0") & 0x07)
+#include "machine/nvram.h"
+
+#define CONTRAST (ioport("DSW0")->read() & 0x07)
 
 
 class pc1401_state : public driver_device
 {
 public:
+	enum
+	{
+		TIMER_POWER_UP
+	};
+
 	pc1401_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this, "maincpu") { }
 
 	UINT8 m_portc;
 	UINT8 m_outa;
 	UINT8 m_outb;
 	int m_power;
 	UINT8 m_reg[0x100];
+	DECLARE_DRIVER_INIT(pc1401);
+	UINT32 screen_update_pc1401(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	DECLARE_READ_LINE_MEMBER(pc1401_reset);
+	DECLARE_READ_LINE_MEMBER(pc1401_brk);
+	DECLARE_WRITE8_MEMBER(pc1401_outa);
+	DECLARE_WRITE8_MEMBER(pc1401_outb);
+	DECLARE_WRITE8_MEMBER(pc1401_outc);
+	DECLARE_READ8_MEMBER(pc1401_ina);
+	DECLARE_READ8_MEMBER(pc1401_inb);
+	DECLARE_READ8_MEMBER(pc1401_lcd_read);
+	DECLARE_WRITE8_MEMBER(pc1401_lcd_write);
+
+	virtual void machine_start();
+	required_device<cpu_device> m_maincpu;
+
+protected:
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 };
-
-
-/*----------- defined in machine/pc1401.c -----------*/
-
-int pc1401_reset(device_t *device);
-int pc1401_brk(device_t *device);
-void pc1401_outa(device_t *device, int data);
-void pc1401_outb(device_t *device, int data);
-void pc1401_outc(device_t *device, int data);
-int pc1401_ina(device_t *device);
-int pc1401_inb(device_t *device);
-
-DRIVER_INIT( pc1401 );
-NVRAM_HANDLER( pc1401 );
-
-
-/*----------- defined in video/pc1401.c -----------*/
-
-READ8_HANDLER(pc1401_lcd_read);
-WRITE8_HANDLER(pc1401_lcd_write);
-SCREEN_UPDATE( pc1401 );
-
 
 #endif /* PC1401_H_ */

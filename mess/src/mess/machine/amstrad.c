@@ -40,7 +40,9 @@ This gives a total of 19968 NOPs per frame.
 #include "machine/i8255.h"
 #include "machine/mc146818.h"
 #include "machine/upd765.h"
-#include "machine/ctronics.h"
+#include "bus/centronics/ctronics.h"
+#include "machine/cpc_rom.h"
+#include "machine/mface2.h"
 #include "imagedev/cassette.h"
 #include "imagedev/snapquik.h"
 #include "includes/amstrad.h"
@@ -92,14 +94,14 @@ static const UINT8 asic_unlock_seq[15] =
    The following tables show the possible ram configurations :*/
 static const int RamConfigurations[8 * 4] =
 {
-	0, 1, 2, 3, 					   /* config 0 */
-	0, 1, 2, 7, 					   /* config 1 */
-	4, 5, 6, 7, 					   /* config 2 */
-	0, 3, 2, 7, 					   /* config 3 */
-	0, 4, 2, 3, 					   /* config 4 */
-	0, 5, 2, 3, 					   /* config 5 */
-	0, 6, 2, 3, 					   /* config 6 */
-	0, 7, 2, 3					     /* config 7 */
+	0, 1, 2, 3,                        /* config 0 */
+	0, 1, 2, 7,                        /* config 1 */
+	4, 5, 6, 7,                        /* config 2 */
+	0, 3, 2, 7,                        /* config 3 */
+	0, 4, 2, 3,                        /* config 4 */
+	0, 5, 2, 3,                        /* config 5 */
+	0, 6, 2, 3,                        /* config 6 */
+	0, 7, 2, 3                       /* config 7 */
 };
 
 
@@ -118,38 +120,38 @@ The hardware allows selection of 32 colours, but these extra colours are copies 
 
 static const rgb_t amstrad_palette[32] =
 {
-	MAKE_RGB(0x060, 0x060, 0x060),			   /* white */
-	MAKE_RGB(0x060, 0x060, 0x060),			   /* white */
-	MAKE_RGB(0x000, 0x0ff, 0x060),			   /* sea green */
-	MAKE_RGB(0x0ff, 0x0ff, 0x060),			   /* pastel yellow */
-	MAKE_RGB(0x000, 0x000, 0x060),			   /* blue */
-	MAKE_RGB(0x0ff, 0x000, 0x060),			   /* purple */
-	MAKE_RGB(0x000, 0x060, 0x060),			   /* cyan */
-	MAKE_RGB(0x0ff, 0x060, 0x060),			   /* pink */
-	MAKE_RGB(0x0ff, 0x000, 0x060),			   /* purple */
-	MAKE_RGB(0x0ff, 0x0ff, 0x060),			   /* pastel yellow */
-	MAKE_RGB(0x0ff, 0x0ff, 0x000),			   /* bright yellow */
-	MAKE_RGB(0x0ff, 0x0ff, 0x0ff),			   /* bright white */
-	MAKE_RGB(0x0ff, 0x000, 0x000),			   /* bright red */
-	MAKE_RGB(0x0ff, 0x000, 0x0ff),			   /* bright magenta */
-	MAKE_RGB(0x0ff, 0x060, 0x000),			   /* orange */
-	MAKE_RGB(0x0ff, 0x060, 0x0ff),			   /* pastel magenta */
-	MAKE_RGB(0x000, 0x000, 0x060),			   /* blue */
-	MAKE_RGB(0x000, 0x0ff, 0x060),			   /* sea green */
-	MAKE_RGB(0x000, 0x0ff, 0x000),			   /* bright green */
-	MAKE_RGB(0x000, 0x0ff, 0x0ff),			   /* bright cyan */
-	MAKE_RGB(0x000, 0x000, 0x000),			   /* black */
-	MAKE_RGB(0x000, 0x000, 0x0ff),			   /* bright blue */
-	MAKE_RGB(0x000, 0x060, 0x000),			   /* green */
-	MAKE_RGB(0x000, 0x060, 0x0ff),			   /* sky blue */
-	MAKE_RGB(0x060, 0x000, 0x060),			   /* magenta */
-	MAKE_RGB(0x060, 0x0ff, 0x060),			   /* pastel green */
-	MAKE_RGB(0x060, 0x0ff, 0x060),			   /* lime */
-	MAKE_RGB(0x060, 0x0ff, 0x0ff),			   /* pastel cyan */
-	MAKE_RGB(0x060, 0x000, 0x000),			   /* Red */
-	MAKE_RGB(0x060, 0x000, 0x0ff),			   /* mauve */
-	MAKE_RGB(0x060, 0x060, 0x000),			   /* yellow */
-	MAKE_RGB(0x060, 0x060, 0x0ff)			   /* pastel blue */
+	MAKE_RGB(0x060, 0x060, 0x060),             /* white */
+	MAKE_RGB(0x060, 0x060, 0x060),             /* white */
+	MAKE_RGB(0x000, 0x0ff, 0x060),             /* sea green */
+	MAKE_RGB(0x0ff, 0x0ff, 0x060),             /* pastel yellow */
+	MAKE_RGB(0x000, 0x000, 0x060),             /* blue */
+	MAKE_RGB(0x0ff, 0x000, 0x060),             /* purple */
+	MAKE_RGB(0x000, 0x060, 0x060),             /* cyan */
+	MAKE_RGB(0x0ff, 0x060, 0x060),             /* pink */
+	MAKE_RGB(0x0ff, 0x000, 0x060),             /* purple */
+	MAKE_RGB(0x0ff, 0x0ff, 0x060),             /* pastel yellow */
+	MAKE_RGB(0x0ff, 0x0ff, 0x000),             /* bright yellow */
+	MAKE_RGB(0x0ff, 0x0ff, 0x0ff),             /* bright white */
+	MAKE_RGB(0x0ff, 0x000, 0x000),             /* bright red */
+	MAKE_RGB(0x0ff, 0x000, 0x0ff),             /* bright magenta */
+	MAKE_RGB(0x0ff, 0x060, 0x000),             /* orange */
+	MAKE_RGB(0x0ff, 0x060, 0x0ff),             /* pastel magenta */
+	MAKE_RGB(0x000, 0x000, 0x060),             /* blue */
+	MAKE_RGB(0x000, 0x0ff, 0x060),             /* sea green */
+	MAKE_RGB(0x000, 0x0ff, 0x000),             /* bright green */
+	MAKE_RGB(0x000, 0x0ff, 0x0ff),             /* bright cyan */
+	MAKE_RGB(0x000, 0x000, 0x000),             /* black */
+	MAKE_RGB(0x000, 0x000, 0x0ff),             /* bright blue */
+	MAKE_RGB(0x000, 0x060, 0x000),             /* green */
+	MAKE_RGB(0x000, 0x060, 0x0ff),             /* sky blue */
+	MAKE_RGB(0x060, 0x000, 0x060),             /* magenta */
+	MAKE_RGB(0x060, 0x0ff, 0x060),             /* pastel green */
+	MAKE_RGB(0x060, 0x0ff, 0x060),             /* lime */
+	MAKE_RGB(0x060, 0x0ff, 0x0ff),             /* pastel cyan */
+	MAKE_RGB(0x060, 0x000, 0x000),             /* Red */
+	MAKE_RGB(0x060, 0x000, 0x0ff),             /* mauve */
+	MAKE_RGB(0x060, 0x060, 0x000),             /* yellow */
+	MAKE_RGB(0x060, 0x060, 0x0ff)              /* pastel blue */
 };
 
 
@@ -195,39 +197,49 @@ static const rgb_t amstrad_green_palette[32] =
   Prototypes
 *******************************************************************/
 
-INLINE void amstrad_update_video( running_machine &machine );
-INLINE void amstrad_plus_update_video( running_machine &machine );
-static void amstrad_rethinkMemory(running_machine &machine);
-
-
 /* Initialise the palette */
-PALETTE_INIT( amstrad_cpc )
+PALETTE_INIT_MEMBER(amstrad_state,amstrad_cpc)
 {
-	palette_set_colors(machine, 0, amstrad_palette, ARRAY_LENGTH(amstrad_palette));
+	palette_set_colors(machine(), 0, amstrad_palette, ARRAY_LENGTH(amstrad_palette));
 }
 
 
-PALETTE_INIT( amstrad_cpc_green )
+PALETTE_INIT_MEMBER(amstrad_state,amstrad_cpc_green)
 {
-	palette_set_colors(machine, 0, amstrad_green_palette, ARRAY_LENGTH(amstrad_green_palette));
+	palette_set_colors(machine(), 0, amstrad_green_palette, ARRAY_LENGTH(amstrad_green_palette));
 }
 
 
-WRITE_LINE_DEVICE_HANDLER( aleste_interrupt )
+void amstrad_state::aleste_interrupt(bool state)
 {
-	amstrad_state *drvstate = device->machine().driver_data<amstrad_state>();
-	if(state == CLEAR_LINE)
-		drvstate->m_aleste_fdc_int = 0;
-	else
-		drvstate->m_aleste_fdc_int = 1;
+	m_aleste_fdc_int = state;
 }
 
 
 /* Some games set the 8255 to mode 1 and expect a strobe signal */
 /* on PC2. Apparently PC2 is always low on the CPC. ?!? */
-static TIMER_CALLBACK(amstrad_pc2_low)
+TIMER_CALLBACK_MEMBER(amstrad_state::amstrad_pc2_low)
 {
-	machine.device<i8255_device>("ppi8255")->pc2_w(0);
+	m_ppi->pc2_w(0);
+}
+
+
+void amstrad_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+{
+	switch (id)
+	{
+	case TIMER_PC2_LOW:
+		amstrad_pc2_low(ptr, param);
+		break;
+	case TIMER_VIDEO_UPDATE:
+		amstrad_video_update_timer(ptr, param);
+		break;
+	case TIMER_SET_RESOLUTION:
+		cb_set_resolution(ptr, param);
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in amstrad_state::device_timer");
+	}
 }
 
 
@@ -259,7 +271,7 @@ Green value, Red value, Blue value: 0 = 0%, 01/10 = 50%, 11 = 100%.
 The 01 case is not used, it is unknown if this produces a different amount of colour.
 */
 
-static unsigned char kccomp_get_colour_element(int colour_value)
+unsigned char amstrad_state::kccomp_get_colour_element(int colour_value)
 {
 	switch (colour_value)
 	{
@@ -280,15 +292,16 @@ static unsigned char kccomp_get_colour_element(int colour_value)
 /* the colour rom has the same 32 bytes repeated, but it might be possible to put a new rom in
 with different data and be able to select the other entries - not tested on a real kc compact yet
 and not supported by this driver */
-PALETTE_INIT( kccomp )
+PALETTE_INIT_MEMBER(amstrad_state,kccomp)
 {
+	const UINT8 *color_prom = memregion("proms")->base();
 	int i;
 
 	color_prom = color_prom+0x018000;
 
 	for (i=0; i<32; i++)
 	{
-		palette_set_color_rgb(machine, i,
+		palette_set_color_rgb(machine(), i,
 			kccomp_get_colour_element((color_prom[i]>>2) & 0x03),
 			kccomp_get_colour_element((color_prom[i]>>4) & 0x03),
 			kccomp_get_colour_element((color_prom[i]>>0) & 0x03));
@@ -302,11 +315,11 @@ Amstrad Plus
 The Amstrad Plus has a 4096 colour palette
 *********************************************/
 
-PALETTE_INIT( amstrad_plus )
+PALETTE_INIT_MEMBER(amstrad_state,amstrad_plus)
 {
 	int i;
 
-	palette_set_colors(machine, 0, amstrad_palette, sizeof(amstrad_palette) / 3);
+	palette_set_colors(machine(), 0, amstrad_palette, ARRAY_LENGTH(amstrad_palette) / 3);
 	for ( i = 0; i < 0x1000; i++ )
 	{
 		int r, g, b;
@@ -319,17 +332,17 @@ PALETTE_INIT( amstrad_plus )
 		g = ( g << 4 ) | ( g );
 		b = ( b << 4 ) | ( b );
 
-		palette_set_color_rgb(machine, i, r, g, b);
+		palette_set_color_rgb(machine(), i, r, g, b);
 	}
 }
 
 
-PALETTE_INIT( aleste )
+PALETTE_INIT_MEMBER(amstrad_state,aleste)
 {
 	int i;
 
 	/* CPC Colour data is stored in the colour ROM (RFCOLDAT.BIN) at 0x140-0x17f */
-	unsigned char* pal = machine.region("user4")->base();
+	unsigned char* pal = memregion("user4")->base();
 
 	for(i=0; i<32; i++)
 	{
@@ -343,7 +356,7 @@ PALETTE_INIT( aleste )
 		g = (g << 6);
 		b = (b << 6);
 
-		palette_set_color_rgb(machine, i, r, g, b);
+		palette_set_color_rgb(machine(), i, r, g, b);
 	}
 
 	/* MSX colour palette is 6-bit RGB */
@@ -359,116 +372,116 @@ PALETTE_INIT( aleste )
 		g = (g << 6);
 		b = (b << 6);
 
-		palette_set_color_rgb(machine, i+32, r, g, b);
+		palette_set_color_rgb(machine(), i+32, r, g, b);
 	}
 }
 
 
-static void amstrad_init_lookups( amstrad_state *state )
+void amstrad_state::amstrad_init_lookups()
 {
 	int i;
 
 	for ( i = 0; i < 256; i++ )
 	{
-		state->m_mode0_lookup[i] = ( ( i & 0x80 ) >> 7 ) | ( ( i & 0x20 ) >> 3 ) | ( ( i & 0x08 ) >> 2 ) | ( ( i & 0x02 ) << 2 );
-		state->m_mode1_lookup[i] = ( ( i & 0x80 ) >> 7 ) | ( ( i & 0x08 ) >> 2 );
-		state->m_mode2_lookup[i] = ( ( i & 0x80 ) >> 7 );
+		m_mode0_lookup[i] = ( ( i & 0x80 ) >> 7 ) | ( ( i & 0x20 ) >> 3 ) | ( ( i & 0x08 ) >> 2 ) | ( ( i & 0x02 ) << 2 );
+		m_mode1_lookup[i] = ( ( i & 0x80 ) >> 7 ) | ( ( i & 0x08 ) >> 2 );
+		m_mode2_lookup[i] = ( ( i & 0x80 ) >> 7 );
 	}
 }
 
 
 /* Set the new screen mode (0,1,2,4) from the GateArray */
-static void amstrad_vh_update_mode( amstrad_state *state )
+void amstrad_state::amstrad_vh_update_mode()
 {
-	if ( state->m_system_type == SYSTEM_PLUS || state->m_system_type == SYSTEM_GX4000 )
+	if ( m_system_type == SYSTEM_PLUS || m_system_type == SYSTEM_GX4000 )
 	{
 		/* select a cpc plus mode */
-		switch ( state->m_gate_array.mrer & 0x03 )
+		switch ( m_gate_array.mrer & 0x03 )
 		{
-		case 0:		/* Mode 0: 160x200, 16 colours */
-			state->m_gate_array.mode_lookup = state->m_mode0_lookup;
-			state->m_gate_array.max_colour_ticks = 4;
-			state->m_gate_array.ticks_increment = 1;
+		case 0:     /* Mode 0: 160x200, 16 colours */
+			m_gate_array.mode_lookup = m_mode0_lookup;
+			m_gate_array.max_colour_ticks = 4;
+			m_gate_array.ticks_increment = 1;
 			break;
 
-		case 1:		/* Mode 1: 320x200, 4 colous */
-			state->m_gate_array.mode_lookup = state->m_mode1_lookup;
-			state->m_gate_array.max_colour_ticks = 2;
-			state->m_gate_array.ticks_increment = 1;
+		case 1:     /* Mode 1: 320x200, 4 colous */
+			m_gate_array.mode_lookup = m_mode1_lookup;
+			m_gate_array.max_colour_ticks = 2;
+			m_gate_array.ticks_increment = 1;
 			break;
 
-		case 2:		/* Mode 2: 640x200, 2 colours */
-			state->m_gate_array.mode_lookup = state->m_mode2_lookup;
-			state->m_gate_array.max_colour_ticks = 1;
-			state->m_gate_array.ticks_increment = 1;
+		case 2:     /* Mode 2: 640x200, 2 colours */
+			m_gate_array.mode_lookup = m_mode2_lookup;
+			m_gate_array.max_colour_ticks = 1;
+			m_gate_array.ticks_increment = 1;
 			break;
 
-		case 3:		/* Mode 3: 160x200, 4 colours */
-			state->m_gate_array.mode_lookup = state->m_mode0_lookup;
-			state->m_gate_array.max_colour_ticks = 4;
-			state->m_gate_array.ticks_increment = 1;
+		case 3:     /* Mode 3: 160x200, 4 colours */
+			m_gate_array.mode_lookup = m_mode0_lookup;
+			m_gate_array.max_colour_ticks = 4;
+			m_gate_array.ticks_increment = 1;
 			break;
 		}
 	}
 	else
 	{
-		if ( state->m_aleste_mode & 0x02 )
+		if ( m_aleste_mode & 0x02 )
 		{
 			/* select an aleste mode */
-			switch ( state->m_gate_array.mrer & 0x03 )
+			switch ( m_gate_array.mrer & 0x03 )
 			{
-			case 0:		/* Aleste Mode 0 (= Amstrad CPC mode 2): 640x200, 2 colours */
-				state->m_gate_array.mode_lookup = state->m_mode2_lookup;
-				state->m_gate_array.max_colour_ticks = 1;
-				state->m_gate_array.ticks_increment = 1;
+			case 0:     /* Aleste Mode 0 (= Amstrad CPC mode 2): 640x200, 2 colours */
+				m_gate_array.mode_lookup = m_mode2_lookup;
+				m_gate_array.max_colour_ticks = 1;
+				m_gate_array.ticks_increment = 1;
 				break;
 
-			case 1:		/* Aleste mode 1 (= Amstrad CPC mode 1): 320x200, 4 colours */
-				state->m_gate_array.mode_lookup = state->m_mode1_lookup;
-				state->m_gate_array.max_colour_ticks = 2;
-				state->m_gate_array.ticks_increment = 1;
+			case 1:     /* Aleste mode 1 (= Amstrad CPC mode 1): 320x200, 4 colours */
+				m_gate_array.mode_lookup = m_mode1_lookup;
+				m_gate_array.max_colour_ticks = 2;
+				m_gate_array.ticks_increment = 1;
 				break;
 
-			case 2:		/* Aleste mode 2: 4 colours */
-				state->m_gate_array.mode_lookup = state->m_mode1_lookup;
-				state->m_gate_array.max_colour_ticks = 1;
-				state->m_gate_array.ticks_increment = 2;
+			case 2:     /* Aleste mode 2: 4 colours */
+				m_gate_array.mode_lookup = m_mode1_lookup;
+				m_gate_array.max_colour_ticks = 1;
+				m_gate_array.ticks_increment = 2;
 				break;
 
-			case 3:		/* Aleste mode 3: 16 colours */
-				state->m_gate_array.mode_lookup = state->m_mode0_lookup;
-				state->m_gate_array.max_colour_ticks = 2;
-				state->m_gate_array.ticks_increment = 2;
+			case 3:     /* Aleste mode 3: 16 colours */
+				m_gate_array.mode_lookup = m_mode0_lookup;
+				m_gate_array.max_colour_ticks = 2;
+				m_gate_array.ticks_increment = 2;
 				break;
 			}
 		}
 		else
 		{
 			/* select an original cpc mode */
-			switch ( state->m_gate_array.mrer & 0x03 )
+			switch ( m_gate_array.mrer & 0x03 )
 			{
-			case 0:		/* Mode 0: 160x200, 16 colours */
-				state->m_gate_array.mode_lookup = state->m_mode0_lookup;
-				state->m_gate_array.max_colour_ticks = 4;
-				state->m_gate_array.ticks_increment = 1;
+			case 0:     /* Mode 0: 160x200, 16 colours */
+				m_gate_array.mode_lookup = m_mode0_lookup;
+				m_gate_array.max_colour_ticks = 4;
+				m_gate_array.ticks_increment = 1;
 				break;
 
-			case 1:		/* Mode 1: 320x200, 4 colous */
-				state->m_gate_array.mode_lookup = state->m_mode1_lookup;
-				state->m_gate_array.max_colour_ticks = 2;
-				state->m_gate_array.ticks_increment = 1;
+			case 1:     /* Mode 1: 320x200, 4 colous */
+				m_gate_array.mode_lookup = m_mode1_lookup;
+				m_gate_array.max_colour_ticks = 2;
+				m_gate_array.ticks_increment = 1;
 				break;
 
-			case 2:		/* Mode 2: 640x200, 2 colours */
-				state->m_gate_array.mode_lookup = state->m_mode2_lookup;
-				state->m_gate_array.max_colour_ticks = 1;
-				state->m_gate_array.ticks_increment = 1;
+			case 2:     /* Mode 2: 640x200, 2 colours */
+				m_gate_array.mode_lookup = m_mode2_lookup;
+				m_gate_array.max_colour_ticks = 1;
+				m_gate_array.ticks_increment = 1;
 				break;
 
-			case 3:		/* Mode 3: 160x200, 4 colours */
-				state->m_gate_array.mode_lookup = state->m_mode0_lookup;
-				state->m_gate_array.max_colour_ticks = 4;
-				state->m_gate_array.ticks_increment = 1;
+			case 3:     /* Mode 3: 160x200, 4 colours */
+				m_gate_array.mode_lookup = m_mode0_lookup;
+				m_gate_array.max_colour_ticks = 4;
+				m_gate_array.ticks_increment = 1;
 				break;
 			}
 		}
@@ -489,311 +502,323 @@ DMA commands
 4020h   STOP    Stop processing the sound list.
 */
 
-static void amstrad_plus_dma_parse(running_machine &machine, int channel)
+void amstrad_state::amstrad_plus_dma_parse(int channel)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
 	unsigned short command;
 
-	if( state->m_asic.dma_addr[channel] & 0x01)
-		state->m_asic.dma_addr[channel]++;  // align to even address
+	if( m_asic.dma_addr[channel] & 0x01)
+		m_asic.dma_addr[channel]++;  // align to even address
 
-	if ( state->m_asic.dma_pause[channel] != 0 )
+	if ( m_asic.dma_pause[channel] != 0 )
 	{  // do nothing, this channel is paused
-		state->m_asic.dma_prescaler[channel]--;
-		if ( state->m_asic.dma_prescaler[channel] == 0 )
+		m_asic.dma_prescaler[channel]--;
+		if ( m_asic.dma_prescaler[channel] == 0 )
 		{
-			state->m_asic.dma_pause[channel]--;
-			state->m_asic.dma_prescaler[channel] = state->m_asic.ram[0x2c02 + (4*channel)] + 1;
+			m_asic.dma_pause[channel]--;
+			m_asic.dma_prescaler[channel] = m_asic.ram[0x2c02 + (4*channel)] + 1;
 		}
 		return;
 	}
-	command = (ram_get_ptr(machine.device(RAM_TAG))[state->m_asic.dma_addr[channel]+1] << 8) + ram_get_ptr(machine.device(RAM_TAG))[state->m_asic.dma_addr[channel]];
-//  logerror("DMA #%i: address %04x: command %04x\n",channel,state->m_asic.dma_addr[channel],command);
+	command = (m_ram->pointer()[m_asic.dma_addr[channel]+1] << 8) + m_ram->pointer()[m_asic.dma_addr[channel]];
+//  logerror("DMA #%i: address %04x: command %04x\n",channel,m_asic.dma_addr[channel],command);
 	switch (command & 0xf000)
 	{
 	case 0x0000:  // Load PSG register
 		{
-			device_t *ay8910 = machine.device("ay");
-			ay8910_address_w(ay8910, 0, (command & 0x0f00) >> 8);
-			ay8910_data_w(ay8910, 0, command & 0x00ff);
-			ay8910_address_w(ay8910, 0, state->m_prev_reg);
+			m_ay->address_w(generic_space(), 0, (command & 0x0f00) >> 8);
+			m_ay->data_w(generic_space(), 0, command & 0x00ff);
+			m_ay->address_w(generic_space(), 0, m_prev_reg);
 		}
 		logerror("DMA %i: LOAD %i, %i\n",channel,(command & 0x0f00) >> 8, command & 0x00ff);
 		break;
 	case 0x1000:  // Pause for n HSYNCs (0 - 4095)
-		state->m_asic.dma_pause[channel] = (command & 0x0fff) - 1;
+		m_asic.dma_pause[channel] = (command & 0x0fff) - 1;
 		logerror("DMA %i: PAUSE %i\n",channel,command & 0x0fff);
 		break;
 	case 0x2000:  // Beginning of repeat loop
-		state->m_asic.dma_repeat[channel] = state->m_asic.dma_addr[channel];
-		state->m_asic.dma_loopcount[channel] = (command & 0x0fff);
+		m_asic.dma_repeat[channel] = m_asic.dma_addr[channel];
+		m_asic.dma_loopcount[channel] = (command & 0x0fff);
 		logerror("DMA %i: REPEAT %i\n",channel,command & 0x0fff);
 		break;
 	case 0x4000:  // Control functions
 		if (command & 0x01) // Loop back to last Repeat instruction
 		{
-			if (state->m_asic.dma_loopcount[channel] > 0)
+			if (m_asic.dma_loopcount[channel] > 0)
 			{
-				state->m_asic.dma_addr[channel] = state->m_asic.dma_repeat[channel];
-				logerror("DMA %i: LOOP (%i left)\n",channel,state->m_asic.dma_loopcount[channel]);
-				state->m_asic.dma_loopcount[channel]--;
+				m_asic.dma_addr[channel] = m_asic.dma_repeat[channel];
+				logerror("DMA %i: LOOP (%i left)\n",channel,m_asic.dma_loopcount[channel]);
+				m_asic.dma_loopcount[channel]--;
 			}
 			else
 				logerror("DMA %i: LOOP (end)\n",channel);
 		}
 		if (command & 0x10) // Cause interrupt
 		{
-			state->m_plus_irq_cause = channel * 2;
-			state->m_asic.ram[0x2c0f] |= (0x40 >> channel);
-			cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
+			m_plus_irq_cause = channel * 2;
+			m_asic.ram[0x2c0f] |= (0x40 >> channel);
+			m_maincpu->set_input_line(0, ASSERT_LINE);
 			logerror("DMA %i: INT\n",channel);
 		}
 		if (command & 0x20)  // Stop processing on this channel
 		{
-			state->m_asic.dma_status &= ~(0x01 << channel);
+			m_asic.dma_status &= ~(0x01 << channel);
 			logerror("DMA %i: STOP\n",channel);
 		}
 		break;
 	default:
-		logerror("DMA: Unknown DMA command - %04x - at address &%04x\n",command,state->m_asic.dma_addr[channel]);
+		logerror("DMA: Unknown DMA command - %04x - at address &%04x\n",command,m_asic.dma_addr[channel]);
 	}
-	state->m_asic.dma_addr[channel] += 2;  // point to next DMA instruction
+	m_asic.dma_addr[channel] += 2;  // point to next DMA instruction
 }
 
 
-static void amstrad_plus_handle_dma(running_machine &machine)
+void amstrad_state::amstrad_plus_handle_dma()
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	if ( state->m_asic.dma_status & 0x01 )  // DMA channel 0
-		amstrad_plus_dma_parse( machine, 0 );
+	if ( m_asic.dma_status & 0x01 )  // DMA channel 0
+	{
+		amstrad_plus_dma_parse( 0 );
+	}
 
-	if ( state->m_asic.dma_status & 0x02 )  // DMA channel 1
-		amstrad_plus_dma_parse( machine, 1 );
+	if ( m_asic.dma_status & 0x02 )  // DMA channel 1
+	{
+		amstrad_plus_dma_parse( 1 );
+	}
 
-	if ( state->m_asic.dma_status & 0x04 )  // DMA channel 2
-		amstrad_plus_dma_parse( machine, 2 );
+	if ( m_asic.dma_status & 0x04 )  // DMA channel 2
+	{
+		amstrad_plus_dma_parse( 2 );
+	}
 }
 
+TIMER_CALLBACK_MEMBER(amstrad_state::amstrad_video_update_timer)
+{
+	if(param == 1)
+	{
+		amstrad_plus_update_video();
+	}
+	else
+	{
+		amstrad_update_video();
+	}
+}
 
 /* Set the new colour from the GateArray */
-static void amstrad_vh_update_colour(running_machine &machine, int PenIndex, UINT16 hw_colour_index)
+void amstrad_state::amstrad_vh_update_colour(int PenIndex, UINT16 hw_colour_index)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	if ( state->m_system_type == SYSTEM_PLUS || state->m_system_type == SYSTEM_GX4000 )
+	if ( m_system_type == SYSTEM_PLUS || m_system_type == SYSTEM_GX4000 )
 	{
 		int val;
 
-		amstrad_plus_update_video( machine );
+		timer_set(attotime::from_usec(0), TIMER_VIDEO_UPDATE, 1);
 
 		/* CPC+/GX4000 - normal palette changes through the Gate Array also makes the corresponding change in the ASIC palette */
 		val = (amstrad_palette[hw_colour_index] & 0xf00000) >> 16; /* red */
 		val |= (amstrad_palette[hw_colour_index] & 0x0000f0) >> 4; /* blue */
-		state->m_asic.ram[0x2400+PenIndex*2] = val;
+		m_asic.ram[0x2400+PenIndex*2] = val;
 		val = (amstrad_palette[hw_colour_index] & 0x00f000) >> 12; /* green */
-		state->m_asic.ram[0x2401+PenIndex*2] = val;
+		m_asic.ram[0x2401+PenIndex*2] = val;
 	}
 	else
 	{
-		amstrad_update_video( machine );
+		timer_set(attotime::from_usec(0), TIMER_VIDEO_UPDATE, 0);
 	}
-	state->m_GateArray_render_colours[PenIndex] = hw_colour_index;
+	m_GateArray_render_colours[PenIndex] = hw_colour_index;
 }
 
 
-static void aleste_vh_update_colour(running_machine &machine, int PenIndex, UINT16 hw_colour_index)
+void amstrad_state::aleste_vh_update_colour(int PenIndex, UINT16 hw_colour_index)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	amstrad_update_video( machine );
-	state->m_GateArray_render_colours[PenIndex] = hw_colour_index+32;
+	timer_set(attotime::from_usec(0), TIMER_VIDEO_UPDATE, 0);
+	m_GateArray_render_colours[PenIndex] = hw_colour_index+32;
 }
 
 
-INLINE void amstrad_gate_array_get_video_data( running_machine &machine )
+void amstrad_state::amstrad_gate_array_get_video_data()
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	if ( state->m_aleste_mode & 0x02 )
-		state->m_gate_array.address = ( ( state->m_gate_array.ma & 0x2000 ) << 2 ) | ( ( state->m_gate_array.ra & 0x06 ) << 11 ) | ( ( state->m_gate_array.ra & 0x01 ) << 14 ) | ( ( state->m_gate_array.ma & 0x7ff ) << 1 );
-	else
-		state->m_gate_array.address = ( ( state->m_gate_array.ma & 0x3000 ) << 2 ) | ( ( state->m_gate_array.ra & 0x07 ) << 11 ) | ( ( state->m_gate_array.ma & 0x3ff ) << 1 );
-	state->m_gate_array.data = ram_get_ptr(machine.device(RAM_TAG))[ state->m_gate_array.address ];
-	state->m_gate_array.colour = state->m_GateArray_render_colours[ state->m_gate_array.mode_lookup[state->m_gate_array.data] ];
-	state->m_gate_array.colour_ticks = state->m_gate_array.max_colour_ticks;
-	state->m_gate_array.ticks = 0;
-}
-
-
-INLINE void amstrad_update_video( running_machine &machine )
-{
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	attotime now = machine.time();
-
-	if ( state->m_gate_array.draw_p )
+	if ( m_aleste_mode & 0x02 )
 	{
-		UINT32 cycles_passed = (now - state->m_gate_array.last_draw_time ).as_ticks(XTAL_16MHz);
+		m_gate_array.address = ( ( m_gate_array.ma & 0x2000 ) << 2 ) | ( ( m_gate_array.ra & 0x06 ) << 11 ) | ( ( m_gate_array.ra & 0x01 ) << 14 ) | ( ( m_gate_array.ma & 0x7ff ) << 1 );
+	}
+	else
+	{
+		m_gate_array.address = ( ( m_gate_array.ma & 0x3000 ) << 2 ) | ( ( m_gate_array.ra & 0x07 ) << 11 ) | ( ( m_gate_array.ma & 0x3ff ) << 1 );
+	}
+	m_gate_array.data = m_ram->pointer()[ m_gate_array.address ];
+	m_gate_array.colour = m_GateArray_render_colours[ m_gate_array.mode_lookup[m_gate_array.data] ];
+	m_gate_array.colour_ticks = m_gate_array.max_colour_ticks;
+	m_gate_array.ticks = 0;
+}
+
+
+void amstrad_state::amstrad_update_video()
+{
+	attotime now = machine().time();
+
+
+	if ( m_gate_array.draw_p )
+	{
+		UINT32 cycles_passed = (now - m_gate_array.last_draw_time ).as_ticks(XTAL_16MHz);
 
 		while( cycles_passed )
 		{
-			if ( ! state->m_gate_array.de || ( ( state->m_aleste_mode & 0x02 ) && ! ( state->m_aleste_mode & 0x08 ) ) )
+			if ( ! m_gate_array.de || ( ( m_aleste_mode & 0x02 ) && ! ( m_aleste_mode & 0x08 ) ) )
 			{
-				*state->m_gate_array.draw_p = state->m_GateArray_render_colours[ 16 ];
+				*m_gate_array.draw_p = m_GateArray_render_colours[ 16 ];
 			}
 			else
 			{
-				*state->m_gate_array.draw_p = state->m_gate_array.colour;
-				state->m_gate_array.colour_ticks--;
-				if ( ! state->m_gate_array.colour_ticks )
+				*m_gate_array.draw_p = m_gate_array.colour;
+				m_gate_array.colour_ticks--;
+				if ( ! m_gate_array.colour_ticks )
 				{
-					state->m_gate_array.data <<= 1;
-					state->m_gate_array.colour = state->m_GateArray_render_colours[ state->m_gate_array.mode_lookup[state->m_gate_array.data] ];
-					state->m_gate_array.colour_ticks = state->m_gate_array.max_colour_ticks;
+					m_gate_array.data <<= 1;
+					m_gate_array.colour = m_GateArray_render_colours[ m_gate_array.mode_lookup[m_gate_array.data] ];
+					m_gate_array.colour_ticks = m_gate_array.max_colour_ticks;
 				}
-				state->m_gate_array.ticks += state->m_gate_array.ticks_increment;
-				switch( state->m_gate_array.ticks)
+				m_gate_array.ticks += m_gate_array.ticks_increment;
+				switch( m_gate_array.ticks)
 				{
 				case 8:
-					state->m_gate_array.data = ram_get_ptr(machine.device(RAM_TAG))[ state->m_gate_array.address + 1 ];
-					state->m_gate_array.colour = state->m_GateArray_render_colours[ state->m_gate_array.mode_lookup[state->m_gate_array.data] ];
+					m_gate_array.data = m_ram->pointer()[ m_gate_array.address + 1 ];
+					m_gate_array.colour = m_GateArray_render_colours[ m_gate_array.mode_lookup[m_gate_array.data] ];
 					break;
 				case 16:
-					state->m_gate_array.ma += 1;						/* If we were synced with the 6845 mc6845_get_ma should return this value */
-					amstrad_gate_array_get_video_data( machine );
+					m_gate_array.ma += 1;                        /* If we were synced with the 6845 mc6845_get_ma should return this value */
+					amstrad_gate_array_get_video_data();
 					break;
 				}
 			}
-			state->m_gate_array.draw_p++;
+			m_gate_array.draw_p++;
 			cycles_passed--;
-			state->m_gate_array.line_ticks++;
-			if ( state->m_gate_array.line_ticks > state->m_gate_array.bitmap->width )
+			m_gate_array.line_ticks++;
+			if ( m_gate_array.line_ticks > m_gate_array.bitmap->width() )
 			{
-				state->m_gate_array.draw_p = NULL;
+				m_gate_array.draw_p = NULL;
 				cycles_passed = 0;
 			}
 		}
 	}
 
-	state->m_gate_array.last_draw_time = now;
+	m_gate_array.last_draw_time = now;
 }
 
 
-INLINE void amstrad_plus_gate_array_get_video_data( running_machine &machine )
+void amstrad_state::amstrad_plus_gate_array_get_video_data()
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
 	UINT16 caddr;
-	UINT16 ma = ( state->m_gate_array.ma - state->m_asic.split_ma_started ) + state->m_asic.split_ma_base;
-	UINT16 ra = state->m_gate_array.ra + ( ( state->m_asic.ram[0x2804] >> 4 ) & 0x07 );
+	UINT16 ma = ( m_gate_array.ma - m_asic.split_ma_started ) + m_asic.split_ma_base;
+	UINT16 ra = m_gate_array.ra + ( ( m_asic.ram[0x2804] >> 4 ) & 0x07 );
 
 	if ( ra > 7 )
 	{
-		ma += state->m_asic.horiz_disp;
+		ma += m_asic.horiz_disp;
 	}
-	state->m_gate_array.address = ( ( ma & 0x3000 ) << 2 ) | ( ( state->m_gate_array.ra & 0x07 ) << 11 ) | ( ( ma & 0x3ff ) << 1 );
-	state->m_gate_array.data = ram_get_ptr(machine.device(RAM_TAG))[ state->m_gate_array.address ];
-	caddr = 0x2400 + state->m_gate_array.mode_lookup[state->m_gate_array.data] * 2;
-	state->m_gate_array.colour = state->m_asic.ram[caddr] + ( state->m_asic.ram[caddr+1] << 8 );
-	state->m_gate_array.colour_ticks = state->m_gate_array.max_colour_ticks;
-	state->m_gate_array.ticks = 0;
+	m_gate_array.address = ( ( ma & 0x3000 ) << 2 ) | ( ( m_gate_array.ra & 0x07 ) << 11 ) | ( ( ma & 0x3ff ) << 1 );
+	m_gate_array.data = m_ram->pointer()[ m_gate_array.address ];
+	caddr = 0x2400 + m_gate_array.mode_lookup[m_gate_array.data] * 2;
+	m_gate_array.colour = m_asic.ram[caddr] + ( m_asic.ram[caddr+1] << 8 );
+	m_gate_array.colour_ticks = m_gate_array.max_colour_ticks;
+	m_gate_array.ticks = 0;
 }
 
 
-INLINE void amstrad_plus_update_video( running_machine &machine )
+void amstrad_state::amstrad_plus_update_video()
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	attotime now = machine.time();
+	attotime now = machine().time();
 
-	if ( state->m_gate_array.draw_p )
+	if ( m_gate_array.draw_p )
 	{
-		UINT32 cycles_passed = (now - state->m_gate_array.last_draw_time ).as_ticks(XTAL_16MHz);
+		UINT32 cycles_passed = (now - m_gate_array.last_draw_time ).as_ticks(XTAL_16MHz);
 
 		while( cycles_passed )
 		{
-			if ( ! state->m_gate_array.de )
+			if ( ! m_gate_array.de )
 			{
-				*state->m_gate_array.draw_p = state->m_asic.ram[0x2420] + ( state->m_asic.ram[0x2421] << 8 );
+				*m_gate_array.draw_p = m_asic.ram[0x2420] + ( m_asic.ram[0x2421] << 8 );
 			}
 			else
 			{
-				*state->m_gate_array.draw_p = state->m_gate_array.colour;
+				*m_gate_array.draw_p = m_gate_array.colour;
 
-				if ( state->m_asic.hscroll )
+				if ( m_asic.hscroll )
 				{
-					state->m_asic.hscroll--;
-					if ( state->m_asic.hscroll == 0 )
-						amstrad_plus_gate_array_get_video_data( machine );
+					m_asic.hscroll--;
+					if ( m_asic.hscroll == 0 )
+						amstrad_plus_gate_array_get_video_data();
 				}
 				else
 				{
-					state->m_gate_array.colour_ticks--;
-					if ( ! state->m_gate_array.colour_ticks )
+					m_gate_array.colour_ticks--;
+					if ( ! m_gate_array.colour_ticks )
 					{
 						UINT16 caddr;
 
-						state->m_gate_array.data <<= 1;
-						caddr = 0x2400 + state->m_gate_array.mode_lookup[state->m_gate_array.data] * 2;
-						state->m_gate_array.colour = state->m_asic.ram[caddr] + ( state->m_asic.ram[caddr+1] << 8 );
-						state->m_gate_array.colour_ticks = state->m_gate_array.max_colour_ticks;
+						m_gate_array.data <<= 1;
+						caddr = 0x2400 + m_gate_array.mode_lookup[m_gate_array.data] * 2;
+						m_gate_array.colour = m_asic.ram[caddr] + ( m_asic.ram[caddr+1] << 8 );
+						m_gate_array.colour_ticks = m_gate_array.max_colour_ticks;
 					}
-					state->m_gate_array.ticks += state->m_gate_array.ticks_increment;
-					switch( state->m_gate_array.ticks)
+					m_gate_array.ticks += m_gate_array.ticks_increment;
+					switch( m_gate_array.ticks)
 					{
 					case 8:
 						{
 							UINT16 caddr;
 
-							state->m_gate_array.data = ram_get_ptr(machine.device(RAM_TAG))[ state->m_gate_array.address + 1 ];
-							caddr = 0x2400 + state->m_gate_array.mode_lookup[state->m_gate_array.data] * 2;
-							state->m_gate_array.colour = state->m_asic.ram[caddr] + ( state->m_asic.ram[caddr+1] << 8 );
+							m_gate_array.data = m_ram->pointer()[ m_gate_array.address + 1 ];
+							caddr = 0x2400 + m_gate_array.mode_lookup[m_gate_array.data] * 2;
+							m_gate_array.colour = m_asic.ram[caddr] + ( m_asic.ram[caddr+1] << 8 );
 						}
 						break;
 					case 16:
-						state->m_gate_array.ma += 1;						/* If we were synced with the 6845 mc6845_get_ma should return this value */
-						amstrad_plus_gate_array_get_video_data( machine );
+						m_gate_array.ma += 1;                        /* If we were synced with the 6845 mc6845_get_ma should return this value */
+						amstrad_plus_gate_array_get_video_data();
 						break;
 					}
 				}
 			}
-			state->m_gate_array.draw_p++;
+			m_gate_array.draw_p++;
 			cycles_passed--;
-			state->m_gate_array.line_ticks++;
-			if ( state->m_gate_array.line_ticks > state->m_gate_array.bitmap->width )
+			m_gate_array.line_ticks++;
+			if ( m_gate_array.line_ticks >= m_gate_array.bitmap->width() )
 			{
-				state->m_gate_array.draw_p = NULL;
+				m_gate_array.draw_p = NULL;
 				cycles_passed = 0;
 			}
 		}
 	}
 
-	state->m_gate_array.last_draw_time = now;
+	m_gate_array.last_draw_time = now;
 }
 
 
-INLINE void amstrad_plus_update_video_sprites( running_machine &machine )
+void amstrad_state::amstrad_plus_update_video_sprites()
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	UINT16	*p = BITMAP_ADDR16( state->m_gate_array.bitmap, state->m_gate_array.y, state->m_asic.h_start );
+	UINT16  *p = &m_gate_array.bitmap->pix16(m_gate_array.y, m_asic.h_start );
 	int i;
 
-	if ( state->m_gate_array.y < 0 )
+	if ( m_gate_array.y < 0 )
 		return;
 
 	for ( i = 15 * 8; i >= 0; i -= 8 )
 	{
-		UINT8	xmag = ( state->m_asic.ram[ 0x2000 + i + 4 ] >> 2 ) & 0x03;
-		UINT8	ymag = state->m_asic.ram[ 0x2000 + i + 4 ] & 0x03;
+		UINT8   xmag = ( m_asic.ram[ 0x2000 + i + 4 ] >> 2 ) & 0x03;
+		UINT8   ymag = m_asic.ram[ 0x2000 + i + 4 ] & 0x03;
 
 		/* Check if sprite is enabled */
 		if ( xmag && ymag )
 		{
-			INT16	spr_x = state->m_asic.ram[ 0x2000 + i ] + ( state->m_asic.ram[ 0x2001 + i ] << 8 );
-			INT16	spr_y = state->m_asic.ram[ 0x2002 + i ] + ( state->m_asic.ram[ 0x2003 + i ] << 8 );
+			INT16   spr_x = m_asic.ram[ 0x2000 + i ] + ( m_asic.ram[ 0x2001 + i ] << 8 );
+			INT16   spr_y = m_asic.ram[ 0x2002 + i ] + ( m_asic.ram[ 0x2003 + i ] << 8 );
 
 			xmag -= 1;
 			ymag -= 1;
 
 			/* Check if sprite would appear on this scanline */
-			if ( spr_y <= state->m_asic.vpos && state->m_asic.vpos < spr_y + ( 16 << ymag ) && spr_x < ( state->m_asic.h_end - state->m_asic.h_start ) && spr_x + ( 16 << xmag ) > 0 )
+			if ( spr_y <= m_asic.vpos && m_asic.vpos < spr_y + ( 16 << ymag ) && spr_x < ( m_asic.h_end - m_asic.h_start ) && spr_x + ( 16 << xmag ) > 0 )
 			{
-				UINT16	spr_addr = i * 32 + ( ( ( state->m_asic.vpos - spr_y ) >> ymag ) * 16 );
-				int		j, k;
+				UINT16  spr_addr = i * 32 + ( ( ( m_asic.vpos - spr_y ) >> ymag ) * 16 );
+				int     j, k;
 
 				for ( j = 0; j < 16; j++ )
 				{
@@ -801,12 +826,12 @@ INLINE void amstrad_plus_update_video_sprites( running_machine &machine )
 					{
 						INT16 x = spr_x + ( j << xmag ) + k;
 
-						if ( x >= 0 && x < ( state->m_asic.h_end - state->m_asic.h_start ) )
+						if ( x >= 0 && x < ( m_asic.h_end - m_asic.h_start ) )
 						{
-							UINT8	spr_col = ( state->m_asic.ram[ spr_addr + j ] & 0x0f ) * 2;
+							UINT8   spr_col = ( m_asic.ram[ spr_addr + j ] & 0x0f ) * 2;
 
 							if ( spr_col )
-								p[x] = state->m_asic.ram[ 0x2420 + spr_col ] + ( state->m_asic.ram[ 0x2421 + spr_col ] << 8 );
+								p[x] = m_asic.ram[ 0x2420 + spr_col ] + ( m_asic.ram[ 0x2421 + spr_col ] << 8 );
 						}
 					}
 				}
@@ -816,578 +841,332 @@ INLINE void amstrad_plus_update_video_sprites( running_machine &machine )
 }
 
 
-static WRITE_LINE_DEVICE_HANDLER( amstrad_hsync_changed )
+WRITE_LINE_MEMBER(amstrad_state::amstrad_hsync_changed)
 {
-	amstrad_state *drvstate = device->machine().driver_data<amstrad_state>();
-	amstrad_update_video(device->machine());
+	amstrad_update_video();
 
 	/* The gate array reacts to de-assertion of the hsycnc 6845 line */
-	if ( drvstate->m_gate_array.hsync && !state )
+	if ( m_gate_array.hsync && !state )
 	{
-		drvstate->m_gate_array.hsync_counter++;
+		m_gate_array.hsync_counter++;
 		/* Advance to next drawing line */
-		drvstate->m_gate_array.y++;
-		drvstate->m_gate_array.line_ticks = 0;
-		if ( drvstate->m_gate_array.y >= 0 && drvstate->m_gate_array.y < drvstate->m_gate_array.bitmap->height )
+		m_gate_array.y++;
+		m_gate_array.line_ticks = 0;
+		if ( m_gate_array.y >= 0 && m_gate_array.y < m_gate_array.bitmap->height() )
 		{
-			drvstate->m_gate_array.draw_p = BITMAP_ADDR16( drvstate->m_gate_array.bitmap, drvstate->m_gate_array.y, 0 );
+			m_gate_array.draw_p = &m_gate_array.bitmap->pix16(m_gate_array.y);
 		}
 		else
 		{
-			drvstate->m_gate_array.draw_p = NULL;
+			m_gate_array.draw_p = NULL;
 		}
 
-		if ( drvstate->m_gate_array.hsync_after_vsync_counter != 0 )  // counters still operate regardless of PRI state
+		if ( m_gate_array.hsync_after_vsync_counter != 0 )  // counters still operate regardless of PRI state
 		{
-			drvstate->m_gate_array.hsync_after_vsync_counter--;
+			m_gate_array.hsync_after_vsync_counter--;
 
-			if (drvstate->m_gate_array.hsync_after_vsync_counter == 0)
+			if (m_gate_array.hsync_after_vsync_counter == 0)
 			{
-				if (drvstate->m_gate_array.hsync_counter >= 32)
+				if (m_gate_array.hsync_counter >= 32)
 				{
-					cputag_set_input_line(device->machine(), "maincpu", 0, ASSERT_LINE);
+					m_maincpu->set_input_line(0, ASSERT_LINE);
 				}
-				drvstate->m_gate_array.hsync_counter = 0;
+				m_gate_array.hsync_counter = 0;
 			}
 		}
 
-		if ( drvstate->m_gate_array.hsync_counter >= 52 )
+		if ( m_gate_array.hsync_counter >= 52 )
 		{
-			drvstate->m_gate_array.hsync_counter = 0;
-			cputag_set_input_line(device->machine(), "maincpu", 0, ASSERT_LINE);
+			m_gate_array.hsync_counter = 0;
+			m_maincpu->set_input_line(0, ASSERT_LINE);
 		}
 	}
-	drvstate->m_gate_array.hsync = state ? 1 : 0;
+	m_gate_array.hsync = state ? 1 : 0;
 }
 
 
-static WRITE_LINE_DEVICE_HANDLER( amstrad_plus_hsync_changed )
+WRITE_LINE_MEMBER(amstrad_state::amstrad_plus_hsync_changed)
 {
-	amstrad_state *drvstate = device->machine().driver_data<amstrad_state>();
-	amstrad_plus_update_video(device->machine());
+	amstrad_plus_update_video();
 
-	if ( drvstate->m_gate_array.hsync && !state )
+	if ( m_gate_array.hsync && !state )
 	{
-		drvstate->m_gate_array.hsync_counter++;
+		m_gate_array.hsync_counter++;
 		/* Advance to next drawing line */
-		drvstate->m_gate_array.y++;
-		drvstate->m_gate_array.line_ticks = 0;
-		if ( drvstate->m_gate_array.y >= 0 && drvstate->m_gate_array.y < drvstate->m_gate_array.bitmap->height )
+		m_gate_array.y++;
+		m_gate_array.line_ticks = 0;
+		if ( m_gate_array.y >= 0 && m_gate_array.y < m_gate_array.bitmap->height() )
 		{
-			drvstate->m_gate_array.draw_p = BITMAP_ADDR16( drvstate->m_gate_array.bitmap, drvstate->m_gate_array.y, 0 );
+			m_gate_array.draw_p = &m_gate_array.bitmap->pix16(m_gate_array.y);
 		}
 		else
 		{
-			drvstate->m_gate_array.draw_p = NULL;
+			m_gate_array.draw_p = NULL;
 		}
 
-		if ( drvstate->m_gate_array.hsync_after_vsync_counter != 0 )  // counters still operate regardless of PRI state
+		if ( m_gate_array.hsync_after_vsync_counter != 0 )  // counters still operate regardless of PRI state
 		{
-			drvstate->m_gate_array.hsync_after_vsync_counter--;
+			m_gate_array.hsync_after_vsync_counter--;
 
-			if (drvstate->m_gate_array.hsync_after_vsync_counter == 0)
+			if (m_gate_array.hsync_after_vsync_counter == 0)
 			{
-				if (drvstate->m_gate_array.hsync_counter >= 32)
+				if (m_gate_array.hsync_counter >= 32)
 				{
-					if( drvstate->m_asic.pri == 0 || drvstate->m_asic.enabled == 0)
+					if( m_asic.pri == 0 || m_asic.enabled == 0)
 					{
-						cputag_set_input_line(device->machine(), "maincpu", 0, ASSERT_LINE);
+						m_maincpu->set_input_line(0, ASSERT_LINE);
 					}
 				}
-				drvstate->m_gate_array.hsync_counter = 0;
+				m_gate_array.hsync_counter = 0;
 			}
 		}
 
-		if ( drvstate->m_gate_array.hsync_counter >= 52 )
+		if ( m_gate_array.hsync_counter >= 52 )
 		{
-			drvstate->m_gate_array.hsync_counter = 0;
-			if ( drvstate->m_asic.pri == 0 || drvstate->m_asic.enabled == 0 )
+			m_gate_array.hsync_counter = 0;
+			if ( m_asic.pri == 0 || m_asic.enabled == 0 )
 			{
-				cputag_set_input_line(device->machine(), "maincpu", 0, ASSERT_LINE);
+				m_maincpu->set_input_line(0, ASSERT_LINE);
 			}
 		}
 
-		if ( drvstate->m_asic.enabled )
+		if ( m_asic.enabled )
 		{
 			// CPC+/GX4000 Programmable Raster Interrupt (disabled if &6800 in ASIC RAM is 0)
-			if ( drvstate->m_asic.pri != 0 )
+			if ( m_asic.pri != 0 )
 			{
-				if ( drvstate->m_asic.pri == drvstate->m_asic.vpos - 1 )
+				if ( m_asic.pri == m_asic.vpos - 1 )
 				{
-					logerror("PRI: triggered, scanline %d\n",drvstate->m_asic.pri);
-					cputag_set_input_line(device->machine(), "maincpu", 0, ASSERT_LINE);
-					drvstate->m_plus_irq_cause = 0x06;  // raster interrupt vector
-					drvstate->m_gate_array.hsync_counter &= ~0x20;  // ASIC PRI resets the MSB of the raster counter
+					logerror("PRI: triggered, scanline %d\n",m_asic.pri);
+					m_maincpu->set_input_line(0, ASSERT_LINE);
+					m_plus_irq_cause = 0x06;  // raster interrupt vector
+					m_gate_array.hsync_counter &= ~0x20;  // ASIC PRI resets the MSB of the raster counter
 				}
 			}
 			// CPC+/GX4000 Split screen registers  (disabled if &6801 in ASIC RAM is 0)
-			if(drvstate->m_asic.ram[0x2801] != 0)
+			if(m_asic.ram[0x2801] != 0)
 			{
-				if ( drvstate->m_asic.ram[0x2801] == drvstate->m_asic.vpos - 1 )	// split occurs here (hopefully)
+				if ( m_asic.ram[0x2801] == m_asic.vpos - 1 )    // split occurs here (hopefully)
 				{
-					logerror("SSCR: Split screen occured at scanline %d\n",drvstate->m_asic.ram[0x2801]);
+					logerror("SSCR: Split screen occurred at scanline %d\n",m_asic.ram[0x2801]);
 				}
 			}
 			// CPC+/GX4000 DMA channels
-			amstrad_plus_handle_dma(device->machine());  // a DMA command is handled at the leading edge of HSYNC (every 64us)
-			if(drvstate->m_asic.de_start != 0)
-				drvstate->m_asic.vpos++;
+			amstrad_plus_handle_dma();  // a DMA command is handled at the leading edge of HSYNC (every 64us)
+			m_asic.vpos++;
 		}
 	}
-	drvstate->m_gate_array.hsync = state ? 1 : 0;
+	m_gate_array.hsync = state ? 1 : 0;
 }
 
 
-static WRITE_LINE_DEVICE_HANDLER( amstrad_vsync_changed )
+WRITE_LINE_MEMBER(amstrad_state::amstrad_vsync_changed)
 {
-	amstrad_state *drvstate = device->machine().driver_data<amstrad_state>();
-	amstrad_update_video(device->machine());
+	amstrad_update_video();
 
-	if ( ! drvstate->m_gate_array.vsync && state )
+	if ( ! m_gate_array.vsync && state )
 	{
 		/* Reset the amstrad_CRTC_HS_After_VS_Counter */
-		drvstate->m_gate_array.hsync_after_vsync_counter = 3;
+		m_gate_array.hsync_after_vsync_counter = 3;
 
 		/* Start of new frame */
-		drvstate->m_gate_array.y = -1;
-		drvstate->m_asic.vpos = 1;
-		drvstate->m_asic.de_start = 0;
+		m_gate_array.y = -1;
+		m_asic.de_start = 0;
 	}
 
-	drvstate->m_gate_array.vsync = state ? 1 : 0;
+	m_gate_array.vsync = state ? 1 : 0;
 
 	/* Schedule a write to PC2 */
-	device->machine().scheduler().timer_set( attotime::zero, FUNC(amstrad_pc2_low));
+	timer_set(attotime::zero, TIMER_PC2_LOW);
 }
 
 
-static WRITE_LINE_DEVICE_HANDLER( amstrad_plus_vsync_changed )
+WRITE_LINE_MEMBER(amstrad_state::amstrad_plus_vsync_changed)
 {
-	amstrad_state *drvstate = device->machine().driver_data<amstrad_state>();
-	amstrad_plus_update_video(device->machine());
+	amstrad_plus_update_video();
 
-	if ( ! drvstate->m_gate_array.vsync && state )
+	if ( ! m_gate_array.vsync && state )
 	{
 		/* Reset the amstrad_CRTC_HS_After_VS_Counter */
-		drvstate->m_gate_array.hsync_after_vsync_counter = 3;
+		m_gate_array.hsync_after_vsync_counter = 3;
 
 		/* Start of new frame */
-		drvstate->m_gate_array.y = -1;
-		drvstate->m_asic.vpos = 1;
-		drvstate->m_asic.de_start = 0;
+		m_gate_array.y = -1;
+		m_asic.de_start = 0;
 	}
 
-	drvstate->m_gate_array.vsync = state ? 1 : 0;
+	m_gate_array.vsync = state ? 1 : 0;
 
 	/* Schedule a write to PC2 */
-	device->machine().scheduler().timer_set( attotime::zero, FUNC(amstrad_pc2_low));
+	timer_set(attotime::zero, TIMER_PC2_LOW);
 }
 
 
-static WRITE_LINE_DEVICE_HANDLER( amstrad_de_changed )
+WRITE_LINE_MEMBER(amstrad_state::amstrad_de_changed)
 {
-	amstrad_state *drvstate = device->machine().driver_data<amstrad_state>();
-	amstrad_update_video(device->machine());
+	amstrad_update_video();
 
-	if ( ! drvstate->m_gate_array.de && state )
+	if ( ! m_gate_array.de && state )
 	{
 		/* DE became active, store the starting MA and RA signals */
-		mc6845_device *mc6845 = device->machine().device<mc6845_device>("mc6845" );
+		mc6845_device *mc6845 = m_crtc;
 
-		drvstate->m_gate_array.ma = mc6845->get_ma();
-		drvstate->m_gate_array.ra = mc6845->get_ra();
-logerror("y = %d; ma = %02x; ra = %02x, address = %04x\n", drvstate->m_gate_array.y, drvstate->m_gate_array.ma, drvstate->m_gate_array.ra, ( ( drvstate->m_gate_array.ma & 0x3000 ) << 2 ) | ( ( drvstate->m_gate_array.ra & 0x07 ) << 11 ) | ( ( drvstate->m_gate_array.ma & 0x3ff ) << 1 ) );
-		amstrad_gate_array_get_video_data(device->machine());
-		drvstate->m_asic.de_start = 1;
+		if(m_asic.de_start == 0)
+			m_asic.vpos = 1;
+
+		m_gate_array.ma = mc6845->get_ma();
+		m_gate_array.ra = mc6845->get_ra();
+//logerror("y = %d; ma = %02x; ra = %02x, address = %04x\n", m_gate_array.y, m_gate_array.ma, m_gate_array.ra, ( ( m_gate_array.ma & 0x3000 ) << 2 ) | ( ( m_gate_array.ra & 0x07 ) << 11 ) | ( ( m_gate_array.ma & 0x3ff ) << 1 ) );
+		amstrad_gate_array_get_video_data();
+		m_asic.de_start = 1;
 	}
 
-	drvstate->m_gate_array.de = state ? 1 : 0;
+	m_gate_array.de = state ? 1 : 0;
 }
 
 
-static WRITE_LINE_DEVICE_HANDLER( amstrad_plus_de_changed )
+WRITE_LINE_MEMBER(amstrad_state::amstrad_plus_de_changed)
 {
-	amstrad_state *drvstate = device->machine().driver_data<amstrad_state>();
-	amstrad_plus_update_video(device->machine());
+	amstrad_plus_update_video();
 
-	if ( ! drvstate->m_gate_array.de && state )
+	if ( ! m_gate_array.de && state )
 	{
 		/* DE became active, store the starting MA and RA signals */
-		mc6845_device *mc6845 = device->machine().device<mc6845_device>("mc6845" );
-
-		drvstate->m_gate_array.ma = mc6845->get_ma();
-		drvstate->m_gate_array.ra = mc6845->get_ra();
-		drvstate->m_asic.h_start = drvstate->m_gate_array.line_ticks;
-		drvstate->m_asic.de_start = 1;
+		m_gate_array.ma = m_crtc->get_ma();
+		m_gate_array.ra = m_crtc->get_ra();
+		m_asic.h_start = m_gate_array.line_ticks;
+		if(m_asic.de_start == 0)
+			m_asic.vpos = 1;
+		m_asic.de_start = 1;
 
 		/* Start of screen */
-		if ( drvstate->m_asic.vpos == 1 )
+		if ( m_asic.vpos == 1 )
 		{
-			drvstate->m_asic.split_ma_base = 0x0000;
-			drvstate->m_asic.split_ma_started = 0x0000;
+			m_asic.split_ma_base = 0x0000;
+			m_asic.split_ma_started = 0x0000;
 		}
 		/* Start of split screen section */
-		else if ( drvstate->m_asic.enabled && drvstate->m_asic.ram[0x2801] != 0 && drvstate->m_asic.ram[0x2801] == drvstate->m_asic.vpos - 1 )
+		else if ( m_asic.enabled && m_asic.ram[0x2801] != 0 && m_asic.ram[0x2801] == m_asic.vpos - 1 )
 		{
-			drvstate->m_asic.split_ma_started = drvstate->m_gate_array.ma;
-			drvstate->m_asic.split_ma_base = ( drvstate->m_asic.ram[0x2802] << 8 ) | drvstate->m_asic.ram[0x2803];
+			m_asic.split_ma_started = m_gate_array.ma;
+			m_asic.split_ma_base = ( m_asic.ram[0x2802] << 8 ) | m_asic.ram[0x2803];
 		}
 
-		drvstate->m_gate_array.colour = drvstate->m_asic.ram[0x2420] + ( drvstate->m_asic.ram[0x2421] << 8 );
-		drvstate->m_asic.hscroll = drvstate->m_asic.ram[0x2804] & 0x0f;
+		m_gate_array.colour = m_asic.ram[0x2420] + ( m_asic.ram[0x2421] << 8 );
+		m_asic.hscroll = m_asic.ram[0x2804] & 0x0f;
 
-		if ( drvstate->m_asic.hscroll == 0 )
-			amstrad_plus_gate_array_get_video_data(device->machine());
+		if ( m_asic.hscroll == 0 )
+			amstrad_plus_gate_array_get_video_data();
 	}
 
-	if ( drvstate->m_gate_array.de && ! state )
+	if ( m_gate_array.de && ! state )
 	{
-		drvstate->m_asic.h_end = drvstate->m_gate_array.line_ticks;
-		amstrad_plus_update_video_sprites(device->machine());
+		m_asic.h_end = m_gate_array.line_ticks;
+		amstrad_plus_update_video_sprites();
 	}
 
-	drvstate->m_gate_array.de = state ? 1 : 0;
+	m_gate_array.de = state ? 1 : 0;
 }
 
 
-VIDEO_START( amstrad )
+VIDEO_START_MEMBER(amstrad_state,amstrad)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	screen_device *screen = downcast<screen_device *>(machine.device("screen"));
+	amstrad_init_lookups();
 
-	amstrad_init_lookups(state);
-
-	state->m_gate_array.bitmap = auto_bitmap_alloc( machine, screen->width(), screen->height(), screen->format() );
-	state->m_gate_array.hsync_after_vsync_counter = 3;
+	m_gate_array.bitmap = auto_bitmap_ind16_alloc( machine(), m_screen->width(), m_screen->height() );
+	m_gate_array.hsync_after_vsync_counter = 3;
 }
 
 
-SCREEN_UPDATE( amstrad )
+UINT32 amstrad_state::screen_update_amstrad(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	amstrad_state *state = screen->machine().driver_data<amstrad_state>();
-	copybitmap( bitmap, state->m_gate_array.bitmap, 0, 0, 0, 0, cliprect );
+	copybitmap( bitmap, *m_gate_array.bitmap, 0, 0, 0, 0, cliprect );
 	return 0;
 }
 
 
-const mc6845_interface amstrad_mc6845_intf =
+MC6845_INTERFACE( amstrad_mc6845_intf )
 {
-	NULL,									/* screen name */
-	16,										/* number of pixels per video memory address */
-	NULL,									/* begin_update */
-	NULL,									/* update_row */
-	NULL,									/* end_update */
-	DEVCB_LINE(amstrad_de_changed),			/* on_de_changed */
-	DEVCB_NULL,								/* on_cur_changed */
-	DEVCB_LINE(amstrad_hsync_changed),		/* on_hsync_changed */
-	DEVCB_LINE(amstrad_vsync_changed),		/* on_vsync_changed */
+	false,                                  /* show border area */
+	16,                                     /* number of pixels per video memory address */
+	NULL,                                   /* begin_update */
+	NULL,                                   /* update_row */
+	NULL,                                   /* end_update */
+	DEVCB_DRIVER_LINE_MEMBER(amstrad_state,amstrad_de_changed),         /* on_de_changed */
+	DEVCB_NULL,                             /* on_cur_changed */
+	DEVCB_DRIVER_LINE_MEMBER(amstrad_state,amstrad_hsync_changed),      /* on_hsync_changed */
+	DEVCB_DRIVER_LINE_MEMBER(amstrad_state,amstrad_vsync_changed),      /* on_vsync_changed */
 	NULL
 };
 
 
-const mc6845_interface amstrad_plus_mc6845_intf =
+MC6845_INTERFACE( amstrad_plus_mc6845_intf )
 {
-	NULL,										/* screen name */
-	16,											/* number of pixels per video memory address */
-	NULL,										/* begin_update */
-	NULL,										/* update_row */
-	NULL,										/* end_update */
-	DEVCB_LINE(amstrad_plus_de_changed),		/* on_de_changed */
-	DEVCB_NULL,									/* on_cur_changed */
-	DEVCB_LINE(amstrad_plus_hsync_changed),		/* on_hsync_changed */
-	DEVCB_LINE(amstrad_plus_vsync_changed),		/* on_vsync_changed */
+	false,                                      /* show border area */
+	16,                                         /* number of pixels per video memory address */
+	NULL,                                       /* begin_update */
+	NULL,                                       /* update_row */
+	NULL,                                       /* end_update */
+	DEVCB_DRIVER_LINE_MEMBER(amstrad_state,amstrad_plus_de_changed),        /* on_de_changed */
+	DEVCB_NULL,                                 /* on_cur_changed */
+	DEVCB_DRIVER_LINE_MEMBER(amstrad_state,amstrad_plus_hsync_changed),     /* on_hsync_changed */
+	DEVCB_DRIVER_LINE_MEMBER(amstrad_state,amstrad_plus_vsync_changed),     /* on_vsync_changed */
 	NULL
 };
 
-
-/******************************************************************************************
-    Multiface emulation
-  ****************************************************************************************/
-
-
-/* stop button has been pressed */
-#define MULTIFACE_STOP_BUTTON_PRESSED	0x0001
-/* ram/rom is paged into memory space */
-#define MULTIFACE_RAM_ROM_ENABLED		0x0002
-/* when visible OUT commands are performed! */
-#define MULTIFACE_VISIBLE				0x0004
-
-/* multiface traps calls to 0x0065 when it is active.
-This address has a RET and so executes no code.
-
-It is believed that it is used to make multiface invisible to programs */
-
-/*#define MULTIFACE_0065_TOGGLE                   0x0008*/
-
-DIRECT_UPDATE_HANDLER( amstrad_default )
-{
-	return address;
-}
-
-/* used to setup computer if a snapshot was specified */
-DIRECT_UPDATE_HANDLER( amstrad_multiface_directoverride )
+/* traverses the daisy-chain of expansion devices, looking for the specified device */
+static device_t* get_expansion_device(running_machine &machine, const char* tag)
 {
 	amstrad_state *state = machine.driver_data<amstrad_state>();
-		int pc;
+	cpc_expansion_slot_device* exp_port = state->m_exp;
 
-		pc = cpu_get_pc(machine.device("maincpu"));
-
-		/* there are two places where CALL &0065 can be found
-        in the multiface rom. At this address there is a RET.
-
-        To disable the multiface from being detected, the multiface
-        stop button must be pressed, then the program that was stopped
-        must be returned to. When this is done, the multiface cannot
-        be detected and the out operations to page the multiface
-        ram/rom into the address space will not work! */
-
-		/* I assume that the hardware in the multiface detects
-        the PC set to 0x065 and uses this to enable/disable the multiface
-        */
-
-		/* I also use this to allow the stop button to be pressed again */
-		if (pc==0x0164)
-		{
-			/* first call? */
-			state->m_multiface_flags |= MULTIFACE_VISIBLE;
-		}
-		else if (pc==0x0c98)
-		{
-		  /* second call */
-
-		  /* no longer visible */
-		  state->m_multiface_flags &= ~(MULTIFACE_VISIBLE|MULTIFACE_STOP_BUTTON_PRESSED);
-
-		 /* clear op base override */
-		  machine.device("maincpu")->memory().space(AS_PROGRAM)->set_direct_update_handler(direct_update_delegate(FUNC(amstrad_default), &machine));
-		}
-
-		return pc;
-}
-
-static void multiface_init(running_machine &machine)
-{
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	/* after a reset the multiface is visible */
-	state->m_multiface_flags = MULTIFACE_VISIBLE;
-
-	/* allocate ram */
-	state->m_multiface_ram = auto_alloc_array(machine, UINT8, 8192);
-}
-
-/* call when a system reset is done */
-static void multiface_reset(amstrad_state *state)
-{
-		/* stop button not pressed and ram/rom disabled */
-		state->m_multiface_flags &= ~(MULTIFACE_STOP_BUTTON_PRESSED |
-						MULTIFACE_RAM_ROM_ENABLED);
-		/* as on the real hardware the multiface is visible after a reset! */
-		state->m_multiface_flags |= MULTIFACE_VISIBLE;
-}
-
-static int multiface_hardware_enabled(running_machine &machine)
-{
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-		if (state->m_multiface_ram!=NULL)
-		{
-				if ((input_port_read(machine, "multiface") & 0x01)!=0)
-				{
-						return 1;
-				}
-		}
-
-		return 0;
-}
-
-
-static void multiface_rethink_memory(running_machine &machine)
-{
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	unsigned char *multiface_rom;
-
-	/* multiface hardware enabled? */
-	if (!multiface_hardware_enabled(machine))
-		return;
-
-	multiface_rom = &machine.region("maincpu")->base()[0x01C000];
-
-	if (
-		((state->m_multiface_flags & MULTIFACE_RAM_ROM_ENABLED)!=0) &&
-		((state->m_gate_array.mrer & 0x04) == 0)
-		)
+	while(exp_port != NULL)
 	{
+		device_t* temp;
 
-		/* set bank addressess */
-		memory_set_bankptr(machine,"bank1", multiface_rom);
-		memory_set_bankptr(machine,"bank2", state->m_multiface_ram);
-		memory_set_bankptr(machine,"bank9", multiface_rom);
-		memory_set_bankptr(machine,"bank10", state->m_multiface_ram);
+		// first, check if this expansion port has the device we want attached
+		temp = exp_port->subdevice(tag);
+		if(temp != NULL)
+			return temp;
+
+		// if it's not what we're looking for, then check the expansion port on this expansion device. if it exists.
+		temp = dynamic_cast<device_t*>(exp_port->get_card_device());
+		if(temp == NULL)
+			return NULL; // no device attached
+		exp_port = temp->subdevice<cpc_expansion_slot_device>("exp");
+		if(exp_port == NULL)
+			return NULL;  // we're at the end of the chain
 	}
+	return NULL;
 }
 
-
-/* simulate the stop button has been pressed */
-static void multiface_stop(running_machine &machine)
+WRITE_LINE_DEVICE_HANDLER(cpc_irq_w)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	/* multiface hardware enabled? */
-	if (!multiface_hardware_enabled(machine))
-		return;
-
-	/* if stop button not already pressed, do press action */
-	/* pressing stop button while multiface is running has no effect */
-	if ((state->m_multiface_flags & MULTIFACE_STOP_BUTTON_PRESSED)==0)
-	{
-		/* initialise 0065 toggle */
-				/*state->m_multiface_flags &= ~MULTIFACE_0065_TOGGLE;*/
-
-		state->m_multiface_flags |= MULTIFACE_RAM_ROM_ENABLED;
-
-		/* stop button has been pressed, furthur pressess will not issue a NMI */
-		state->m_multiface_flags |= MULTIFACE_STOP_BUTTON_PRESSED;
-
-		state->m_gate_array.mrer &=~0x04;
-
-		/* page rom into memory */
-		multiface_rethink_memory(machine);
-
-		/* pulse the nmi line */
-		cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
-
-		/* initialise 0065 override to monitor calls to 0065 */
-		machine.device("maincpu")->memory().space(AS_PROGRAM)->set_direct_update_handler(direct_update_delegate(FUNC(amstrad_multiface_directoverride), &machine));
-	}
-
+	device->machine().device("maincpu")->execute().set_input_line(0, state);
 }
 
-
-/* any io writes are passed through here */
-static WRITE8_HANDLER(multiface_io_write)
+WRITE_LINE_DEVICE_HANDLER(cpc_nmi_w)
 {
-	amstrad_state *state = space->machine().driver_data<amstrad_state>();
-	/* multiface hardware enabled? */
-		if (!multiface_hardware_enabled(space->machine()))
-		return;
+	device->machine().device("maincpu")->execute().set_input_line(INPUT_LINE_NMI, state);
+}
 
-		/* visible? */
-	if (state->m_multiface_flags & MULTIFACE_VISIBLE)
-	{
-		if (offset==0x0fee8)
-		{
-			state->m_multiface_flags |= MULTIFACE_RAM_ROM_ENABLED;
-			amstrad_rethinkMemory(space->machine());
-		}
+WRITE_LINE_DEVICE_HANDLER(cpc_romdis)
+{
+	amstrad_state *tstate = device->machine().driver_data<amstrad_state>();
 
-		if (offset==0x0feea)
-		{
-			state->m_multiface_flags &= ~MULTIFACE_RAM_ROM_ENABLED;
-			amstrad_rethinkMemory(space->machine());
-		}
-	}
+	tstate->m_gate_array.romdis = state;
+	tstate->amstrad_rethinkMemory();
+}
 
-	/* update multiface ram with data */
-		/* these are decoded fully! */
-		switch ((offset>>8) & 0x0ff)
-		{
-				/* gate array */
-				case 0x07f:
-				{
-						switch (data & 0x0c0)
-						{
-								/* pen index */
-								case 0x00:
-								{
-									state->m_multiface_ram[0x01fcf] = data;
+WRITE_LINE_DEVICE_HANDLER(cpc_romen)
+{
+	amstrad_state *tstate = device->machine().driver_data<amstrad_state>();
 
-								}
-								break;
-
-								/* pen colour */
-								case 0x040:
-								{
-									int pen_index;
-
-									pen_index = state->m_multiface_ram[0x01fcf] & 0x0f;
-
-									if (state->m_multiface_ram[0x01fcf] & 0x010)
-									{
-
-										state->m_multiface_ram[0x01fdf + pen_index] = data;
-									}
-									else
-									{
-										state->m_multiface_ram[0x01f90 + pen_index] = data & 0x01f;
-									}
-
-								}
-								break;
-
-								/* rom/mode selection */
-								case 0x080:
-								{
-
-									state->m_multiface_ram[0x01fef] = data;
-
-								}
-								break;
-
-								/* ram configuration */
-								case 0x0c0:
-								{
-
-									state->m_multiface_ram[0x01fff] = data;
-
-								}
-								break;
-
-								default:
-								  break;
-
-						}
-
-				}
-				break;
-
-
-				/* crtc register index */
-				case 0x0bc:
-				{
-						state->m_multiface_ram[0x01cff] = data;
-				}
-				break;
-
-				/* crtc register write */
-				case 0x0bd:
-				{
-						int reg_index;
-
-						reg_index = state->m_multiface_ram[0x01cff] & 0x0f;
-
-						state->m_multiface_ram[0x01db0 + reg_index] = data;
-				}
-				break;
-
-
-				/* 8255 ppi control */
-				case 0x0f7:
-				{
-				  state->m_multiface_ram[0x017ff] = data;
-
-				}
-				break;
-
-				/* rom select */
-				case 0x0df:
-				{
-				   state->m_multiface_ram[0x01aac] = data;
-				}
-				break;
-
-				default:
-				   break;
-
-		}
-
+	if(state != 0)
+		tstate->m_gate_array.mrer &= ~0x04;
+	else
+		tstate->m_gate_array.mrer |= 0x04;
+	tstate->amstrad_rethinkMemory();
 }
 
 
@@ -1397,91 +1176,90 @@ static WRITE8_HANDLER(multiface_io_write)
 /*-----------------
   - Set Lower Rom -
   -----------------*/
-static void amstrad_setLowerRom(running_machine &machine)
+void amstrad_state::amstrad_setLowerRom()
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
 	UINT8 *bank_base;
 
 	/* b2 : "1" Lower rom area disable or "0" Lower rom area enable */
-	if ( state->m_system_type == SYSTEM_CPC || state->m_system_type == SYSTEM_ALESTE )
+	if ( m_system_type == SYSTEM_CPC || m_system_type == SYSTEM_ALESTE )
 	{
-		if ((state->m_gate_array.mrer & (1<<2)) == 0)
+		if ((m_gate_array.mrer & (1<<2)) == 0 && m_gate_array.romdis == 0)
 		{
-			bank_base = &machine.region("maincpu")->base()[0x010000];
+			bank_base = &m_region_maincpu->base()[0x010000];
 		}
 		else
 		{
-			if(state->m_aleste_mode & 0x04)
-				bank_base = state->m_Aleste_RamBanks[0];
+			if(m_aleste_mode & 0x04)
+				bank_base = m_Aleste_RamBanks[0];
 			else
-				bank_base = state->m_AmstradCPC_RamBanks[0];
+				bank_base = m_AmstradCPC_RamBanks[0];
 		}
-		memory_set_bankptr(machine,"bank1", bank_base);
-		memory_set_bankptr(machine,"bank2", bank_base+0x02000);
+		m_bank1->set_base(bank_base);
+		m_bank2->set_base(bank_base+0x02000);
 	}
 	else  // CPC+/GX4000
 	{
-		address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+		//address_space &space = state->m_maincpu->space(AS_PROGRAM);
 
-		if ( state->m_asic.enabled && ( state->m_asic.rmr2 & 0x18 ) == 0x18 )
+/*      if ( m_asic.enabled && ( m_asic.rmr2 & 0x18 ) == 0x18 )
+        {
+            space.install_read_handler(0x4000, 0x5fff, read8_delegate(FUNC(amstrad_state::amstrad_plus_asic_4000_r),this));
+            space.install_read_handler(0x6000, 0x7fff, read8_delegate(FUNC(amstrad_state::amstrad_plus_asic_6000_r),this));
+            space.install_write_handler(0x4000, 0x5fff, write8_delegate(FUNC(amstrad_state::amstrad_plus_asic_4000_w),this));
+            space.install_write_handler(0x6000, 0x7fff, write8_delegate(FUNC(amstrad_state::amstrad_plus_asic_6000_w),this));
+        }
+        else
+        {
+            space.install_read_bank(0x4000, 0x5fff, "bank3");
+            space.install_read_bank(0x6000, 0x7fff, "bank4");
+            space.install_write_bank(0x4000, 0x5fff, "bank11");
+            space.install_write_bank(0x6000, 0x7fff, "bank12");
+        }
+*/
+		if(m_AmstradCPC_RamBanks[0] != NULL)
 		{
-			space->install_legacy_read_handler(0x4000, 0x5fff, FUNC(amstrad_plus_asic_4000_r));
-			space->install_legacy_read_handler(0x6000, 0x7fff, FUNC(amstrad_plus_asic_6000_r));
-			space->install_legacy_write_handler(0x4000, 0x5fff, FUNC(amstrad_plus_asic_4000_w));
-			space->install_legacy_write_handler(0x6000, 0x7fff, FUNC(amstrad_plus_asic_6000_w));
-		}
-		else
-		{
-			space->install_read_bank(0x4000, 0x5fff, "bank3");
-			space->install_read_bank(0x6000, 0x7fff, "bank4");
-			space->install_write_bank(0x4000, 0x5fff, "bank11");
-			space->install_write_bank(0x6000, 0x7fff, "bank12");
+			m_bank1->set_base(m_AmstradCPC_RamBanks[0]);
+			m_bank2->set_base(m_AmstradCPC_RamBanks[0]+0x2000);
+			m_bank3->set_base(m_AmstradCPC_RamBanks[1]);
+			m_bank4->set_base(m_AmstradCPC_RamBanks[1]+0x2000);
+			m_bank5->set_base(m_AmstradCPC_RamBanks[2]);
+			m_bank6->set_base(m_AmstradCPC_RamBanks[2]+0x2000);
 		}
 
-		if(state->m_AmstradCPC_RamBanks[0] != NULL)
-		{
-			memory_set_bankptr(machine,"bank1", state->m_AmstradCPC_RamBanks[0]);
-			memory_set_bankptr(machine,"bank2", state->m_AmstradCPC_RamBanks[0]+0x2000);
-			memory_set_bankptr(machine,"bank3", state->m_AmstradCPC_RamBanks[1]);
-			memory_set_bankptr(machine,"bank4", state->m_AmstradCPC_RamBanks[1]+0x2000);
-			memory_set_bankptr(machine,"bank5", state->m_AmstradCPC_RamBanks[2]);
-			memory_set_bankptr(machine,"bank6", state->m_AmstradCPC_RamBanks[2]+0x2000);
-		}
-
-		if ( (state->m_gate_array.mrer & (1<<2)) == 0)
+		if ( (m_gate_array.mrer & (1<<2)) == 0 && m_gate_array.romdis == 0)
 		{  // ASIC secondary lower ROM selection (bit 5: 1 = enabled)
-			if ( state->m_asic.enabled )
+			if ( m_asic.enabled )
 			{
-//              logerror("L-ROM: Lower ROM enabled, cart bank %i\n", state->m_asic.rmr2 & 0x07 );
-				bank_base = &machine.region("maincpu")->base()[0x4000 * ( state->m_asic.rmr2 & 0x07 )];
-				switch( state->m_asic.rmr2 & 0x18 )
+//              logerror("L-ROM: Lower ROM enabled, cart bank %i\n", m_asic.rmr2 & 0x07 );
+				bank_base = &m_region_maincpu->base()[0x4000 * ( m_asic.rmr2 & 0x07 )];
+				switch( m_asic.rmr2 & 0x18 )
 				{
 				case 0x00:
 //                  logerror("L-ROM: located at &0000\n");
-					memory_set_bankptr(machine,"bank1", bank_base);
-					memory_set_bankptr(machine,"bank2", bank_base+0x02000);
+					m_bank1->set_base(bank_base);
+					m_bank2->set_base(bank_base+0x02000);
 					break;
 				case 0x08:
 //                  logerror("L-ROM: located at &4000\n");
-					memory_set_bankptr(machine,"bank3", bank_base);
-					memory_set_bankptr(machine,"bank4", bank_base+0x02000);
+					m_bank3->set_base(bank_base);
+					m_bank4->set_base(bank_base+0x02000);
 					break;
 				case 0x10:
 //                  logerror("L-ROM: located at &8000\n");
-					memory_set_bankptr(machine,"bank5", bank_base);
-					memory_set_bankptr(machine,"bank6", bank_base+0x02000);
+					m_bank5->set_base(bank_base);
+					m_bank6->set_base(bank_base+0x02000);
 					break;
 				case 0x18:
 //                  logerror("L-ROM: located at &0000, ASIC registers enabled\n");
-					memory_set_bankptr(machine,"bank1", bank_base);
-					memory_set_bankptr(machine,"bank2", bank_base+0x02000);
+					m_bank1->set_base(bank_base);
+					m_bank2->set_base(bank_base+0x02000);
 					break;
 				}
 			}
 			else
 			{
-				memory_set_bankptr( machine, "bank1", machine.region( "maincpu" )->base() );
-				memory_set_bankptr( machine, "bank2", machine.region( "maincpu" )->base() + 0x2000 );
+				m_bank1->set_base( m_region_maincpu->base() );
+				m_bank2->set_base( m_region_maincpu->base() + 0x2000 );
 			}
 		}
 	}
@@ -1491,28 +1269,27 @@ static void amstrad_setLowerRom(running_machine &machine)
 /*-----------------
   - Set Upper Rom -
   -----------------*/
-static void amstrad_setUpperRom(running_machine &machine)
+void amstrad_state::amstrad_setUpperRom()
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
 	UINT8 *bank_base = NULL;
 
 	/* b3 : "1" Upper rom area disable or "0" Upper rom area enable */
-	if ( ! ( state->m_gate_array.mrer & 0x08 ) )
+	if ( ! ( m_gate_array.mrer & 0x08 ) && m_gate_array.romdis == 0)
 	{
-		bank_base = state->m_Amstrad_ROM_Table[ state->m_gate_array.upper_bank ];
+		bank_base = m_Amstrad_ROM_Table[ m_gate_array.upper_bank ];
 	}
 	else
 	{
-		if(state->m_aleste_mode & 0x04)
-			bank_base = state->m_Aleste_RamBanks[3];
+		if(m_aleste_mode & 0x04)
+			bank_base = m_Aleste_RamBanks[3];
 		else
-			bank_base = state->m_AmstradCPC_RamBanks[3];
+			bank_base = m_AmstradCPC_RamBanks[3];
 	}
 
 	if (bank_base)
 	{
-		memory_set_bankptr(machine,"bank7", bank_base);
-		memory_set_bankptr(machine,"bank8", bank_base+0x2000);
+		m_bank7->set_base(bank_base);
+		m_bank8->set_base(bank_base+0x2000);
 	}
 }
 
@@ -1537,28 +1314,27 @@ Dk'tronics 256K Silicon Disk 1 1 1 b1 b0 b2 -  -
 The CPC6128 has a 64k ram expansion built-in, giving 128K of RAM in this system.
 In the CPC464,CPC664 and KC compact if a ram expansion is not present, then writing to this port has no effect and the ram will be in the same arrangement as if configuration 0 had been selected.
 */
-static void AmstradCPC_GA_SetRamConfiguration(running_machine &machine)
+void amstrad_state::AmstradCPC_GA_SetRamConfiguration()
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	int ConfigurationIndex = state->m_GateArray_RamConfiguration & 0x07;
+	int ConfigurationIndex = m_GateArray_RamConfiguration & 0x07;
 	int BankIndex,i;
 	unsigned char *BankAddr;
 
 /* if b5 = 0 */
-	if(((state->m_GateArray_RamConfiguration) & (1<<5)) == 0)
+	if(((m_GateArray_RamConfiguration) & (1<<5)) == 0)
 	{
 		for (i=0;i<4;i++)
 		{
 			BankIndex = RamConfigurations[(ConfigurationIndex << 2) + i];
-			BankAddr = ram_get_ptr(machine.device(RAM_TAG)) + (BankIndex << 14);
-			state->m_Aleste_RamBanks[i] = BankAddr;
-			state->m_AmstradCPC_RamBanks[i] = BankAddr;
+			BankAddr = m_ram->pointer() + (BankIndex << 14);
+			m_Aleste_RamBanks[i] = BankAddr;
+			m_AmstradCPC_RamBanks[i] = BankAddr;
 		}
 	}
 	else
 	{/* Need to add the ram expansion configuration here ! */
 	}
-	amstrad_rethinkMemory(machine);
+	amstrad_rethinkMemory();
 }
 
 
@@ -1628,173 +1404,197 @@ static void AmstradCPC_GA_SetRamConfiguration(running_machine &machine)
 
  */
 
-WRITE8_HANDLER( amstrad_plus_asic_4000_w )
+WRITE8_MEMBER(amstrad_state::amstrad_plus_asic_4000_w)
 {
-	amstrad_state *state = space->machine().driver_data<amstrad_state>();
 //  logerror("ASIC: Write to register at &%04x\n",offset+0x4000);
-	state->m_asic.ram[offset] = data & 0x0f;
-}
-
-
-WRITE8_HANDLER( amstrad_plus_asic_6000_w )
-{
-	amstrad_state *state = space->machine().driver_data<amstrad_state>();
-	state->m_asic.ram[offset+0x2000] = data;
-	if(offset >= 0x0400 && offset < 0x440 && ( offset & 0x01 ) ) // ASIC palette
+	if ( m_asic.enabled && ( m_asic.rmr2 & 0x18 ) == 0x18 )
+		m_asic.ram[offset] = data & 0x0f;
+	else
 	{
-		state->m_asic.ram[ offset + 0x2000 ] = data & 0x0f;
-	}
-	if(offset == 0x0800)  // Programmable raster interrupt
-	{
-//      logerror("ASIC: Wrote %02x to PRI\n",data);
-		state->m_asic.pri = data;
-	}
-	if(offset >= 0x0801 && offset <= 0x0803)  // Split screen registers
-	{
-		logerror("ASIC: Split screen at line %i, address &%04x\n",state->m_asic.ram[0x2801],state->m_asic.ram[0x2803] + (state->m_asic.ram[0x2802] << 8));
-	}
-	if(offset == 0x0804)  // Soft scroll register
-	{
-	}
-	if(offset == 0x0805)  // Interrupt vector register (for IM 2, used by Pang)
-	{
-		// high 5 bits go to interrupt vector
-		int vector;
-
-		if ( state->m_asic.enabled )
-		{
-			vector = (data & 0xf8) + (state->m_plus_irq_cause);
-			device_set_input_line_vector(space->machine().device("maincpu"), 0, vector);
-			logerror("ASIC: IM 2 vector write %02x, data = &%02x\n",vector,data);
-		}
-		state->m_asic.dma_clear = data & 0x01;
-	}
-	// DMA channels
-	switch(offset)
-	{
-	case 0x0c00:
-	case 0x0c01:
-		state->m_asic.dma_addr[0] = (state->m_asic.ram[0x2c01] << 8) + state->m_asic.ram[0x2c00];
-		state->m_asic.dma_status &= ~0x01;
-		logerror("ASIC: DMA 0 address set to &%04x\n",state->m_asic.dma_addr[0]);
-		break;
-	case 0x0c04:
-	case 0x0c05:
-		state->m_asic.dma_addr[1] = (state->m_asic.ram[0x2c05] << 8) + state->m_asic.ram[0x2c04];
-		state->m_asic.dma_status &= ~0x02;
-		logerror("ASIC: DMA 1 address set to &%04x\n",state->m_asic.dma_addr[1]);
-		break;
-	case 0x0c08:
-	case 0x0c09:
-		state->m_asic.dma_addr[2] = (state->m_asic.ram[0x2c09] << 8) + state->m_asic.ram[0x2c08];
-		state->m_asic.dma_status &= ~0x04;
-		logerror("ASIC: DMA 2 address set to &%04x\n",state->m_asic.dma_addr[2]);
-		break;
-	case 0x0c02:
-		state->m_asic.dma_prescaler[0] = data + 1;
-		logerror("ASIC: DMA 0 pause prescaler set to %i\n",data);
-		break;
-	case 0x0c06:
-		state->m_asic.dma_prescaler[1] = data + 1;
-		logerror("ASIC: DMA 1 pause prescaler set to %i\n",data);
-		break;
-	case 0x0c0a:
-		state->m_asic.dma_prescaler[2] = data + 1;
-		logerror("ASIC: DMA 2 pause prescaler set to %i\n",data);
-		break;
-	case 0x0c0f:
-		state->m_asic.dma_status = data;
-		logerror("ASIC: DMA status write - %02x\n",data);
-		if(data & 0x40)
-		{
-			logerror("ASIC: DMA 0 IRQ acknowledge\n");
-			cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
-			state->m_plus_irq_cause = 0x06;
-			state->m_asic.ram[0x2c0f] &= ~0x40;
-		}
-		if(data & 0x20)
-		{
-			logerror("ASIC: DMA 1 IRQ acknowledge\n");
-			cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
-			state->m_plus_irq_cause = 0x06;
-			state->m_asic.ram[0x2c0f] &= ~0x20;
-		}
-		if(data & 0x10)
-		{
-			logerror("ASIC: DMA 2 IRQ acknowledge\n");
-			cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
-			state->m_plus_irq_cause = 0x06;
-			state->m_asic.ram[0x2c0f] &= ~0x10;
-		}
-		break;
+		UINT8* RAM = (UINT8*)m_bank11->base();
+		RAM[offset] = data;
 	}
 }
 
 
-READ8_HANDLER( amstrad_plus_asic_4000_r )
+WRITE8_MEMBER(amstrad_state::amstrad_plus_asic_6000_w)
 {
-	amstrad_state *state = space->machine().driver_data<amstrad_state>();
+	if ( m_asic.enabled && ( m_asic.rmr2 & 0x18 ) == 0x18 )
+	{
+		m_asic.ram[offset+0x2000] = data;
+		if(offset >= 0x0400 && offset < 0x440 && ( offset & 0x01 ) ) // ASIC palette
+		{
+			m_asic.ram[ offset + 0x2000 ] = data & 0x0f;
+		}
+		if(offset == 0x0800)  // Programmable raster interrupt
+		{
+			// logerror("ASIC: Wrote %02x to PRI\n",data);
+			m_asic.pri = data;
+		}
+		if(offset >= 0x0801 && offset <= 0x0803)  // Split screen registers
+		{
+			logerror("ASIC: Split screen at line %i, address &%04x\n",m_asic.ram[0x2801],m_asic.ram[0x2803] + (m_asic.ram[0x2802] << 8));
+		}
+		if(offset == 0x0804)  // Soft scroll register
+		{
+		}
+		if(offset == 0x0805)  // Interrupt vector register (for IM 2, used by Pang)
+		{
+			// high 5 bits go to interrupt vector
+			int vector;
+
+			if ( m_asic.enabled )
+			{
+				vector = (data & 0xf8) + (m_plus_irq_cause);
+				m_maincpu->set_input_line_vector(0, vector);
+				logerror("ASIC: IM 2 vector write %02x, data = &%02x\n",vector,data);
+			}
+			m_asic.dma_clear = data & 0x01;
+		}
+		// DMA channels
+		switch(offset)
+		{
+		case 0x0c00:
+		case 0x0c01:
+			m_asic.dma_addr[0] = (m_asic.ram[0x2c01] << 8) + m_asic.ram[0x2c00];
+			m_asic.dma_status &= ~0x01;
+			logerror("ASIC: DMA 0 address set to &%04x\n",m_asic.dma_addr[0]);
+			break;
+		case 0x0c04:
+		case 0x0c05:
+			m_asic.dma_addr[1] = (m_asic.ram[0x2c05] << 8) + m_asic.ram[0x2c04];
+			m_asic.dma_status &= ~0x02;
+			logerror("ASIC: DMA 1 address set to &%04x\n",m_asic.dma_addr[1]);
+			break;
+		case 0x0c08:
+		case 0x0c09:
+			m_asic.dma_addr[2] = (m_asic.ram[0x2c09] << 8) + m_asic.ram[0x2c08];
+			m_asic.dma_status &= ~0x04;
+			logerror("ASIC: DMA 2 address set to &%04x\n",m_asic.dma_addr[2]);
+			break;
+		case 0x0c02:
+			m_asic.dma_prescaler[0] = data + 1;
+			logerror("ASIC: DMA 0 pause prescaler set to %i\n",data);
+			break;
+		case 0x0c06:
+			m_asic.dma_prescaler[1] = data + 1;
+			logerror("ASIC: DMA 1 pause prescaler set to %i\n",data);
+			break;
+		case 0x0c0a:
+			m_asic.dma_prescaler[2] = data + 1;
+			logerror("ASIC: DMA 2 pause prescaler set to %i\n",data);
+			break;
+		case 0x0c0f:
+			m_asic.dma_status = data;
+			logerror("ASIC: DMA status write - %02x\n",data);
+			if(data & 0x40)
+			{
+				logerror("ASIC: DMA 0 IRQ acknowledge\n");
+				m_maincpu->set_input_line(0, CLEAR_LINE);
+				m_plus_irq_cause = 0x06;
+				m_asic.ram[0x2c0f] &= ~0x40;
+			}
+			if(data & 0x20)
+			{
+				logerror("ASIC: DMA 1 IRQ acknowledge\n");
+				m_maincpu->set_input_line(0, CLEAR_LINE);
+				m_plus_irq_cause = 0x06;
+				m_asic.ram[0x2c0f] &= ~0x20;
+			}
+			if(data & 0x10)
+			{
+				logerror("ASIC: DMA 2 IRQ acknowledge\n");
+				m_maincpu->set_input_line(0, CLEAR_LINE);
+				m_plus_irq_cause = 0x06;
+				m_asic.ram[0x2c0f] &= ~0x10;
+			}
+			m_asic.ram[0x2c0f] = (m_asic.ram[0x2c0f] & 0xf8) | (data & 0x07);
+			break;
+		}
+	}
+	else
+	{
+		UINT8* RAM = (UINT8*)m_bank12->base();
+		RAM[offset] = data;
+	}
+}
+
+
+READ8_MEMBER(amstrad_state::amstrad_plus_asic_4000_r)
+{
 //  logerror("RAM: read from &%04x\n",offset+0x4000);
-	return state->m_asic.ram[offset];
+	if ( m_asic.enabled && ( m_asic.rmr2 & 0x18 ) == 0x18 )
+		return m_asic.ram[offset];
+	else
+	{
+		UINT8* RAM = (UINT8*)m_bank3->base();
+		return RAM[offset];
+	}
 }
 
 
-READ8_HANDLER( amstrad_plus_asic_6000_r )
+READ8_MEMBER(amstrad_state::amstrad_plus_asic_6000_r)
 {
-	amstrad_state *state = space->machine().driver_data<amstrad_state>();
 //  logerror("RAM: read from &%04x\n",offset+0x6000);
-	// Analogue ports
-	if(offset == 0x0808)
+	if ( m_asic.enabled && ( m_asic.rmr2 & 0x18 ) == 0x18 )
 	{
-		return (input_port_read(space->machine(), "analog1") & 0x3f);
+		// Analogue ports
+		if(offset == 0x0808)
+		{
+			return (m_io_analog1->read() & 0x3f);
+		}
+		if(offset == 0x0809)
+		{
+			return (m_io_analog2->read() & 0x3f);
+		}
+		if(offset == 0x080a)
+		{
+			return (m_io_analog3->read() & 0x3f);
+		}
+		if(offset == 0x080b)
+		{
+			return (m_io_analog4->read() & 0x3f);
+		}
+		if(offset == 0x080c || offset == 0x080e)
+		{
+			return 0x3f;
+		}
+		if(offset == 0x080d || offset == 0x080f)
+		{
+			return 0x00;
+		}
+	#if 0
+		if(offset == 0x0c0f)  // DMA status and control
+		{
+			int result = 0;
+			if(m_plus_irq_cause == 0x00)
+				result |= 0x40;
+			if(m_plus_irq_cause == 0x02)
+				result |= 0x20;
+			if(m_plus_irq_cause == 0x04)
+				result |= 0x10;
+			if(m_plus_irq_cause == 0x06)
+				result |= 0x80;
+			return result;
+		}
+	#endif
+		return m_asic.ram[offset+0x2000];
 	}
-	if(offset == 0x0809)
+	else
 	{
-		return (input_port_read(space->machine(), "analog2") & 0x3f);
+		UINT8* RAM = (UINT8*)m_bank4->base();
+		return RAM[offset];
 	}
-	if(offset == 0x080a)
-	{
-		return (input_port_read(space->machine(), "analog3") & 0x3f);
-	}
-	if(offset == 0x080b)
-	{
-		return (input_port_read(space->machine(), "analog4") & 0x3f);
-	}
-	if(offset == 0x080c || offset == 0x080e)
-	{
-		return 0x3f;
-	}
-	if(offset == 0x080d || offset == 0x080f)
-	{
-		return 0x00;
-	}
-#if 0
-	if(offset == 0x0c0f)  // DMA status and control
-	{
-		int result = 0;
-		if(state->m_plus_irq_cause == 0x00)
-			result |= 0x40;
-		if(state->m_plus_irq_cause == 0x02)
-			result |= 0x20;
-		if(state->m_plus_irq_cause == 0x04)
-			result |= 0x10;
-		if(state->m_plus_irq_cause == 0x06)
-			result |= 0x80;
-		return result;
-	}
-#endif
-	return state->m_asic.ram[offset+0x2000];
 }
 
 
 /* used for loading snapshot only ! */
-static void AmstradCPC_PALWrite(running_machine &machine, int data)
+void amstrad_state::AmstradCPC_PALWrite(int data)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
 	if ((data & 0x0c0)==0x0c0)
 	{
-		state->m_GateArray_RamConfiguration = data;
-		AmstradCPC_GA_SetRamConfiguration(machine);
+		m_GateArray_RamConfiguration = data;
+		AmstradCPC_GA_SetRamConfiguration();
 	}
 }
 
@@ -1819,9 +1619,8 @@ Bit 7 Bit 6 Function
 Note 1 : This function is not available in the Gate-Array, but is performed by a device at the same I/O port address location. In the CPC464,CPC664 and KC compact, this function is performed in a memory-expansion (e.g. Dk'Tronics 64K Ram Expansion), if this expansion is not present then the function is not available. In the CPC6128, this function is performed by a PAL located on the main PCB, or a memory-expansion. In the 464+ and 6128+ this function is performed by the ASIC or a memory expansion. Please read the document on Ram Management for more information.*/
 
 
-static void amstrad_GateArray_write(running_machine &machine, UINT8 dataToGateArray)
+void amstrad_state::amstrad_GateArray_write(UINT8 dataToGateArray)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
 /* Get Bit 7 and 6 of the dataToGateArray = Gate Array function selected */
 	switch ((dataToGateArray & 0xc0)>>6)
 	{
@@ -1838,7 +1637,7 @@ Bit Value Function        Bit Value Function
 	case 0x00:
 		/* Select Border Number, get b4 */
 		/* if b4 = 0 : Select Pen Number, get b3-b0 */
-		state->m_gate_array.pen_selected = ( dataToGateArray & 0x10 ) ? 0x10 : ( dataToGateArray & 0x0f );
+		m_gate_array.pen_selected = ( dataToGateArray & 0x10 ) ? 0x10 : ( dataToGateArray & 0x0f );
 		break;
 
 /* Colour selection
@@ -1854,7 +1653,7 @@ Bit Value Function
 1   x     |
 0   x     |*/
 	case 0x01:
-		amstrad_vh_update_colour( machine, state->m_gate_array.pen_selected, (dataToGateArray & 0x1F));
+		amstrad_vh_update_colour( m_gate_array.pen_selected, (dataToGateArray & 0x1F));
 		break;
 
 /* Select screen mode and rom configuration
@@ -1886,38 +1685,38 @@ Similarly, bit 3 controls enabling or disabling of the upper rom area. The upper
 Bit 4 controls the interrupt generation. It can be used to delay interrupts.*/
 	case 0x02:
 		/* If bit 5 is enabled on a CPC Plus/GX4000 when the ASIC is unlocked, sets the lower ROM position and cart bank
-           b5 = 1, b4b3 = RAM position for lower ROM area and if the ASIC registers are visible at &4000,
-           b2b1b0 = cartridge bank to read from lower ROM area (0-7 only) */
-		if ( state->m_system_type == SYSTEM_PLUS || state->m_system_type == SYSTEM_GX4000 )
+		   b5 = 1, b4b3 = RAM position for lower ROM area and if the ASIC registers are visible at &4000,
+		   b2b1b0 = cartridge bank to read from lower ROM area (0-7 only) */
+		if ( m_system_type == SYSTEM_PLUS || m_system_type == SYSTEM_GX4000 )
 		{
-			if ( state->m_asic.enabled && (dataToGateArray & 0x20) )
+			if ( m_asic.enabled && (dataToGateArray & 0x20) )
 			{
-				state->m_asic.rmr2 = dataToGateArray;
+				m_asic.rmr2 = dataToGateArray;
 			}
 			else
 			{
-				state->m_gate_array.mrer = dataToGateArray;
+				m_gate_array.mrer = dataToGateArray;
 			}
 		}
 		else
 		{
-			state->m_gate_array.mrer = dataToGateArray;
+			m_gate_array.mrer = dataToGateArray;
 		}
 
 		/* If bit 4 of the "Select screen mode and rom configuration" register of the Gate-Array is set to "1"
-         then the interrupt request is cleared and the 6-bit counter is reset to "0".  */
-		if ( state->m_gate_array.mrer & 0x10 )
+		 then the interrupt request is cleared and the 6-bit counter is reset to "0".  */
+		if ( m_gate_array.mrer & 0x10 )
 		{
-			state->m_gate_array.hsync_counter = 0;
-			cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
+			m_gate_array.hsync_counter = 0;
+			m_maincpu->set_input_line(0, CLEAR_LINE);
 		}
 
 		/* b3b2 != 0 then change the state of upper or lower rom area and rethink memory */
-		amstrad_setLowerRom(machine);
-		amstrad_setUpperRom(machine);
+		amstrad_setLowerRom();
+		amstrad_setUpperRom();
 
 		/* b1b0 mode */
-		amstrad_vh_update_mode(state);
+		amstrad_vh_update_mode();
 
 		break;
 
@@ -1929,7 +1728,7 @@ In the CPC6128, this function is performed by a PAL located on the main PCB, or 
 In the 464+ and 6128+ this function is performed by the ASIC or a memory expansion.
 */
 	case 0x03:
-		state->m_GateArray_RamConfiguration = dataToGateArray;
+		m_GateArray_RamConfiguration = dataToGateArray;
 		break;
 
 	default:
@@ -1938,64 +1737,63 @@ In the 464+ and 6128+ this function is performed by the ASIC or a memory expansi
 }
 
 
-static WRITE8_HANDLER( aleste_msx_mapper )
+WRITE8_MEMBER(amstrad_state::aleste_msx_mapper)
 {
-	amstrad_state *state = space->machine().driver_data<amstrad_state>();
 	int page = (offset & 0x0300) >> 8;
 	int ramptr = (data & 0x1f) * 0x4000;
 	int rampage = data & 0x1f;
 	int function = (data & 0xc0) >> 6;
-	UINT8 *ram = ram_get_ptr(space->machine().device(RAM_TAG));
+	UINT8 *ram = m_ram->pointer();
 
 	// It is assumed that functions are all mapped to each port &7cff-&7fff, and b8 and b9 are only used for RAM bank location
 	switch(function)
 	{
 	case 0:  // Pen select (same as Gate Array?)
-		amstrad_GateArray_write(space->machine(), data);
+		amstrad_GateArray_write(data);
 		break;
 	case 1:  // Colour select (6-bit palette)
-		aleste_vh_update_colour( space->machine(), state->m_gate_array.pen_selected, data & 0x3f );
+		aleste_vh_update_colour( m_gate_array.pen_selected, data & 0x3f );
 		break;
 	case 2:  // Screen mode, Upper/Lower ROM select
-		amstrad_GateArray_write(space->machine(), data);
+		amstrad_GateArray_write(data);
 		break;
 	case 3: // RAM banks
 		switch(page)
 		{
 		case 0:  /* 0x0000 - 0x3fff */
-			memory_set_bankptr(space->machine(),"bank1",ram+ramptr);
-			memory_set_bankptr(space->machine(),"bank2",ram+ramptr+0x2000);
-			memory_set_bankptr(space->machine(),"bank9",ram+ramptr);
-			memory_set_bankptr(space->machine(),"bank10",ram+ramptr+0x2000);
-			state->m_Aleste_RamBanks[0] = ram+ramptr;
-			state->m_aleste_active_page[0] = data;
+			m_bank1->set_base(ram+ramptr);
+			m_bank2->set_base(ram+ramptr+0x2000);
+			m_bank9->set_base(ram+ramptr);
+			m_bank10->set_base(ram+ramptr+0x2000);
+			m_Aleste_RamBanks[0] = ram+ramptr;
+			m_aleste_active_page[0] = data;
 			logerror("RAM: RAM location 0x%06x (page %02x) mapped to 0x0000\n",ramptr,rampage);
 			break;
 		case 1:  /* 0x4000 - 0x7fff */
-			memory_set_bankptr(space->machine(),"bank3",ram+ramptr);
-			memory_set_bankptr(space->machine(),"bank4",ram+ramptr+0x2000);
-			memory_set_bankptr(space->machine(),"bank11",ram+ramptr);
-			memory_set_bankptr(space->machine(),"bank12",ram+ramptr+0x2000);
-			state->m_Aleste_RamBanks[1] = ram+ramptr;
-			state->m_aleste_active_page[1] = data;
+			m_bank3->set_base(ram+ramptr);
+			m_bank4->set_base(ram+ramptr+0x2000);
+			m_bank11->set_base(ram+ramptr);
+			m_bank12->set_base(ram+ramptr+0x2000);
+			m_Aleste_RamBanks[1] = ram+ramptr;
+			m_aleste_active_page[1] = data;
 			logerror("RAM: RAM location 0x%06x (page %02x) mapped to 0x4000\n",ramptr,rampage);
 			break;
 		case 2:  /* 0x8000 - 0xbfff */
-			memory_set_bankptr(space->machine(),"bank5",ram+ramptr);
-			memory_set_bankptr(space->machine(),"bank6",ram+ramptr+0x2000);
-			memory_set_bankptr(space->machine(),"bank13",ram+ramptr);
-			memory_set_bankptr(space->machine(),"bank14",ram+ramptr+0x2000);
-			state->m_Aleste_RamBanks[2] = ram+ramptr;
-			state->m_aleste_active_page[2] = data;
+			m_bank5->set_base(ram+ramptr);
+			m_bank6->set_base(ram+ramptr+0x2000);
+			m_bank13->set_base(ram+ramptr);
+			m_bank14->set_base(ram+ramptr+0x2000);
+			m_Aleste_RamBanks[2] = ram+ramptr;
+			m_aleste_active_page[2] = data;
 			logerror("RAM: RAM location 0x%06x (page %02x) mapped to 0x8000\n",ramptr,rampage);
 			break;
 		case 3:  /* 0xc000 - 0xffff */
-			memory_set_bankptr(space->machine(),"bank7",ram+ramptr);
-			memory_set_bankptr(space->machine(),"bank8",ram+ramptr+0x2000);
-			memory_set_bankptr(space->machine(),"bank15",ram+ramptr);
-			memory_set_bankptr(space->machine(),"bank16",ram+ramptr+0x2000);
-			state->m_Aleste_RamBanks[3] = ram+ramptr;
-			state->m_aleste_active_page[3] = data;
+			m_bank7->set_base(ram+ramptr);
+			m_bank8->set_base(ram+ramptr+0x2000);
+			m_bank15->set_base(ram+ramptr);
+			m_bank16->set_base(ram+ramptr+0x2000);
+			m_Aleste_RamBanks[3] = ram+ramptr;
+			m_aleste_active_page[3] = data;
 			logerror("RAM: RAM location 0x%06x (page %02x) mapped to 0xc000\n",ramptr,rampage);
 			break;
 		}
@@ -2065,26 +1863,22 @@ Expansion Peripherals Read/Write -   -   -   -   -   0   -   -   -   -   -   -  
 
 */
 
-READ8_HANDLER ( amstrad_cpc_io_r )
+READ8_MEMBER(amstrad_state::amstrad_cpc_io_r)
 {
-	amstrad_state *state = space->machine().driver_data<amstrad_state>();
-	device_t *fdc = space->machine().device("upd765");
-	mc6845_device *mc6845 = space->machine().device<mc6845_device>("mc6845" );
-
 	unsigned char data = 0xFF;
 	unsigned int r1r0 = (unsigned int)((offset & 0x0300) >> 8);
 //  m6845_personality_t crtc_type;
 	int page;
 
-//  crtc_type = input_port_read_safe(space->machine(), "crtc", 0);
+//  crtc_type = ioport("crtc"->read_safe(0));
 //  m6845_set_personality(crtc_type);
 
-	if(state->m_aleste_mode & 0x04)
+	if(m_aleste_mode & 0x04)
 	{
 		if ((offset & (1<<15)) == 0)  // Aleste Mapper is readable?
 		{
 			page = (offset & 0x0300) >> 8;
-			data = state->m_aleste_active_page[page];
+			data = m_aleste_active_page[page];
 			return data;
 		}
 	}
@@ -2095,10 +1889,10 @@ READ8_HANDLER ( amstrad_cpc_io_r )
 		switch(r1r0)
 		{
 		case 0x02:
-			data = mc6845->status_r( *space, 0 );
+			data = m_crtc->status_r( space, 0 );
 #if 0
 			/* CRTC Type 1 : Read Status Register
-               CRTC Type 3 or 4 : Read from selected internal 6845 register */
+			   CRTC Type 3 or 4 : Read from selected internal 6845 register */
 			switch(crtc_type) {
 			case M6845_PERSONALITY_UM6845R:
 				data = amstrad_CRTC_CR; /* Read Status Register */
@@ -2114,7 +1908,7 @@ READ8_HANDLER ( amstrad_cpc_io_r )
 			break;
 		case 0x03:
 			/* All CRTC type : Read from selected internal 6845 register Read only */
-			data = mc6845->register_r( *space, (offs_t)0 );
+			data = m_crtc->register_r( space, (offs_t)0 );
 			break;
 		}
 	}
@@ -2130,7 +1924,7 @@ b9 b8 | PPI Function Read/Write status
 	if ((offset & (1<<11)) == 0)
 	{
 		if (r1r0 < 0x03 )
-			data = space->machine().device<i8255_device>("ppi8255")->read(*space, r1r0);
+			data = m_ppi->read(space, r1r0);
 	}
 
 /* if b10 = 0 : Expansion Peripherals Read selected
@@ -2151,7 +1945,7 @@ b8 b0 Function Read/Write state
 If b10 is reset but none of b7-b5 are reset, user expansion peripherals are selected.
 The exception is the case where none of b7-b0 are reset (i.e. port &FBFF), which causes the expansion peripherals to reset.
  */
-	if ( state->m_system_type != SYSTEM_GX4000 )
+	if ( m_system_type != SYSTEM_GX4000 )
 	{
 		if ( ( offset & (1<<10) ) == 0 )
 		{
@@ -2162,10 +1956,10 @@ The exception is the case where none of b7-b0 are reset (i.e. port &FBFF), which
 				switch (b8b0)
 				{
 				case 0x02:
-					data = upd765_status_r(fdc, 0);
+					data = m_fdc->msr_r(space, 0);
 					break;
 				case 0x03:
-					data = upd765_data_r(fdc, 0);
+					data = m_fdc->fifo_r(space, 0);
 					break;
 				default:
 					break;
@@ -2178,40 +1972,37 @@ The exception is the case where none of b7-b0 are reset (i.e. port &FBFF), which
 
 
 // Handler for checking the ASIC unlocking sequence
-static void amstrad_plus_seqcheck(amstrad_state *state, int data)
+void amstrad_state::amstrad_plus_seqcheck(int data)
 {
-	if(data == 0 && state->m_prev_data != 0)
+	if(data == 0 && m_prev_data != 0)
 	{
-		state->m_asic.seqptr = 0;  // non-zero value followed by zero will sync the locking mechanism
+		m_asic.seqptr = 0;  // non-zero value followed by zero will sync the locking mechanism
 	}
-	if(data == asic_unlock_seq[state->m_asic.seqptr])
+	if(data == asic_unlock_seq[m_asic.seqptr])
 	{
-		state->m_asic.seqptr++;
-		if ( state->m_asic.seqptr == 14 && state->m_asic.enabled )
+		m_asic.seqptr++;
+		if ( m_asic.seqptr == 14 && m_asic.enabled )
 		{
 			logerror("SYS: ASIC locked\n");
-			state->m_asic.enabled = 0;
+			m_asic.enabled = 0;
 		}
-		if ( state->m_asic.seqptr >= 15 )  // end of sequence
+		if ( m_asic.seqptr >= 15 )  // end of sequence
 		{
 			logerror("SYS: ASIC unlocked\n");
-			state->m_asic.enabled = 1;
+			m_asic.enabled = 1;
 		}
 	}
-	state->m_prev_data = data;
+	m_prev_data = data;
 }
 
-
 /* Offset handler for write */
-WRITE8_HANDLER ( amstrad_cpc_io_w )
+WRITE8_MEMBER(amstrad_state::amstrad_cpc_io_w)
 {
-	amstrad_state *state = space->machine().driver_data<amstrad_state>();
-	device_t *fdc = space->machine().device("upd765");
-	mc6845_device *mc6845 = space->machine().device<mc6845_device>("mc6845");
+	cpc_multiface2_device* mface2;
 
 	if ((offset & (1<<15)) == 0)
 	{
-		if(state->m_aleste_mode & 0x04) // Aleste mode
+		if(m_aleste_mode & 0x04) // Aleste mode
 		{
 			aleste_msx_mapper(space, offset, data);
 		}
@@ -2219,10 +2010,10 @@ WRITE8_HANDLER ( amstrad_cpc_io_w )
 		{
 			/* if b15 = 0 and b14 = 1 : Gate-Array Write Selected*/
 			if ((offset & (1<<14)) != 0)
-				amstrad_GateArray_write(space->machine(), data);
+				amstrad_GateArray_write(data);
 
 			/* if b15 = 0 : RAM Configuration Write Selected*/
-			AmstradCPC_GA_SetRamConfiguration(space->machine());
+			AmstradCPC_GA_SetRamConfiguration();
 		}
 	}
 
@@ -2232,34 +2023,33 @@ WRITE8_HANDLER ( amstrad_cpc_io_w )
 	{
 		switch ((offset & 0x0300) >> 8) // r1r0
 		{
-		case 0x00:		/* Select internal 6845 register Write Only */
-			mc6845->address_w( *space, 0, data );
-			if ( state->m_system_type == SYSTEM_PLUS || state->m_system_type == SYSTEM_GX4000 )
-				amstrad_plus_seqcheck(state, data);
+		case 0x00:      /* Select internal 6845 register Write Only */
+			m_crtc->address_w( space, 0, data );
+			if ( m_system_type == SYSTEM_PLUS || m_system_type == SYSTEM_GX4000 )
+				amstrad_plus_seqcheck(data);
 
 			/* printer port d7 */
-			if (data == 0x0c && state->m_system_type == SYSTEM_PLUS)
-				state->m_printer_bit8_selected = TRUE;
+			if (data == 0x0c && m_system_type == SYSTEM_PLUS)
+				m_printer_bit8_selected = TRUE;
 
-			state->m_asic.addr_6845 = data;
+			m_asic.addr_6845 = data;
 			break;
-		case 0x01:		/* Write to selected internal 6845 register Write Only */
-			if ( state->m_system_type == SYSTEM_PLUS || state->m_system_type == SYSTEM_GX4000 )
-				amstrad_plus_update_video(space->machine());
+		case 0x01:      /* Write to selected internal 6845 register Write Only */
+			if ( m_system_type == SYSTEM_PLUS || m_system_type == SYSTEM_GX4000 )
+				timer_set(attotime::from_usec(0), TIMER_VIDEO_UPDATE, 1);
 			else
-				amstrad_update_video(space->machine());
-			mc6845->register_w( *space, 0, data );
+				timer_set(attotime::from_usec(0), TIMER_VIDEO_UPDATE, 0);
+			m_crtc->register_w( space, 0, data );
 
 			/* printer port bit 8 */
-			if (state->m_printer_bit8_selected && state->m_system_type == SYSTEM_PLUS)
+			if (m_printer_bit8_selected && m_system_type == SYSTEM_PLUS)
 			{
-				device_t *printer = space->machine().device("centronics");
-				centronics_d7_w(printer, BIT(data, 3));
-				state->m_printer_bit8_selected = FALSE;
+				m_centronics->d7_w(BIT(data, 3));
+				m_printer_bit8_selected = FALSE;
 			}
 
-			if ( state->m_asic.addr_6845 == 0x01 )
-				state->m_asic.horiz_disp = data;
+			if ( m_asic.addr_6845 == 0x01 )
+				m_asic.horiz_disp = data;
 
 			break;
 		default:
@@ -2271,35 +2061,33 @@ WRITE8_HANDLER ( amstrad_cpc_io_w )
 	/* b13 = 0 : ROM select Write Selected*/
 	if ((offset & (1<<13)) == 0)
 	{
-		state->m_gate_array.upper_bank = data;
-		amstrad_setUpperRom(space->machine());
+		m_gate_array.upper_bank = data;
+		amstrad_setUpperRom();
 	}
 
 	/* b12 = 0 : Printer port Write Selected*/
-	if(state->m_system_type != SYSTEM_GX4000)
+	if(m_system_type != SYSTEM_GX4000)
 	{
 		if ((offset & (1<<12)) == 0)
 		{
-			device_t *printer = space->machine().device("centronics");
-
 			/* CPC has a 7-bit data port, bit 8 is the STROBE signal */
-			centronics_data_w(printer, 0, data & 0x7f);
-			centronics_strobe_w(printer, BIT(data, 7));
+			m_centronics->write(space, 0, data & 0x7f);
+			m_centronics->strobe_w(BIT(data, 7));
 		}
 	}
 
 	/* if b11 = 0 : 8255 PPI Write selected - bits 9 and 8 then define the PPI function access as shown below:
-    b9 b8 | PPI Function Read/Write status
-    0  0  | Port A data  Read/Write
-    0  1  | Port B data  Read/Write
-    1  0  | Port C data  Read/Write
-    1  1  | Control      Write Only
-    */
+	b9 b8 | PPI Function Read/Write status
+	0  0  | Port A data  Read/Write
+	0  1  | Port B data  Read/Write
+	1  0  | Port C data  Read/Write
+	1  1  | Control      Write Only
+	*/
 	if ((offset & (1<<11)) == 0)
 	{
 		unsigned int Index = ((offset & 0x0300) >> 8);
 
-		space->machine().device<i8255_device>("ppi8255")->write(*space, Index, data);
+		m_ppi->write(space, Index, data);
 	}
 
 	/* if b10 = 0 : Expansion Peripherals Write selected */
@@ -2322,7 +2110,7 @@ b8 b0 Function Read/Write state
 If b10 is reset but none of b7-b5 are reset, user expansion peripherals are selected.
 The exception is the case where none of b7-b0 are reset (i.e. port &FBFF), which causes the expansion peripherals to reset.
 */
-		if(state->m_system_type != SYSTEM_GX4000)
+		if(m_system_type != SYSTEM_GX4000)
 		{
 			if ((offset & (1<<7)) == 0)
 			{
@@ -2330,18 +2118,22 @@ The exception is the case where none of b7-b0 are reset (i.e. port &FBFF), which
 
 				switch (b8b0)
 				{
-				case 0x00:
+				case 0x00: {
 					/* FDC Motor Control - Bit 0 defines the state of the FDD motor:
-                     * "1" the FDD motor will be active.
-                     * "0" the FDD motor will be in-active.*/
-					floppy_mon_w(floppy_get_device(space->machine(), 0), !BIT(data, 0));
-					floppy_mon_w(floppy_get_device(space->machine(), 1), !BIT(data, 0));
-					floppy_drive_set_ready_state(floppy_get_device(space->machine(), 0), 1,1);
-					floppy_drive_set_ready_state(floppy_get_device(space->machine(), 1), 1,1);
-				  break;
+					 * "1" the FDD motor will be active.
+					 * "0" the FDD motor will be in-active.*/
+					floppy_image_device *floppy;
+					floppy = machine().device<floppy_connector>(":upd765:0")->get_device();
+					if(floppy)
+						floppy->mon_w(!BIT(data, 0));
+					floppy = machine().device<floppy_connector>(":upd765:1")->get_device();
+					if(floppy)
+						floppy->mon_w(!BIT(data, 0));
+					break;
+				}
 
 				case 0x03: /* Write Data register of FDC */
-					upd765_data_w(fdc, 0,data);
+					m_fdc->fifo_w(space, 0,data);
 					break;
 
 				default:
@@ -2352,141 +2144,145 @@ The exception is the case where none of b7-b0 are reset (i.e. port &FBFF), which
 	}
 
 	/*  Aleste Extend Port:
-        D0 - VRAM Bank 0/1 (64K)
-        D1 - MODE 0-Norm ,1-High resolution
-        D2 - MAPMOD 0-Amstrad ,1-Yamaha mapper
-        D3 - MAP Page 0/1 (256K)
-        D4 - 580WI53
-        D5 - 0-AY8910 ,1-512WI1 */
+	    D0 - VRAM Bank 0/1 (64K)
+	    D1 - MODE 0-Norm ,1-High resolution
+	    D2 - MAPMOD 0-Amstrad ,1-Yamaha mapper
+	    D3 - MAP Page 0/1 (256K)
+	    D4 - 580WI53
+	    D5 - 0-AY8910 ,1-512WI1 */
 	if(offset == 0xfabf)
 	{
-		state->m_aleste_mode = data;
+		m_aleste_mode = data;
 		logerror("EXTEND: Port &FABF write 0x%02x\n",data);
-		mc6845->set_clock( ( state->m_aleste_mode & 0x02 ) ? ( XTAL_16MHz / 8 ) : ( XTAL_16MHz / 16 ) );
+		m_crtc->set_clock( ( m_aleste_mode & 0x02 ) ? ( XTAL_16MHz / 8 ) : ( XTAL_16MHz / 16 ) );
 	}
 
-	multiface_io_write(space, offset, data);
+	mface2 = dynamic_cast<cpc_multiface2_device*>(get_expansion_device(machine(),"multiface2"));
+	if(mface2 != NULL)
+	{
+		if(mface2->multiface_io_write(offset, data) != 0)
+		{
+			amstrad_rethinkMemory();
+		}
+	}
 }
 
 
 /* load CPCEMU style snapshots */
-static void amstrad_handle_snapshot(running_machine &machine, unsigned char *pSnapshot)
+void amstrad_state::amstrad_handle_snapshot(unsigned char *pSnapshot)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	address_space* space = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	mc6845_device *mc6845 = space->machine().device<mc6845_device>("mc6845");
-	device_t *ay8910 = machine.device("ay");
+	address_space &space = m_maincpu->space(AS_PROGRAM);
 	int RegData;
 	int i;
 
 	/* init Z80 */
 	RegData = (pSnapshot[0x011] & 0x0ff) | ((pSnapshot[0x012] & 0x0ff)<<8);
-	cpu_set_reg(machine.device("maincpu"), Z80_AF, RegData);
+	m_maincpu->set_state_int(Z80_AF, RegData);
 
 	RegData = (pSnapshot[0x013] & 0x0ff) | ((pSnapshot[0x014] & 0x0ff)<<8);
-	cpu_set_reg(machine.device("maincpu"), Z80_BC, RegData);
+	m_maincpu->set_state_int(Z80_BC, RegData);
 
 	RegData = (pSnapshot[0x015] & 0x0ff) | ((pSnapshot[0x016] & 0x0ff)<<8);
-	cpu_set_reg(machine.device("maincpu"), Z80_DE, RegData);
+	m_maincpu->set_state_int(Z80_DE, RegData);
 
 	RegData = (pSnapshot[0x017] & 0x0ff) | ((pSnapshot[0x018] & 0x0ff)<<8);
-	cpu_set_reg(machine.device("maincpu"), Z80_HL, RegData);
+	m_maincpu->set_state_int(Z80_HL, RegData);
 
 	RegData = (pSnapshot[0x019] & 0x0ff) ;
-	cpu_set_reg(machine.device("maincpu"), Z80_R, RegData);
+	m_maincpu->set_state_int(Z80_R, RegData);
 
 	RegData = (pSnapshot[0x01a] & 0x0ff);
-	cpu_set_reg(machine.device("maincpu"), Z80_I, RegData);
+	m_maincpu->set_state_int(Z80_I, RegData);
 
 	if ((pSnapshot[0x01b] & 1)==1)
 	{
-		cpu_set_reg(machine.device("maincpu"), Z80_IFF1, (UINT64)1);
+		m_maincpu->set_state_int(Z80_IFF1, (UINT64)1);
 	}
 	else
 	{
-		cpu_set_reg(machine.device("maincpu"), Z80_IFF1, (UINT64)0);
+		m_maincpu->set_state_int(Z80_IFF1, (UINT64)0);
 	}
 
 	if ((pSnapshot[0x01c] & 1)==1)
 	{
-		cpu_set_reg(machine.device("maincpu"), Z80_IFF2, (UINT64)1);
+		m_maincpu->set_state_int(Z80_IFF2, (UINT64)1);
 	}
 	else
 	{
-		cpu_set_reg(machine.device("maincpu"), Z80_IFF2, (UINT64)0);
+		m_maincpu->set_state_int(Z80_IFF2, (UINT64)0);
 	}
 
 	RegData = (pSnapshot[0x01d] & 0x0ff) | ((pSnapshot[0x01e] & 0x0ff)<<8);
-	cpu_set_reg(machine.device("maincpu"), Z80_IX, RegData);
+	m_maincpu->set_state_int(Z80_IX, RegData);
 
 	RegData = (pSnapshot[0x01f] & 0x0ff) | ((pSnapshot[0x020] & 0x0ff)<<8);
-	cpu_set_reg(machine.device("maincpu"), Z80_IY, RegData);
+	m_maincpu->set_state_int(Z80_IY, RegData);
 
 	RegData = (pSnapshot[0x021] & 0x0ff) | ((pSnapshot[0x022] & 0x0ff)<<8);
-	cpu_set_reg(machine.device("maincpu"), Z80_SP, RegData);
-	cpu_set_reg(machine.device("maincpu"), STATE_GENSP, RegData);
+	m_maincpu->set_state_int(Z80_SP, RegData);
+	m_maincpu->set_state_int(STATE_GENSP, RegData);
 
 	RegData = (pSnapshot[0x023] & 0x0ff) | ((pSnapshot[0x024] & 0x0ff)<<8);
 
-	cpu_set_reg(machine.device("maincpu"), Z80_PC, RegData);
-//  cpu_set_reg(machine.device("maincpu"), REG_SP, RegData);
+	m_maincpu->set_state_int(Z80_PC, RegData);
+//  m_maincpu->set_state_int(REG_SP, RegData);
 
 	RegData = (pSnapshot[0x025] & 0x0ff);
-	cpu_set_reg(machine.device("maincpu"), Z80_IM, RegData);
+	m_maincpu->set_state_int(Z80_IM, RegData);
 
 	RegData = (pSnapshot[0x026] & 0x0ff) | ((pSnapshot[0x027] & 0x0ff)<<8);
-	cpu_set_reg(machine.device("maincpu"), Z80_AF2, RegData);
+	m_maincpu->set_state_int(Z80_AF2, RegData);
 
 	RegData = (pSnapshot[0x028] & 0x0ff) | ((pSnapshot[0x029] & 0x0ff)<<8);
-	cpu_set_reg(machine.device("maincpu"), Z80_BC2, RegData);
+	m_maincpu->set_state_int(Z80_BC2, RegData);
 
 	RegData = (pSnapshot[0x02a] & 0x0ff) | ((pSnapshot[0x02b] & 0x0ff)<<8);
-	cpu_set_reg(machine.device("maincpu"), Z80_DE2, RegData);
+	m_maincpu->set_state_int(Z80_DE2, RegData);
 
 	RegData = (pSnapshot[0x02c] & 0x0ff) | ((pSnapshot[0x02d] & 0x0ff)<<8);
-	cpu_set_reg(machine.device("maincpu"), Z80_HL2, RegData);
+	m_maincpu->set_state_int(Z80_HL2, RegData);
 
 	/* init GA */
 	for (i=0; i<17; i++)
 	{
-		amstrad_GateArray_write(machine, i);
+		amstrad_GateArray_write(i);
 
-		amstrad_GateArray_write(machine, ((pSnapshot[0x02f + i] & 0x01f) | 0x040));
+		amstrad_GateArray_write(((pSnapshot[0x02f + i] & 0x01f) | 0x040));
 	}
 
-	amstrad_GateArray_write(machine, pSnapshot[0x02e] & 0x01f);
+	amstrad_GateArray_write(pSnapshot[0x02e] & 0x01f);
 
-	amstrad_GateArray_write(machine, ((pSnapshot[0x040] & 0x03f) | 0x080));
+	amstrad_GateArray_write(((pSnapshot[0x040] & 0x03f) | 0x080));
 
-	AmstradCPC_PALWrite(machine, ((pSnapshot[0x041] & 0x03f) | 0x0c0));
+	AmstradCPC_PALWrite(((pSnapshot[0x041] & 0x03f) | 0x0c0));
 
 	/* init CRTC */
 	for (i=0; i<18; i++)
 	{
-		mc6845->address_w( *space, 0, i );
-		mc6845->register_w( *space, 0, pSnapshot[0x043+i] & 0xff );
+		m_crtc->address_w( space, 0, i );
+		m_crtc->register_w( space, 0, pSnapshot[0x043+i] & 0xff );
 	}
 
-	mc6845->address_w( *space, 0, i );
+	m_crtc->address_w( space, 0, i );
 
 	/* upper rom selection */
-	state->m_gate_array.upper_bank = pSnapshot[0x055];
+	m_gate_array.upper_bank = pSnapshot[0x055];
 
 	/* PPI */
-	space->machine().device<i8255_device>("ppi8255")->write(*space, 3, pSnapshot[0x059] & 0x0ff);
+	m_ppi->write(space, 3, pSnapshot[0x059] & 0x0ff);
 
-	space->machine().device<i8255_device>("ppi8255")->write(*space, 0, pSnapshot[0x056] & 0x0ff);
-	space->machine().device<i8255_device>("ppi8255")->write(*space, 1, pSnapshot[0x057] & 0x0ff);
-	space->machine().device<i8255_device>("ppi8255")->write(*space, 2, pSnapshot[0x058] & 0x0ff);
+	m_ppi->write(space, 0, pSnapshot[0x056] & 0x0ff);
+	m_ppi->write(space, 1, pSnapshot[0x057] & 0x0ff);
+	m_ppi->write(space, 2, pSnapshot[0x058] & 0x0ff);
 
 	/* PSG */
 	for (i=0; i<16; i++)
 	{
-		ay8910_address_w(ay8910, 0, i);
-		ay8910_data_w(ay8910, 0, pSnapshot[0x05b + i] & 0x0ff);
+		m_ay->address_w(space, 0, i);
+		m_ay->data_w(space, 0, pSnapshot[0x05b + i] & 0x0ff);
 	}
 
-	ay8910_address_w(ay8910, 0, pSnapshot[0x05a]);
+	m_ay->address_w(space, 0, pSnapshot[0x05a]);
 
 	{
 		int MemSize;
@@ -2503,9 +2299,9 @@ static void amstrad_handle_snapshot(running_machine &machine, unsigned char *pSn
 			MemorySize = 64*1024;
 		}
 
-		memcpy(ram_get_ptr(machine.device(RAM_TAG)), &pSnapshot[0x0100], MemorySize);
+		memcpy(m_ram->pointer(), &pSnapshot[0x0100], MemorySize);
 	}
-	amstrad_rethinkMemory(machine);
+	amstrad_rethinkMemory();
 }
 
 
@@ -2513,110 +2309,124 @@ static void amstrad_handle_snapshot(running_machine &machine, unsigned char *pSn
 All hardware is reset and the firmware is completely initialized
 Once all tables and jumpblocks have been set up,
 control is passed to the default entry in rom 0*/
-static void amstrad_reset_machine(running_machine &machine)
+void amstrad_state::amstrad_reset_machine()
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
 	/* enable lower rom (OS rom) */
-	amstrad_GateArray_write(machine, 0x089);
+	amstrad_GateArray_write(0x089);
 
 	/* set ram config 0 */
-	amstrad_GateArray_write(machine, 0x0c0);
+	amstrad_GateArray_write(0x0c0);
 
 	// Get manufacturer name and TV refresh rate from PCB link (dipswitch for mess emulation)
-	state->m_ppi_port_inputs[amstrad_ppi_PortB] = (((input_port_read(machine, "solder_links")&MANUFACTURER_NAME)<<1) | (input_port_read(machine, "solder_links")&TV_REFRESH_RATE));
+	m_ppi_port_inputs[amstrad_ppi_PortB] = (((m_io_solder_links->read()&MANUFACTURER_NAME)<<1) | (m_io_solder_links->read()&TV_REFRESH_RATE));
 
-	if ( state->m_system_type == SYSTEM_PLUS || state->m_system_type == SYSTEM_GX4000 )
-		memset(state->m_asic.ram,0,16384);  // clear ASIC RAM
-
-	multiface_reset(state);
+	if ( m_system_type == SYSTEM_PLUS || m_system_type == SYSTEM_GX4000 )
+	{
+		memset(m_asic.ram,0,16384);  // clear ASIC RAM
+	}
 }
 
 
 /*------------------
   - Rethink Memory -
   ------------------*/
-static void amstrad_rethinkMemory(running_machine &machine)
+void amstrad_state::amstrad_rethinkMemory()
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
+	cpc_multiface2_device* mface2;
 	/* the following is used for banked memory read/writes and for setting up
-     * opcode and opcode argument reads */
+	 * opcode and opcode argument reads */
 
 	/* bank 0 - 0x0000..0x03fff */
-	amstrad_setLowerRom(machine);
+	amstrad_setLowerRom();
 
 	/* bank 1 - 0x04000..0x07fff */
-	if ( state->m_system_type == SYSTEM_CPC || state->m_system_type == SYSTEM_ALESTE || state->m_asic.enabled == 0 )
+	if ( m_system_type == SYSTEM_CPC || m_system_type == SYSTEM_ALESTE || m_asic.enabled == 0 )
 	{
-		if(state->m_aleste_mode & 0x04)
+		if(m_aleste_mode & 0x04)
 		{
-			memory_set_bankptr(machine,"bank3", state->m_Aleste_RamBanks[1]);
-			memory_set_bankptr(machine,"bank4", state->m_Aleste_RamBanks[1]+0x2000);
+			m_bank3->set_base(m_Aleste_RamBanks[1]);
+			m_bank4->set_base(m_Aleste_RamBanks[1]+0x2000);
 			/* bank 2 - 0x08000..0x0bfff */
-			memory_set_bankptr(machine,"bank5", state->m_Aleste_RamBanks[2]);
-			memory_set_bankptr(machine,"bank6", state->m_Aleste_RamBanks[2]+0x2000);
+			m_bank5->set_base(m_Aleste_RamBanks[2]);
+			m_bank6->set_base(m_Aleste_RamBanks[2]+0x2000);
 		}
 		else
 		{
-			memory_set_bankptr(machine,"bank3", state->m_AmstradCPC_RamBanks[1]);
-			memory_set_bankptr(machine,"bank4", state->m_AmstradCPC_RamBanks[1]+0x2000);
+			m_bank3->set_base(m_AmstradCPC_RamBanks[1]);
+			m_bank4->set_base(m_AmstradCPC_RamBanks[1]+0x2000);
 			/* bank 2 - 0x08000..0x0bfff */
-			memory_set_bankptr(machine,"bank5", state->m_AmstradCPC_RamBanks[2]);
-			memory_set_bankptr(machine,"bank6", state->m_AmstradCPC_RamBanks[2]+0x2000);
+			m_bank5->set_base(m_AmstradCPC_RamBanks[2]);
+			m_bank6->set_base(m_AmstradCPC_RamBanks[2]+0x2000);
 		}
 	}
 	else
-		amstrad_setLowerRom(machine);
+	{
+		amstrad_setLowerRom();
+	}
 
 	/* bank 3 - 0x0c000..0x0ffff */
-	amstrad_setUpperRom(machine);
+	amstrad_setUpperRom();
 
 	/* other banks */
-	if(state->m_aleste_mode & 0x04)
+	if(m_aleste_mode & 0x04)
 	{
-		memory_set_bankptr(machine,"bank9", state->m_Aleste_RamBanks[0]);
-		memory_set_bankptr(machine,"bank10", state->m_Aleste_RamBanks[0]+0x2000);
-		memory_set_bankptr(machine,"bank11", state->m_Aleste_RamBanks[1]);
-		memory_set_bankptr(machine,"bank12", state->m_Aleste_RamBanks[1]+0x2000);
-		memory_set_bankptr(machine,"bank13", state->m_Aleste_RamBanks[2]);
-		memory_set_bankptr(machine,"bank14", state->m_Aleste_RamBanks[2]+0x2000);
-		memory_set_bankptr(machine,"bank15", state->m_Aleste_RamBanks[3]);
-		memory_set_bankptr(machine,"bank16", state->m_Aleste_RamBanks[3]+0x2000);
+		m_bank9->set_base(m_Aleste_RamBanks[0]);
+		m_bank10->set_base(m_Aleste_RamBanks[0]+0x2000);
+		m_bank11->set_base(m_Aleste_RamBanks[1]);
+		m_bank12->set_base(m_Aleste_RamBanks[1]+0x2000);
+		m_bank13->set_base(m_Aleste_RamBanks[2]);
+		m_bank14->set_base(m_Aleste_RamBanks[2]+0x2000);
+		m_bank15->set_base(m_Aleste_RamBanks[3]);
+		m_bank16->set_base(m_Aleste_RamBanks[3]+0x2000);
 	}
 	else
 	{
-		memory_set_bankptr(machine,"bank9", state->m_AmstradCPC_RamBanks[0]);
-		memory_set_bankptr(machine,"bank10", state->m_AmstradCPC_RamBanks[0]+0x2000);
-		memory_set_bankptr(machine,"bank11", state->m_AmstradCPC_RamBanks[1]);
-		memory_set_bankptr(machine,"bank12", state->m_AmstradCPC_RamBanks[1]+0x2000);
-		memory_set_bankptr(machine,"bank13", state->m_AmstradCPC_RamBanks[2]);
-		memory_set_bankptr(machine,"bank14", state->m_AmstradCPC_RamBanks[2]+0x2000);
-		memory_set_bankptr(machine,"bank15", state->m_AmstradCPC_RamBanks[3]);
-		memory_set_bankptr(machine,"bank16", state->m_AmstradCPC_RamBanks[3]+0x2000);
+		m_bank9->set_base(m_AmstradCPC_RamBanks[0]);
+		m_bank10->set_base(m_AmstradCPC_RamBanks[0]+0x2000);
+		m_bank11->set_base(m_AmstradCPC_RamBanks[1]);
+		m_bank12->set_base(m_AmstradCPC_RamBanks[1]+0x2000);
+		m_bank13->set_base(m_AmstradCPC_RamBanks[2]);
+		m_bank14->set_base(m_AmstradCPC_RamBanks[2]+0x2000);
+		m_bank15->set_base(m_AmstradCPC_RamBanks[3]);
+		m_bank16->set_base(m_AmstradCPC_RamBanks[3]+0x2000);
 	}
 
 	/* multiface hardware enabled? */
-	if (multiface_hardware_enabled(machine))
+	mface2 = dynamic_cast<cpc_multiface2_device*>(get_expansion_device(machine(),"multiface2"));
+	if(mface2 != NULL)
 	{
-		multiface_rethink_memory(machine);
+		if (mface2->multiface_hardware_enabled())
+		{
+			if((m_gate_array.mrer & 0x04) == 0)
+			{
+				mface2->multiface_rethink_memory();
+			}
+		}
 	}
 }
 
 
-static void kccomp_reset_machine(running_machine &machine)
+void amstrad_state::kccomp_reset_machine()
 {
 	/* enable lower rom (OS rom) */
-	amstrad_GateArray_write(machine, 0x089);
+	amstrad_GateArray_write(0x089);
 
 	/* set ram config 0 */
-	amstrad_GateArray_write(machine, 0x0c0);
+	amstrad_GateArray_write(0x0c0);
 }
 
 
-SCREEN_EOF( amstrad )
+void amstrad_state::screen_eof_amstrad(screen_device &screen, bool state)
 {
-	if (input_port_read_safe(machine, "multiface", 0) & 0x02)
+	// rising edge
+	if (state)
 	{
-		multiface_stop(machine);
+		cpc_multiface2_device* mface2 = dynamic_cast<cpc_multiface2_device*>(get_expansion_device(machine(),"multiface2"));
+
+		if(mface2 != NULL)
+		{
+			mface2->check_button_state();
+		}
 	}
 }
 
@@ -2643,48 +2453,45 @@ BDIR BC1       |
 1    1         | Select PSG register. When set, the PSG will take the data at PPI Port A and select a register
 */
 /* PSG function selected */
-static void update_psg(running_machine &machine)
+void amstrad_state::update_psg()
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	device_t *ay8910 = machine.device("ay");
-	mc146818_device *rtc = space->machine().device<mc146818_device>("rtc");
+	address_space &space = m_maincpu->space(AS_PROGRAM);
 
-	if(state->m_aleste_mode & 0x20)  // RTC selected
+	if(m_aleste_mode & 0x20)  // RTC selected
 	{
-		switch(state->m_aleste_rtc_function)
+		switch(m_aleste_rtc_function)
 		{
 		case 0x02:  // AS
-			rtc->write(*space, 0,state->m_ppi_port_outputs[amstrad_ppi_PortA]);
+			m_rtc->write(space, 0,m_ppi_port_outputs[amstrad_ppi_PortA]);
 			break;
 		case 0x04:  // DS write
-			rtc->write(*space, 1,state->m_ppi_port_outputs[amstrad_ppi_PortA]);
+			m_rtc->write(space, 1,m_ppi_port_outputs[amstrad_ppi_PortA]);
 			break;
 		case 0x05:  // DS read
-			state->m_ppi_port_inputs[amstrad_ppi_PortA] = rtc->read(*space, 1);
+			m_ppi_port_inputs[amstrad_ppi_PortA] = m_rtc->read(space, 1);
 			break;
 		}
 		return;
 	}
-	switch (state->m_Psg_FunctionSelected)
+	switch (m_Psg_FunctionSelected)
 	{
 	case 0:
 		{/* Inactive */
 		} break;
 	case 1:
 		{/* b6 = 1 ? : Read from selected PSG register and make the register data available to PPI Port A */
-			state->m_ppi_port_inputs[amstrad_ppi_PortA] = ay8910_r(ay8910, 0);
+			m_ppi_port_inputs[amstrad_ppi_PortA] = m_ay->data_r(space, 0);
 		}
 		break;
 	case 2:
 		{/* b7 = 1 ? : Write to selected PSG register and write data to PPI Port A */
-			ay8910_data_w(ay8910, 0, state->m_ppi_port_outputs[amstrad_ppi_PortA]);
+			m_ay->data_w(space, 0, m_ppi_port_outputs[amstrad_ppi_PortA]);
 		}
 		break;
 	case 3:
 		{/* b6 and b7 = 1 ? : The register will now be selected and the user can read from or write to it.  The register will remain selected until another is chosen.*/
-			ay8910_address_w(ay8910, 0, state->m_ppi_port_outputs[amstrad_ppi_PortA]);
-			state->m_prev_reg = state->m_ppi_port_outputs[amstrad_ppi_PortA];
+			m_ay->address_w(space, 0, m_ppi_port_outputs[amstrad_ppi_PortA]);
+			m_prev_reg = m_ppi_port_outputs[amstrad_ppi_PortA];
 		}
 		break;
 	default:
@@ -2695,19 +2502,17 @@ static void update_psg(running_machine &machine)
 
 
 /* Read/Write 8255 PPI port A (connected to AY-3-8912 databus) */
-READ8_DEVICE_HANDLER ( amstrad_ppi_porta_r )
+READ8_MEMBER(amstrad_state::amstrad_ppi_porta_r)
 {
-	amstrad_state *state = device->machine().driver_data<amstrad_state>();
-	update_psg(device->machine());
-	return state->m_ppi_port_inputs[amstrad_ppi_PortA];
+	update_psg();
+	return m_ppi_port_inputs[amstrad_ppi_PortA];
 }
 
 
-WRITE8_DEVICE_HANDLER ( amstrad_ppi_porta_w )
+WRITE8_MEMBER(amstrad_state::amstrad_ppi_porta_w)
 {
-	amstrad_state *state = device->machine().driver_data<amstrad_state>();
-	state->m_ppi_port_outputs[amstrad_ppi_PortA] = data;
-	update_psg(device->machine());
+	m_ppi_port_outputs[amstrad_ppi_PortA] = data;
+	update_psg();
 }
 
 
@@ -2737,41 +2542,39 @@ Note:
 */
 
 
-READ8_DEVICE_HANDLER (amstrad_ppi_portb_r)
+READ8_MEMBER(amstrad_state::amstrad_ppi_portb_r)
 {
-	amstrad_state *state = device->machine().driver_data<amstrad_state>();
 	int data = 0;
 /* Set b7 with cassette tape input */
-	if(state->m_system_type != SYSTEM_GX4000)
+	if(m_system_type != SYSTEM_GX4000)
 	{
-		if (device->machine().device<cassette_image_device>(CASSETTE_TAG)->input() > 0.03)
+		if (m_cassette->input() > 0.03)
 		{
 			data |= (1<<7);
 		}
 	}
 /* Set b6 with Parallel/Printer port ready */
-	if(state->m_system_type != SYSTEM_GX4000)
+	if(m_system_type != SYSTEM_GX4000)
 	{
-		device_t *printer = device->machine().device("centronics");
-		data |= centronics_busy_r(printer) << 6;
+		data |= m_centronics->busy_r() << 6;
 	}
 /* Set b4-b1 50Hz/60Hz state and manufacturer name defined by links on PCB */
-	data |= (state->m_ppi_port_inputs[amstrad_ppi_PortB] & 0x1e);
+	data |= (m_ppi_port_inputs[amstrad_ppi_PortB] & 0x1e);
 
 /*  Set b0 with VSync state from the CRTC */
-	data |= state->m_gate_array.vsync;
+	data |= m_gate_array.vsync;
 
-	if(state->m_aleste_mode & 0x04)
+	if(m_aleste_mode & 0x04)
 	{
-		if(state->m_aleste_fdc_int == 0)
+		if(m_aleste_fdc_int == 0)
 			data &= ~0x02;
 		else
 			data |= 0x02;
 	}
 
-logerror("amstrad_ppi_portb_r\n");
+//logerror("amstrad_ppi_portb_r\n");
 	/* Schedule a write to PC2 */
-	device->machine().scheduler().timer_set( attotime::zero, FUNC(amstrad_pc2_low));
+	timer_set(attotime::zero, TIMER_PC2_LOW);
 
 	return data;
 }
@@ -2791,43 +2594,42 @@ Bit Description  Usage
 
 /* previous_ppi_portc_w value */
 
-WRITE8_DEVICE_HANDLER ( amstrad_ppi_portc_w )
+WRITE8_MEMBER(amstrad_state::amstrad_ppi_portc_w)
 {
-	amstrad_state *state = device->machine().driver_data<amstrad_state>();
 	int changed_data;
 
-	state->m_previous_ppi_portc_w = state->m_ppi_port_outputs[amstrad_ppi_PortC];
+	m_previous_ppi_portc_w = m_ppi_port_outputs[amstrad_ppi_PortC];
 /* Write the data to Port C */
-	changed_data = state->m_previous_ppi_portc_w^data;
+	changed_data = m_previous_ppi_portc_w^data;
 
-	state->m_ppi_port_outputs[amstrad_ppi_PortC] = data;
+	m_ppi_port_outputs[amstrad_ppi_PortC] = data;
 
 /* get b7 and b6 (PSG Function Selected */
-	state->m_Psg_FunctionSelected = ((data & 0xC0)>>6);
+	m_Psg_FunctionSelected = ((data & 0xC0)>>6);
 
 	/* MC146818 function */
-	state->m_aleste_rtc_function = data & 0x07;
+	m_aleste_rtc_function = data & 0x07;
 
 	/* Perform PSG function */
-	update_psg(device->machine());
+	update_psg();
 
 	/* b5 Cassette Write data */
-	if(state->m_system_type != SYSTEM_GX4000)
+	if(m_system_type != SYSTEM_GX4000)
 	{
 		if ((changed_data & 0x20) != 0)
 		{
-			device->machine().device<cassette_image_device>(CASSETTE_TAG)->output(((data & 0x20) ? -1.0 : +1.0));
+			m_cassette->output(((data & 0x20) ? -1.0 : +1.0));
 		}
 	}
 
 	/* b4 Cassette Motor Control */
-	if(state->m_system_type != SYSTEM_GX4000)
+	if(m_system_type != SYSTEM_GX4000)
 	{
 		if ((changed_data & 0x10) != 0)
 		{
-			device->machine().device<cassette_image_device>(CASSETTE_TAG)->change_state(
-				((data & 0x10) ? CASSETTE_MOTOR_ENABLED : CASSETTE_MOTOR_DISABLED),
-				CASSETTE_MASK_MOTOR);
+			m_cassette->change_state(
+					((data & 0x10) ? CASSETTE_MOTOR_ENABLED : CASSETTE_MOTOR_DISABLED),
+					CASSETTE_MASK_MOTOR);
 		}
 	}
 }
@@ -2841,29 +2643,32 @@ When port B is defined as input (bit 7 of register 7 is set to "0"), a read of t
 */
 
 /* read PSG port A */
-READ8_HANDLER ( amstrad_psg_porta_read )
+READ8_MEMBER(amstrad_state::amstrad_psg_porta_read)
 {
-	amstrad_state *state = space->machine().driver_data<amstrad_state>();
 	/* Read CPC Keyboard
-   If keyboard matrix line 11-14 are selected, the byte is always &ff.
-   After testing on a real CPC, it is found that these never change, they always return &FF. */
+	If keyboard matrix line 11-15 are selected, the byte is always &ff.
+	After testing on a real CPC, it is found that these never change, they always return &FF. */
 
-	static const char *const keynames[] = {
-		"keyboard_row_0", "keyboard_row_1", "keyboard_row_2", "keyboard_row_3", "keyboard_row_4",
-		"keyboard_row_5", "keyboard_row_6", "keyboard_row_7", "keyboard_row_8", "keyboard_row_9",
-		"keyboard_row_10"
+	ioport_port *keyrow[] = {
+		m_io_keyboard_row_0, m_io_keyboard_row_1, m_io_keyboard_row_2, m_io_keyboard_row_3, m_io_keyboard_row_4,
+		m_io_keyboard_row_5, m_io_keyboard_row_6, m_io_keyboard_row_7, m_io_keyboard_row_8, m_io_keyboard_row_9,
+		m_io_keyboard_row_10
 	};
 
-	if ( ( state->m_ppi_port_outputs[amstrad_ppi_PortC] & 0x0F ) > 10)
+	if ( ( m_ppi_port_outputs[amstrad_ppi_PortC] & 0x0F ) > 10)
 	{
 		return 0xFF;
 	}
 	else
 	{
-		if(state->m_aleste_mode == 0x08 && ( state->m_ppi_port_outputs[amstrad_ppi_PortC] & 0x0F ) == 10)
+		if(m_aleste_mode == 0x08 && ( m_ppi_port_outputs[amstrad_ppi_PortC] & 0x0F ) == 10)
 			return 0xff;
 
-		return input_port_read_safe(space->machine(), keynames[state->m_ppi_port_outputs[amstrad_ppi_PortC] & 0x0F], 0) & 0xFF;
+		if (keyrow[m_ppi_port_outputs[amstrad_ppi_PortC] & 0x0F])
+		{
+			return keyrow[m_ppi_port_outputs[amstrad_ppi_PortC] & 0x0F]->read_safe(0) & 0xFF;
+		}
+		return 0xFF;
 	}
 }
 
@@ -2871,28 +2676,27 @@ READ8_HANDLER ( amstrad_psg_porta_read )
 /* called when cpu acknowledges int */
 /* reset top bit of interrupt line counter */
 /* this ensures that the next interrupt is no closer than 32 lines */
-static IRQ_CALLBACK(amstrad_cpu_acknowledge_int)
+IRQ_CALLBACK_MEMBER(amstrad_state::amstrad_cpu_acknowledge_int)
 {
-	amstrad_state *state = device->machine().driver_data<amstrad_state>();
 	// DMA interrupts can be automatically cleared if bit 0 of &6805 is set to 0
-	if( state->m_asic.enabled && state->m_plus_irq_cause != 0x06 && state->m_asic.dma_clear & 0x01)
+	if( m_asic.enabled && m_plus_irq_cause != 0x06 && m_asic.dma_clear & 0x01)
 	{
-		logerror("IRQ: Not cleared, IRQ was called by DMA [%i]\n",state->m_plus_irq_cause);
-		state->m_asic.ram[0x2c0f] &= ~0x80;  // not a raster interrupt, so this bit is reset
-		return (state->m_asic.ram[0x2805] & 0xf8) | state->m_plus_irq_cause;
+		logerror("IRQ: Not cleared, IRQ was called by DMA [%i]\n",m_plus_irq_cause);
+		m_asic.ram[0x2c0f] &= ~0x80;  // not a raster interrupt, so this bit is reset
+		return (m_asic.ram[0x2805] & 0xf8) | m_plus_irq_cause;
 	}
-	cputag_set_input_line(device->machine(),"maincpu", 0, CLEAR_LINE);
-	state->m_gate_array.hsync_counter &= 0x1F;
-	if ( state->m_asic.enabled )
+	m_maincpu->set_input_line(0, CLEAR_LINE);
+	m_gate_array.hsync_counter &= 0x1F;
+	if ( m_asic.enabled )
 	{
-		if(state->m_plus_irq_cause == 6)  // bit 7 is set "if last interrupt acknowledge cycle was caused by a raster interrupt"
-			state->m_asic.ram[0x2c0f] |= 0x80;
+		if(m_plus_irq_cause == 6)  // bit 7 is set "if last interrupt acknowledge cycle was caused by a raster interrupt"
+			m_asic.ram[0x2c0f] |= 0x80;
 		else
 		{
-			state->m_asic.ram[0x2c0f] &= ~0x80;
-			state->m_asic.ram[0x2c0f] &= (0x40 >> state->m_plus_irq_cause/2);
+			m_asic.ram[0x2c0f] &= ~0x80;
+			m_asic.ram[0x2c0f] &= (0x40 >> m_plus_irq_cause/2);
 		}
-		return (state->m_asic.ram[0x2805] & 0xf8) | state->m_plus_irq_cause;
+		return (m_asic.ram[0x2805] & 0xf8) | m_plus_irq_cause;
 	}
 	return 0xFF;
 }
@@ -2900,82 +2704,82 @@ static IRQ_CALLBACK(amstrad_cpu_acknowledge_int)
 
 /* the following timings have been measured! */
 static const UINT8 amstrad_cycle_table_op[256] = {
-	 4, 12,  8,  8,  4,  4,  8,  4,  4, 12,  8,  8,  4,  4,  8,  4,
+		4, 12,  8,  8,  4,  4,  8,  4,  4, 12,  8,  8,  4,  4,  8,  4,
 	12, 12,  8,  8,  4,  4,  8,  4, 12, 12,  8,  8,  4,  4,  8,  4,
-	 8, 12, 20,  8,  4,  4,  8,  4,  8, 12, 20,  8,  4,  4,  8,  4,
-	 8, 12, 16,  8, 12, 12, 12,  4,  8, 12, 16,  8,  4,  4,  8,  4,
-	 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
-	 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
-	 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
-	 8,  8,  8,  8,  8,  8,  4,  8,  4,  4,  4,  4,  4,  4,  8,  4,
-	 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
-	 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
-	 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
-	 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
-	 8, 12, 12, 12, 12, 16,  8, 16,  8, 12, 12,  4, 12, 20,  8, 16,
-	 8, 12, 12, 12, 12, 16,  8, 16,  8,  4, 12, 12, 12,  4,  8, 16,
-	 8, 12, 12, 24, 12, 16,  8, 16,  8,  4, 12,  4, 12,  4,  8, 16,
-	 8, 12, 12,  4, 12, 16,  8, 16,  8,  8, 12,  4, 12,  4,  8, 16
+		8, 12, 20,  8,  4,  4,  8,  4,  8, 12, 20,  8,  4,  4,  8,  4,
+		8, 12, 16,  8, 12, 12, 12,  4,  8, 12, 16,  8,  4,  4,  8,  4,
+		4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
+		4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
+		4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
+		8,  8,  8,  8,  8,  8,  4,  8,  4,  4,  4,  4,  4,  4,  8,  4,
+		4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
+		4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
+		4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
+		4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
+		8, 12, 12, 12, 12, 16,  8, 16,  8, 12, 12,  4, 12, 20,  8, 16,
+		8, 12, 12, 12, 12, 16,  8, 16,  8,  4, 12, 12, 12,  4,  8, 16,
+		8, 12, 12, 24, 12, 16,  8, 16,  8,  4, 12,  4, 12,  4,  8, 16,
+		8, 12, 12,  4, 12, 16,  8, 16,  8,  8, 12,  4, 12,  4,  8, 16
 };
 
 static const UINT8 amstrad_cycle_table_cb[256]=
 {
-	 4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
-	 4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
-	 4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
-	 4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
-	 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
-	 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
-	 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
-	 4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
-	 4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
-	 4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
-	 4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
-	 4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
-	 4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
-	 4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
-	 4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
-	 4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4
+		4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
+		4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
+		4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
+		4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
+		4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
+		4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
+		4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
+		4,  4,  4,  4,  4,  4,  8,  4,  4,  4,  4,  4,  4,  4,  8,  4,
+		4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
+		4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
+		4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
+		4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
+		4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
+		4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
+		4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4,
+		4,  4,  4,  4,  4,  4, 12,  4,  4,  4,  4,  4,  4,  4, 12,  4
 };
 
 static const UINT8 amstrad_cycle_table_ed[256]=
 {
-	 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
-	 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
-	 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
-	 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+		4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+		4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+		4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+		4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
 	12, 12, 12, 20,  4, 12,  4,  8, 12, 12, 12, 20,  4, 12,  4,  8,
 	12, 12, 12, 20,  4, 12,  4,  8, 12, 12, 12, 20,  4, 12,  4,  8,
 	12, 12, 12, 20,  4, 12,  4, 16, 12, 12, 12, 20,  4, 12,  4, 16,
 	12, 12, 12, 20,  4, 12,  4,  4, 12, 12, 12, 20,  4, 12,  4,  4,
-	 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
-	 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+		4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+		4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
 	16, 12, 16, 16,  4,  4,  4,  4, 16, 12, 16, 16,  4,  4,  4,  4,
 	16, 12, 16, 16,  4,  4,  4,  4, 16, 12, 16, 16,  4,  4,  4,  4,
-	 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
-	 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
-	 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
-	 4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4
+		4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+		4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+		4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
+		4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4
 };
 
 static const UINT8 amstrad_cycle_table_xy[256]=
 {
-	 4, 12,  8,  8,  4,  4,  8,  4,  4, 12,  8,  8,  4,  4,  8,  4,
+		4, 12,  8,  8,  4,  4,  8,  4,  4, 12,  8,  8,  4,  4,  8,  4,
 	12, 12,  8,  8,  4,  4,  8,  4, 12, 12,  8,  8,  4,  4,  8,  4,
-	 8, 12, 20,  8,  4,  4,  8,  4,  8, 12, 20,  8,  4,  4,  8,  4,
-	 8, 12, 16,  8, 20, 20, 20,  4,  8, 12, 16,  8,  4,  4,  8,  4,
-	 4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
-	 4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
-	 4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
+		8, 12, 20,  8,  4,  4,  8,  4,  8, 12, 20,  8,  4,  4,  8,  4,
+		8, 12, 16,  8, 20, 20, 20,  4,  8, 12, 16,  8,  4,  4,  8,  4,
+		4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
+		4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
+		4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
 	16, 16, 16, 16, 16, 16,  4, 16,  4,  4,  4,  4,  4,  4, 16,  4,
-	 4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
-	 4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
-	 4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
-	 4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
-	 8, 12, 12, 12, 12, 16,  8, 16,  8, 12, 12,  4, 12, 20,  8, 16,
-	 8, 12, 12, 12, 12, 16,  8, 16,  8,  4, 12, 12, 12,  4,  8, 16,
-	 8, 12, 12, 24, 12, 16,  8, 16,  8,  4, 12,  4, 12,  4,  8, 16,
-	 8, 12, 12,  4, 12, 16,  8, 16,  8,  8, 12,  4, 12,  4,  8, 16
+		4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
+		4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
+		4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
+		4,  4,  4,  4,  4,  4, 16,  4,  4,  4,  4,  4,  4,  4, 16,  4,
+		8, 12, 12, 12, 12, 16,  8, 16,  8, 12, 12,  4, 12, 20,  8, 16,
+		8, 12, 12, 12, 12, 16,  8, 16,  8,  4, 12, 12, 12,  4,  8, 16,
+		8, 12, 12, 24, 12, 16,  8, 16,  8,  4, 12,  4, 12,  4,  8, 16,
+		8, 12, 12,  4, 12, 16,  8, 16,  8,  8, 12,  4, 12,  4,  8, 16
 };
 
 static const UINT8 amstrad_cycle_table_xycb[256]=
@@ -3000,78 +2804,96 @@ static const UINT8 amstrad_cycle_table_xycb[256]=
 
 static const UINT8 amstrad_cycle_table_ex[256]=
 {
-	 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	 4,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	 4,  0,  0,  0,  0,  0,  0,  0,  4,  0,  0,  0,  0,  0,  0,  0,
-	 4,  0,  0,  0,  0,  0,  0,  0,  4,  0,  0,  0,  0,  0,  0,  0,
-	 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	 4,  8,  4,  4,  0,  0,  0,  0,  4,  8,  4,  4,  0,  0,  0,  0,
-	 8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,
-	 8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,
-	 8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,
-	 8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0
+		0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+		4,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+		4,  0,  0,  0,  0,  0,  0,  0,  4,  0,  0,  0,  0,  0,  0,  0,
+		4,  0,  0,  0,  0,  0,  0,  0,  4,  0,  0,  0,  0,  0,  0,  0,
+		0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+		0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+		0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+		0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+		0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+		0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+		0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+		4,  8,  4,  4,  0,  0,  0,  0,  4,  8,  4,  4,  0,  0,  0,  0,
+		8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,
+		8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,
+		8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,
+		8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0,  8,  0,  0,  0
 };
 
-static void amstrad_common_init(running_machine &machine)
+void amstrad_state::amstrad_common_init()
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space &space = m_maincpu->space(AS_PROGRAM);
+	device_t* romexp;
+	rom_image_device* romimage;
+	char str[20];
+	int x;
 
-	state->m_aleste_mode = 0;
+	m_aleste_mode = 0;
 
-	state->m_gate_array.mrer = 0;
-	state->m_gate_array.vsync = 0;
-	state->m_gate_array.hsync = 0;
-	state->m_GateArray_RamConfiguration = 0;
-	state->m_gate_array.hsync_counter = 2;
+	m_gate_array.mrer = 0;
+	m_gate_array.vsync = 0;
+	m_gate_array.hsync = 0;
+	m_GateArray_RamConfiguration = 0;
+	m_gate_array.hsync_counter = 2;
 
-	space->install_read_bank(0x0000, 0x1fff, "bank1");
-	space->install_read_bank(0x2000, 0x3fff, "bank2");
+	space.install_read_bank(0x0000, 0x1fff, "bank1");
+	space.install_read_bank(0x2000, 0x3fff, "bank2");
 
-	space->install_read_bank(0x4000, 0x5fff, "bank3");
-	space->install_read_bank(0x6000, 0x7fff, "bank4");
+	space.install_read_bank(0x4000, 0x5fff, "bank3");
+	space.install_read_bank(0x6000, 0x7fff, "bank4");
 
-	space->install_read_bank(0x8000, 0x9fff, "bank5");
-	space->install_read_bank(0xa000, 0xbfff, "bank6");
+	space.install_read_bank(0x8000, 0x9fff, "bank5");
+	space.install_read_bank(0xa000, 0xbfff, "bank6");
 
-	space->install_read_bank(0xc000, 0xdfff, "bank7");
-	space->install_read_bank(0xe000, 0xffff, "bank8");
+	space.install_read_bank(0xc000, 0xdfff, "bank7");
+	space.install_read_bank(0xe000, 0xffff, "bank8");
 
-	space->install_write_bank(0x0000, 0x1fff, "bank9");
-	space->install_write_bank(0x2000, 0x3fff, "bank10");
+	space.install_write_bank(0x0000, 0x1fff, "bank9");
+	space.install_write_bank(0x2000, 0x3fff, "bank10");
 
-	space->install_write_bank(0x4000, 0x5fff, "bank11");
-	space->install_write_bank(0x6000, 0x7fff, "bank12");
+	space.install_write_bank(0x4000, 0x5fff, "bank11");
+	space.install_write_bank(0x6000, 0x7fff, "bank12");
 
-	space->install_write_bank(0x8000, 0x9fff, "bank13");
-	space->install_write_bank(0xa000, 0xbfff, "bank14");
+	space.install_write_bank(0x8000, 0x9fff, "bank13");
+	space.install_write_bank(0xa000, 0xbfff, "bank14");
 
-	space->install_write_bank(0xc000, 0xdfff, "bank15");
-	space->install_write_bank(0xe000, 0xffff, "bank16");
+	space.install_write_bank(0xc000, 0xdfff, "bank15");
+	space.install_write_bank(0xe000, 0xffff, "bank16");
 
-	space->machine().device("maincpu")->reset();
-	if ( state->m_system_type == SYSTEM_CPC || state->m_system_type == SYSTEM_ALESTE )
-		device_set_input_line_vector(machine.device("maincpu"), 0, 0xff);
+	/* Set up ROMs, if we have an expansion device connected */
+	romexp = get_expansion_device(machine(),"rom");
+	if(romexp)
+	{
+		for(x=0;x<6;x++)
+		{
+			sprintf(str,"rom%i",x+1);
+			romimage = romexp->subdevice<rom_image_device>(str);
+			if(romimage->base() != NULL)
+			{
+				m_Amstrad_ROM_Table[x+1] = romimage->base();
+			}
+		}
+	}
+
+	m_maincpu->reset();
+	if ( m_system_type == SYSTEM_CPC || m_system_type == SYSTEM_ALESTE )
+		m_maincpu->set_input_line_vector(0, 0xff);
 	else
-		device_set_input_line_vector(machine.device("maincpu"), 0, 0x00);
+		m_maincpu->set_input_line_vector(0, 0x00);
 
 	/* The opcode timing in the Amstrad is different to the opcode
-    timing in the core for the Z80 CPU.
+	timing in the core for the Z80 CPU.
 
-    The Amstrad hardware issues a HALT for each memory fetch.
-    This has the effect of stretching the timing for Z80 opcodes,
-    so that they are all multiple of 4 T states long. All opcode
-    timings are a multiple of 1us in length. */
+	The Amstrad hardware issues a HALT for each memory fetch.
+	This has the effect of stretching the timing for Z80 opcodes,
+	so that they are all multiple of 4 T states long. All opcode
+	timings are a multiple of 1us in length. */
 
 	/* Using the cool code Juergen has provided, I will override
-    the timing tables with the values for the amstrad */
-	z80_set_cycle_tables(machine.device("maincpu"),
+	the timing tables with the values for the amstrad */
+	z80_set_cycle_tables(m_maincpu,
 		(const UINT8*)amstrad_cycle_table_op,
 		(const UINT8*)amstrad_cycle_table_cb,
 		(const UINT8*)amstrad_cycle_table_ed,
@@ -3080,227 +2902,217 @@ static void amstrad_common_init(running_machine &machine)
 		(const UINT8*)amstrad_cycle_table_ex);
 
 	/* Juergen is a cool dude! */
-	device_set_irq_callback(machine.device("maincpu"), amstrad_cpu_acknowledge_int);
+	m_maincpu->set_irq_acknowledge_callback(device_irq_acknowledge_delegate(FUNC(amstrad_state::amstrad_cpu_acknowledge_int),this));
 }
 
-
-static TIMER_CALLBACK( cb_set_resolution )
+TIMER_CALLBACK_MEMBER(amstrad_state::cb_set_resolution)
 {
-	screen_device *screen = downcast<screen_device *>(machine.device("screen"));
 	rectangle visarea;
 	attoseconds_t refresh;
 	int height;
 
-	if ( input_port_read( machine, "solder_links" ) & 0x10 )
+	if ( m_io_solder_links->read() & 0x10 )
 	{
 		/* PAL */
-		visarea.min_x = 0;
-		visarea.max_x = 64 + 640 + 64 - 1;
-		visarea.min_y = 34;
-		visarea.max_y = 34 + 15 + 242 + 15 - 1;
+		visarea.set(0, 64 + 640 + 64 - 1, 34, 34 + 15 + 242 + 15 - 1);
 		height = 312;
 	}
 	else
 	{
 		/* NTSC */
-		visarea.min_x = 0;
-		visarea.max_x = 64 + 640 + 64 - 1;
-		visarea.min_y = 16;
-		visarea.max_y = 16 + 15 + 200 + 15 - 1;
+		visarea.set(0, 64 + 640 + 64 - 1, 16, 16 + 15 + 200 + 15 - 1);
 		height = 262;
 	}
 	refresh = HZ_TO_ATTOSECONDS( XTAL_16MHz ) * 1024 * height;
-	screen->configure( 1024, height, visarea, refresh );
+	m_screen->configure( 1024, height, visarea, refresh );
 }
 
 
-MACHINE_START( amstrad )
+MACHINE_START_MEMBER(amstrad_state,amstrad)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	multiface_init(machine);
-	state->m_system_type = SYSTEM_CPC;
+	m_system_type = SYSTEM_CPC;
 }
 
 
-MACHINE_RESET( amstrad )
+MACHINE_RESET_MEMBER(amstrad_state,amstrad)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
 	int i;
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = m_region_maincpu->base();
 
 	for (i=0; i<256; i++)
 	{
-		state->m_Amstrad_ROM_Table[i] = &rom[0x014000];
+		m_Amstrad_ROM_Table[i] = &rom[0x014000];
 	}
 
-	state->m_Amstrad_ROM_Table[7] = &rom[0x018000];
-	amstrad_common_init(machine);
-	amstrad_reset_machine(machine);
-//  amstrad_init_palette(machine);
+	m_Amstrad_ROM_Table[7] = &rom[0x018000];
+	amstrad_common_init();
+	amstrad_reset_machine();
+//  amstrad_init_palette(machine());
 
-	state->m_gate_array.de = 0;
-	state->m_gate_array.draw_p = NULL;
-	state->m_gate_array.hsync = 0;
-	state->m_gate_array.vsync = 0;
+	m_gate_array.de = 0;
+	m_gate_array.draw_p = NULL;
+	m_gate_array.hsync = 0;
+	m_gate_array.vsync = 0;
 
-	machine.scheduler().timer_set( attotime::zero, FUNC(cb_set_resolution));
+	timer_set(attotime::zero, TIMER_SET_RESOLUTION);
 }
 
 
-MACHINE_START( plus )
+MACHINE_START_MEMBER(amstrad_state,plus)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	state->m_asic.ram = machine.region("user1")->base();  // 16kB RAM for ASIC, memory-mapped registers.
-	state->m_system_type = SYSTEM_PLUS;
+	m_asic.ram = m_region_user1->base();  // 16kB RAM for ASIC, memory-mapped registers.
+	m_system_type = SYSTEM_PLUS;
 }
 
 
-MACHINE_RESET( plus )
+MACHINE_RESET_MEMBER(amstrad_state,plus)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
+	address_space &space = m_maincpu->space(AS_PROGRAM);
 	int i;
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = m_region_maincpu->base();
 
 	for (i=0; i<128; i++)  // fill ROM table
 	{
-		state->m_Amstrad_ROM_Table[i] = &rom[0x4000];  // BASIC in system cart
+		m_Amstrad_ROM_Table[i] = &rom[0x4000];  // BASIC in system cart
 	}
 	for(i=128;i<160;i++)
 	{
-		state->m_Amstrad_ROM_Table[i] = &rom[(i-128)*0x4000];
+		m_Amstrad_ROM_Table[i] = &rom[(i-128)*0x4000];
 	}
-	state->m_Amstrad_ROM_Table[7] = &rom[0xc000];  // AMSDOS in system cart
+	m_Amstrad_ROM_Table[7] = &rom[0xc000];  // AMSDOS in system cart
 
-	state->m_asic.enabled = 0;
-	state->m_asic.seqptr = 0;
-	state->m_asic.pri = 0;  // disable PRI
-	state->m_asic.dma_status = 0;  // disable all DMA channels
-	state->m_asic.dma_addr[0] = 0;
-	state->m_asic.dma_prescaler[0] = 0;
-	state->m_asic.dma_addr[1] = 0;
-	state->m_asic.dma_prescaler[1] = 0;
-	state->m_asic.dma_addr[2] = 0;
-	state->m_asic.dma_prescaler[2] = 0;
-	state->m_asic.dma_clear = 1;  // by default, DMA interrupts must be cleared by writing to the DSCR (&6c0f)
-	state->m_plus_irq_cause = 6;
+	m_asic.enabled = 0;
+	m_asic.seqptr = 0;
+	m_asic.pri = 0;  // disable PRI
+	m_asic.dma_status = 0;  // disable all DMA channels
+	m_asic.dma_addr[0] = 0;
+	m_asic.dma_prescaler[0] = 0;
+	m_asic.dma_addr[1] = 0;
+	m_asic.dma_prescaler[1] = 0;
+	m_asic.dma_addr[2] = 0;
+	m_asic.dma_prescaler[2] = 0;
+	m_asic.dma_clear = 1;  // by default, DMA interrupts must be cleared by writing to the DSCR (&6c0f)
+	m_plus_irq_cause = 6;
 
-	amstrad_common_init(machine);
-	amstrad_reset_machine(machine);
-	state->m_asic.ram[0x2805] = 0x01;  // interrupt vector is undefined at startup, except that bit 0 is always 1.
-	AmstradCPC_GA_SetRamConfiguration(machine);
-	amstrad_GateArray_write(machine, 0x081); // Epyx World of Sports requires upper ROM to be enabled by default
+	amstrad_common_init();
+	amstrad_reset_machine();
+	m_asic.ram[0x2805] = 0x01;  // interrupt vector is undefined at startup, except that bit 0 is always 1.
+	AmstradCPC_GA_SetRamConfiguration();
+	amstrad_GateArray_write(0x081); // Epyx World of Sports requires upper ROM to be enabled by default
+
+	space.install_read_handler(0x4000, 0x5fff, read8_delegate(FUNC(amstrad_state::amstrad_plus_asic_4000_r),this));
+	space.install_read_handler(0x6000, 0x7fff, read8_delegate(FUNC(amstrad_state::amstrad_plus_asic_6000_r),this));
+	space.install_write_handler(0x4000, 0x5fff, write8_delegate(FUNC(amstrad_state::amstrad_plus_asic_4000_w),this));
+	space.install_write_handler(0x6000, 0x7fff, write8_delegate(FUNC(amstrad_state::amstrad_plus_asic_6000_w),this));
 
 	//  multiface_init();
-	machine.scheduler().timer_set( attotime::zero, FUNC(cb_set_resolution));
+	timer_set(attotime::zero, TIMER_SET_RESOLUTION);
 }
 
-MACHINE_START( gx4000 )
+MACHINE_START_MEMBER(amstrad_state,gx4000)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	state->m_asic.ram = machine.region("user1")->base();  // 16kB RAM for ASIC, memory-mapped registers.
-	state->m_system_type = SYSTEM_GX4000;
+	m_asic.ram = m_region_user1->base();  // 16kB RAM for ASIC, memory-mapped registers.
+	m_system_type = SYSTEM_GX4000;
 }
 
-MACHINE_RESET( gx4000 )
+MACHINE_RESET_MEMBER(amstrad_state,gx4000)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
+	address_space &space = m_maincpu->space(AS_PROGRAM);
 	int i;
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = m_region_maincpu->base();
 
 	for (i=0; i<128; i++)  // fill ROM table
 	{
-		state->m_Amstrad_ROM_Table[i] = &rom[0x4000];
+		m_Amstrad_ROM_Table[i] = &rom[0x4000];
 	}
 	for(i=128;i<160;i++)
 	{
-		state->m_Amstrad_ROM_Table[i] = &rom[(i-128)*0x4000];
+		m_Amstrad_ROM_Table[i] = &rom[(i-128)*0x4000];
 	}
-	state->m_Amstrad_ROM_Table[7] = &rom[0xc000];
+	m_Amstrad_ROM_Table[7] = &rom[0xc000];
 
-	state->m_asic.enabled = 0;
-	state->m_asic.seqptr = 0;
-	state->m_asic.pri = 0;  // disable PRI
-	state->m_asic.dma_status = 0;  // disable all DMA channels
-	state->m_asic.dma_addr[0] = 0;
-	state->m_asic.dma_prescaler[0] = 0;
-	state->m_asic.dma_addr[1] = 0;
-	state->m_asic.dma_prescaler[1] = 0;
-	state->m_asic.dma_addr[2] = 0;
-	state->m_asic.dma_prescaler[2] = 0;
-	state->m_asic.dma_clear = 1;  // by default, DMA interrupts must be cleared by writing to the DSCR (&6c0f)
-	state->m_plus_irq_cause = 6;
+	m_asic.enabled = 0;
+	m_asic.seqptr = 0;
+	m_asic.pri = 0;  // disable PRI
+	m_asic.dma_status = 0;  // disable all DMA channels
+	m_asic.dma_addr[0] = 0;
+	m_asic.dma_prescaler[0] = 0;
+	m_asic.dma_addr[1] = 0;
+	m_asic.dma_prescaler[1] = 0;
+	m_asic.dma_addr[2] = 0;
+	m_asic.dma_prescaler[2] = 0;
+	m_asic.dma_clear = 1;  // by default, DMA interrupts must be cleared by writing to the DSCR (&6c0f)
+	m_plus_irq_cause = 6;
 
-	amstrad_common_init(machine);
-	amstrad_reset_machine(machine);
-	state->m_asic.ram[0x2805] = 0x01;  // interrupt vector is undefined at startup, except that bit 0 is always 1.
-	AmstradCPC_GA_SetRamConfiguration(machine);
-	amstrad_GateArray_write(machine, 0x081); // Epyx World of Sports requires upper ROM to be enabled by default
+	amstrad_common_init();
+	amstrad_reset_machine();
+	m_asic.ram[0x2805] = 0x01;  // interrupt vector is undefined at startup, except that bit 0 is always 1.
+	AmstradCPC_GA_SetRamConfiguration();
+	amstrad_GateArray_write(0x081); // Epyx World of Sports requires upper ROM to be enabled by default
 	//  multiface_init();
+	space.install_read_handler(0x4000, 0x5fff, read8_delegate(FUNC(amstrad_state::amstrad_plus_asic_4000_r),this));
+	space.install_read_handler(0x6000, 0x7fff, read8_delegate(FUNC(amstrad_state::amstrad_plus_asic_6000_r),this));
+	space.install_write_handler(0x4000, 0x5fff, write8_delegate(FUNC(amstrad_state::amstrad_plus_asic_4000_w),this));
+	space.install_write_handler(0x6000, 0x7fff, write8_delegate(FUNC(amstrad_state::amstrad_plus_asic_6000_w),this));
 
-	machine.scheduler().timer_set( attotime::zero, FUNC(cb_set_resolution));
+	timer_set(attotime::zero, TIMER_SET_RESOLUTION);
 }
 
-MACHINE_START( kccomp )
+MACHINE_START_MEMBER(amstrad_state,kccomp)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	multiface_init(machine);
-	state->m_system_type = SYSTEM_CPC;
+	m_system_type = SYSTEM_CPC;
 }
 
 
-MACHINE_RESET( kccomp )
+MACHINE_RESET_MEMBER(amstrad_state,kccomp)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
 	int i;
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = m_region_maincpu->base();
 
 	for (i=0; i<256; i++)
 	{
-		state->m_Amstrad_ROM_Table[i] = &rom[0x014000];
+		m_Amstrad_ROM_Table[i] = &rom[0x014000];
 	}
 
-	amstrad_common_init(machine);
-	kccomp_reset_machine(machine);
+	amstrad_common_init();
+	kccomp_reset_machine();
 
 	/* bit 1 = /TEST. When 0, KC compact will enter data transfer
-    sequence, where another system using the expansion port signals
-    DATA2,DATA1, /STROBE and DATA7 can transfer 256 bytes of program.
-    When the program has been transfered, it will be executed. This
-    is not supported in the driver */
+	sequence, where another system using the expansion port signals
+	DATA2,DATA1, /STROBE and DATA7 can transfer 256 bytes of program.
+	When the program has been transfered, it will be executed. This
+	is not supported in the driver */
 	/* bit 3,4 are tied to +5V, bit 2 is tied to 0V */
-	state->m_ppi_port_inputs[amstrad_ppi_PortB] = (1<<4) | (1<<3) | 2;
+	m_ppi_port_inputs[amstrad_ppi_PortB] = (1<<4) | (1<<3) | 2;
 }
 
 
-MACHINE_START( aleste )
+MACHINE_START_MEMBER(amstrad_state,aleste)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
-	multiface_init(machine);
-	state->m_system_type = SYSTEM_ALESTE;
+	m_system_type = SYSTEM_ALESTE;
 }
 
-MACHINE_RESET( aleste )
+MACHINE_RESET_MEMBER(amstrad_state,aleste)
 {
-	amstrad_state *state = machine.driver_data<amstrad_state>();
 	int i;
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = m_region_maincpu->base();
 
 	for (i=0; i<256; i++)
 	{
-		state->m_Amstrad_ROM_Table[i] = &rom[0x014000];
+		m_Amstrad_ROM_Table[i] = &rom[0x014000];
 	}
 
-	state->m_Amstrad_ROM_Table[3] = &rom[0x01c000];  // MSX-DOS / BIOS
-	state->m_Amstrad_ROM_Table[7] = &rom[0x018000];  // AMSDOS
-	amstrad_common_init(machine);
-	amstrad_reset_machine(machine);
+	m_Amstrad_ROM_Table[3] = &rom[0x01c000];  // MSX-DOS / BIOS
+	m_Amstrad_ROM_Table[7] = &rom[0x018000];  // AMSDOS
+	amstrad_common_init();
+	amstrad_reset_machine();
 
-	machine.scheduler().timer_set( attotime::zero, FUNC(cb_set_resolution));
+	timer_set(attotime::zero, TIMER_SET_RESOLUTION);
 }
 
 
 /* load snapshot */
-SNAPSHOT_LOAD(amstrad)
+SNAPSHOT_LOAD_MEMBER( amstrad_state,amstrad)
 {
 	UINT8 *snapshot;
 
@@ -3321,13 +3133,13 @@ SNAPSHOT_LOAD(amstrad)
 		return IMAGE_INIT_FAIL;
 	}
 
-	amstrad_handle_snapshot(image.device().machine(), snapshot);
+	amstrad_handle_snapshot(snapshot);
 	free(snapshot);
 	return IMAGE_INIT_PASS;
 }
 
 
-DEVICE_IMAGE_LOAD(amstrad_plus_cartridge)
+DEVICE_IMAGE_LOAD_MEMBER(amstrad_state, amstrad_plus_cartridge)
 {
 	// load CPC Plus / GX4000 cartridge image
 	// Format is RIFF: RIFF header chunk contains "AMS!"
@@ -3344,23 +3156,23 @@ DEVICE_IMAGE_LOAD(amstrad_plus_cartridge)
 	int chunksize;                // chunk length, calcaulated from the above
 	int ramblock;                 // 16k RAM block chunk is to be loaded in to
 	unsigned int bytes_to_read;   // total bytes to read, as mame_feof doesn't react to EOF without trying to go past it.
-	unsigned char* mem = image.device().machine().region("maincpu")->base();
+	unsigned char* mem = m_region_maincpu->base();
 
 	if (image.software_entry() == NULL)
 	{
 		size = image.length();
-		temp_copy = auto_alloc_array(image.device().machine(), UINT8, size);
+		temp_copy = auto_alloc_array(machine(), UINT8, size);
 		if (image.fread(temp_copy, size) != size)
 		{
 			logerror("IMG: failed to read from cart image\n");
-			auto_free(image.device().machine(), temp_copy);
+			auto_free(machine(), temp_copy);
 			return IMAGE_INIT_FAIL;
 		}
 	}
 	else
 	{
 		size= image.get_software_region_length("rom");
-		temp_copy = auto_alloc_array(image.device().machine(), UINT8, size);
+		temp_copy = auto_alloc_array(machine(), UINT8, size);
 		memcpy(temp_copy, image.get_software_region("rom"), size);
 	}
 
@@ -3372,7 +3184,7 @@ DEVICE_IMAGE_LOAD(amstrad_plus_cartridge)
 	if (strncmp((char *)header, "RIFF", 4) != 0)
 	{
 		logerror("IMG: raw CPC+ cartridge file\n");
-		offset -= 12;	// no header, so we go back to the start of the file
+		offset -= 12;   // no header, so we go back to the start of the file
 
 		// not an RIFF format file, assume raw binary (*.bin)
 		while (offset < size)
@@ -3382,19 +3194,19 @@ DEVICE_IMAGE_LOAD(amstrad_plus_cartridge)
 			if ((size - offset) < 0x4000)
 			{
 				logerror("BIN: block %i loaded is smaller than 16kB in size\n", offset / 0x4000);
-				auto_free(image.device().machine(), temp_copy);
+				auto_free(machine(), temp_copy);
 				return IMAGE_INIT_FAIL;
 			}
 			offset += 0x4000;
 		}
 	}
-	else if (image.software_entry() == NULL)	// we have no CPR carts in our gx4000 softlist
+	else if (image.software_entry() == NULL)    // we have no CPR carts in our gx4000 softlist
 	{
 		// Is RIFF format (*.cpr)
 		if (strncmp((char*)(header + 8), "AMS!", 4) != 0)
 		{
 			logerror("CPR: not an Amstrad CPC cartridge image\n");
-			auto_free(image.device().machine(), temp_copy);
+			auto_free(machine(), temp_copy);
 			return IMAGE_INIT_FAIL;
 		}
 
@@ -3449,26 +3261,13 @@ DEVICE_IMAGE_LOAD(amstrad_plus_cartridge)
 			}
 		}
 	}
-	else	// CPR carts in our softlist
+	else    // CPR carts in our softlist
 	{
 		logerror("Gamelist cart in RIFF format\n");
-		auto_free(image.device().machine(), temp_copy);
+		auto_free(machine(), temp_copy);
 		return IMAGE_INIT_FAIL;
 	}
 
-	auto_free(image.device().machine(), temp_copy);
+	auto_free(machine(), temp_copy);
 	return IMAGE_INIT_PASS;
 }
-
-
-#if 0
-static DEVICE_IMAGE_LOAD( aleste )
-{
-	if (device_load_basicdsk_floppy(image)==IMAGE_INIT_PASS)
-	{
-		basicdsk_set_geometry(image, 80, 2, 9, 512, 0x01, 0, FALSE);
-		return IMAGE_INIT_PASS;
-	}
-	return IMAGE_INIT_FAIL;
-}
-#endif

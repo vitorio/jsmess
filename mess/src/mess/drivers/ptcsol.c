@@ -1,3 +1,5 @@
+// license:MAME
+// copyright-holders:Robbbert
 /***************************************************************************
 
     Processor Technology Corp. SOL-20
@@ -6,9 +8,7 @@
 
     Info from: http://www.sol20.org/
 
-    Note that the SOLOS dump comes from the Solace emu. Not being sure if
-    it has been verified with a real SOL-20 (even if I think it has been), I
-    marked it as a BAD_DUMP.
+    Note that the SOLOS dump comes from the Solace emu. Confirmed as ok.
 
     The roms DPMON and CONSOL are widely available on the net as ENT files,
     which can be loaded into memory with the Paste option, then exported to
@@ -19,10 +19,11 @@
     Note that the CONSOL rom is basically a dumb terminal program and doesn't
     do anything useful unless the MODE key (whatever that is) is pressed.
 
-    CUTER is a relocatable cassette-based alternative to SOLOS.
+    CUTER is a relocatable cassette-based alternative to SOLOS. According
+    to the manual, it should work if the sense switches are set to on. But,
+    it continuously reads port 00 and does nothing.
 
-    Need a dump of BOOTLOAD. Need a tape of CUTER. Need orginal dumps of
-    SOLOS, DPMON and CONSOL.
+    Need original dumps of all roms.
 
     The character roms are built by a script from the Solace source, then the
     characters moved back to the original 7x9 matrix positions, as shown in
@@ -68,8 +69,7 @@
       - Most files are simple ascii which can be loaded via the Paste handler.
         These are ASC, ENT, BAS, ROM, BS5 and ECB. Most files require that the
         correct version of BASIC be loaded first. Paste works, but it is very
-        very slow, and has a noticeable buffer limitation. Perhaps we need
-        something faster such as what Solace has.
+        very slow. Perhaps we need something faster such as what Solace has.
       - SVT (Solace Virtual Tape) files are a representation of a cassette,
         usually holding about 4 games, just like a multifile tape. It will
         need a 'format' program to be written to convert it to be loadable
@@ -79,53 +79,76 @@
       - The remaining formats (OPN, PL, PRN, SMU, SOL, ASM and LIB) appear
         at first glance to be more specialised, and probably not worth being
         supported.
+
+    System Setup (to play games etc).
+      - In the Dipswitches (not the Configuration), turn cursor flashing OFF.
+      - Loading via wav files works, so load a tape image in the file manager
+      - In UPPER CASE, enter XE press enter, cassette will load.
+      - At the end, the program will start by itself.
+      - When it says use 2,4,6,8 keys, you can use the keyboard arrow keys.
+
+    Monitor Commands:
+      - TE - ?
+      - DU - dump memory
+      - EN - modify memory
+      - EX - Go (execute)
+      - CU - ?
+      - SE - Set parameters (eg tape speed)
+      - SA - Save
+      - GE - Load
+      - XE - Load and run
+      - CA - List the files on a tape
+
 ****************************************************************************/
-#define ADDRESS_MAP_MODERN
 
 #include "emu.h"
 #include "cpu/i8085/i8085.h"
-#include "machine/terminal.h"
+#include "machine/keyboard.h"
 #include "sound/wave.h"
 #include "imagedev/cassette.h"
 #include "machine/ay31015.h"
 
-#define MACHINE_RESET_MEMBER(name) void name::machine_reset()
-#define MACHINE_START_MEMBER(name) void name::machine_start()
-#define VIDEO_START_MEMBER(name) void name::video_start()
-#define SCREEN_UPDATE_MEMBER(name) bool name::screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect)
 
-typedef struct {
+struct cass_data_t {
 	struct {
-		int length;		/* time cassette level is at input.level */
-		int level;		/* cassette level */
-		int bit;		/* bit being read */
+		int length;     /* time cassette level is at input.level */
+		int level;      /* cassette level */
+		int bit;        /* bit being read */
 	} input;
 	struct {
-		int length;		/* time cassette level is at output.level */
-		int level;		/* cassette level */
-		int bit;		/* bit to to output */
+		int length;     /* time cassette level is at output.level */
+		int level;      /* cassette level */
+		int bit;        /* bit to to output */
 	} output;
-} cass_data_t;
+};
 
 class sol20_state : public driver_device
 {
 public:
+	enum
+	{
+		TIMER_SOL20_CASSETTE_TC,
+		TIMER_SOL20_BOOT
+	};
+
 	sol20_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag),
 	m_maincpu(*this, "maincpu"),
-	m_cass1(*this, CASSETTE_TAG),
-	m_cass2(*this, CASSETTE2_TAG),
+	m_cass1(*this, "cassette"),
+	m_cass2(*this, "cassette2"),
 	m_uart(*this, "uart"),
 	m_uart_s(*this, "uart_s"),
-	m_terminal(*this, TERMINAL_TAG)
+	m_p_videoram(*this, "videoram"),
+	m_iop_arrows(*this, "ARROWS"),
+	m_iop_config(*this, "CONFIG"),
+	m_iop_s1(*this, "S1"),
+	m_iop_s2(*this, "S2"),
+	m_iop_s3(*this, "S3"),
+	m_iop_s4(*this, "S4"),
+	m_cassette1(*this, "cassette"),
+	m_cassette2(*this, "cassette2")
 	{ }
 
-	required_device<cpu_device> m_maincpu;
-	required_device<cassette_image_device> m_cass1;
-	required_device<cassette_image_device> m_cass2;
-	required_device<device_t> m_uart;
-	required_device<device_t> m_uart_s;
-	required_device<device_t> m_terminal;
 	DECLARE_READ8_MEMBER( sol20_f8_r );
 	DECLARE_READ8_MEMBER( sol20_f9_r );
 	DECLARE_READ8_MEMBER( sol20_fa_r );
@@ -138,119 +161,157 @@ public:
 	DECLARE_WRITE8_MEMBER( sol20_fb_w );
 	DECLARE_WRITE8_MEMBER( sol20_fd_w );
 	DECLARE_WRITE8_MEMBER( sol20_fe_w );
-	DECLARE_WRITE8_MEMBER( sol20_kbd_put );
+	DECLARE_WRITE8_MEMBER( kbd_put );
 	UINT8 m_sol20_fa;
-	UINT8 m_sol20_fc;
-	UINT8 m_sol20_fe;
-	const UINT8 *m_p_chargen;
-	const UINT8 *m_p_videoram;
-	UINT8 m_framecnt;
-	emu_timer *m_cassette_timer;
 	cass_data_t m_cass_data;
 	virtual void machine_reset();
 	virtual void machine_start();
 	virtual void video_start();
-	virtual bool screen_update(screen_device &screen, bitmap_t &bitmap, const rectangle &cliprect);
+	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
+	required_device<cassette_image_device> m_cass1;
+	required_device<cassette_image_device> m_cass2;
+	required_device<ay31015_device> m_uart;
+	required_device<ay31015_device> m_uart_s;
+	required_shared_ptr<const UINT8> m_p_videoram;
+	required_ioport m_iop_arrows;
+	required_ioport m_iop_config;
+	required_ioport m_iop_s1;
+	required_ioport m_iop_s2;
+	required_ioport m_iop_s3;
+	required_ioport m_iop_s4;
+
+private:
+	UINT8 m_sol20_fc;
+	UINT8 m_sol20_fe;
+	const UINT8 *m_p_chargen;
+	UINT8 m_framecnt;
+	emu_timer *m_cassette_timer;
+	required_device<cassette_image_device> m_cassette1;
+	required_device<cassette_image_device> m_cassette2;
+
+public:
+	DECLARE_DRIVER_INIT(sol20);
+	TIMER_CALLBACK_MEMBER(sol20_cassette_tc);
+	TIMER_CALLBACK_MEMBER(sol20_boot);
+	cassette_image_device *cassette_device_image();
+
+protected:
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 };
 
 
 /* timer to read cassette waveforms */
 
 
-static cassette_image_device *cassette_device_image(running_machine &machine)
+cassette_image_device *sol20_state::cassette_device_image()
 {
-	sol20_state *state = machine.driver_data<sol20_state>();
-	if (state->m_sol20_fa & 0x40)
-		return machine.device<cassette_image_device>(CASSETTE2_TAG);
+	if (m_sol20_fa & 0x40)
+		return m_cassette2;
 	else
-		return machine.device<cassette_image_device>(CASSETTE_TAG);
+		return m_cassette1;
+}
+
+
+void sol20_state::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+{
+	switch (id)
+	{
+	case TIMER_SOL20_CASSETTE_TC:
+		sol20_cassette_tc(ptr, param);
+		break;
+	case TIMER_SOL20_BOOT:
+		sol20_boot(ptr, param);
+		break;
+	default:
+		assert_always(FALSE, "Unknown id in sol20_state::device_timer");
+	}
 }
 
 
 // identical to sorcerer
-static TIMER_CALLBACK(sol20_cassette_tc)
+TIMER_CALLBACK_MEMBER(sol20_state::sol20_cassette_tc)
 {
-	sol20_state *state = machine.driver_data<sol20_state>();
 	UINT8 cass_ws = 0;
-	switch (state->m_sol20_fa & 0x20)
+	switch (m_sol20_fa & 0x20)
 	{
-		case 0x20:				/* Cassette 300 baud */
+		case 0x20:              /* Cassette 300 baud */
 
 			/* loading a tape - this is basically the same as the super80.
-                           We convert the 1200/2400 Hz signal to a 0 or 1, and send it to the uart. */
+			               We convert the 1200/2400 Hz signal to a 0 or 1, and send it to the uart. */
 
-			state->m_cass_data.input.length++;
+			m_cass_data.input.length++;
 
-			cass_ws = ((cassette_device_image(machine))->input() > +0.02) ? 1 : 0;
+			cass_ws = ((cassette_device_image())->input() > +0.02) ? 1 : 0;
 
-			if (cass_ws != state->m_cass_data.input.level)
+			if (cass_ws != m_cass_data.input.level)
 			{
-				state->m_cass_data.input.level = cass_ws;
-				state->m_cass_data.input.bit = ((state->m_cass_data.input.length < 0x6) || (state->m_cass_data.input.length > 0x20)) ? 1 : 0;
-				state->m_cass_data.input.length = 0;
-				ay31015_set_input_pin( state->m_uart, AY31015_SI, state->m_cass_data.input.bit );
+				m_cass_data.input.level = cass_ws;
+				m_cass_data.input.bit = ((m_cass_data.input.length < 0x6) || (m_cass_data.input.length > 0x20)) ? 1 : 0;
+				m_cass_data.input.length = 0;
+				m_uart->set_input_pin(AY31015_SI, m_cass_data.input.bit);
 			}
 
 			/* saving a tape - convert the serial stream from the uart, into 1200 and 2400 Hz frequencies.
-                           Synchronisation of the frequency pulses to the uart is extremely important. */
+			               Synchronisation of the frequency pulses to the uart is extremely important. */
 
-			state->m_cass_data.output.length++;
-			if (!(state->m_cass_data.output.length & 0x1f))
+			m_cass_data.output.length++;
+			if (!(m_cass_data.output.length & 0x1f))
 			{
-				cass_ws = ay31015_get_output_pin( state->m_uart, AY31015_SO );
-				if (cass_ws != state->m_cass_data.output.bit)
+				cass_ws = m_uart->get_output_pin(AY31015_SO);
+				if (cass_ws != m_cass_data.output.bit)
 				{
-					state->m_cass_data.output.bit = cass_ws;
-					state->m_cass_data.output.length = 0;
+					m_cass_data.output.bit = cass_ws;
+					m_cass_data.output.length = 0;
 				}
 			}
 
-			if (!(state->m_cass_data.output.length & 3))
+			if (!(m_cass_data.output.length & 3))
 			{
-				if (!((state->m_cass_data.output.bit == 0) && (state->m_cass_data.output.length & 4)))
+				if (!((m_cass_data.output.bit == 0) && (m_cass_data.output.length & 4)))
 				{
-					state->m_cass_data.output.level ^= 1;			// toggle output state, except on 2nd half of low bit
-					cassette_device_image(machine)->output(state->m_cass_data.output.level ? -1.0 : +1.0);
+					m_cass_data.output.level ^= 1;          // toggle output this, except on 2nd half of low bit
+					cassette_device_image()->output(m_cass_data.output.level ? -1.0 : +1.0);
 				}
 			}
 			return;
 
-		case 0x00:			/* Cassette 1200 baud */
+		case 0x00:          /* Cassette 1200 baud */
 			/* loading a tape */
-			state->m_cass_data.input.length++;
+			m_cass_data.input.length++;
 
-			cass_ws = ((cassette_device_image(machine))->input() > +0.02) ? 1 : 0;
+			cass_ws = ((cassette_device_image())->input() > +0.02) ? 1 : 0;
 
-			if (cass_ws != state->m_cass_data.input.level || state->m_cass_data.input.length == 10)
+			if (cass_ws != m_cass_data.input.level || m_cass_data.input.length == 10)
 			{
-				state->m_cass_data.input.bit = ((state->m_cass_data.input.length < 10) || (state->m_cass_data.input.length > 0x20)) ? 1 : 0;
-				if ( cass_ws != state->m_cass_data.input.level )
+				m_cass_data.input.bit = ((m_cass_data.input.length < 10) || (m_cass_data.input.length > 0x20)) ? 1 : 0;
+				if ( cass_ws != m_cass_data.input.level )
 				{
-					state->m_cass_data.input.length = 0;
-					state->m_cass_data.input.level = cass_ws;
+					m_cass_data.input.length = 0;
+					m_cass_data.input.level = cass_ws;
 				}
-				ay31015_set_input_pin( state->m_uart, AY31015_SI, state->m_cass_data.input.bit );
+				m_uart->set_input_pin(AY31015_SI, m_cass_data.input.bit);
 			}
 
 			/* saving a tape - convert the serial stream from the uart, into 600 and 1200 Hz frequencies. */
 
-			state->m_cass_data.output.length++;
-			if (!(state->m_cass_data.output.length & 7))
+			m_cass_data.output.length++;
+			if (!(m_cass_data.output.length & 7))
 			{
-				cass_ws = ay31015_get_output_pin( state->m_uart, AY31015_SO );
-				if (cass_ws != state->m_cass_data.output.bit)
+				cass_ws = m_uart->get_output_pin(AY31015_SO);
+				if (cass_ws != m_cass_data.output.bit)
 				{
-					state->m_cass_data.output.bit = cass_ws;
-					state->m_cass_data.output.length = 0;
+					m_cass_data.output.bit = cass_ws;
+					m_cass_data.output.length = 0;
 				}
 			}
 
-			if (!(state->m_cass_data.output.length & 7))
+			if (!(m_cass_data.output.length & 7))
 			{
-				if (!((state->m_cass_data.output.bit == 0) && (state->m_cass_data.output.length & 8)))
+				if (!((m_cass_data.output.bit == 0) && (m_cass_data.output.length & 8)))
 				{
-					state->m_cass_data.output.level ^= 1;			// toggle output state, except on 2nd half of low bit
-					cassette_device_image(machine)->output(state->m_cass_data.output.level ? -1.0 : +1.0);
+					m_cass_data.output.level ^= 1;          // toggle output this, except on 2nd half of low bit
+					cassette_device_image()->output(m_cass_data.output.level ? -1.0 : +1.0);
 				}
 			}
 			return;
@@ -263,22 +324,22 @@ READ8_MEMBER( sol20_state::sol20_f8_r )
 	/* set unemulated bits (CTS/DSR/CD) high */
 	UINT8 data = 0x23;
 
-	ay31015_set_input_pin( m_uart_s, AY31015_SWE, 0 );
-	data |= ay31015_get_output_pin( m_uart_s, AY31015_TBMT ) ? 0x80 : 0;
-	data |= ay31015_get_output_pin( m_uart_s, AY31015_DAV  ) ? 0x40 : 0;
-	data |= ay31015_get_output_pin( m_uart_s, AY31015_OR   ) ? 0x10 : 0;
-	data |= ay31015_get_output_pin( m_uart_s, AY31015_PE   ) ? 0x08 : 0;
-	data |= ay31015_get_output_pin( m_uart_s, AY31015_FE   ) ? 0x04 : 0;
-	ay31015_set_input_pin( m_uart_s, AY31015_SWE, 1 );
+	m_uart_s->set_input_pin(AY31015_SWE, 0);
+	data |= m_uart_s->get_output_pin(AY31015_TBMT) ? 0x80 : 0;
+	data |= m_uart_s->get_output_pin(AY31015_DAV ) ? 0x40 : 0;
+	data |= m_uart_s->get_output_pin(AY31015_OR  ) ? 0x10 : 0;
+	data |= m_uart_s->get_output_pin(AY31015_PE  ) ? 0x08 : 0;
+	data |= m_uart_s->get_output_pin(AY31015_FE  ) ? 0x04 : 0;
+	m_uart_s->set_input_pin(AY31015_SWE, 1);
 
 	return data;
 }
 
 READ8_MEMBER( sol20_state::sol20_f9_r)
 {
-	UINT8 data = ay31015_get_received_data( m_uart_s );
-	ay31015_set_input_pin( m_uart_s, AY31015_RDAV, 0 );
-	ay31015_set_input_pin( m_uart_s, AY31015_RDAV, 1 );
+	UINT8 data = m_uart_s->get_received_data();
+	m_uart_s->set_input_pin(AY31015_RDAV, 0);
+	m_uart_s->set_input_pin(AY31015_RDAV, 1);
 	return data;
 }
 
@@ -287,26 +348,35 @@ READ8_MEMBER( sol20_state::sol20_fa_r )
 	/* set unused bits high */
 	UINT8 data = 0x26;
 
-	ay31015_set_input_pin( m_uart, AY31015_SWE, 0 );
-	data |= ay31015_get_output_pin( m_uart, AY31015_TBMT ) ? 0x80 : 0;
-	data |= ay31015_get_output_pin( m_uart, AY31015_DAV  ) ? 0x40 : 0;
-	data |= ay31015_get_output_pin( m_uart, AY31015_OR   ) ? 0x10 : 0;
-	data |= ay31015_get_output_pin( m_uart, AY31015_FE   ) ? 0x08 : 0;
-	ay31015_set_input_pin( m_uart, AY31015_SWE, 1 );
+	m_uart->set_input_pin(AY31015_SWE, 0);
+	data |= m_uart->get_output_pin(AY31015_TBMT) ? 0x80 : 0;
+	data |= m_uart->get_output_pin(AY31015_DAV ) ? 0x40 : 0;
+	data |= m_uart->get_output_pin(AY31015_OR  ) ? 0x10 : 0;
+	data |= m_uart->get_output_pin(AY31015_FE  ) ? 0x08 : 0;
+	m_uart->set_input_pin(AY31015_SWE, 1);
 
-	return data | (m_sol20_fa & 1);
+	bool arrowkey = m_iop_arrows->read() ? 0 : 1;
+	bool keydown = m_sol20_fa & 1;
+
+	return data | (arrowkey & keydown);
 }
 
 READ8_MEMBER( sol20_state::sol20_fb_r)
 {
-	UINT8 data = ay31015_get_received_data( m_uart );
-	ay31015_set_input_pin( m_uart, AY31015_RDAV, 0 );
-	ay31015_set_input_pin( m_uart, AY31015_RDAV, 1 );
+	UINT8 data = m_uart->get_received_data();
+	m_uart->set_input_pin(AY31015_RDAV, 0);
+	m_uart->set_input_pin(AY31015_RDAV, 1);
 	return data;
 }
 
 READ8_MEMBER( sol20_state::sol20_fc_r )
 {
+	UINT8 data = m_iop_arrows->read();
+	if (BIT(data, 0)) return 0x32;
+	if (BIT(data, 1)) return 0x34;
+	if (BIT(data, 2)) return 0x36;
+	if (BIT(data, 3)) return 0x38;
+
 	m_sol20_fa |= 1;
 	return m_sol20_fc;
 }
@@ -324,7 +394,7 @@ WRITE8_MEMBER( sol20_state::sol20_f8_w )
 
 WRITE8_MEMBER( sol20_state::sol20_f9_w )
 {
-	ay31015_set_transmit_data( m_uart_s, data );
+	m_uart_s->set_transmit_data(data);
 }
 
 WRITE8_MEMBER( sol20_state::sol20_fa_w )
@@ -346,13 +416,13 @@ WRITE8_MEMBER( sol20_state::sol20_fa_w )
 		m_cassette_timer->adjust(attotime::zero);
 
 	// bit 5 baud rate */
-	ay31015_set_receiver_clock( m_uart, (BIT(data, 5)) ? 4800.0 : 19200.0);
-	ay31015_set_transmitter_clock( m_uart, (BIT(data, 5)) ? 4800.0 : 19200.0);
+	m_uart->set_receiver_clock((BIT(data, 5)) ? 4800.0 : 19200.0);
+	m_uart->set_transmitter_clock((BIT(data, 5)) ? 4800.0 : 19200.0);
 }
 
 WRITE8_MEMBER( sol20_state::sol20_fb_w )
 {
-	ay31015_set_transmit_data( m_uart, data );
+	m_uart->set_transmit_data(data);
 }
 
 WRITE8_MEMBER( sol20_state::sol20_fd_w )
@@ -367,14 +437,14 @@ WRITE8_MEMBER( sol20_state::sol20_fe_w )
 
 static ADDRESS_MAP_START( sol20_mem, AS_PROGRAM, 8, sol20_state)
 	AM_RANGE(0x0000, 0x07ff) AM_RAMBANK("boot")
-	AM_RANGE(0X0800, 0Xbfff) AM_RAM	// optional s100 ram
+	AM_RANGE(0X0800, 0Xbfff) AM_RAM // optional s100 ram
 	AM_RANGE(0xc000, 0xc7ff) AM_ROM
-	AM_RANGE(0Xc800, 0Xcbff) AM_RAM	// system ram
-	AM_RANGE(0Xcc00, 0Xcfff) AM_RAM	AM_BASE(m_p_videoram)
-	AM_RANGE(0Xd000, 0Xffff) AM_RAM	// optional s100 ram
+	AM_RANGE(0Xc800, 0Xcbff) AM_RAM // system ram
+	AM_RANGE(0Xcc00, 0Xcfff) AM_RAM AM_SHARE("videoram")
+	AM_RANGE(0Xd000, 0Xffff) AM_RAM // optional s100 ram
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sol20_io , AS_IO, 8, sol20_state)
+static ADDRESS_MAP_START( sol20_io, AS_IO, 8, sol20_state)
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0xf8, 0xf8) AM_READWRITE(sol20_f8_r,sol20_f8_w)
@@ -397,6 +467,13 @@ ADDRESS_MAP_END
 
 /* Input ports */
 static INPUT_PORTS_START( sol20 )
+	PORT_START("ARROWS")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_DOWN)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_LEFT)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_RIGHT)
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_KEYBOARD ) PORT_CODE(KEYCODE_UP)
+	PORT_BIT( 0xf0, IP_ACTIVE_HIGH, IPT_UNUSED)
+
 	PORT_START("S1")
 	PORT_DIPNAME( 0x04, 0x00, "Ctrl Chars")
 	PORT_DIPSETTING(    0x04, DEF_STR(Off))
@@ -463,7 +540,6 @@ static INPUT_PORTS_START( sol20 )
 	PORT_DIPSETTING(    0x00, "Half")
 	PORT_DIPSETTING(    0x20, "Full")
 
-
 	PORT_START("CONFIG")
 	PORT_CONFNAME( 0x01, 0x01, "High Baud Rate") // jumper on the board
 	PORT_CONFSETTING(    0x00, "4800")
@@ -475,12 +551,11 @@ INPUT_PORTS_END
 
 static const ay31015_config sol20_ay31015_config =
 {
-	AY_3_1015,
 	4800.0,
 	4800.0,
-	NULL,
-	NULL,
-	NULL
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
 };
 
 
@@ -494,17 +569,17 @@ static const cassette_interface sol20_cassette_interface =
 };
 
 /* after the first 4 bytes have been read from ROM, switch the ram back in */
-static TIMER_CALLBACK( sol20_boot )
+TIMER_CALLBACK_MEMBER(sol20_state::sol20_boot)
 {
-	memory_set_bank(machine, "boot", 0);
+	membank("boot")->set_entry(0);
 }
 
-MACHINE_START_MEMBER( sol20_state )
+void sol20_state::machine_start()
 {
-	m_cassette_timer = machine().scheduler().timer_alloc(FUNC(sol20_cassette_tc));
+	m_cassette_timer = timer_alloc(TIMER_SOL20_CASSETTE_TC);
 }
 
-MACHINE_RESET_MEMBER( sol20_state )
+void sol20_state::machine_reset()
 {
 	UINT8 data = 0, s_count = 0;
 	int s_clock;
@@ -513,26 +588,26 @@ MACHINE_RESET_MEMBER( sol20_state )
 	m_sol20_fa=1;
 
 	// set hard-wired uart pins
-	ay31015_set_input_pin( m_uart, AY31015_CS, 0 );
-	ay31015_set_input_pin( m_uart, AY31015_NB1, 1);
-	ay31015_set_input_pin( m_uart, AY31015_NB2, 1);
-	ay31015_set_input_pin( m_uart, AY31015_TSB, 1);
-	ay31015_set_input_pin( m_uart, AY31015_EPS, 1);
-	ay31015_set_input_pin( m_uart, AY31015_NP,  1);
-	ay31015_set_input_pin( m_uart, AY31015_CS, 1 );
+	m_uart->set_input_pin(AY31015_CS, 0);
+	m_uart->set_input_pin(AY31015_NB1, 1);
+	m_uart->set_input_pin(AY31015_NB2, 1);
+	m_uart->set_input_pin(AY31015_TSB, 1);
+	m_uart->set_input_pin(AY31015_EPS, 1);
+	m_uart->set_input_pin(AY31015_NP,  1);
+	m_uart->set_input_pin(AY31015_CS, 1);
 
 	// set switched uart pins
-	data = input_port_read(machine(), "S4");
-	ay31015_set_input_pin( m_uart_s, AY31015_CS, 0 );
-	ay31015_set_input_pin( m_uart_s, AY31015_NB1, BIT(data, 1) ? 1 : 0);
-	ay31015_set_input_pin( m_uart_s, AY31015_NB2, BIT(data, 2) ? 1 : 0);
-	ay31015_set_input_pin( m_uart_s, AY31015_TSB, BIT(data, 3) ? 1 : 0);
-	ay31015_set_input_pin( m_uart_s, AY31015_EPS, BIT(data, 0) ? 1 : 0);
-	ay31015_set_input_pin( m_uart_s, AY31015_NP, BIT(data, 4) ? 1 : 0);
-	ay31015_set_input_pin( m_uart_s, AY31015_CS, 1 );
+	data = m_iop_s4->read();
+	m_uart_s->set_input_pin(AY31015_CS, 0);
+	m_uart_s->set_input_pin(AY31015_NB1, BIT(data, 1));
+	m_uart_s->set_input_pin(AY31015_NB2, BIT(data, 2));
+	m_uart_s->set_input_pin(AY31015_TSB, BIT(data, 3));
+	m_uart_s->set_input_pin(AY31015_EPS, BIT(data, 0));
+	m_uart_s->set_input_pin(AY31015_NP, BIT(data, 4));
+	m_uart_s->set_input_pin(AY31015_CS, 1);
 
 	// set rs232 baud rate
-	data = input_port_read(machine(), "S3");
+	data = m_iop_s3->read();
 
 	if (data > 1)
 		do
@@ -542,46 +617,46 @@ MACHINE_RESET_MEMBER( sol20_state )
 		}
 		while (!(data & 1) && (s_count < 7)); // find which switch is used
 
-	if ((s_count == 7) && (input_port_read(machine(), "CONFIG")&1)) // if highest, look at jumper
+	if ( (s_count == 7) & BIT(m_iop_config->read(), 0) ) // if highest, look at jumper
 		s_clock = 9600 << 4;
 	else
 		s_clock = s_bauds[s_count] << 4;
 
 	// these lines could be commented out for now if you want better performance
-	ay31015_set_receiver_clock( m_uart_s, s_clock);
-	ay31015_set_transmitter_clock( m_uart_s, s_clock);
+	m_uart_s->set_receiver_clock(s_clock);
+	m_uart_s->set_transmitter_clock(s_clock);
 
 	// boot-bank
-	memory_set_bank(machine(), "boot", 1);
-	machine().scheduler().timer_set(attotime::from_usec(9), FUNC(sol20_boot));
+	membank("boot")->set_entry(1);
+	timer_set(attotime::from_usec(9), TIMER_SOL20_BOOT);
 }
 
-static DRIVER_INIT( sol20 )
+DRIVER_INIT_MEMBER(sol20_state,sol20)
 {
-	UINT8 *RAM = machine.region("maincpu")->base();
-	memory_configure_bank(machine, "boot", 0, 2, &RAM[0x0000], 0xc000);
+	UINT8 *RAM = memregion("maincpu")->base();
+	membank("boot")->configure_entries(0, 2, &RAM[0x0000], 0xc000);
 }
 
-VIDEO_START_MEMBER( sol20_state )
+void sol20_state::video_start()
 {
-	m_p_chargen = machine().region("chargen")->base();
+	m_p_chargen = memregion("chargen")->base();
 }
 
-SCREEN_UPDATE_MEMBER( sol20_state )
+UINT32 sol20_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 // Visible screen is 64 x 16, with start position controlled by scroll register.
 // Each character is 9 pixels wide (blank ones at the right) and 13 lines deep.
 // Note on blinking characters:
 // any character with bit 7 set will blink. With DPMON, do DA C000 C2FF to see what happens
-	UINT8 s1 = input_port_read(machine(), "S1");
-	UINT16 which = (input_port_read(machine(), "CONFIG") & 2) << 10;
+	UINT16 which = (m_iop_config->read() & 2) << 10;
+	UINT8 s1 = m_iop_s1->read();
 	UINT8 y,ra,chr,gfx;
 	UINT16 sy=0,ma,x,inv;
 	UINT8 polarity = (s1 & 8) ? 0xff : 0;
 
-	UINT8 cursor_inv = FALSE;
+	bool cursor_inv = false;
 	if (((s1 & 0x30) == 0x20) || (((s1 & 0x30) == 0x10) && (m_framecnt & 0x08)))
-		cursor_inv = TRUE;
+		cursor_inv = true;
 
 	m_framecnt++;
 
@@ -591,7 +666,7 @@ SCREEN_UPDATE_MEMBER( sol20_state )
 	{
 		for (ra = 0; ra < 13; ra++)
 		{
-			UINT16 *p = BITMAP_ADDR16(&bitmap, sy++, 0);
+			UINT16 *p = &bitmap.pix16(sy++);
 
 			for (x = ma; x < ma + 64; x++)
 			{
@@ -599,7 +674,7 @@ SCREEN_UPDATE_MEMBER( sol20_state )
 				chr = m_p_videoram[x & 0x3ff];
 
 				// cursor
-				if (BIT(chr, 7) && cursor_inv)
+				if (BIT(chr, 7) & cursor_inv)
 					inv ^= 0xff;
 
 				chr &= 0x7f;
@@ -631,7 +706,7 @@ SCREEN_UPDATE_MEMBER( sol20_state )
 				*p++ = BIT(gfx, 2);
 				*p++ = BIT(gfx, 1);
 				*p++ = BIT(gfx, 0);
-				*p++ = (inv) ? 1 : 0;
+				*p++ = BIT(inv, 0);
 			}
 		}
 		ma+=64;
@@ -642,30 +717,33 @@ SCREEN_UPDATE_MEMBER( sol20_state )
 /* F4 Character Displayer */
 static const gfx_layout sol20_charlayout =
 {
-	7, 9,					/* 7 x 9 characters */
-	128*2,					/* 128 characters per rom */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	7, 9,                   /* 7 x 9 characters */
+	128*2,                  /* 128 characters per rom */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8, 8*8 },
-	8*16					/* every char takes 16 bytes */
+	8*16                    /* every char takes 16 bytes */
 };
 
 static GFXDECODE_START( sol20 )
 	GFXDECODE_ENTRY( "chargen", 0x0000, sol20_charlayout, 0, 1 )
 GFXDECODE_END
 
-WRITE8_MEMBER( sol20_state::sol20_kbd_put )
+WRITE8_MEMBER( sol20_state::kbd_put )
 {
-	m_sol20_fa &= 0xfe;
-	m_sol20_fc = data;
+	if (data)
+	{
+		m_sol20_fa &= 0xfe;
+		m_sol20_fc = data;
+	}
 }
 
-static GENERIC_TERMINAL_INTERFACE( sol20_terminal_intf )
+static ASCII_KEYBOARD_INTERFACE( keyboard_intf )
 {
-	DEVCB_DRIVER_MEMBER(sol20_state, sol20_kbd_put)
+	DEVCB_DRIVER_MEMBER(sol20_state, kbd_put)
 };
 
 static MACHINE_CONFIG_START( sol20, sol20_state )
@@ -678,37 +756,44 @@ static MACHINE_CONFIG_START( sol20, sol20_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_UPDATE_DRIVER(sol20_state, screen_update)
 	MCFG_SCREEN_SIZE(576, 208)
 	MCFG_SCREEN_VISIBLE_AREA(0, 575, 0, 207)
 	MCFG_GFXDECODE(sol20)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)	// cass1 speaker
-	MCFG_SOUND_WAVE_ADD(WAVE2_TAG, CASSETTE2_TAG)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)	// cass2 speaker
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25) // cass1 speaker
+	MCFG_SOUND_WAVE_ADD(WAVE2_TAG, "cassette2")
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25) // cass2 speaker
 
 	// devices
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, sol20_cassette_interface )
-	MCFG_CASSETTE_ADD( CASSETTE2_TAG, sol20_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", sol20_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette2", sol20_cassette_interface )
 	MCFG_AY31015_ADD( "uart", sol20_ay31015_config )
 	MCFG_AY31015_ADD( "uart_s", sol20_ay31015_config )
-	MCFG_GENERIC_TERMINAL_ADD(TERMINAL_TAG, sol20_terminal_intf)
+	MCFG_ASCII_KEYBOARD_ADD(KEYBOARD_TAG, keyboard_intf)
 MACHINE_CONFIG_END
 
 /* ROM definition */
 ROM_START( sol20 )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_SYSTEM_BIOS(0, "SOLOS", "SOLOS")
-	ROMX_LOAD( "solos.bin", 0xc000, 0x0800, BAD_DUMP CRC(4d0af383) SHA1(ac4510c3380ed4a31ccf4f538af3cb66b76701ef), ROM_BIOS(1) )	// from solace emu
-	ROM_SYSTEM_BIOS(1, "DPMON", "DPMON")
+	ROM_SYSTEM_BIOS(0, "solos", "SOLOS")
+	ROMX_LOAD( "solos.bin", 0xc000, 0x0800, CRC(4d0af383) SHA1(ac4510c3380ed4a31ccf4f538af3cb66b76701ef), ROM_BIOS(1) )    // from solace emu
+	ROM_SYSTEM_BIOS(1, "dpmon", "DPMON")
 	ROMX_LOAD( "dpmon.bin", 0xc000, 0x0800, BAD_DUMP CRC(2a84f099) SHA1(60ff6e38082c50afcf0f40707ef65668a411008b), ROM_BIOS(2) )
-	ROM_SYSTEM_BIOS(2, "CONSOL", "CONSOL")
+	ROM_SYSTEM_BIOS(2, "consol", "CONSOL")
 	ROMX_LOAD( "consol.bin", 0xc000, 0x0400, BAD_DUMP CRC(80bf6d85) SHA1(84b81c60bb08a3a5435ec1be56a67aa695bce099), ROM_BIOS(3) )
+	ROM_SYSTEM_BIOS(3, "solos2", "Solos Patched")
+	ROMX_LOAD( "solos2.bin", 0xc000, 0x0800, CRC(7776cc7d) SHA1(c4739a9ea7e8146ce7ae3305ed526b6045efa9d6), ROM_BIOS(4) ) // from Nama
+	ROM_SYSTEM_BIOS(4, "bootload", "BOOTLOAD")
+	ROMX_LOAD( "bootload.bin", 0xc000, 0x0800, BAD_DUMP CRC(4261ac71) SHA1(4752408ac85d88857e8e9171c7f42bd623c9271e), ROM_BIOS(5) ) // from Nama
+//        This one doesn't work
+	ROM_SYSTEM_BIOS(5, "cuter", "CUTER")
+	ROMX_LOAD( "cuter.bin", 0xc000, 0x0800, BAD_DUMP CRC(39cca901) SHA1(33725d6da63e295552ee13f0a735d33aee8f0d17), ROM_BIOS(6) ) // from Nama
 
 	ROM_REGION( 0x1000, "chargen", 0 )
 	ROM_LOAD( "6574.bin", 0x0000, 0x0800, BAD_DUMP CRC(fd75df4f) SHA1(4d09aae2f933478532b7d3d1a2dee7123d9828ca) )
@@ -716,5 +801,5 @@ ROM_START( sol20 )
 ROM_END
 
 /* Driver */
-/*    YEAR  NAME    PARENT  COMPAT  MACHINE  INPUT  INIT   COMPANY     FULLNAME   FLAGS */
-COMP( 1976, sol20,  0,      0,      sol20,   sol20, sol20, "Processor Technology Corporation",  "SOL-20", GAME_NOT_WORKING )
+/*    YEAR  NAME    PARENT  COMPAT  MACHINE  INPUT  CLASS        INIT               COMPANY                 FULLNAME  FLAGS */
+COMP( 1976, sol20,  0,      0,      sol20,   sol20, sol20_state, sol20, "Processor Technology Corporation", "SOL-20", 0 )

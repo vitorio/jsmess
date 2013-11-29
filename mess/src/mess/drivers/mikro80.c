@@ -10,38 +10,39 @@
 #include "emu.h"
 #include "cpu/i8085/i8085.h"
 #include "sound/wave.h"
-#include "machine/i8255.h"
 #include "includes/mikro80.h"
-#include "imagedev/cassette.h"
 #include "imagedev/cartslot.h"
 #include "formats/rk_cas.h"
 #include "sound/dac.h"
 
 /* Address maps */
-static ADDRESS_MAP_START(mikro80_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(mikro80_mem, AS_PROGRAM, 8, mikro80_state )
 	AM_RANGE( 0x0000, 0x07ff ) AM_RAMBANK("bank1") // First bank
-    AM_RANGE( 0x0800, 0xdfff ) AM_RAM  // RAM
-    AM_RANGE( 0xe000, 0xe7ff ) AM_RAM  AM_BASE_MEMBER(mikro80_state, m_cursor_ram)// Video RAM
-    AM_RANGE( 0xe800, 0xefff ) AM_RAM  AM_BASE_MEMBER(mikro80_state, m_video_ram) // Video RAM
-    AM_RANGE( 0xd000, 0xf7ff ) AM_RAM  // RAM
-    AM_RANGE( 0xf800, 0xffff ) AM_ROM  // System ROM
+	AM_RANGE( 0x0800, 0xdfff ) AM_RAM  // RAM
+	AM_RANGE( 0xe000, 0xe7ff ) AM_RAM  AM_SHARE("cursor_ram")// Video RAM
+	AM_RANGE( 0xe800, 0xefff ) AM_RAM  AM_SHARE("video_ram") // Video RAM
+	AM_RANGE( 0xd000, 0xf7ff ) AM_RAM  // RAM
+	AM_RANGE( 0xf800, 0xffff ) AM_ROM  // System ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mikro80_io , AS_IO, 8)
+static ADDRESS_MAP_START( mikro80_io , AS_IO, 8, mikro80_state )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE( 0x01, 0x01) AM_READWRITE ( mikro80_tape_r, mikro80_tape_w )
-	AM_RANGE( 0x04, 0x07) AM_READWRITE ( mikro80_keyboard_r, mikro80_keyboard_w )
+	AM_RANGE( 0x01, 0x01) AM_READWRITE(mikro80_tape_r, mikro80_tape_w )
+	AM_RANGE( 0x04, 0x07) AM_READWRITE(mikro80_keyboard_r, mikro80_keyboard_w )
 ADDRESS_MAP_END
 
-static WRITE8_DEVICE_HANDLER( radio99_dac_w )	{ dac_data_w(device, data); }
-
-static ADDRESS_MAP_START( radio99_io , AS_IO, 8)
+static ADDRESS_MAP_START( kristall_io , AS_IO, 8, mikro80_state )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE( 0x01, 0x01) AM_READWRITE ( mikro80_tape_r, mikro80_tape_w )
-	AM_RANGE( 0x04, 0x04) AM_DEVWRITE  ( "dac", radio99_dac_w )
-	AM_RANGE( 0x05, 0x05) AM_READWRITE ( mikro80_8255_portc_r, mikro80_8255_portc_w )
-	AM_RANGE( 0x06, 0x06) AM_READ	   ( mikro80_8255_portb_r)
-	AM_RANGE( 0x07, 0x07) AM_WRITE	   ( mikro80_8255_porta_w)
+	AM_RANGE( 0x00, 0x03) AM_DEVREADWRITE("ppi8255", i8255_device, read, write)
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( radio99_io , AS_IO, 8, mikro80_state )
+	ADDRESS_MAP_UNMAP_HIGH
+	AM_RANGE( 0x01, 0x01) AM_READWRITE(mikro80_tape_r, mikro80_tape_w )
+	AM_RANGE( 0x04, 0x04) AM_DEVWRITE("dac", dac_device, write_unsigned8)
+	AM_RANGE( 0x05, 0x05) AM_READWRITE(mikro80_8255_portc_r, mikro80_8255_portc_w )
+	AM_RANGE( 0x06, 0x06) AM_READ(mikro80_8255_portb_r)
+	AM_RANGE( 0x07, 0x07) AM_WRITE(mikro80_8255_porta_w)
 ADDRESS_MAP_END
 
 /* Input ports */
@@ -151,15 +152,15 @@ static const cassette_interface mikro80_cassette_interface =
 /* F4 Character Displayer */
 static const gfx_layout mikro80_charlayout =
 {
-	8, 8,					/* 8 x 8 characters */
-	256,					/* 256 characters */
-	1,					/* 1 bits per pixel */
-	{ 0 },					/* no bitplanes */
+	8, 8,                   /* 8 x 8 characters */
+	256,                    /* 256 characters */
+	1,                  /* 1 bits per pixel */
+	{ 0 },                  /* no bitplanes */
 	/* x offsets */
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	/* y offsets */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*8					/* every char takes 8 bytes */
+	8*8                 /* every char takes 8 bytes */
 };
 
 static GFXDECODE_START( mikro80 )
@@ -171,7 +172,6 @@ static MACHINE_CONFIG_START( mikro80, mikro80_state )
 	MCFG_CPU_ADD("maincpu",I8080, 2000000)
 	MCFG_CPU_PROGRAM_MAP(mikro80_mem)
 	MCFG_CPU_IO_MAP(mikro80_io)
-	MCFG_MACHINE_RESET( mikro80 )
 
 	MCFG_I8255_ADD( "ppi8255", mikro80_ppi8255_interface )
 
@@ -179,22 +179,20 @@ static MACHINE_CONFIG_START( mikro80, mikro80_state )
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_REFRESH_RATE(50)
 	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MCFG_SCREEN_SIZE(64*8, 32*8)
 	MCFG_SCREEN_VISIBLE_AREA(0, 64*8-1, 0, 32*8-1)
-	MCFG_SCREEN_UPDATE(mikro80)
+	MCFG_SCREEN_UPDATE_DRIVER(mikro80_state, screen_update_mikro80)
 
 	MCFG_GFXDECODE(mikro80)
 	MCFG_PALETTE_LENGTH(2)
-	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
-	MCFG_VIDEO_START(mikro80)
 
 	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_WAVE_ADD(WAVE_TAG, CASSETTE_TAG)
+	MCFG_SOUND_WAVE_ADD(WAVE_TAG, "cassette")
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_CASSETTE_ADD( CASSETTE_TAG, mikro80_cassette_interface )
+	MCFG_CASSETTE_ADD( "cassette", mikro80_cassette_interface )
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( radio99, mikro80 )
@@ -205,6 +203,11 @@ static MACHINE_CONFIG_DERIVED( radio99, mikro80 )
 
 	MCFG_SOUND_ADD("dac", DAC, 0)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 16.00)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( kristall, mikro80 )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(kristall_io)
 MACHINE_CONFIG_END
 
 
@@ -218,14 +221,20 @@ ROM_START( mikro80 )
 ROM_END
 
 ROM_START( radio99 )
-	ROM_REGION( 0x20000, "maincpu", ROMREGION_ERASEFF )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
 	ROM_LOAD( "monrk88.bin", 0xf800, 0x0800, CRC(5415D847) SHA1(c8233c72548bc79846b9d998766a10df349c5bda))
 	ROM_REGION(0x0800, "gfx1",0)
 	ROM_LOAD ("mikro80.fnt", 0x0000, 0x0800, CRC(43eb72bb) SHA1(761319cc6747661b33e84aa449cec83800543b5b) )
 ROM_END
 
-
+ROM_START( kristall2 )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
+	ROM_LOAD( "kristall-2.rom", 0xf800, 0x0800, CRC(e1b5c60f) SHA1(8ce5158def7fca91ec7e11efbb10aa5d70b7c36d))
+	ROM_REGION(0x0800, "gfx1",0)
+	ROM_LOAD( "kristall-2.fnt", 0x0000, 0x0800, CRC(9661c9f5) SHA1(830c38735dcb1c8a271fa0027f94b4e034848fc8))
+ROM_END
 /* Driver */
 /*    YEAR  NAME    PARENT  COMPAT  MACHINE     INPUT       INIT     COMPANY                  FULLNAME   FLAGS */
-COMP( 1983, mikro80,	 0, 	 0,	mikro80,	mikro80,	mikro80, "<unknown>", "Mikro-80",	 0)
-COMP( 1993, radio99, mikro80,	 0,	radio99,	mikro80,	radio99, "<unknown>", "Radio-99DM",	 0)
+COMP( 1983, mikro80,     0,      0, mikro80,    mikro80, mikro80_state, mikro80, "<unknown>", "Mikro-80",    0)
+COMP( 1993, radio99, mikro80,    0, radio99,    mikro80, mikro80_state, radio99, "<unknown>", "Radio-99DM",  0)
+COMP( 1987, kristall2, mikro80,  0, kristall,   mikro80, mikro80_state, mikro80, "<unknown>", "Kristall-2",  0)

@@ -15,8 +15,15 @@ class vt320_state : public driver_device
 {
 public:
 	vt320_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+		: driver_device(mconfig, type, tag) ,
+		m_maincpu(*this, "maincpu"),
+		m_ram(*this, RAM_TAG) { }
 
+	virtual void machine_reset();
+	virtual void video_start();
+	UINT32 screen_update_vt320(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+	required_device<cpu_device> m_maincpu;
+	required_device<ram_device> m_ram;
 };
 
 /*
@@ -46,53 +53,48 @@ Texas Inst. 749X 75146
 Signetics? 74LS373N
 8-bit D-type latch. This has eight inputs and eight outputs.
 */
-static ADDRESS_MAP_START(vt320_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(vt320_mem, AS_PROGRAM, 8, vt320_state)
 	AM_RANGE(0x0000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( vt320_io , AS_IO, 8)
+static ADDRESS_MAP_START(vt320_io, AS_IO, 8, vt320_state)
 ADDRESS_MAP_END
 
 /* Input ports */
 static INPUT_PORTS_START( vt320 )
 INPUT_PORTS_END
 
-static MACHINE_RESET(vt320)
+void vt320_state::machine_reset()
 {
-	memset(ram_get_ptr(machine.device(RAM_TAG)),0,16*1024);
+	memset(m_ram->pointer(),0,16*1024);
 }
 
-static VIDEO_START( vt320 )
+void vt320_state::video_start()
 {
 }
 
-static SCREEN_UPDATE( vt320 )
+UINT32 vt320_state::screen_update_vt320(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-    return 0;
+	return 0;
 }
 
 
 static MACHINE_CONFIG_START( vt320, vt320_state )
-    /* basic machine hardware */
-    MCFG_CPU_ADD("maincpu", I8051, XTAL_16MHz)
-    MCFG_CPU_PROGRAM_MAP(vt320_mem)
-    MCFG_CPU_IO_MAP(vt320_io)
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", I8051, XTAL_16MHz)
+	MCFG_CPU_PROGRAM_MAP(vt320_mem)
+	MCFG_CPU_IO_MAP(vt320_io)
 
-    MCFG_MACHINE_RESET(vt320)
 
-    /* video hardware */
-    MCFG_SCREEN_ADD("screen", RASTER)
-    MCFG_SCREEN_REFRESH_RATE(50)
-    MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-    MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-    MCFG_SCREEN_SIZE(640, 480)
-    MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
-    MCFG_SCREEN_UPDATE(vt320)
-
-    MCFG_PALETTE_LENGTH(2)
-    MCFG_PALETTE_INIT(black_and_white)
-
-    MCFG_VIDEO_START(vt320)
+	/* video hardware */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(50)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
+	MCFG_SCREEN_SIZE(640, 480)
+	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
+	MCFG_SCREEN_UPDATE_DRIVER(vt320_state, screen_update_vt320)
+	MCFG_PALETTE_LENGTH(2)
+	MCFG_PALETTE_INIT_OVERRIDE(driver_device, black_and_white)
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)
@@ -107,9 +109,8 @@ ROM_END
 
 /* Driver */
 
-/*    YEAR  NAME    PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY   FULLNAME       FLAGS */
-COMP( 1987, vt320,  0,       0, 	vt320,	vt320,	 0, 	    "Digital Equipment Corporation",   "VT320",		GAME_NOT_WORKING | GAME_NO_SOUND)
-//COMP( 1989?, vt330,  0,       0,  vt320,  vt320,   0,         "Digital Equipment Corporation",   "VT330",      GAME_NOT_WORKING)
-//COMP( 1989?, vt340,  0,       0,  vt320,  vt320,   0,         "Digital Equipment Corporation",   "VT340",      GAME_NOT_WORKING)
-//COMP( 1990?, vt340p,  0,      0,  vt320,  vt320,   0,         "Digital Equipment Corporation",   "VT340+",     GAME_NOT_WORKING)
-
+/*    YEAR  NAME     PARENT  COMPAT   MACHINE    INPUT    INIT    COMPANY                    FULLNAME       FLAGS */
+COMP( 1987, vt320,   0,      0,       vt320,     vt320, driver_device,   0, "Digital Equipment Corporation", "VT320", GAME_NOT_WORKING | GAME_NO_SOUND)
+//COMP( 1989?, vt330,  0,      0,       vt320,     vt320, driver_device,   0, "Digital Equipment Corporation", "VT330", GAME_NOT_WORKING)
+//COMP( 1989?, vt340,  0,      0,       vt320,     vt320, driver_device,   0, "Digital Equipment Corporation", "VT340", GAME_NOT_WORKING)
+//COMP( 1990?, vt340p, 0,      0,       vt320,     vt320, driver_device,   0, "Digital Equipment Corporation", "VT340+", GAME_NOT_WORKING)

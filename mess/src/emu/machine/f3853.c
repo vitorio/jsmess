@@ -22,7 +22,6 @@
 
 #include "emu.h"
 #include "f3853.h"
-#include "devhelpr.h"
 
 /***************************************************************************
     MACROS
@@ -49,9 +48,8 @@ const device_type F3853 = &device_creator<f3853_device>;
 //-------------------------------------------------
 
 f3853_device::f3853_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, F3853, "F3853", tag, owner, clock)
+	: device_t(mconfig, F3853, "F3853", tag, owner, clock, "f3853", __FILE__)
 {
-
 }
 
 
@@ -131,8 +129,8 @@ void f3853_device::device_reset()
 
 void f3853_device::f3853_set_interrupt_request_line()
 {
-    if(!m_interrupt_request)
-    {
+	if(!m_interrupt_request)
+	{
 		return;
 	}
 
@@ -166,67 +164,55 @@ TIMER_CALLBACK( f3853_device::f3853_timer_callback )
 
 void f3853_device::f3853_timer()
 {
-    if(m_timer_enable)
+	if(m_timer_enable)
 	{
 		m_request_flipflop = TRUE;
 		f3853_set_interrupt_request_line();
-    }
-    f3853_timer_start(0xfe);
-}
-
-
-void f3853_set_external_interrupt_in_line(device_t *device, int level)
-{
-	downcast<f3853_device*>(device)->f3853_set_external_interrupt_in_line(level);
+	}
+	f3853_timer_start(0xfe);
 }
 
 void f3853_device::f3853_set_external_interrupt_in_line(int level)
 {
-    if(m_external_interrupt_line && !level && m_external_enable)
-    {
+	if(m_external_interrupt_line && !level && m_external_enable)
+	{
 		m_request_flipflop = TRUE;
 	}
-    m_external_interrupt_line = level;
-    f3853_set_interrupt_request_line();
-}
-
-
-void f3853_set_priority_in_line(device_t *device, int level)
-{
-	downcast<f3853_device*>(device)->f3853_set_priority_in_line(level);
+	m_external_interrupt_line = level;
+	f3853_set_interrupt_request_line();
 }
 
 void f3853_device::f3853_set_priority_in_line(int level)
 {
-    m_priority_line = level;
-    f3853_set_interrupt_request_line();
+	m_priority_line = level;
+	f3853_set_interrupt_request_line();
 }
 
 
-READ8_DEVICE_HANDLER_TRAMPOLINE(f3853, f3853_r)
+READ8_MEMBER(f3853_device::f3853_r)
 {
-    UINT8 data = 0;
+	UINT8 data = 0;
 
-    switch (offset)
+	switch (offset)
 	{
-    case 0:
+	case 0:
 		data = m_high;
 		break;
 
-    case 1:
+	case 1:
 		data = m_low;
 		break;
 
-    case 2: // Interrupt control; not readable
-    case 3: // Timer; not readable
+	case 2: // Interrupt control; not readable
+	case 3: // Timer; not readable
 		break;
-    }
+	}
 
-    return data;
+	return data;
 }
 
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(f3853, f3853_w)
+WRITE8_MEMBER(f3853_device::f3853_w)
 {
 	switch(offset)
 	{

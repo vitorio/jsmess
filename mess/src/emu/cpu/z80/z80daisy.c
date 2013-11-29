@@ -62,12 +62,12 @@ void z80_daisy_chain::init(device_t *cpudevice, const z80_daisy_config *daisy)
 		// find the device
 		device_t *target = cpudevice->siblingdevice(daisy->devname);
 		if (target == NULL)
-			fatalerror("Unable to locate device '%s'", daisy->devname);
+			fatalerror("Unable to locate device '%s'\n", daisy->devname);
 
 		// make sure it has an interface
 		device_z80daisy_interface *intf;
 		if (!target->interface(intf))
-			fatalerror("Device '%s' does not implement the z80daisy interface!", daisy->devname);
+			fatalerror("Device '%s' does not implement the z80daisy interface!\n", daisy->devname);
 
 		// append to the end
 		*tailptr = auto_alloc(cpudevice->machine(), daisy_entry(target));
@@ -163,8 +163,8 @@ void z80_daisy_chain::call_reti_device()
 
 z80_daisy_chain::daisy_entry::daisy_entry(device_t *device)
 	: m_next(NULL),
-	  m_device(device),
-	  m_interface(NULL)
+		m_device(device),
+		m_interface(NULL)
 {
 	device->interface(m_interface);
 }

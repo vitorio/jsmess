@@ -1,39 +1,10 @@
+// license:BSD-3-Clause
+// copyright-holders:Aaron Giles
 /***************************************************************************
 
     xmlfile.h
 
     XML file parsing code.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
@@ -75,46 +46,42 @@ struct XML_ParserStruct;
 
 
 /* a node representing an attribute */
-typedef struct _xml_attribute_node xml_attribute_node;
-struct _xml_attribute_node
+struct xml_attribute_node
 {
-	xml_attribute_node *	next;			/* pointer to next attribute node */
-	const char *			name;			/* pointer to copy of tag name */
-	const char *			value;			/* pointer to copy of value string */
+	xml_attribute_node *    next;           /* pointer to next attribute node */
+	const char *            name;           /* pointer to copy of tag name */
+	const char *            value;          /* pointer to copy of value string */
 };
 
 
 /* a node representing a data item and its relationships */
-typedef struct _xml_data_node xml_data_node;
-struct _xml_data_node
+struct xml_data_node
 {
-	xml_data_node *			next;			/* pointer to next sibling node */
-	xml_data_node *			parent;			/* pointer to parent node */
-	xml_data_node *			child;			/* pointer to first child node */
-	const char *			name;			/* pointer to copy of tag name */
-	const char *			value;			/* pointer to copy of value string */
-	xml_attribute_node *	attribute;		/* pointer to array of attribute nodes */
-	int						line;			/* line number for this node's start */
+	xml_data_node *         next;           /* pointer to next sibling node */
+	xml_data_node *         parent;         /* pointer to parent node */
+	xml_data_node *         child;          /* pointer to first child node */
+	const char *            name;           /* pointer to copy of tag name */
+	const char *            value;          /* pointer to copy of value string */
+	xml_attribute_node *    attribute;      /* pointer to array of attribute nodes */
+	int                     line;           /* line number for this node's start */
 };
 
 
 /* extended error information from parsing */
-typedef struct _xml_parse_error xml_parse_error;
-struct _xml_parse_error
+struct xml_parse_error
 {
-	const char *			error_message;
-	int						error_line;
-	int						error_column;
+	const char *            error_message;
+	int                     error_line;
+	int                     error_column;
 };
 
 
 /* parsing options */
-typedef struct _xml_parse_options xml_parse_options;
-struct _xml_parse_options
+struct xml_parse_options
 {
-	xml_parse_error *		error;
-	void					(*init_parser)(struct XML_ParserStruct *parser);
-	UINT32					flags;
+	xml_parse_error *       error;
+	void                    (*init_parser)(struct XML_ParserStruct *parser);
+	UINT32                  flags;
 };
 
 
@@ -198,4 +165,4 @@ xml_attribute_node *xml_set_attribute_float(xml_data_node *node, const char *nam
 /* normalize a string into something that can be written to an XML file */
 const char *xml_normalize_string(const char *string);
 
-#endif	/* __XMLFILE_H__ */
+#endif  /* __XMLFILE_H__ */

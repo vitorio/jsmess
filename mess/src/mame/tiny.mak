@@ -3,7 +3,7 @@
 #   tiny.mak
 #
 #   Small driver-specific example makefile
-#	Use make SUBTARGET=tiny to build
+#   Use make SUBTARGET=tiny to build
 #
 #   Copyright Nicola Salmoria and the MAME Team.
 #   Visit  http://mamedev.org for licensing and usage restrictions.
@@ -63,6 +63,22 @@ SOUNDS += YM3812
 SOUNDS += CEM3394
 
 
+#-------------------------------------------------
+# specify available video cores
+#-------------------------------------------------
+
+#-------------------------------------------------
+# specify available machine cores
+#-------------------------------------------------
+
+MACHINES += 6821PIA
+MACHINES += TTL74148
+MACHINES += TTL74153
+MACHINES += TTL7474
+MACHINES += RIOT6532
+MACHINES += PIT8253
+MACHINES += Z80CTC
+MACHINES += 68681
 
 #-------------------------------------------------
 # This is the list of files that are necessary
@@ -71,7 +87,6 @@ SOUNDS += CEM3394
 #-------------------------------------------------
 
 DRVLIBS = \
-	$(EMUDRIVERS)/emudummy.o \
 	$(MACHINE)/ticket.o \
 	$(DRIVERS)/carpolo.o $(MACHINE)/carpolo.o $(VIDEO)/carpolo.o \
 	$(DRIVERS)/circus.o $(AUDIO)/circus.o $(VIDEO)/circus.o \
@@ -97,7 +112,9 @@ DRVLIBS = \
 # layout dependencies
 #-------------------------------------------------
 
-$(DRIVERS)/astrocde.o:	$(LAYOUT)/gorf.lh \
+$(DRIVERS)/astrocde.o:  $(LAYOUT)/gorf.lh \
+						$(LAYOUT)/seawolf2.lh \
+						$(LAYOUT)/spacezap.lh \
 						$(LAYOUT)/tenpindx.lh
-$(DRIVERS)/circus.o:	$(LAYOUT)/circus.lh \
+$(DRIVERS)/circus.o:    $(LAYOUT)/circus.lh \
 						$(LAYOUT)/crash.lh

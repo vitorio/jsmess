@@ -1,8 +1,9 @@
 /****************************************************************************
 
     Bally Astrocade consumer hardware
-    driver by Nicola Salmoria, Mike Coates, Frank Palazzolo, Aaron Giles,
-    Dirk Best
+
+    license: MAME
+    copyright-holders: Nicola Salmoria, Mike Coates, Frank Palazzolo, Aaron Giles, Dirk Best
 
 ****************************************************************************/
 
@@ -13,8 +14,17 @@
 #include "imagedev/cartslot.h"
 #include "machine/ram.h"
 
-MACHINE_RESET( astrocde );
-void get_ram_expansion_settings(address_space *space, int &ram_expansion_installed, int &write_protect_on, int &expansion_ram_start, int &expansion_ram_end, int &shadow_ram_end);
+class astrocde_mess_state : public astrocde_state
+{
+public:
+	astrocde_mess_state(const machine_config &mconfig, device_type type, const char *tag)
+		: astrocde_state(mconfig, type, tag)
+		{ }
+
+	void get_ram_expansion_settings(int &ram_expansion_installed, int &write_protect_on, int &expansion_ram_start, int &expansion_ram_end, int &shadow_ram_end);
+	DECLARE_MACHINE_RESET(astrocde);
+	DECLARE_INPUT_CHANGED_MEMBER(set_write_protect);
+};
 
 /*************************************
  *
@@ -76,38 +86,38 @@ void get_ram_expansion_settings(address_space *space, int &ram_expansion_install
  *
  *************************************/
 
-static ADDRESS_MAP_START( astrocade_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( astrocade_mem, AS_PROGRAM, 8, astrocde_mess_state )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM AM_WRITE(astrocade_funcgen_w)
 	AM_RANGE(0x1000, 0x3fff) AM_ROM /* Star Fortress writes in here?? */
-	AM_RANGE(0x4000, 0x4fff) AM_RAM AM_BASE_MEMBER(astrocde_state, m_videoram) /* ASG */
+	AM_RANGE(0x4000, 0x4fff) AM_RAM AM_SHARE("videoram") /* ASG */
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( astrocade_io, AS_IO, 8 )
+static ADDRESS_MAP_START( astrocade_io, AS_IO, 8, astrocde_mess_state )
 	AM_RANGE(0x00, 0x1f) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(astrocade_data_chip_register_r, astrocade_data_chip_register_w)
 ADDRESS_MAP_END
 
-static INPUT_CHANGED( set_write_protect )  // run when RAM expansion write protect switch is changed
+INPUT_CHANGED_MEMBER(astrocde_mess_state::set_write_protect)  // run when RAM expansion write protect switch is changed
 {
 	int ram_expansion_installed = 0, write_protect_on = 0, expansion_ram_start = 0, expansion_ram_end = 0, shadow_ram_end = 0;
-	address_space *space = field.machine().device("maincpu")->memory().space(AS_PROGRAM);
-	UINT8 *expram = ram_get_ptr(field.machine().device("ram_tag"));
+	address_space &space = m_maincpu->space(AS_PROGRAM);
+	UINT8 *expram = machine().device<ram_device>("ram_tag")->pointer();
 
-	get_ram_expansion_settings(space, ram_expansion_installed, write_protect_on, expansion_ram_start, expansion_ram_end, shadow_ram_end);  // passing by reference
+	get_ram_expansion_settings(ram_expansion_installed, write_protect_on, expansion_ram_start, expansion_ram_end, shadow_ram_end);  // passing by reference
 
-    if (ram_expansion_installed == 1)
-    {
-        if (write_protect_on == 0)  // write protect off, so install memory normally
-        {
-            space->install_ram(expansion_ram_start, expansion_ram_end, expram);
-            if (shadow_ram_end > expansion_ram_end)
-                space->install_ram(expansion_ram_end + 1, shadow_ram_end, expram);
-        }
-        else  // write protect on, so make memory read only
-        {
-            space->nop_write(expansion_ram_start, expansion_ram_end);
-        }
-     }
+	if (ram_expansion_installed == 1)
+	{
+		if (write_protect_on == 0)  // write protect off, so install memory normally
+		{
+			space.install_ram(expansion_ram_start, expansion_ram_end, expram);
+			if (shadow_ram_end > expansion_ram_end)
+				space.install_ram(expansion_ram_end + 1, shadow_ram_end, expram);
+		}
+		else  // write protect on, so make memory read only
+		{
+			space.nop_write(expansion_ram_start, expansion_ram_end);
+		}
+		}
 }
 
 /*************************************
@@ -214,18 +224,18 @@ static INPUT_PORTS_START( astrocde )
 	PORT_START("P4_KNOB")
 	PORT_BIT(0xff, 0x00, IPT_PADDLE) PORT_INVERT PORT_SENSITIVITY(85) PORT_KEYDELTA(10) PORT_CENTERDELTA(0) PORT_MINMAX(0,255) PORT_CODE_DEC(KEYCODE_Y) PORT_CODE_INC(KEYCODE_U) PORT_PLAYER(4)
 
-    PORT_START("CFG")	/* machine config */
+	PORT_START("CFG")   /* machine config */
 	PORT_DIPNAME( 0x3f, 0x00, "RAM Expansion")
-	PORT_DIPSETTING(	0x00, "No RAM Expansion")
-	PORT_DIPSETTING(	0x01, "16KB Viper System 1 RAM Expansion")
-	PORT_DIPSETTING(	0x02, "32KB Lil' WHITE RAM Expansion")
-	PORT_DIPSETTING(	0x04, "R&L 64K RAM Board (44K installed)")
-	PORT_DIPSETTING(	0x08, "4KB Blue RAM Expansion")
-	PORT_DIPSETTING(	0x10, "16KB Blue RAM Expansion")
-	PORT_DIPSETTING(	0x20, "32KB Blue RAM Expansion")
+	PORT_DIPSETTING(    0x00, "No RAM Expansion")
+	PORT_DIPSETTING(    0x01, "16KB Viper System 1 RAM Expansion")
+	PORT_DIPSETTING(    0x02, "32KB Lil' WHITE RAM Expansion")
+	PORT_DIPSETTING(    0x04, "R&L 64K RAM Board (44K installed)")
+	PORT_DIPSETTING(    0x08, "4KB Blue RAM Expansion")
+	PORT_DIPSETTING(    0x10, "16KB Blue RAM Expansion")
+	PORT_DIPSETTING(    0x20, "32KB Blue RAM Expansion")
 
 	PORT_START("PROTECT")  /* Write protect RAM */
-	PORT_DIPNAME( 0x01, 0x00, "Write Protect RAM") PORT_CHANGED(set_write_protect, 0)
+	PORT_DIPNAME( 0x01, 0x00, "Write Protect RAM") PORT_CHANGED_MEMBER(DEVICE_SELF, astrocde_mess_state, set_write_protect, 0)
 	PORT_DIPSETTING( 0x00, "Write Protect Off")
 	PORT_DIPSETTING( 0x01, "Write Protect On")
 INPUT_PORTS_END
@@ -237,31 +247,28 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( astrocde, astrocde_state )
+static MACHINE_CONFIG_START( astrocde, astrocde_mess_state )
 	/* basic machine hardware */
 	MCFG_CPU_ADD("maincpu", Z80, ASTROCADE_CLOCK/4)        /* 1.789 MHz */
 	MCFG_CPU_PROGRAM_MAP(astrocade_mem)
 	MCFG_CPU_IO_MAP(astrocade_io)
 
-	MCFG_MACHINE_RESET( astrocde )
+	MCFG_MACHINE_RESET_OVERRIDE(astrocde_mess_state, astrocde)
 
 	/* video hardware */
 	MCFG_SCREEN_ADD("screen", RASTER)
 	MCFG_SCREEN_RAW_PARAMS(ASTROCADE_CLOCK, 455, 0, 352, 262, 0, 240)
-	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MCFG_SCREEN_UPDATE(astrocde)
+	MCFG_SCREEN_UPDATE_DRIVER(astrocde_state, screen_update_astrocde)
 
 	MCFG_PALETTE_LENGTH(512)
-	MCFG_PALETTE_INIT(astrocde)
 
-	MCFG_VIDEO_START(astrocde)
 
 	/* sound hardware */
 	MCFG_SPEAKER_STANDARD_MONO("mono")
 	MCFG_SOUND_ADD("astrocade1", ASTROCADE, ASTROCADE_CLOCK/4)
 	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 
-    /* optional expansion ram (installed in MACHINE_RESET)*/
+	/* optional expansion ram (installed in machine_reset)*/
 	MCFG_RAM_ADD("ram_tag")
 	MCFG_RAM_DEFAULT_SIZE("32k")
 
@@ -305,83 +312,82 @@ ROM_END
  *
  *************************************/
 
-static DRIVER_INIT( astrocde )
+DRIVER_INIT_MEMBER(astrocde_state,astrocde)
 {
-	astrocde_state *state = machine.driver_data<astrocde_state>();
-	state->m_video_config = AC_SOUND_PRESENT | AC_LIGHTPEN_INTS;
+	m_video_config = AC_SOUND_PRESENT | AC_LIGHTPEN_INTS;
 }
 
-MACHINE_RESET( astrocde )
+MACHINE_RESET_MEMBER(astrocde_mess_state, astrocde)
 {
-    int ram_expansion_installed = 0, write_protect_on = 0, expansion_ram_start = 0, expansion_ram_end = 0, shadow_ram_end = 0;
-    address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
-    UINT8 *expram = ram_get_ptr(machine.device("ram_tag"));
-    space->unmap_readwrite(0x5000, 0xffff);  // unmap any previously installed expansion RAM
+	int ram_expansion_installed = 0, write_protect_on = 0, expansion_ram_start = 0, expansion_ram_end = 0, shadow_ram_end = 0;
+	address_space &space = m_maincpu->space(AS_PROGRAM);
+	UINT8 *expram = machine().device<ram_device>("ram_tag")->pointer();
+	space.unmap_readwrite(0x5000, 0xffff);  // unmap any previously installed expansion RAM
 
-    get_ram_expansion_settings(space, ram_expansion_installed, write_protect_on, expansion_ram_start, expansion_ram_end, shadow_ram_end);  // passing by reference
+	get_ram_expansion_settings(ram_expansion_installed, write_protect_on, expansion_ram_start, expansion_ram_end, shadow_ram_end);  // passing by reference
 
-    if (ram_expansion_installed == 1)
-    {
-        if (write_protect_on == 0)  // write protect off, so install memory normally
-        {
-            space->install_ram(expansion_ram_start, expansion_ram_end, expram);
-            if (shadow_ram_end > expansion_ram_end)
-                space->install_ram(expansion_ram_end + 1, shadow_ram_end, expram);
-        }
-        else  // write protect on, so make memory read only
-        {
-            space->nop_write(expansion_ram_start, expansion_ram_end);
-        }
-     }
+	if (ram_expansion_installed == 1)
+	{
+		if (write_protect_on == 0)  // write protect off, so install memory normally
+		{
+			space.install_ram(expansion_ram_start, expansion_ram_end, expram);
+			if (shadow_ram_end > expansion_ram_end)
+				space.install_ram(expansion_ram_end + 1, shadow_ram_end, expram);
+		}
+		else  // write protect on, so make memory read only
+		{
+			space.nop_write(expansion_ram_start, expansion_ram_end);
+		}
+		}
 }
 
-void get_ram_expansion_settings(address_space *space, int &ram_expansion_installed, int &write_protect_on, int &expansion_ram_start, int &expansion_ram_end, int &shadow_ram_end)
+void astrocde_mess_state::get_ram_expansion_settings(int &ram_expansion_installed, int &write_protect_on, int &expansion_ram_start, int &expansion_ram_end, int &shadow_ram_end)
 {
-    if (input_port_read(space->machine(), "PROTECT") == 0x01)
-        write_protect_on = 1;
-    else
-        write_protect_on = 0;
+	if (ioport("PROTECT")->read() == 0x01)
+		write_protect_on = 1;
+	else
+		write_protect_on = 0;
 
-    ram_expansion_installed = 1;
+	ram_expansion_installed = 1;
 
-    switch(input_port_read(space->machine(), "CFG"))  // check RAM expansion configuration and set address ranges
-    {
-        case 0x00:  // No RAM Expansion
-             ram_expansion_installed = 0;
-             break;
-        case 0x01:  // 16KB Viper System 1 RAM Expansion
-             expansion_ram_start = 0x6000;
-             expansion_ram_end = 0x9fff;
-             shadow_ram_end = 0;
-             break;
-        case 0x02:  // "32KB Lil' WHITE RAM Expansion
-             expansion_ram_start = 0x5000;
-             expansion_ram_end = 0xcfff;
-             shadow_ram_end = 0xffff;
-             break;
-        case 0x04:  // R&L 64K RAM Board (44KB installed)
-             expansion_ram_start = 0x5000;
-             expansion_ram_end = 0xffff;
-             shadow_ram_end = 0;
-             break;
-        case 0x08:  // 4KB Blue RAM Expansion
-             expansion_ram_start = 0x6000;
-             expansion_ram_end = 0x6fff;
-             shadow_ram_end = 0;
-             break;
-        case 0x10:  // 16KB Blue RAM Expansion
-             expansion_ram_start = 0x6000;
-             expansion_ram_end = 0x9fff;
-             shadow_ram_end = 0;
-             break;
-        case 0x20:  // 32KB Blue RAM Expansion
-             expansion_ram_start = 0x6000;
-             expansion_ram_end = 0xdfff;
-             shadow_ram_end = 0;
-             break;
-        default:
-            break;
-    }
+	switch(ioport("CFG")->read())  // check RAM expansion configuration and set address ranges
+	{
+		case 0x00:  // No RAM Expansion
+				ram_expansion_installed = 0;
+				break;
+		case 0x01:  // 16KB Viper System 1 RAM Expansion
+				expansion_ram_start = 0x6000;
+				expansion_ram_end = 0x9fff;
+				shadow_ram_end = 0;
+				break;
+		case 0x02:  // "32KB Lil' WHITE RAM Expansion
+				expansion_ram_start = 0x5000;
+				expansion_ram_end = 0xcfff;
+				shadow_ram_end = 0xffff;
+				break;
+		case 0x04:  // R&L 64K RAM Board (44KB installed)
+				expansion_ram_start = 0x5000;
+				expansion_ram_end = 0xffff;
+				shadow_ram_end = 0;
+				break;
+		case 0x08:  // 4KB Blue RAM Expansion
+				expansion_ram_start = 0x6000;
+				expansion_ram_end = 0x6fff;
+				shadow_ram_end = 0;
+				break;
+		case 0x10:  // 16KB Blue RAM Expansion
+				expansion_ram_start = 0x6000;
+				expansion_ram_end = 0x9fff;
+				shadow_ram_end = 0;
+				break;
+		case 0x20:  // 32KB Blue RAM Expansion
+				expansion_ram_start = 0x6000;
+				expansion_ram_end = 0xdfff;
+				shadow_ram_end = 0;
+				break;
+		default:
+			break;
+	}
 }
 
 
@@ -392,6 +398,6 @@ void get_ram_expansion_settings(address_space *space, int &ram_expansion_install
  *************************************/
 
 /*    YEAR  NAME      PARENT    COMPAT    MACHINE   INPUT     INIT      COMPANY                FULLNAME                     FLAGS */
-CONS( 1978, astrocde, 0,        0,        astrocde, astrocde, astrocde, "Bally Manufacturing", "Bally Professional Arcade", GAME_SUPPORTS_SAVE )
-CONS( 1977, astrocdl, astrocde, 0,        astrocde, astrocde, astrocde, "Bally Manufacturing", "Bally Home Library Computer", GAME_SUPPORTS_SAVE )
-CONS( 1977, astrocdw, astrocde, 0,        astrocde, astrocde, astrocde, "Bally Manufacturing", "Bally Computer System", GAME_SUPPORTS_SAVE )
+CONS( 1978, astrocde, 0,        0,        astrocde, astrocde, astrocde_state, astrocde, "Bally Manufacturing", "Bally Professional Arcade", GAME_SUPPORTS_SAVE )
+CONS( 1977, astrocdl, astrocde, 0,        astrocde, astrocde, astrocde_state, astrocde, "Bally Manufacturing", "Bally Home Library Computer", GAME_SUPPORTS_SAVE )
+CONS( 1977, astrocdw, astrocde, 0,        astrocde, astrocde, astrocde_state, astrocde, "Bally Manufacturing", "Bally Computer System", GAME_SUPPORTS_SAVE )
