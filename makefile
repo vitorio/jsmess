@@ -96,9 +96,9 @@ TEMPLATE_FILES := $(foreach TFILE,$(TEMPLATE_FILES),$(TEMPLATE_DIR)/$(TFILE))
 MESS_EXE := mess$(SUBTARGET)
 
 ifeq ($(IS_64_BIT),1)
-NATIVE_OBJ := $(MAME_DIR)/mess/obj/nativesdl64
+NATIVE_OBJ := $(MAME_DIR)/obj/nativesdl64
 else
-NATIVE_OBJ := $(MAME_DIR)/mess/obj/nativesdl
+NATIVE_OBJ := $(MAME_DIR)/obj/nativesdl
 endif
 
 
@@ -167,7 +167,7 @@ NATIVE_MESS_FLAGS := $(SHARED_MESS_FLAGS) $(NATIVE_MESS_FLAGS)
 
 BIOS_FILES := $(foreach BIOS_FILE,$(BIOS),$(BIOS_DIR)/$(BIOS_FILE))
 
-JSMESS_MESS_BUILD_VERSION := $(shell tail --lines=1 mess/src/version.c | cut -d '"' -f 2)$(shell date -u)) commit $(shell cat .git/modules/third_party/mame/HEAD)
+JSMESS_MESS_BUILD_VERSION := $(shell tail --lines=1 third_party/mame/src/version.c | cut -d '"' -f 2)$(shell cat .git/modules/third_party/mame/HEAD))
 JSMESS_EMCC_VERSION := $(shell third_party/emscripten/emcc --version | grep commit)
 
 
