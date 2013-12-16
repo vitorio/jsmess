@@ -62,8 +62,8 @@ if [ "$FULLNAME" == "" ]
 fi
 
 #resolution
-width=`$MESS64PATH/$MESS64NAME -listxml $DRIVER | grep "<display " | sed 's/.*width=\"//g' | cut -f1 -d'"'`
-height=`$MESS64PATH/$MESS64NAME -listxml $DRIVER | grep "<display " | sed 's/.*height=\"//g' | cut -f1 -d'"'`
+width=`$MESS64PATH/$MESS64NAME -listxml $DRIVER | grep "<display.*\"screen\"" | sed 's/.*width=\"//g' | cut -f1 -d'"'`
+height=`$MESS64PATH/$MESS64NAME -listxml $DRIVER | grep "<display.*\"screen\"" | sed 's/.*height=\"//g' | cut -f1 -d'"'`
 RESOLUTION="${width}x${height}"
 
 #files
