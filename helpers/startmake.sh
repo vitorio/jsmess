@@ -125,22 +125,22 @@ echo "# MESS_FLAGS +=" >>$O
 echo "# EMCC_FLAGS +=" >>$O
 echo "" >>$O
 
-if [ -f $MESSMAKE/$SOURCEFILE.mak ]
+if [ -f $MESSMAKE/$SOURCEFILE.tiny.mak ]
    then
    echo ""
-   echo "$MESSMAKE/$SOURCEFILE.mak already exists."
+   echo "$MESSMAKE/$SOURCEFILE.tiny.mak already exists."
    echo "You may already be able to build $DRIVER."
    echo "Please make sure work isn't already done on it, or clear it out."
    echo ""
    exit 1
 fi
 
-echo "(2/3) Creating ${MESSMAKE}/${SOURCEFILE}.mak"
+echo "(2/3) Creating ${MESSMAKE}/${SOURCEFILE}.tiny.mak"
 
-O=${MESSMAKE}/${SOURCEFILE}.mak
+O=${MESSMAKE}/${SOURCEFILE}.tiny.mak
 
 echo "## " >$O
-echo "## $SOURCEFILE.mak" >>$O
+echo "## $SOURCEFILE.tiny.mak" >>$O
 echo "## " >>$O
 echo "" >>$O
 echo "include \$(SRC)/mess/messcore.mak" >>$O
@@ -150,12 +150,12 @@ echo "" >>$O
 
 ## It's safe and easy to regenerate the .lst file
 
-echo "(3/3) Creating $MESSMAKE/${SOURCEFILE}.lst"
+echo "(3/3) Creating $MESSMAKE/${SOURCEFILE}.tiny.lst"
 
-O=${MESSMAKE}/${SOURCEFILE}.lst
+O=${MESSMAKE}/${SOURCEFILE}.tiny.lst
 
 echo "// " >$O
-echo "// List of drivers $SOURCEFILE.mak supports" >>$O
+echo "// List of drivers $SOURCEFILE.tiny.mak supports" >>$O
 echo "// " >>$O
 echo "" >> $O
 
