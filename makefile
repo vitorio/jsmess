@@ -230,7 +230,7 @@ $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js.gz: $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).j
 # Runs emcc on LLVM bitcode version of MESS.
 $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js: $(MAME_DIR)/$(MESS_EXE)$(DEBUG_NAME).bc $(TEMPLATE_DIR)/pre.js $(TEMPLATE_DIR)/post.js
 	$(EMCC) $(EMCC_FLAGS) $< -o $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js --pre-js $(TEMPLATE_DIR)/pre.js --post-js $(TEMPLATE_DIR)/post.js
-	@$(call SED_I,'s/JSMESS_MESS_BUILD_VERSION/$(JSMESS_MESS_BUILD_VERSION)/' $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js)
+	@$(call SED_I,'s/JSMESS_MESS_BUILD_VERSION/$(subst /,\/, $(JSMESS_MESS_BUILD_VERSION))/' $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js)
 	@$(call SED_I,'s/JSMESS_EMCC_VERSION/$(JSMESS_EMCC_VERSION)/' $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js)
 	@$(call SED_I,'s/JSMESS_EMCC_FLAGS/$(subst ",\\", $(EMCC_FLAGS))/' $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js)
 	@$(call SED_I,'s/JSMESS_MESS_FLAGS/$(subst ",\\", $(subst /,\/, $(MESS_FLAGS)))/' $(OBJ_DIR)/$(MESS_EXE)$(DEBUG_NAME).js)

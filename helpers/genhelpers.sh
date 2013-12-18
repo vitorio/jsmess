@@ -74,7 +74,7 @@ mv mangled-all-resolved.txt ../../../../helpers/
 mv mangled-all-unresolved.txt ../../../../helpers/
 mv all-resolved.txt ../../../../helpers/
 
-cd ../../../helpers
+cd ../../../../helpers
 
 echo ""
 echo "Ready for startmake.sh"

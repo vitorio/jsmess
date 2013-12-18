@@ -2,7 +2,7 @@
 #
 # Take a MESS driver (system) name as the sole argument
 #
-if [ "$#" -ne 1 ]
+if [ "$#" -lt 1 ]
 then
 	echo "Generates MESS tiny makefiles given a system name."
 	echo "For names, see \"name\", \"parent\" and \"sourcefile\" columns here:"
@@ -42,11 +42,17 @@ fi
 
 DRIVER=$1
 
+if [ "$2" == "-d" ]
+   then
+   rm -f $JSMESSMAKE/$DRIVER.mak
+fi
+
 if [ -f $JSMESSMAKE/$DRIVER.mak ]
    then
    echo ""
-   echo "Problem.  Looks like files for $DRIVER already exist."
-   echo "Please make sure work isn't already done on these, or clear them out."
+   echo "Looks like files for $DRIVER already exist."
+   echo "You may be able to build this system already,"
+   echo "or run \"$0 $1 -d\" to overwrite them." 
    echo ""
    exit 1
 fi
@@ -125,22 +131,28 @@ echo "# MESS_FLAGS +=" >>$O
 echo "# EMCC_FLAGS +=" >>$O
 echo "" >>$O
 
-if [ -f $MESSMAKE/$SOURCEFILE.tiny.mak ]
+if [ "$2" == "-d" ]
+   then
+   rm -f $MESSMAKE/$SOURCEFILE.mak
+   rm -f ${MESSMAKE}/${SOURCEFILE}.lst
+fi
+
+if [ -f $MESSMAKE/$SOURCEFILE.mak ]
    then
    echo ""
-   echo "$MESSMAKE/$SOURCEFILE.tiny.mak already exists."
+   echo "$MESSMAKE/$SOURCEFILE.mak already exists."
    echo "You may already be able to build $DRIVER."
-   echo "Please make sure work isn't already done on it, or clear it out."
+   echo "or run \"$0 $1 -d\" to overwrite them." 
    echo ""
    exit 1
 fi
 
-echo "(2/3) Creating ${MESSMAKE}/${SOURCEFILE}.tiny.mak"
+echo "(2/3) Creating ${MESSMAKE}/${SOURCEFILE}.mak"
 
-O=${MESSMAKE}/${SOURCEFILE}.tiny.mak
+O=${MESSMAKE}/${SOURCEFILE}.mak
 
 echo "## " >$O
-echo "## $SOURCEFILE.tiny.mak" >>$O
+echo "## $SOURCEFILE.mak" >>$O
 echo "## " >>$O
 echo "" >>$O
 echo "include \$(SRC)/mess/messcore.mak" >>$O
@@ -150,12 +162,12 @@ echo "" >>$O
 
 ## It's safe and easy to regenerate the .lst file
 
-echo "(3/3) Creating $MESSMAKE/${SOURCEFILE}.tiny.lst"
+echo "(3/3) Creating $MESSMAKE/${SOURCEFILE}.lst"
 
-O=${MESSMAKE}/${SOURCEFILE}.tiny.lst
+O=${MESSMAKE}/${SOURCEFILE}.lst
 
 echo "// " >$O
-echo "// List of drivers $SOURCEFILE.tiny.mak supports" >>$O
+echo "// List of drivers $SOURCEFILE.mak supports" >>$O
 echo "// " >>$O
 echo "" >> $O
 
