@@ -31,6 +31,15 @@ echo ""
 echo "(2/5) Rebuilding MESS with symbols..."
 echo ""
 make TARGET=mess SYMBOLS=1
+if [ $? -ne 0 ]
+   then
+   echo ""
+   echo "MAME/MESS compilation failed"
+   echo
+   exit 1 
+fi
+mv mess64 ../../helpers/
+
 cd obj/sdl64
 
 rm -f mangled-all-resolved.txt
@@ -74,7 +83,10 @@ mv mangled-all-resolved.txt ../../../../helpers/
 mv mangled-all-unresolved.txt ../../../../helpers/
 mv all-resolved.txt ../../../../helpers/
 
-cd ../../../../helpers
+cd ../..
+make TARGET=mess clean
+
+cd ../../helpers
 
 echo ""
 echo "Ready for startmake.sh"

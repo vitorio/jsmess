@@ -15,7 +15,7 @@ fi
 
 # Path to the correct, identical version of MESS as JSMESS uses
 # No trailing slash!
-MESS64PATH=../third_party/mame
+MESS64PATH=.
 
 # Name of that same MESS executable (it's probably MESS64, but JIC)
 MESS64NAME=mess64
